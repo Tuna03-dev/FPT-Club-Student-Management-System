@@ -14,7 +14,6 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/test")
 @Validated
-
 public class TestController {
 
     @GetMapping("/success")
@@ -26,8 +25,6 @@ public class TestController {
     public ApiResponse<String> throwUserNotFound() throws AppException {
         throw new AppException(ErrorCode.INTERNAL_SERVER_ERROR);
     }
-
-
 
     @PostMapping("/validate")
     public ApiResponse<String> validate(@RequestParam @NotBlank(message = "name must not be blank") String name) {
