@@ -1,10 +1,13 @@
 import { useEffect } from "react";
-
+import axiosClient from "./api/axiosClient";
 export default function TestApi() {
   const callApi = async () => {
-    const res = await fetch("http://localhost:8080/test/success");
-    const data = res.json();
-    console.log(data);
+    try {
+      const res = await axiosClient.get<string>("/test/user-not-found");
+      console.log(res);
+    } catch (err) {
+      console.log(err);
+    }
   };
 
   useEffect(() => {

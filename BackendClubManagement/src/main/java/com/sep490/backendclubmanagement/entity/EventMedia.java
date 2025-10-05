@@ -1,0 +1,35 @@
+package com.sep490.backendclubmanagement.entity;
+
+import jakarta.persistence.*;
+import lombok.*;
+
+@Entity
+@Table(name = "event_media")
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class EventMedia extends BaseEntity {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "event_id", nullable = false)
+    private Event event;
+
+    @Column(name = "media_url", nullable = false, length = 500)
+    private String mediaUrl;
+
+    @Column(name = "media_type", length = 50)
+    private String mediaType; // IMAGE, VIDEO, etc.
+
+    @Column(name = "caption", columnDefinition = "TEXT")
+    private String caption;
+
+    @Column(name = "display_order")
+    private Integer displayOrder;
+}
+
