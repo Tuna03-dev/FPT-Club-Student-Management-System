@@ -1,0 +1,55 @@
+package com.sep490.backendclubmanagement.entity;
+
+import jakarta.persistence.*;
+import lombok.*;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+
+@Entity
+@Table(name = "income_transactions")
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class IncomeTransaction extends BaseEntity {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(name = "transaction_code", unique = true, length = 100)
+    private String transactionCode;
+
+    @Column(name = "amount", nullable = false, precision = 15, scale = 2)
+    private BigDecimal amount;
+
+    @Column(name = "description", columnDefinition = "TEXT")
+    private String description;
+
+    @Column(name = "transaction_date", nullable = false)
+    private LocalDateTime transactionDate;
+
+    @Column(name = "source", length = 200)
+    private String source;
+
+    @Column(name = "status", length = 50)
+    private String status;
+
+    @Column(name = "notes", columnDefinition = "TEXT")
+    private String notes;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "club_wallet_id", nullable = false)
+    private ClubWallet clubWallet;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "fee_id")
+    private Fee fee;
+
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "payos_payment_id")
+    private PayOSPayment payOSPayment;
+}
+
