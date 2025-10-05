@@ -26,5 +26,8 @@ public class SystemRole extends BaseEntity {
 
     @OneToMany(mappedBy = "systemRole", cascade = CascadeType.ALL)
     private Set<User> users;
+
+    @OneToMany(mappedBy = "systemRole", cascade = CascadeType.ALL)
+    private Set<ClubRole> clubRoles;
 }
 

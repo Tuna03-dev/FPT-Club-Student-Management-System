@@ -18,26 +18,29 @@ public class RequestEvent extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "request_code", unique = true, length = 100)
-    private String requestCode;
+    @Column(name = "request_title", unique = true, length = 100)
+    private String requestTitle;
 
     @Column(name = "status", length = 50)
     private String status; // PENDING, APPROVED, REJECTED, CANCELLED
 
-    @Column(name = "submitted_date")
-    private LocalDateTime submittedDate;
+    @Column(name = "request_date")
+    private LocalDateTime requestDate;
 
-    @Column(name = "reviewed_date")
-    private LocalDateTime reviewedDate;
 
-    @Column(name = "reviewer_notes", columnDefinition = "TEXT")
-    private String reviewerNotes;
+    @Column(name = "responseMessage", columnDefinition = "TEXT")
+    private String responseMessage;
 
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "event_id", nullable = false)
+    @OneToOne(mappedBy = "requestEvent", cascade = CascadeType.ALL)
     private Event event;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "created_by", nullable = false)
+    private User createdBy;
+
+
 }
 

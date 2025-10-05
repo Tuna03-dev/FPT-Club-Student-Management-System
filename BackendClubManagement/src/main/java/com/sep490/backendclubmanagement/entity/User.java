@@ -19,20 +19,14 @@ public class User extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "username", unique = true, nullable = false, length = 100)
-    private String username;
-
-    @Column(name = "password", nullable = false)
-    private String password;
-
     @Column(name = "email", unique = true, nullable = false, length = 100)
     private String email;
 
     @Column(name = "full_name", nullable = false, length = 200)
     private String fullName;
 
-    @Column(name = "phone", length = 20)
-    private String phone;
+    @Column(name = "phone_number", length = 20)
+    private String phoneNumber;
 
     @Column(name = "student_code", unique = true, length = 50)
     private String studentCode;
@@ -46,23 +40,18 @@ public class User extends BaseEntity {
     @Column(name = "avatar_url", length = 500)
     private String avatarUrl;
 
-    @Column(name = "address", columnDefinition = "TEXT")
-    private String address;
-
     @Column(name = "is_active", nullable = false)
     private Boolean isActive = true;
+
+    @Column(name = "provider", length = 50)
+    private String provider;
+
+    @Column(name = "provider_id", length = 100)
+    private String providerId;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "system_role_id")
     private SystemRole systemRole;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "campus_id")
-    private Campus campus;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "admin_department_id")
-    private AdminDepartment adminDepartment;
 
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL)
     private Set<ClubMemberShip> clubMemberships;
@@ -87,5 +76,15 @@ public class User extends BaseEntity {
 
     @OneToMany(mappedBy = "submittedBy", cascade = CascadeType.ALL)
     private Set<Report> reports;
+
+    @OneToMany(mappedBy = "createdBy", cascade = CascadeType.ALL)
+    private Set<RequestNews> createdRequestNews;
+
+
+    @OneToMany(mappedBy = "createdBy", cascade = CascadeType.ALL)
+    private Set<RequestEvent> createdRequestEvents;
+
+    @OneToMany(mappedBy = "actedBy", cascade = CascadeType.ALL)
+    private Set<ClubCreationWorkFlowHistory> clubCreationWorkFlowHistories;
 }
 

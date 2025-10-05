@@ -27,22 +27,21 @@ public class News extends BaseEntity {
     @Column(name = "thumbnail_url", length = 500)
     private String thumbnailUrl;
 
-    @Column(name = "author", length = 200)
-    private String author;
+    @Column(name = "news_type", length = 100)
+    private String newsType;
 
-    @Column(name = "published_date")
-    private LocalDateTime publishedDate;
+    @Column(name = "status", length = 100)
+    private String status; // DRAFT, PUBLISHED, ARCHIVED
 
-    @Column(name = "status", length = 50)
-    private String status;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "created_by", nullable = false)
+    private User createdBy;
 
-    @Column(name = "view_count", nullable = false)
-    private Long viewCount = 0L;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "club_id", nullable = false)
+    private Club club;
 
-    @Column(name = "is_pinned", nullable = false)
-    private Boolean isPinned = false;
-
-    @Column(name = "category", length = 100)
-    private String category;
+    @OneToOne(mappedBy = "news", cascade = CascadeType.ALL)
+    private RequestNews requestNews;
 }
 

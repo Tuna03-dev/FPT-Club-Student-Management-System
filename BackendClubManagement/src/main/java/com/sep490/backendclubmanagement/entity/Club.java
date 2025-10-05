@@ -30,8 +30,8 @@ public class Club extends BaseEntity {
     @Column(name = "logo_url", length = 500)
     private String logoUrl;
 
-    @Column(name = "cover_image_url", length = 500)
-    private String coverImageUrl;
+    @Column(name = "banner_url", length = 500)
+    private String bannerUrl;
 
     @Column(name = "email", length = 100)
     private String email;
@@ -39,17 +39,14 @@ public class Club extends BaseEntity {
     @Column(name = "phone", length = 20)
     private String phone;
 
-    @Column(name = "address", columnDefinition = "TEXT")
-    private String address;
-
-    @Column(name = "facebook_url", length = 500)
-    private String facebookUrl;
-
-    @Column(name = "website_url", length = 500)
-    private String websiteUrl;
-
-    @Column(name = "is_active", nullable = false)
-    private Boolean isActive = true;
+    @Column(name = "fb_url", length = 500)
+    private String fbUrl;
+    @Column(name = "ig_url", length = 500)
+    private String igUrl;
+    @Column(name = "tt_url", length = 500)
+    private String ttUrl;
+    @Column(name = "yt_url", length = 500)
+    private String ytUrl;
 
     @Column(name = "status", length = 50)
     private String status;
@@ -61,6 +58,8 @@ public class Club extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "club_category_id")
     private ClubCategory clubCategory;
+
+
 
     @OneToMany(mappedBy = "club", cascade = CascadeType.ALL)
     private Set<ClubMemberShip> clubMemberships;

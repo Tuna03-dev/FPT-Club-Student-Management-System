@@ -37,9 +37,6 @@ public class EventAttendance extends BaseEntity {
     @Column(name = "check_in_time")
     private LocalDateTime checkInTime;
 
-    @Column(name = "check_out_time")
-    private LocalDateTime checkOutTime;
-
     @Column(name = "notes", columnDefinition = "TEXT")
     private String notes;
 }

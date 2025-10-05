@@ -25,20 +25,11 @@ public class Post extends BaseEntity {
     @Column(name = "content", nullable = false, columnDefinition = "TEXT")
     private String content;
 
-    @Column(name = "image_url", length = 500)
-    private String imageUrl;
-
-    @Column(name = "video_url", length = 500)
-    private String videoUrl;
-
     @Column(name = "status", length = 50)
     private String status;
 
-    @Column(name = "published_date")
-    private LocalDateTime publishedDate;
-
-    @Column(name = "view_count", nullable = false)
-    private Long viewCount = 0L;
+    @Column(name = "is_within_club", nullable = false)
+    private boolean IsWithinClub;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "club_id")
@@ -53,5 +44,8 @@ public class Post extends BaseEntity {
 
     @OneToMany(mappedBy = "post", cascade = CascadeType.ALL)
     private Set<Like> likes;
+
+    @OneToMany(mappedBy = "post", cascade = CascadeType.ALL)
+    private Set<PostMedia> postMedia;
 }
 

@@ -19,8 +19,8 @@ public class Event extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "event_name", nullable = false, length = 300)
-    private String eventName;
+    @Column(name = "title", nullable = false, length = 300)
+    private String title;
 
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
@@ -34,20 +34,9 @@ public class Event extends BaseEntity {
     @Column(name = "end_time", nullable = false)
     private LocalDateTime endTime;
 
-    @Column(name = "registration_deadline")
-    private LocalDateTime registrationDeadline;
-
-    @Column(name = "max_participants")
-    private Integer maxParticipants;
-
     @Column(name = "status", length = 50)
     private String status;
 
-    @Column(name = "thumbnail_url", length = 500)
-    private String thumbnailUrl;
-
-    @Column(name = "is_public", nullable = false)
-    private Boolean isPublic = true;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "club_id", nullable = false)
@@ -57,9 +46,6 @@ public class Event extends BaseEntity {
     @JoinColumn(name = "event_type_id")
     private EventType eventType;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "semester_id")
-    private Semester semester;
 
     @OneToMany(mappedBy = "event", cascade = CascadeType.ALL)
     private Set<EventMedia> eventMedia;
@@ -67,7 +53,8 @@ public class Event extends BaseEntity {
     @OneToMany(mappedBy = "event", cascade = CascadeType.ALL)
     private Set<EventAttendance> eventAttendances;
 
-    @OneToMany(mappedBy = "event", cascade = CascadeType.ALL)
-    private Set<RequestEvent> requestEvents;
+    @OneToOne
+    @JoinColumn(name = "request_event_id", referencedColumnName = "id")
+    private RequestEvent requestEvent;
 }
 
