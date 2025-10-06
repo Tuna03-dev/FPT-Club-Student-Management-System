@@ -13,7 +13,6 @@ const setAccessToken = (token: string): void =>
 
 const removeTokens = (): void => {
   localStorage.removeItem("accessToken");
-  localStorage.removeItem("refreshToken");
 };
 
 // ===== API Response wrapper (match backend ApiResponse<T>) =====
