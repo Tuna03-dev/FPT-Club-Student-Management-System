@@ -28,8 +28,9 @@ public class RequestEstablishment extends BaseEntity {
     @Column(name = "club_code", unique = true, length = 50)
     private String clubCode;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 50)
-    private String status; // DRAFT, SUBMITTED, UNDER_REVIEW, APPROVED, REJECTED
+    private RequestEstablishmentStatus status;
 
     @Column(name = "send_date")
     private LocalDateTime sendDate;

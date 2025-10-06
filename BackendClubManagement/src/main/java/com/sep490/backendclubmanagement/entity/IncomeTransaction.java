@@ -19,8 +19,8 @@ public class IncomeTransaction extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "transaction_code", unique = true, length = 100)
-    private String transactionCode;
+    @Column(name = "reference", unique = true, length = 100)
+    private String reference;
 
     @Column(name = "amount", nullable = false, precision = 15, scale = 2)
     private BigDecimal amount;
@@ -34,8 +34,9 @@ public class IncomeTransaction extends BaseEntity {
     @Column(name = "source", length = 200)
     private String source;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 50)
-    private String status;
+    private TransactionStatus status;
 
     @Column(name = "notes", columnDefinition = "TEXT")
     private String notes;
@@ -51,5 +52,9 @@ public class IncomeTransaction extends BaseEntity {
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "payos_payment_id")
     private PayOSPayment payOSPayment;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id")
+    private User user;
 }
 

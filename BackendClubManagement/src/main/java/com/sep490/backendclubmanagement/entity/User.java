@@ -74,7 +74,7 @@ public class User extends BaseEntity {
     @OneToMany(mappedBy = "applicant", cascade = CascadeType.ALL)
     private Set<RecruitmentApplication> recruitmentApplications;
 
-    @OneToMany(mappedBy = "submittedBy", cascade = CascadeType.ALL)
+    @OneToMany(mappedBy = "createdBy", cascade = CascadeType.ALL)
     private Set<Report> reports;
 
     @OneToMany(mappedBy = "createdBy", cascade = CascadeType.ALL)
@@ -86,5 +86,8 @@ public class User extends BaseEntity {
 
     @OneToMany(mappedBy = "actedBy", cascade = CascadeType.ALL)
     private Set<ClubCreationWorkFlowHistory> clubCreationWorkFlowHistories;
+
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL)
+    private Set<IncomeTransaction> incomeTransactions;
 }
 

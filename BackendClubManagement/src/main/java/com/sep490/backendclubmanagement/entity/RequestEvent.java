@@ -21,8 +21,9 @@ public class RequestEvent extends BaseEntity {
     @Column(name = "request_title", unique = true, length = 100)
     private String requestTitle;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 50)
-    private String status; // PENDING, APPROVED, REJECTED, CANCELLED
+    private RequestStatus status;
 
     @Column(name = "request_date")
     private LocalDateTime requestDate;

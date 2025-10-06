@@ -30,8 +30,8 @@ public class News extends BaseEntity {
     @Column(name = "news_type", length = 100)
     private String newsType;
 
-    @Column(name = "status", length = 100)
-    private String status; // DRAFT, PUBLISHED, ARCHIVED
+    @Column(name = "is_draft")
+    private Boolean isDraft = true;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "created_by", nullable = false)

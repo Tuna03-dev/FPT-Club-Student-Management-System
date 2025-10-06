@@ -32,7 +32,8 @@ public class EventAttendance extends BaseEntity {
     private LocalDateTime registrationTime;
 
     @Column(name = "attendance_status", length = 50)
-    private String attendanceStatus; // REGISTERED, ATTENDED, ABSENT, CANCELLED
+    @Enumerated(EnumType.STRING)
+    private AttendanceStatus attendanceStatus; // REGISTERED, ATTENDED, ABSENT, CANCELLED
 
     @Column(name = "check_in_time")
     private LocalDateTime checkInTime;

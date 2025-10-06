@@ -35,6 +35,19 @@ public class ClubWallet extends BaseEntity {
     @Column(name = "currency", length = 10)
     private String currency = "VND";
 
+    @Column(name = "payOs_client_id", length = 100)
+    private String payOsClientId;
+
+    @Column(name = "payOs_api_key", length = 100)
+    private String payOsApiKey;
+
+    @Column(name = "payOs_checksum_key", length = 100)
+    private String payOsChecksumKey;
+
+    @Column(name = "payOs_status", length = 100)
+    private String payOsStatus;
+
+
     @OneToMany(mappedBy = "clubWallet", cascade = CascadeType.ALL)
     private Set<IncomeTransaction> incomeTransactions;
 

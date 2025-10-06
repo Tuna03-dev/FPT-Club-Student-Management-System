@@ -19,6 +19,17 @@ public class PayOSPayment extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    // Response fields
+    @Column(name = "code", length = 10)
+    private String code; // Mã phản hồi từ PayOS ("00" = success)
+
+    @Column(name = "success")
+    private Boolean success; // Trạng thái thành công
+
+    @Column(name = "signature", length = 500)
+    private String signature; // Chữ ký để verify webhook
+
+    // Payment data fields
     @Column(name = "transaction_code", unique = true, length = 100)
     private String transactionCode;
 
@@ -31,8 +42,24 @@ public class PayOSPayment extends BaseEntity {
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
 
+    @Column(name = "account_number", length = 50)
+    private String accountNumber; // Số tài khoản nhận tiền
+
+    @Column(name = "reference", length = 100)
+    private String reference; // Mã tham chiếu giao dịch (VD: TF230204212323)
+
+    @Column(name = "transaction_date_time")
+    private LocalDateTime transactionDateTime; // Thời gian giao dịch thực tế từ PayOS
+
+    @Column(name = "currency", length = 10)
+    private String currency; // Đơn vị tiền tệ (VND)
+
+    @Column(name = "payment_link_id", length = 100)
+    private String paymentLinkId; // ID của payment link
+
+    @Enumerated(EnumType.STRING)
     @Column(name = "payment_status", length = 50)
-    private String paymentStatus; // PENDING, SUCCESS, FAILED, CANCELLED
+    private PaymentStatus paymentStatus;
 
     @Column(name = "payment_method", length = 50)
     private String paymentMethod;
@@ -40,14 +67,26 @@ public class PayOSPayment extends BaseEntity {
     @Column(name = "payment_time")
     private LocalDateTime paymentTime;
 
-    @Column(name = "callback_url", length = 500)
-    private String callbackUrl;
+    // Counter account information (người chuyển tiền)
+    @Column(name = "counter_account_bank_id", length = 50)
+    private String counterAccountBankId; // ID ngân hàng người chuyển
 
-    @Column(name = "return_url", length = 500)
-    private String returnUrl;
+    @Column(name = "counter_account_bank_name", length = 255)
+    private String counterAccountBankName; // Tên ngân hàng người chuyển
 
-    @Column(name = "cancel_url", length = 500)
-    private String cancelUrl;
+    @Column(name = "counter_account_name", length = 255)
+    private String counterAccountName; // Tên người chuyển
+
+    @Column(name = "counter_account_number", length = 50)
+    private String counterAccountNumber; // Số tài khoản người chuyển
+
+    // Virtual account information
+    @Column(name = "virtual_account_name", length = 255)
+    private String virtualAccountName; // Tên tài khoản ảo
+
+    @Column(name = "virtual_account_number", length = 50)
+    private String virtualAccountNumber; // Số tài khoản ảo
+
 
     @OneToOne(mappedBy = "payOSPayment", cascade = CascadeType.ALL)
     private IncomeTransaction incomeTransaction;

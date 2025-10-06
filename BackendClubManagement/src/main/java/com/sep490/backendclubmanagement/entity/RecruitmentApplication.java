@@ -26,8 +26,9 @@ public class RecruitmentApplication extends BaseEntity {
     @Column(name = "team_id")
     private Long teamId;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 50)
-    private String status; // SUBMITTED, UNDER_REVIEW, ACCEPTED, REJECTED, WITHDRAWN
+    private RecruitmentApplicationStatus status;
 
     @Column(name = "review_notes", columnDefinition = "TEXT")
     private String reviewNotes;

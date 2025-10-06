@@ -19,17 +19,18 @@ public class Report extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "report_code", unique = true, length = 100)
-    private String reportCode;
-
     @Column(name = "report_title", nullable = false, length = 500)
     private String reportTitle;
 
     @Column(name = "content", columnDefinition = "TEXT")
     private String content;
 
+    @Column(name = "file_url", length = 500)
+    private String fileUrl;
+
+    @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 50)
-    private String status; // DRAFT, SUBMITTED, UNDER_REVIEW, APPROVED, REJECTED
+    private ReportStatus status;
 
     @Column(name = "submitted_date")
     private LocalDateTime submittedDate;
@@ -49,14 +50,13 @@ public class Report extends BaseEntity {
     private Semester semester;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "submitted_by")
-    private User submittedBy;
+    @JoinColumn(name = "createdBy")
+    private User createdBy;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "report_requirement_id")
     private SubmissionReportRequirement reportRequirement;
 
-    @OneToMany(mappedBy = "report", cascade = CascadeType.ALL)
-    private Set<Attachment> attachments;
+
 }
 

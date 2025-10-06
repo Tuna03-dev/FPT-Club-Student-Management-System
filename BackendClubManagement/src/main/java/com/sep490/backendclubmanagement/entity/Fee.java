@@ -20,8 +20,8 @@ public class Fee extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "fee_name", nullable = false, length = 200)
-    private String feeName;
+    @Column(name = "title", nullable = false, length = 200)
+    private String title;
 
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
@@ -30,7 +30,8 @@ public class Fee extends BaseEntity {
     private BigDecimal amount;
 
     @Column(name = "fee_type", length = 50)
-    private String feeType; // MEMBERSHIP, EVENT, OTHER
+    @Enumerated(EnumType.STRING)
+    private FeeType feeType; // MEMBERSHIP, EVENT, OTHER
 
     @Column(name = "due_date")
     private LocalDate dueDate;

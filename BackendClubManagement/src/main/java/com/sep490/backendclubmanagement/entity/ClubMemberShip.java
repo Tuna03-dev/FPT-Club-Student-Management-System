@@ -36,7 +36,8 @@ public class ClubMemberShip extends BaseEntity {
     private LocalDate endDate;
 
     @Column(name = "status", length = 50)
-    private String status;
+    @Enumerated(EnumType.STRING)
+    private ClubMemberShipStatus status;
 
     @OneToMany(mappedBy = "clubMemberShip", cascade = CascadeType.ALL)
     private Set<RoleMemberShip> roleMemberships;

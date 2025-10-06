@@ -3,7 +3,7 @@ spring:
     name: BackendClubManagement
 
   datasource:
-#    url: jdbc:mysql://gateway01.ap-southeast-1.prod.aws.tidbcloud.com:4000/club_management?sslMode=VERIFY_IDENTITY&sslCa=G:/CA_certs/isrgrootx1.pem
+  #    url: jdbc:mysql://gateway01.ap-southeast-1.prod.aws.tidbcloud.com:4000/club_management?sslMode=VERIFY_IDENTITY&sslCa=G:/CA_certs/isrgrootx1.pem
     url: jdbc:mysql://gateway01.ap-southeast-1.prod.aws.tidbcloud.com:4000/club_management
     username: 3qdsTBXEMihebbR.root
     password: qgq9y3u5zMrPcYr6

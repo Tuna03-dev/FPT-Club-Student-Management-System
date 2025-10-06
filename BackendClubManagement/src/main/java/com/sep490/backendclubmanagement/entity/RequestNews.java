@@ -27,8 +27,9 @@ public class RequestNews extends BaseEntity {
     @Column(name = "response_message", nullable = false, columnDefinition = "TEXT")
     private String responseMessage;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 50)
-    private String status; // PENDING, APPROVED, REJECTED, CANCELLED
+    private RequestStatus status;
 
     @Column(name = "request_date")
     private LocalDateTime requestDate;

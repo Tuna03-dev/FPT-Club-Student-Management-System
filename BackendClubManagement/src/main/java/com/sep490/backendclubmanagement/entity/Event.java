@@ -34,9 +34,8 @@ public class Event extends BaseEntity {
     @Column(name = "end_time", nullable = false)
     private LocalDateTime endTime;
 
-    @Column(name = "status", length = 50)
-    private String status;
-
+    @Column(name = "is_draft")
+    private Boolean isDraft = true;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "club_id", nullable = false)
@@ -56,5 +55,7 @@ public class Event extends BaseEntity {
     @OneToOne
     @JoinColumn(name = "request_event_id", referencedColumnName = "id")
     private RequestEvent requestEvent;
+
+
 }
 

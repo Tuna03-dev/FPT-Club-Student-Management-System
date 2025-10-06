@@ -34,8 +34,9 @@ public class Recruitment extends BaseEntity {
     @Column(name = "max_applicants")
     private Integer maxApplicants;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 50)
-    private String status; // DRAFT, OPEN, CLOSED, CANCELLED
+    private RecruitmentStatus status;
 
     @Column(name = "requirements", columnDefinition = "TEXT")
     private String requirements;
