@@ -18,32 +18,30 @@ public class RequestNews extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "request_code", unique = true, length = 100)
-    private String requestCode;
+    @Column(name = "request_title", nullable = false, length = 500)
+    private String requestTitle;
 
-    @Column(name = "title", nullable = false, length = 500)
-    private String title;
+    @Column(name = "description", nullable = false, columnDefinition = "TEXT")
+    private String description;
 
-    @Column(name = "content", nullable = false, columnDefinition = "TEXT")
-    private String content;
+    @Column(name = "response_message", nullable = false, columnDefinition = "TEXT")
+    private String responseMessage;
 
-    @Column(name = "thumbnail_url", length = 500)
-    private String thumbnailUrl;
-
+    @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 50)
-    private String status; // PENDING, APPROVED, REJECTED, CANCELLED
+    private RequestStatus status;
 
-    @Column(name = "submitted_date")
-    private LocalDateTime submittedDate;
-
-    @Column(name = "reviewed_date")
-    private LocalDateTime reviewedDate;
-
-    @Column(name = "reviewer_notes", columnDefinition = "TEXT")
-    private String reviewerNotes;
+    @Column(name = "request_date")
+    private LocalDateTime requestDate;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "club_id", nullable = false)
-    private Club club;
+    @JoinColumn(name = "created_by", nullable = false)
+    private User createdBy;
+
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "news_id", unique = true)
+    private News news;
+
+
 }
 

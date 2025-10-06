@@ -37,8 +37,9 @@ public class OutcomeTransaction extends BaseEntity {
     @Column(name = "purpose", length = 200)
     private String purpose;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 50)
-    private String status;
+    private TransactionStatus status;
 
     @Column(name = "notes", columnDefinition = "TEXT")
     private String notes;

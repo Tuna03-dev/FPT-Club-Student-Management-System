@@ -34,9 +34,6 @@ public class Campus extends BaseEntity {
     private String email;
 
     @OneToMany(mappedBy = "campus", cascade = CascadeType.ALL)
-    private Set<User> users;
-
-    @OneToMany(mappedBy = "campus", cascade = CascadeType.ALL)
     private Set<Club> clubs;
 
     @OneToMany(mappedBy = "campus", cascade = CascadeType.ALL)

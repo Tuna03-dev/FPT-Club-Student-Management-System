@@ -24,14 +24,8 @@ public class RecruitmentFormQuestion extends BaseEntity {
     @Column(name = "question_type", length = 50)
     private String questionType; // TEXT, MULTIPLE_CHOICE, CHECKBOX, RADIO, FILE_UPLOAD
 
-    @Column(name = "is_required", nullable = false)
-    private Boolean isRequired = false;
-
     @Column(name = "question_order")
     private Integer questionOrder;
-
-    @Column(name = "max_length")
-    private Integer maxLength;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "recruitment_id", nullable = false)

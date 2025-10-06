@@ -3,8 +3,6 @@ package com.sep490.backendclubmanagement.entity;
 import jakarta.persistence.*;
 import lombok.*;
 
-import java.util.Set;
-
 @Entity
 @Table(name = "admin_departments")
 @Getter
@@ -24,8 +22,8 @@ public class AdminDepartment extends BaseEntity {
     @Column(name = "department_code", unique = true, length = 50)
     private String departmentCode;
 
-    @Column(name = "description", columnDefinition = "TEXT")
-    private String description;
+    @Column(name = "sort_description", columnDefinition = "TEXT")
+    private String sortDescription;
 
     @Column(name = "phone", length = 20)
     private String phone;
@@ -33,14 +31,26 @@ public class AdminDepartment extends BaseEntity {
     @Column(name = "email", length = 100)
     private String email;
 
+    @Column(name = "fb_link", length = 500)
+    private String fbLink;
+
+    @Column(name = "ig_link", length = 500)
+    private String igLink;
+
+    @Column(name = "tt_link", length = 500)
+    private String ttLink;
+
+    @Column(name = "yt_link", length = 500)
+    private String ytLink;
+
+    @Column(name = "avatar_url", length = 500)
+    private String avatarUrl;
+
+    @Column(name = "banner_url", length = 500)
+    private String bannerUrl;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "campus_id")
     private Campus campus;
-
-    @OneToMany(mappedBy = "adminDepartment", cascade = CascadeType.ALL)
-    private Set<User> users;
-
-    @OneToMany(mappedBy = "adminDepartment", cascade = CascadeType.ALL)
-    private Set<SubmissionReportRequirement> reportRequirements;
 }
 

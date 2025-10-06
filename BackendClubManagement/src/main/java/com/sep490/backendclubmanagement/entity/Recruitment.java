@@ -19,8 +19,8 @@ public class Recruitment extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "recruitment_name", nullable = false, length = 300)
-    private String recruitmentName;
+    @Column(name = "title", nullable = false, length = 300)
+    private String title;
 
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
@@ -34,8 +34,9 @@ public class Recruitment extends BaseEntity {
     @Column(name = "max_applicants")
     private Integer maxApplicants;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 50)
-    private String status; // DRAFT, OPEN, CLOSED, CANCELLED
+    private RecruitmentStatus status;
 
     @Column(name = "requirements", columnDefinition = "TEXT")
     private String requirements;
@@ -43,10 +44,6 @@ public class Recruitment extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "club_id", nullable = false)
     private Club club;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "semester_id")
-    private Semester semester;
 
     @OneToMany(mappedBy = "recruitment", cascade = CascadeType.ALL)
     private Set<RecruitmentFormQuestion> formQuestions;

@@ -19,27 +19,29 @@ public class RequestEstablishment extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "request_code", unique = true, length = 100)
-    private String requestCode;
+    @Column(name = "club_name", nullable = false, length = 100)
+    private String clubName;
 
+    @Column(name = "club_category", nullable = false, length = 100)
+    private String clubCategory;
+
+    @Column(name = "club_code", unique = true, length = 50)
+    private String clubCode;
+
+    @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 50)
-    private String status; // DRAFT, SUBMITTED, UNDER_REVIEW, APPROVED, REJECTED
+    private RequestEstablishmentStatus status;
 
-    @Column(name = "submitted_date")
-    private LocalDateTime submittedDate;
+    @Column(name = "send_date")
+    private LocalDateTime sendDate;
 
-    @Column(name = "reviewed_date")
-    private LocalDateTime reviewedDate;
-
-    @Column(name = "notes", columnDefinition = "TEXT")
-    private String notes;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "created_by", nullable = false)
     private User createdBy;
 
-    @OneToOne(mappedBy = "requestEstablishment", cascade = CascadeType.ALL)
-    private ClubProposal clubProposal;
+    @OneToMany(mappedBy = "requestEstablishment", cascade = CascadeType.ALL)
+    private Set<ClubProposal> clubProposals;
 
     @OneToMany(mappedBy = "requestEstablishment", cascade = CascadeType.ALL)
     private Set<ClubCreationWorkFlowHistory> workflowHistories;

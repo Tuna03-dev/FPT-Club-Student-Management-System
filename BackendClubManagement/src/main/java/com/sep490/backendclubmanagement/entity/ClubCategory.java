@@ -21,9 +21,6 @@ public class ClubCategory extends BaseEntity {
     @Column(name = "category_name", nullable = false, unique = true, length = 100)
     private String categoryName;
 
-    @Column(name = "description", columnDefinition = "TEXT")
-    private String description;
-
     @OneToMany(mappedBy = "clubCategory", cascade = CascadeType.ALL)
     private Set<Club> clubs;
 }
