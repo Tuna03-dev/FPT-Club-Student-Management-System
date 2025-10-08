@@ -25,3 +25,9 @@ jwt:
   secret-key: ${JWT_SECRET_KEY:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
   access-token-expiration: 86400000 # 24 hours in milliseconds
   refresh-token-expiration: 604800000 # 7 days in milliseconds
+
+google:
+  client-id: "982768167645-ol552hiben0blq9es83e1b2ici5l56nj.apps.googleusercontent.com"
+
+auth:
+  allowed-users-json: "classpath:allowed-users.json"
