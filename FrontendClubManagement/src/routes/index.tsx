@@ -1,10 +1,27 @@
+import { createBrowserRouter, Navigate } from "react-router-dom";
+import { ClubLayout } from "@/layouts/ClubLayout";
+
+import { Dashboard } from "@/pages/myclub/Dashboard";
+import { MemberList } from "@/pages/myclub/members/MemberList";
+import { EventList } from "@/pages/myclub/events/EventList";
+import { Notifications } from "@/pages/myclub/Notifications";
+import { Settings } from "@/pages/myclub/Settings";
 import { createBrowserRouter } from 'react-router-dom';
 import LoginPage from '../pages/LoginPage/LoginPage';
 import Dashboard from '../pages/Dashboard/Dashboard';
 import ProtectedRoute from '../components/ProtectedRoute';
 
+/**
+ * Main application router
+ */
 export const router = createBrowserRouter([
   {
+    path: "/",
+    element: <Navigate to="/myclub" replace />,
+  },
+  {
+    path: "/myclub",
+    element: <ClubLayout />,
     path: '/login',
     element: <LoginPage />,
   },
@@ -22,11 +39,27 @@ export const router = createBrowserRouter([
     children: [
       {
         index: true,
-        element: <div>Home Page</div>,
+        element: <Dashboard />,
       },
       {
-        path: 'about',
-        element: <div>About Page</div>,
+        path: "members",
+        element: <MemberList />,
+      },
+      {
+        path: "events",
+        element: <EventList />,
+      },
+      {
+        path: "notifications",
+        element: <Notifications />,
+      },
+      {
+        path: "settings",
+        element: <Settings />,
+      },
+      {
+        path: "team/:slug",
+        element: <Dashboard />,
       },
     ],
   },
