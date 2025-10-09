@@ -1,0 +1,117 @@
+.login-container {
+  min-height: 100vh;
+  background-color: #f8f8f8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen",
+    "Ubuntu", "Cantarell", sans-serif;
+}
+
+.login-card {
+  background: white;
+  border-radius: 16px;
+  padding: 48px 40px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  max-width: 480px;
+  width: 100%;
+  text-align: center;
+  position: relative;
+}
+
+.logo-container {
+  margin-bottom: 32px;
+}
+
+.logo-container img {
+  max-width: 200px;
+  height: auto;
+  display: block;
+  margin: 0 auto;
+}
+
+.main-title {
+  font-size: 28px;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin: 0 0 16px 0;
+  line-height: 1.2;
+}
+
+.subtitle-tag {
+  margin-bottom: 24px;
+}
+
+.subtitle-tag span {
+  background-color: #feece9;
+  color: #e5533d;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.description {
+  font-size: 16px;
+  color: #666;
+  margin: 0 0 32px 0;
+  line-height: 1.5;
+}
+
+.google-login-container {
+  margin-bottom: 10px;
+}
+
+.google-login-container > div {
+  width: 100%;
+}
+
+.instruction {
+  font-size: 14px;
+  color: #666;
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* Responsive design */
+@media (max-width: 640px) {
+  .login-card {
+    padding: 32px 24px;
+    margin: 16px;
+  }
+
+  .main-title {
+    font-size: 24px;
+  }
+
+  .description {
+    font-size: 14px;
+  }
+}
+
+/* Loading state */
+.loading {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+/* Google button custom styling */
+.gsi-material-button {
+  width: 100% !important;
+  height: 48px !important;
+  border-radius: 8px !important;
+  border: 1px solid #e0e0e0 !important;
+  background: white !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05) !important;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen",
+    "Ubuntu", "Cantarell", sans-serif !important;
+}
+
+.gsi-material-button:hover {
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1) !important;
+}
+
+.gsi-material-button .gsi-material-button-icon {
+  margin-right: 12px !important;
+}
