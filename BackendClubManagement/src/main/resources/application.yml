@@ -30,4 +30,4 @@ google:
   client-id: "982768167645-ol552hiben0blq9es83e1b2ici5l56nj.apps.googleusercontent.com"
 
 auth:
-  allowed-users-json: "classpath:allowed-users.json"
+  allowed-users-api-url: ${ALLOWED_USERS_API_URL:http://localhost:8081/api/allowed-users}

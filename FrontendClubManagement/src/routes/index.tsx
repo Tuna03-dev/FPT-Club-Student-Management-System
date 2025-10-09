@@ -6,10 +6,8 @@ import { MemberList } from "@/pages/myclub/members/MemberList";
 import { EventList } from "@/pages/myclub/events/EventList";
 import { Notifications } from "@/pages/myclub/Notifications";
 import { Settings } from "@/pages/myclub/Settings";
-import { createBrowserRouter } from 'react-router-dom';
-import LoginPage from '../pages/LoginPage/LoginPage';
-import Dashboard from '../pages/Dashboard/Dashboard';
-import ProtectedRoute from '../components/ProtectedRoute';
+import ProtectedRoute from "../components/ProtectedRoute";
+import LoginPage from "@/pages/LoginPage/LoginPage";
 
 /**
  * Main application router
@@ -22,11 +20,13 @@ export const router = createBrowserRouter([
   {
     path: "/myclub",
     element: <ClubLayout />,
-    path: '/login',
+  },
+  {
+    path: "/login",
     element: <LoginPage />,
   },
   {
-    path: '/dashboard',
+    path: "/dashboard",
     element: (
       <ProtectedRoute>
         <Dashboard />
@@ -34,7 +34,7 @@ export const router = createBrowserRouter([
     ),
   },
   {
-    path: '/',
+    path: "/",
     element: <div>Main Layout</div>,
     children: [
       {
@@ -64,20 +64,20 @@ export const router = createBrowserRouter([
     ],
   },
   {
-    path: '*',
+    path: "*",
     element: <div>404 Not Found</div>,
   },
 ]);
 
 /**
  * USAGE EXAMPLES:
- * 
+ *
  * 1. Basic Route:
  * {
  *   path: '/about',
  *   element: <AboutPage />,
  * }
- * 
+ *
  * 2. Nested Routes:
  * {
  *   path: '/dashboard',
@@ -87,27 +87,27 @@ export const router = createBrowserRouter([
  *     { path: 'settings', element: <Settings /> },
  *   ]
  * }
- * 
+ *
  * 3. Lazy Loading:
  * const HomePage = lazy(() => import('@/pages/Home'));
  * {
  *   path: '/',
  *   element: <Suspense fallback={<Loading />}><HomePage /></Suspense>
  * }
- * 
+ *
  * 4. Protected Routes:
  * {
  *   path: '/admin',
  *   element: <ProtectedRoute><AdminLayout /></ProtectedRoute>,
  *   children: [...]
  * }
- * 
+ *
  * 5. Dynamic Routes:
  * {
  *   path: '/users/:userId',
  *   element: <UserProfile />,
  * }
- * 
+ *
  * 6. Route with Loader (Data Fetching):
  * {
  *   path: '/posts/:postId',
