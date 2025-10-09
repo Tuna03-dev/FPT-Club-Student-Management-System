@@ -1,4 +1,4 @@
-import { Settings as SettingsIcon, User, Lock, Bell, Globe } from "lucide-react";
+import {User, Lock, Bell, Globe } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
