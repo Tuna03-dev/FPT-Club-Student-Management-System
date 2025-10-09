@@ -34,7 +34,8 @@ public class DefenseSchedule extends BaseEntity {
     private String notes;
 
     @Column(name = "result", length = 50)
-    private String result; // PASSED, FAILED, PENDING
+    @Enumerated(EnumType.STRING)
+    private DefenseScheduleStatus result; // PASSED, FAILED, PENDING
 
     @Column(name = "feedback", columnDefinition = "TEXT")
     private String feedback;

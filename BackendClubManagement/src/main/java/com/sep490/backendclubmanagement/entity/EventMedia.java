@@ -24,10 +24,8 @@ public class EventMedia extends BaseEntity {
     private String mediaUrl;
 
     @Column(name = "media_type", length = 50)
-    private String mediaType; // IMAGE, VIDEO, etc.
-
-    @Column(name = "caption", columnDefinition = "TEXT")
-    private String caption;
+    @Enumerated(EnumType.STRING)
+    private MediaType mediaType; // IMAGE, VIDEO, etc.
 
     @Column(name = "display_order")
     private Integer displayOrder;

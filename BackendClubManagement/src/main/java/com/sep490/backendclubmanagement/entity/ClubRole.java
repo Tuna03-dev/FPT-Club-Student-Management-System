@@ -21,17 +21,24 @@ public class ClubRole extends BaseEntity {
     @Column(name = "role_name", nullable = false, length = 100)
     private String roleName;
 
+    @Column(name = "role_code", nullable = false, length = 100)
+    private String roleCode;
+
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
 
-    @Column(name = "level", nullable = false)
-    private Integer level;
+    @Column(name = "role_level", nullable = false)
+    private Integer roleLevel;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "club_id")
     private Club club;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "system_role_id")
+    private SystemRole systemRole;
+
     @OneToMany(mappedBy = "clubRole", cascade = CascadeType.ALL)
-    private Set<ClubMemberShip> clubMemberships;
+    private Set<RoleMemberShip> roleMemberships;
 }
 

@@ -35,10 +35,8 @@ public class Semester extends BaseEntity {
     private Boolean isCurrent = false;
 
     @OneToMany(mappedBy = "semester", cascade = CascadeType.ALL)
-    private Set<Event> events;
+    private Set<RoleMemberShip> roleMemberships;
 
-    @OneToMany(mappedBy = "semester", cascade = CascadeType.ALL)
-    private Set<Recruitment> recruitments;
 
     @OneToMany(mappedBy = "semester", cascade = CascadeType.ALL)
     private Set<Report> reports;

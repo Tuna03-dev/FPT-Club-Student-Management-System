@@ -19,14 +19,16 @@ public class RecruitmentApplication extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "application_code", unique = true, length = 100)
-    private String applicationCode;
 
     @Column(name = "submitted_date")
     private LocalDateTime submittedDate;
 
+    @Column(name = "team_id")
+    private Long teamId;
+
+    @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 50)
-    private String status; // SUBMITTED, UNDER_REVIEW, ACCEPTED, REJECTED, WITHDRAWN
+    private RecruitmentApplicationStatus status;
 
     @Column(name = "review_notes", columnDefinition = "TEXT")
     private String reviewNotes;
