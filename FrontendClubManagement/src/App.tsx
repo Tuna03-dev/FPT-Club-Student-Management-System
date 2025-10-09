@@ -1,11 +1,9 @@
+import { RouterProvider } from "react-router-dom";
+import { router } from "./routes";
 import "./App.css";
-import TestApi from "./TestApi";
+
 function App() {
-  return (
-    <>
-      <TestApi />
-    </>
-  );
+  return <RouterProvider router={router} />;
 }
 
 export default App;
