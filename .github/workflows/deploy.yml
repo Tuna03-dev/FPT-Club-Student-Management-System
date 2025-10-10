@@ -57,7 +57,7 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           source: "${{ env.BUILD_CONTEXT }}/docker-compose.yml"
-          target: "~/BackendClubManagement/"
+          target: "~/"
           overwrite: true
 
       # 6. Deploy on server via SSH
