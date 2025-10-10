@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      IMAGE_NAME: minhtuan2811/fcm-backend:latest
+      IMAGE_NAME: minhtuan2811/fcm-backend
       BUILD_CONTEXT: ./BackendClubManagement
       DOCKERFILE_PATH: BackendClubManagement
 
