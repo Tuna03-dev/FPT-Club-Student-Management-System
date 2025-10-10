@@ -12,7 +12,7 @@ jobs:
 
     env:
       IMAGE_NAME: minhtuan2811/fcm-backend
-      BUILD_CONTEXT: ./BackendClubManagement
+      BUILD_CONTEXT: BackendClubManagement
       DOCKERFILE_PATH: Dockerfile
 
     steps:
@@ -53,7 +53,7 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           source: "${{ env.BUILD_CONTEXT }}/docker-compose.yml" # File ở root repo
-          target: "~/fcm-backend/" # Tạo file ~/fcm-backend/docker-compose.yml trên server
+          target: "~/fcm-backend/${{ env.BUILD_CONTEXT }}/" # Tạo file docker-compose.yml trên server
           overwrite: true
 
       # 6. Deploy on server via SSH
@@ -65,8 +65,11 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             set -e
-            APP_DIR=~/fcm-backend
-            mkdir -p $APP_DIR  # Tạo thư mục nếu chưa có
+
+            APP_ROOT=~/fcm-backend
+            APP_DIR=$APP_ROOT/${{ env.BUILD_CONTEXT }}
+
+            mkdir -p $APP_DIR
             cd $APP_DIR
 
             # Tạo .env từ GitHub Secrets (thêm Redis host/port cho an toàn)
