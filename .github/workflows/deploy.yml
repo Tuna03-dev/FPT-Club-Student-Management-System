@@ -13,7 +13,7 @@ jobs:
     env:
       IMAGE_NAME: minhtuan2811/fcm-backend
       BUILD_CONTEXT: ./BackendClubManagement
-      DOCKERFILE_PATH: BackendClubManagement
+      DOCKERFILE_PATH: Dockerfile
 
     steps:
       # 1. Checkout code
