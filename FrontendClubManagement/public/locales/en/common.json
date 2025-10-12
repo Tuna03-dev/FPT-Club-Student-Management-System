@@ -1,4 +1,20 @@
 {
   "welcome": "Welcome to our website",
-  "hi": "Hi there!"
+  "hi": "Hi there!",
+  "nav": {
+    "dashboard": "Dashboard",
+    "members": "Members",
+    "events": "Events",
+    "notifications": "Notifications",
+    "settings": "Settings"
+  },
+  "teams": {
+    "title": "Teams",
+    "chuyen-mon": "Professional Team",
+    "truyen-thong": "Media Team",
+    "to-chuc": "Organization Team",
+    "noi-vu": "Internal Affairs Team",
+    "doi-ngoai": "External Affairs Team"
+  },
+  "search": "Search..."
 }
