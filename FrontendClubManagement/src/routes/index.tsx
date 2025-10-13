@@ -6,6 +6,8 @@ import { MemberList } from "@/pages/myclub/members/MemberList";
 import { EventList } from "@/pages/myclub/events/EventList";
 import { Notifications } from "@/pages/myclub/Notifications";
 import { Settings } from "@/pages/myclub/Settings";
+import { EventsPage } from "@/pages/events/EventPageList";
+import NewsPageList from "@/pages/news/NewsPageList";
 
 /**
  * Main application router
@@ -14,6 +16,15 @@ export const router = createBrowserRouter([
   {
     path: "/",
     element: <Navigate to="/myclub" replace />,
+  },
+  {
+    path: "/events",
+    element: <EventsPage />,
+  },
+  
+  {
+    path: "news",
+    element : <NewsPageList />
   },
   {
     path: "/myclub",
