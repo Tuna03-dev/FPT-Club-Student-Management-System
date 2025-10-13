@@ -31,6 +31,9 @@ public class Post extends BaseEntity {
     @Column(name = "is_within_club", nullable = false)
     private boolean IsWithinClub;
 
+    @Column(name = "is_club_wide", nullable = false)
+    private boolean IsClubWide;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "club_id")
     private Club club;
@@ -47,5 +50,10 @@ public class Post extends BaseEntity {
 
     @OneToMany(mappedBy = "post", cascade = CascadeType.ALL)
     private Set<PostMedia> postMedia;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "team_id")
+    private Team team;
+
 }
 
