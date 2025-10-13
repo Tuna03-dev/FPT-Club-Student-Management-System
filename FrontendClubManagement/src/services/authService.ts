@@ -29,6 +29,11 @@ export const authService = {
     });
   },
 
+  logoutApi: async (): Promise<ApiResponse<string>> => {
+    const refreshToken = localStorage.getItem("refreshToken");
+    return axiosClient.post<string>("/v1/auth/logout", refreshToken ? { refreshToken } : {});
+  },
+
   logout: () => {
     localStorage.removeItem("accessToken");
     localStorage.removeItem("refreshToken");

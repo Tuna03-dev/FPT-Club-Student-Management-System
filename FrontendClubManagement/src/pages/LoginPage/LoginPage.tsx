@@ -80,7 +80,7 @@ const LoginPage: React.FC = () => {
   };
 
   return (
-    <div className="login-container">
+    <div className={`login-container ${isLoading ? "loading" : ""}`}>
       <div className="login-card">
         {/* Logo */}
         <div className="logo-container">
@@ -105,8 +105,15 @@ const LoginPage: React.FC = () => {
         </div>
 
         <p className="instruction">
-          Sử dụng tài khoản Google của bạn để truy cập hệ thống
+          Sử dụng tài khoản Google <b>@fpt.edu.vn</b> của bạn để truy cập hệ
+          thống
         </p>
+
+        {isLoading && (
+          <div className="loading-overlay">
+            <div className="spinner" />
+          </div>
+        )}
       </div>
     </div>
   );
