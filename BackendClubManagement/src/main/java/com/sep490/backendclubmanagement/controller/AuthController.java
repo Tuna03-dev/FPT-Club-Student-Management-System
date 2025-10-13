@@ -151,13 +151,26 @@ public class AuthController {
     }
 
     @PostMapping("/logout")
-    public ResponseEntity<ApiResponse<Void>> logout(@RequestHeader(name = "Authorization", required = false) String authorization) {
+    public ResponseEntity<ApiResponse<Void>> logout(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @RequestBody(required = false) Map<String, String> body) {
+        
+        // Revoke access token
         if (authorization != null && authorization.startsWith("Bearer ")) {
             String token = authorization.substring(7);
             String jti = jwtUtil.extractJti(token);
             long exp = jwtUtil.extractExpiration(token).getTime();
             tokenBlacklistService.revoke(jti, exp);
         }
+        
+        // Revoke refresh token if provided
+        if (body != null && body.containsKey("refreshToken")) {
+            String refreshToken = body.get("refreshToken");
+            String refreshJti = jwtUtil.extractJti(refreshToken);
+            long refreshExp = jwtUtil.extractExpiration(refreshToken).getTime();
+            tokenBlacklistService.revoke(refreshJti, refreshExp);
+        }
+        
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 
