@@ -2,7 +2,7 @@ import { createBrowserRouter, Navigate } from "react-router-dom";
 import { ClubLayout } from "@/layouts/ClubLayout";
 
 import { Dashboard } from "@/pages/myclub/Dashboard";
-import { MemberList } from "@/pages/myclub/members/MemberList";
+import Members from "@/pages/myclub/members/MemberList";
 import { EventList } from "@/pages/myclub/events/EventList";
 import { Notifications } from "@/pages/myclub/Notifications";
 import { Settings } from "@/pages/myclub/Settings";
@@ -25,7 +25,7 @@ export const router = createBrowserRouter([
       },
       {
         path: "members",
-        element: <MemberList />,
+        element: <Members />,
       },
       {
         path: "events",

@@ -96,3 +96,4 @@ export const PostCard = ({
     </Card>
   );
 };
+

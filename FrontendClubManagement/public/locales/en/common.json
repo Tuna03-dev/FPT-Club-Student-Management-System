@@ -6,7 +6,8 @@
     "members": "Members",
     "events": "Events",
     "notifications": "Notifications",
-    "settings": "Settings"
+    "settings": "Settings",
+    "management": "Management"
   },
   "teams": {
     "title": "Teams",
@@ -15,6 +16,13 @@
     "to-chuc": "Organization Team",
     "noi-vu": "Internal Affairs Team",
     "doi-ngoai": "External Affairs Team"
+  },
+  "management": {
+    "permissions": "Permissions",
+    "pending_posts": "Pending Posts",
+    "manage_members": "Manage Members",
+    "manage_events": "Manage Events",
+    "pending_requests": "Pending Requests"
   },
   "search": "Search..."
 }
