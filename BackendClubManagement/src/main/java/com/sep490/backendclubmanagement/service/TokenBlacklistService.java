@@ -3,9 +3,11 @@ package com.sep490.backendclubmanagement.service;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -91,6 +93,65 @@ public class TokenBlacklistService {
             log.info("Token force revoked: jti={}", jti);
         } catch (Exception e) {
             log.error("Failed to force revoke token: jti={}", jti, e);
+        }
+    }
+
+    /**
+     * Get count of revoked tokens in blacklist
+     * @return number of revoked tokens
+     */
+    public long getBlacklistSize() {
+        try {
+            Set<String> keys = redisTemplate.keys(REVOKED_TOKEN_PREFIX + "*");
+            return keys != null ? keys.size() : 0;
+        } catch (Exception e) {
+            log.error("Failed to get blacklist size", e);
+            return 0;
+        }
+    }
+
+    /**
+     * Clean up expired tokens (Redis TTL should handle this automatically, but this is a backup)
+     * Runs every hour to clean up any orphaned keys
+     */
+    @Scheduled(fixedRate = 3600000) // Run every hour
+    public void cleanupExpiredTokens() {
+        try {
+            Set<String> keys = redisTemplate.keys(REVOKED_TOKEN_PREFIX + "*");
+            if (keys != null && !keys.isEmpty()) {
+                long cleanedCount = 0;
+                for (String key : keys) {
+                    try {
+                        // Check if key exists (TTL should have removed it if expired)
+                        Boolean exists = redisTemplate.hasKey(key);
+                        if (Boolean.FALSE.equals(exists)) {
+                            cleanedCount++;
+                        }
+                    } catch (Exception e) {
+                        log.warn("Error checking key: {}", key, e);
+                    }
+                }
+                if (cleanedCount > 0) {
+                    log.info("Cleanup completed: {} expired tokens cleaned up", cleanedCount);
+                }
+            }
+        } catch (Exception e) {
+            log.error("Error during token cleanup", e);
+        }
+    }
+
+    /**
+     * Clear all revoked tokens (use with caution - admin operation)
+     */
+    public void clearAllRevokedTokens() {
+        try {
+            Set<String> keys = redisTemplate.keys(REVOKED_TOKEN_PREFIX + "*");
+            if (keys != null && !keys.isEmpty()) {
+                redisTemplate.delete(keys);
+                log.info("Cleared {} revoked tokens from blacklist", keys.size());
+            }
+        } catch (Exception e) {
+            log.error("Failed to clear revoked tokens", e);
         }
     }
 }
