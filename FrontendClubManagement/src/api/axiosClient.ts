@@ -23,7 +23,8 @@ interface AuthenticationResponse {
 // ===== Token Helpers =====
 const getAccessToken = (): string | null => localStorage.getItem("accessToken");
 
-const getRefreshToken = (): string | null => localStorage.getItem("refreshToken");
+const getRefreshToken = (): string | null =>
+  localStorage.getItem("refreshToken");
 
 const setAccessToken = (token: string): void =>
   localStorage.setItem("accessToken", token);
@@ -85,9 +86,7 @@ axiosInstance.interceptors.response.use(
         const refreshResponse = await axios.post<
           ApiResponse<AuthenticationResponse>
         >(
-          `${import.meta.env.VITE_API_URL || "/api"}/auth/refresh-token`,
-          {},
-          `${import.meta.env.VITE_API_URL || "http://localhost:8080/api"}/v1/auth/refresh`,
+          `${import.meta.env.VITE_API_URL || "/api"}/auth/refreshToken`,
           { refreshToken },
           { withCredentials: true }
         );

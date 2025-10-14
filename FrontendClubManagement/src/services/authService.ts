@@ -24,7 +24,7 @@ export const authService = {
   loginWithGoogle: async (
     idToken: string
   ): Promise<ApiResponse<AuthenticationResponse>> => {
-    return axiosClient.post<AuthenticationResponse>("/v1/auth/google", {
+    return axiosClient.post<AuthenticationResponse>("/auth/google", {
       idToken,
     });
   },
@@ -34,12 +34,17 @@ export const authService = {
     if (!refreshToken) {
       throw new Error("No refresh token available");
     }
-    return axiosClient.post<AuthenticationResponse>("/v1/auth/refresh", { refreshToken });
+    return axiosClient.post<AuthenticationResponse>("/auth/refreshToken", {
+      refreshToken,
+    });
   },
 
   logoutApi: async (): Promise<ApiResponse<string>> => {
     const refreshToken = localStorage.getItem("refreshToken");
-    return axiosClient.post<string>("/v1/auth/logout", refreshToken ? { refreshToken } : {});
+    return axiosClient.post<string>(
+      "/auth/logout",
+      refreshToken ? { refreshToken } : {}
+    );
   },
 
   logout: () => {
