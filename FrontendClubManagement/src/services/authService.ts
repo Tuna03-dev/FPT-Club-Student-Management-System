@@ -29,6 +29,14 @@ export const authService = {
     });
   },
 
+  refreshToken: async (): Promise<ApiResponse<AuthenticationResponse>> => {
+    const refreshToken = localStorage.getItem("refreshToken");
+    if (!refreshToken) {
+      throw new Error("No refresh token available");
+    }
+    return axiosClient.post<AuthenticationResponse>("/v1/auth/refresh", { refreshToken });
+  },
+
   logoutApi: async (): Promise<ApiResponse<string>> => {
     const refreshToken = localStorage.getItem("refreshToken");
     return axiosClient.post<string>("/v1/auth/logout", refreshToken ? { refreshToken } : {});

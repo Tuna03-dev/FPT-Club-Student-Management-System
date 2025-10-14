@@ -5,14 +5,35 @@ import axios, {
   AxiosError,
 } from "axios";
 
+// Import AuthenticationResponse type
+interface AuthenticationResponse {
+  accessToken: string;
+  refreshToken: string;
+  tokenType: string;
+  expiresIn: number;
+  user: {
+    id: number;
+    email: string;
+    fullName: string;
+    avatarUrl: string;
+    systemRole: string;
+  };
+}
+
 // ===== Token Helpers =====
 const getAccessToken = (): string | null => localStorage.getItem("accessToken");
+
+const getRefreshToken = (): string | null => localStorage.getItem("refreshToken");
 
 const setAccessToken = (token: string): void =>
   localStorage.setItem("accessToken", token);
 
+const setRefreshToken = (token: string): void =>
+  localStorage.setItem("refreshToken", token);
+
 const removeTokens = (): void => {
   localStorage.removeItem("accessToken");
+  localStorage.removeItem("refreshToken");
 };
 
 // ===== API Response wrapper (match backend ApiResponse<T>) =====
@@ -56,22 +77,33 @@ axiosInstance.interceptors.response.use(
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
       try {
+        const refreshToken = getRefreshToken();
+        if (!refreshToken) {
+          throw new Error("No refresh token available");
+        }
+
         const refreshResponse = await axios.post<
-          ApiResponse<{ accessToken: string }>
+          ApiResponse<AuthenticationResponse>
         >(
-          `${import.meta.env.VITE_API_URL}/auth/refresh-token`,
-          {},
+          `${import.meta.env.VITE_API_URL || "http://localhost:8080/api"}/v1/auth/refresh`,
+          { refreshToken },
           { withCredentials: true }
         );
 
-        const newAccessToken = refreshResponse.data.data?.accessToken;
-        if (newAccessToken) {
-          setAccessToken(newAccessToken);
+        if (refreshResponse.data.code === 200 && refreshResponse.data.data) {
+          const authData = refreshResponse.data.data;
+          setAccessToken(authData.accessToken);
+          if (authData.refreshToken) {
+            setRefreshToken(authData.refreshToken);
+          }
+          
           originalRequest.headers = {
             ...originalRequest.headers,
-            Authorization: `Bearer ${newAccessToken}`,
+            Authorization: `Bearer ${authData.accessToken}`,
           };
           return axiosInstance(originalRequest);
+        } else {
+          throw new Error("Invalid refresh response");
         }
       } catch (refreshError) {
         removeTokens();
