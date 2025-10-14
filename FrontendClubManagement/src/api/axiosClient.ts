@@ -47,7 +47,7 @@ export interface ApiResponse<T> {
 
 // ===== Axios instance =====
 const axiosInstance: AxiosInstance = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || "http://localhost:8080/api",
+  baseURL: import.meta.env.VITE_API_URL || "/api",
   timeout: import.meta.env.VITE_TIMEOUT || 10000,
   headers: { "Content-Type": "application/json" },
   withCredentials: true,
@@ -85,6 +85,8 @@ axiosInstance.interceptors.response.use(
         const refreshResponse = await axios.post<
           ApiResponse<AuthenticationResponse>
         >(
+          `${import.meta.env.VITE_API_URL || "/api"}/auth/refresh-token`,
+          {},
           `${import.meta.env.VITE_API_URL || "http://localhost:8080/api"}/v1/auth/refresh`,
           { refreshToken },
           { withCredentials: true }
@@ -96,7 +98,7 @@ axiosInstance.interceptors.response.use(
           if (authData.refreshToken) {
             setRefreshToken(authData.refreshToken);
           }
-          
+
           originalRequest.headers = {
             ...originalRequest.headers,
             Authorization: `Bearer ${authData.accessToken}`,
