@@ -1,3 +1,19 @@
 {
-  "welcome": "Chào mừng bạn đến với website của chúng tôi"
+  "welcome": "Chào mừng bạn đến với website của chúng tôi",
+  "nav": {
+    "dashboard": "Bảng tin",
+    "members": "Thành viên",
+    "events": "Sự kiện",
+    "notifications": "Thông báo",
+    "settings": "Cài đặt"
+  },
+  "teams": {
+    "title": "Phòng ban",
+    "chuyen-mon": "Ban Chuyên môn",
+    "truyen-thong": "Ban Truyền thông",
+    "to-chuc": "Ban Tổ chức",
+    "noi-vu": "Ban Nội vụ",
+    "doi-ngoai": "Ban Đối ngoại"
+  },
+  "search": "Tìm kiếm..."
 }

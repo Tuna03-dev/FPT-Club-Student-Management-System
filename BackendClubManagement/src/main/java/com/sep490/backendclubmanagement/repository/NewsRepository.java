@@ -1,14 +1,17 @@
 package com.sep490.backendclubmanagement.repository;
 
+import com.sep490.backendclubmanagement.dto.request.NewsRequest;
 import com.sep490.backendclubmanagement.dto.response.LatestNewsDTO;
 import com.sep490.backendclubmanagement.entity.News;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.Optional;
 import java.util.List;
-import java.util.Optional; // Import thư viện này
 
 @Repository
 public interface NewsRepository extends JpaRepository<News, Long> {
@@ -21,4 +24,21 @@ public interface NewsRepository extends JpaRepository<News, Long> {
 
     // Thêm phương thức mới để tìm tin spotlight mới nhất
     Optional<News> findTopByIsSpotlightTrueOrderByCreatedAtDesc();
+
+    // 🔹 Dành cho phần quản trị: Lọc/tìm kiếm tin tức
+    @Query(
+            value = """
+            SELECT DISTINCT n.*
+            FROM news n
+            LEFT JOIN clubs c ON n.club_id = c.id
+            LEFT JOIN news_media nm ON nm.news_id = n.id
+            WHERE 
+                (:#{#request.keyword} IS NULL OR n.title LIKE %:#{#request.keyword}% OR n.content LIKE %:#{#request.keyword}%)
+                AND (:#{#request.clubId} IS NULL OR n.club_id = :#{#request.clubId})
+            """,
+            countQuery = "SELECT COUNT(*) FROM news n",
+            nativeQuery = true
+    )
+    Page<News> getAllNewsByFilter(@Param("request") NewsRequest request, Pageable pageable);
+
 }

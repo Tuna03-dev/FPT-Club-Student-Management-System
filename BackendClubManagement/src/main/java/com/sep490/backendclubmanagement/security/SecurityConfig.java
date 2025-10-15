@@ -31,11 +31,15 @@ public class SecurityConfig {
     private final UserDetailsService userDetailsService;
     
     private final String[] PUBLIC_URL = {
+            "api/**",
             "/api/v1/auth/**",
             "/api/v1/public/**",
             "/oauth2/**",
             "/login/**",
-            "/api/homepage"
+            "/api/homepage",
+            "/test/**",
+            "/posts/**"
+
     };
     
     private final String[] SWAGGER_URL = {
