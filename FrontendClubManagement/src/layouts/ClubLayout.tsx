@@ -6,6 +6,9 @@ import {
   Settings,
   Search,
   Menu,
+  Shield,
+  FileText,
+  Clock,
 } from "lucide-react";
 import { NavLink, Outlet } from "react-router-dom";
 import { useNavigate } from "react-router-dom";
@@ -20,6 +23,13 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { authService } from "@/services/authService";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { useState } from "react";
 
 const navItems = [
   { key: "dashboard", url: "/myclub", icon: Home },
@@ -27,6 +37,47 @@ const navItems = [
   { key: "events", url: "/myclub/events", icon: Calendar },
   { key: "notifications", url: "/myclub/notifications", icon: Bell },
 ];
+
+const managementItems = [
+  {
+    key: "permissions",
+    url: "/myclub/permissions",
+    icon: Shield,
+    label: "Phân quyền",
+  },
+  {
+    key: "pending_posts",
+    url: "/myclub/pending-posts",
+    icon: FileText,
+    label: "Bài viết chờ duyệt",
+  },
+  {
+    key: "manage_members",
+    url: "/myclub/members",
+    icon: Users,
+    label: "Quản lý thành viên",
+  },
+  {
+    key: "manage_events",
+    url: "/myclub/events",
+    icon: Calendar,
+    label: "Quản lý sự kiện",
+  },
+  {
+    key: "pending_requests",
+    url: "/myclub/pending-requests",
+    icon: Clock,
+    label: "Yêu cầu chờ duyệt",
+  },
+];
+
+const managementColors: Record<string, string> = {
+  permissions: "bg-gradient-to-br from-purple-500 to-purple-600",
+  pending_posts: "bg-gradient-to-br from-yellow-500 to-yellow-600",
+  manage_members: "bg-gradient-to-br from-blue-500 to-blue-600",
+  manage_events: "bg-gradient-to-br from-green-500 to-green-600",
+  pending_requests: "bg-gradient-to-br from-orange-500 to-orange-600",
+};
 
 const teams = [
   { id: "1", name: "Ban Chuyên môn", slug: "chuyen-mon" },
@@ -46,6 +97,7 @@ const teamColors: Record<string, string> = {
 
 export const ClubLayout = () => {
   const { t } = useTranslation("common");
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const navigate = useNavigate();
 
   const handleLogout = async () => {
@@ -164,46 +216,143 @@ export const ClubLayout = () => {
               </div>
 
               {/* Mobile Menu */}
-              <Button variant="ghost" size="icon" className="md:hidden">
-                <Menu className="h-5 w-5" />
-              </Button>
+              <DropdownMenu
+                open={isMobileMenuOpen}
+                onOpenChange={setIsMobileMenuOpen}
+              >
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="md:hidden">
+                    <Menu className="h-5 w-5" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-64">
+                  <div className="px-2 py-1.5">
+                    <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                      QUẢN LÝ
+                    </h3>
+                    {managementItems.map((item) => (
+                      <DropdownMenuItem key={item.key} asChild>
+                        <NavLink
+                          to={item.url}
+                          className="flex items-center gap-3 w-full"
+                          onClick={() => setIsMobileMenuOpen(false)}
+                        >
+                          <div
+                            className={`h-6 w-6 rounded-lg ${
+                              managementColors[item.key]
+                            } flex items-center justify-center text-white shadow-sm`}
+                          >
+                            <item.icon className="h-3 w-3" />
+                          </div>
+                          <span className="text-sm">
+                            {t(`management.${item.key}`)}
+                          </span>
+                        </NavLink>
+                      </DropdownMenuItem>
+                    ))}
+                  </div>
+                  <div className="border-t border-border my-1"></div>
+                  <div className="px-2 py-1.5">
+                    <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                      {t("teams.title")}
+                    </h3>
+                    {teams.map((team) => (
+                      <DropdownMenuItem key={team.id} asChild>
+                        <NavLink
+                          to={`/myclub/team/${team.slug}`}
+                          className="flex items-center gap-3 w-full"
+                          onClick={() => setIsMobileMenuOpen(false)}
+                        >
+                          <div
+                            className={`h-6 w-6 rounded-lg ${
+                              teamColors[team.slug]
+                            } flex items-center justify-center text-white text-xs font-bold shadow-sm`}
+                          >
+                            {t(`teams.${team.slug}`).split(" ")[1]?.[0] || "T"}
+                          </div>
+                          <span className="text-sm">
+                            {t(`teams.${team.slug}`)}
+                          </span>
+                        </NavLink>
+                      </DropdownMenuItem>
+                    ))}
+                  </div>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
         </header>
 
         {/* Container with Sidebar and Main Content */}
         <div className="flex flex-1 w-full max-w-[1920px] mx-auto overflow-hidden">
-          {/* Left Sidebar - Departments */}
-          <aside className="hidden lg:block w-64 border-r border-border bg-card min-h-[calc(100vh-56px)] sticky top-14">
-            <nav className="p-4 space-y-2">
-              <div className="px-3 mb-4">
-                <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                  {t("teams.title")}
-                </h2>
+          {/* Left Sidebar - Management & Departments */}
+          <aside className="hidden lg:block w-64 border-r border-border bg-card h-[calc(100vh-56px)] sticky top-14">
+            <nav className="pt-2 pb-4 px-4 space-y-6 h-full overflow-y-auto">
+              {/* Management Section */}
+              <div>
+                <div className="px-3 mb-4">
+                  <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    QUẢN LÝ
+                  </h2>
+                </div>
+                <div className="space-y-2">
+                  {managementItems.map((item) => (
+                    <NavLink
+                      key={item.key}
+                      to={item.url}
+                      className={({ isActive }) =>
+                        `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                          isActive
+                            ? "bg-primary/10 text-primary shadow-sm"
+                            : "text-foreground hover:bg-secondary"
+                        }`
+                      }
+                    >
+                      <div
+                        className={`h-8 w-8 rounded-lg ${
+                          managementColors[item.key]
+                        } flex items-center justify-center text-white shadow-sm`}
+                      >
+                        <item.icon className="h-4 w-4" />
+                      </div>
+                      <span>{t(`management.${item.key}`)}</span>
+                    </NavLink>
+                  ))}
+                </div>
               </div>
 
-              {teams.map((team) => (
-                <NavLink
-                  key={team.id}
-                  to={`/myclub/team/${team.slug}`}
-                  className={({ isActive }) =>
-                    `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                      isActive
-                        ? "bg-primary/10 text-primary shadow-sm"
-                        : "text-foreground hover:bg-secondary"
-                    }`
-                  }
-                >
-                  <div
-                    className={`h-8 w-8 rounded-lg ${
-                      teamColors[team.slug]
-                    } flex items-center justify-center text-white text-xs font-bold shadow-sm`}
-                  >
-                    {t(`teams.${team.slug}`).split(" ")[1]?.[0] || "T"}
-                  </div>
-                  <span>{t(`teams.${team.slug}`)}</span>
-                </NavLink>
-              ))}
+              {/* Teams Section */}
+              <div>
+                <div className="px-3 mb-4">
+                  <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    {t("teams.title")}
+                  </h2>
+                </div>
+                <div className="space-y-2">
+                  {teams.map((team) => (
+                    <NavLink
+                      key={team.id}
+                      to={`/myclub/team/${team.slug}`}
+                      className={({ isActive }) =>
+                        `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                          isActive
+                            ? "bg-primary/10 text-primary shadow-sm"
+                            : "text-foreground hover:bg-secondary"
+                        }`
+                      }
+                    >
+                      <div
+                        className={`h-8 w-8 rounded-lg ${
+                          teamColors[team.slug]
+                        } flex items-center justify-center text-white text-xs font-bold shadow-sm`}
+                      >
+                        {t(`teams.${team.slug}`).split(" ")[1]?.[0] || "T"}
+                      </div>
+                      <span>{t(`teams.${team.slug}`)}</span>
+                    </NavLink>
+                  ))}
+                </div>
+              </div>
             </nav>
           </aside>
 
