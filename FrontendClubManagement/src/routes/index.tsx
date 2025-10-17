@@ -18,24 +18,16 @@ export const router = createBrowserRouter([
     element: <Navigate to="/myclub" replace />,
   },
   {
-    path: "/myclub",
-    element: <ClubLayout />,
-  },
-  {
     path: "/login",
     element: <LoginPage />,
   },
   {
-    path: "/dashboard",
+    path: "/myclub",
     element: (
       <ProtectedRoute>
-        <Dashboard />
+        <ClubLayout />
       </ProtectedRoute>
     ),
-  },
-  {
-    path: "/",
-    element: <div>Main Layout</div>,
     children: [
       {
         index: true,
