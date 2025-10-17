@@ -61,11 +61,9 @@ const LoginPage: React.FC = () => {
       const result = await authService.loginWithGoogle(response.credential);
 
       if (result.code === 200 && result.data) {
-        authService.setTokens(
-          result.data.accessToken,
-          result.data.refreshToken
-        );
+        authService.setTokens(result.data.accessToken);
         authService.setUser(result.data.user);
+
         navigate("/dashboard"); // Redirect to dashboard after successful login
       } else {
         console.error("Login failed:", result.message);

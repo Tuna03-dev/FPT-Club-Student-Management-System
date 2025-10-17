@@ -14,9 +14,6 @@ export interface UserInfo {
 
 export interface AuthenticationResponse {
   accessToken: string;
-  refreshToken: string;
-  tokenType: string;
-  expiresIn: number;
   user: UserInfo;
 }
 
@@ -30,26 +27,17 @@ export const authService = {
   },
 
   refreshToken: async (): Promise<ApiResponse<AuthenticationResponse>> => {
-    const refreshToken = localStorage.getItem("refreshToken");
-    if (!refreshToken) {
-      throw new Error("No refresh token available");
-    }
-    return axiosClient.post<AuthenticationResponse>("/auth/refreshToken", {
-      refreshToken,
-    });
+    return axiosClient.post<AuthenticationResponse>(
+      "/auth/refreshTokenServerSide"
+    );
   },
 
   logoutApi: async (): Promise<ApiResponse<string>> => {
-    const refreshToken = localStorage.getItem("refreshToken");
-    return axiosClient.post<string>(
-      "/auth/logout",
-      refreshToken ? { refreshToken } : {}
-    );
+    return axiosClient.post<string>("/auth/logout");
   },
 
   logout: () => {
     localStorage.removeItem("accessToken");
-    localStorage.removeItem("refreshToken");
     localStorage.removeItem("user");
   },
 
@@ -58,9 +46,8 @@ export const authService = {
     return userStr ? JSON.parse(userStr) : null;
   },
 
-  setTokens: (accessToken: string, refreshToken: string) => {
+  setTokens: (accessToken: string) => {
     localStorage.setItem("accessToken", accessToken);
-    localStorage.setItem("refreshToken", refreshToken);
   },
 
   setUser: (user: UserInfo) => {

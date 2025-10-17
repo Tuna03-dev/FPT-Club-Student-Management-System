@@ -13,19 +13,19 @@ import java.util.Optional;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class AllowedUserService {
+public class FapApiService {
 
-    @Value("${auth.allowed-users-api-url}")
-    private String allowedUsersApiUrl;
+    @Value("${auth.fap-api-url}")
+    private String FapApiUrl;
 
     private final RestClient restClient = RestClient.builder().build();
 
     public Optional<Map<String, Object>> findProfileByEmail(String email) {
         if (email == null || email.isBlank()) return Optional.empty();
-        if (allowedUsersApiUrl == null || allowedUsersApiUrl.isBlank()) return Optional.empty();
+        if (FapApiUrl == null || FapApiUrl.isBlank()) return Optional.empty();
         try {
             Map profile = restClient.post()
-                    .uri(allowedUsersApiUrl + "/verify")
+                    .uri(FapApiUrl + "/verify")
                     .contentType(MediaType.APPLICATION_JSON)
                     .accept(MediaType.APPLICATION_JSON)
                     .body(Map.of("email", email))

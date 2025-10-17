@@ -11,22 +11,22 @@ import com.sep490.backendclubmanagement.dto.response.AuthenticationResponse;
 import com.sep490.backendclubmanagement.exception.ErrorCode;
 import com.sep490.backendclubmanagement.entity.SystemRole;
 import com.sep490.backendclubmanagement.entity.User;
-import com.sep490.backendclubmanagement.repository.SystemRoleRepository;
-import com.sep490.backendclubmanagement.repository.UserRepository;
-import com.sep490.backendclubmanagement.service.AllowedUserService;
+import com.sep490.backendclubmanagement.service.FapApiService;
+import com.sep490.backendclubmanagement.service.SystemRoleService;
 import com.sep490.backendclubmanagement.service.TokenBlacklistService;
+import com.sep490.backendclubmanagement.service.UserService;
+import com.sep490.backendclubmanagement.service.RefreshTokenService;
 import com.sep490.backendclubmanagement.util.JwtUtil;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
+import jakarta.servlet.http.HttpServletRequest;
 import java.security.GeneralSecurityException;
-import java.time.Instant;
 import java.util.*;
 import java.util.Optional;
 
@@ -37,22 +37,23 @@ import java.util.Optional;
 @Slf4j
 public class AuthController {
 
-    private final AllowedUserService allowedUserService;
+    private final FapApiService fapApiServiceService;
     private final JwtUtil jwtUtil;
-    private final UserRepository userRepository;
-    private final SystemRoleRepository systemRoleRepository;
+    private final UserService userService;
+    private final SystemRoleService systemRoleService;
     private final TokenBlacklistService tokenBlacklistService;
+    private final RefreshTokenService refreshTokenService;
 
     @Value("${google.client-id}")
     private String googleClientId;
 
     @PostMapping("/google")
-    public ApiResponse<AuthenticationResponse> loginWithGoogle(@Valid @RequestBody GoogleLoginRequest request) {
+    public ApiResponse<AuthenticationResponse> loginWithGoogle(@Valid @RequestBody GoogleLoginRequest request, HttpServletRequest httpRequest) {
         try {
             GoogleIdToken.Payload payload = verifyIdToken(request.getIdToken());
             String email = payload.getEmail();
 
-            Optional<Map<String, Object>> profileOpt = allowedUserService.findProfileByEmail(email);
+            Optional<Map<String, Object>> profileOpt = fapApiServiceService.findProfileByEmail(email);
             if (profileOpt.isEmpty()) {
                 return ApiResponse.error(ErrorCode.UNAUTHORIZED, null);
             }
@@ -64,16 +65,12 @@ public class AuthController {
             String systemRole = Objects.toString(profile.getOrDefault("systemRole", "STUDENT"));
 
             // Ensure system role entity exists
-            SystemRole role = systemRoleRepository.findByRoleName(systemRole)
-                    .orElseGet(() -> systemRoleRepository.save(SystemRole.builder()
-                            .roleName(systemRole)
-                            .description("System role for " + systemRole.toLowerCase())
-                            .build()));
+            SystemRole role = systemRoleService.findOrCreateRole(systemRole);
 
             // Handle user creation/retrieval
             // - New users: Create with Google/FapAPI information
             // - Existing users: Keep original information, don't update
-            User user = userRepository.findByEmail(email).orElse(null);
+            User user = userService.findByEmail(email).orElse(null);
             
             if (user == null) {
                 // Create new user with information from Google/FapAPI
@@ -88,7 +85,7 @@ public class AuthController {
                 user.setSystemRole(role);
 
                 // Save new user to database
-                user = userRepository.save(user);
+                user = userService.save(user);
             } else {
                 // Check if existing user is active
                 if (!user.getIsActive()) {
@@ -98,7 +95,7 @@ public class AuthController {
                 // Only ensure they have a system role if missing
                 if (user.getSystemRole() == null) {
                     user.setSystemRole(role);
-                    user = userRepository.save(user);
+                    user = userService.save(user);
                 }
             }
 
@@ -114,6 +111,15 @@ public class AuthController {
         String accessToken = jwtUtil.generateAccessToken(extraClaims, securityUser);
         String refreshToken = jwtUtil.generateRefreshToken(securityUser);
 
+        // Store refresh token in Redis
+        try {
+            refreshTokenService.createRefreshToken(user, refreshToken);
+            log.info("Refresh token stored for user: {}", user.getEmail());
+        } catch (Exception e) {
+            log.error("Failed to store refresh token for user: {}", user.getEmail(), e);
+            // Continue with login even if refresh token storage fails
+        }
+
         AuthenticationResponse.UserInfo userInfo = AuthenticationResponse.UserInfo.builder()
                 .id(user.getId())
                 .email(user.getEmail())
@@ -124,9 +130,6 @@ public class AuthController {
 
         AuthenticationResponse auth = AuthenticationResponse.builder()
                 .accessToken(accessToken)
-                .refreshToken(refreshToken)
-                .tokenType("Bearer")
-                .expiresIn(jwtUtil.extractExpiration(accessToken).toInstant().toEpochMilli() - Instant.now().toEpochMilli())
                 .user(userInfo)
                 .build();
 
@@ -137,26 +140,26 @@ public class AuthController {
         }
     }
 
+    /**
+     * Refresh token
+     */
     @PostMapping("/refreshToken")
-    public ApiResponse<AuthenticationResponse> refresh(@Valid @RequestBody RefreshTokenRequest request) {
+    public ApiResponse<AuthenticationResponse> refreshToken(
+            @RequestHeader(name = "Authorization") String authorization) {
         try {
-            String refreshToken = request.getRefreshToken();
-            
-            // Check if refresh token is revoked
-            String jti = jwtUtil.extractJti(refreshToken);
-            if (tokenBlacklistService.isRevoked(jti)) {
-                return ApiResponse.error(ErrorCode.UNAUTHORIZED, null);
-            }
-            
-            String email = jwtUtil.extractUsername(refreshToken);
+            // Extract access token from Authorization header
+            String accessToken = authorization.substring(7);
+            String email = jwtUtil.extractUsername(accessToken);
             
             if (email == null || email.trim().isEmpty()) {
+                log.warn("Invalid access token provided for refresh");
                 return ApiResponse.error(ErrorCode.UNAUTHORIZED, null);
             }
             
             // Find user in database
-            Optional<User> userOpt = userRepository.findByEmail(email);
+            Optional<User> userOpt = userService.findByEmail(email);
             if (userOpt.isEmpty()) {
+                log.warn("User not found for refresh: {}", email);
                 return ApiResponse.error(ErrorCode.UNAUTHORIZED, null);
             }
             
@@ -164,6 +167,13 @@ public class AuthController {
             
             // Check if user is active
             if (!user.getIsActive()) {
+                log.warn("Inactive user attempted refresh: {}", email);
+                return ApiResponse.error(ErrorCode.UNAUTHORIZED, null);
+            }
+            
+            // Check if user has a valid refresh token in Redis
+            if (!refreshTokenService.hasValidRefreshToken(user.getId().toString())) {
+                log.warn("No valid refresh token found for user: {}", email);
                 return ApiResponse.error(ErrorCode.UNAUTHORIZED, null);
             }
             
@@ -183,6 +193,18 @@ public class AuthController {
             extraClaims.put("systemRole", systemRole);
 
             String newAccessToken = jwtUtil.generateAccessToken(extraClaims, securityUser);
+            String newRefreshToken = jwtUtil.generateRefreshToken(securityUser);
+            
+            // Revoke old refresh token and store new one
+            refreshTokenService.revokeRefreshToken(user.getId().toString());
+            
+            try {
+                refreshTokenService.createRefreshToken(user, newRefreshToken);
+                log.info("New refresh token created for user: {}", email);
+            } catch (Exception e) {
+                log.error("Failed to store new refresh token for user: {}", email, e);
+                // Continue with response even if refresh token storage fails
+            }
 
             AuthenticationResponse.UserInfo userInfo = AuthenticationResponse.UserInfo.builder()
                     .id(user.getId())
@@ -194,15 +216,12 @@ public class AuthController {
 
             AuthenticationResponse auth = AuthenticationResponse.builder()
                     .accessToken(newAccessToken)
-                    .refreshToken(refreshToken)
-                    .tokenType("Bearer")
-                    .expiresIn(jwtUtil.extractExpiration(newAccessToken).toInstant().toEpochMilli() - Instant.now().toEpochMilli())
                     .user(userInfo)
                     .build();
 
             return ApiResponse.success(auth);
         } catch (Exception e) {
-            log.error("Error refreshing token: {}", e.getMessage(), e);
+            log.error("Error refreshing token server-side: {}", e.getMessage(), e);
             return ApiResponse.error(ErrorCode.UNAUTHORIZED, null);
         }
     }
@@ -230,10 +249,21 @@ public class AuthController {
             if (body != null && body.containsKey("refreshToken")) {
                 String refreshToken = body.get("refreshToken");
                 try {
-                    String refreshJti = jwtUtil.extractJti(refreshToken);
-                    long refreshExp = jwtUtil.extractExpiration(refreshToken).getTime();
-                    tokenBlacklistService.revoke(refreshJti, refreshExp);
-                    log.info("Refresh token revoked successfully");
+                    // Revoke refresh token from Redis
+                    String email = jwtUtil.extractUsername(refreshToken);
+                    if (email != null) {
+                        Optional<User> userOpt = userService.findByEmail(email);
+                        if (userOpt.isPresent()) {
+                            refreshTokenService.revokeRefreshToken(userOpt.get().getId().toString());
+                            log.info("Refresh token revoked successfully from Redis");
+                        }
+                    } else {
+                        // Fallback to JWT blacklist if not found in Redis
+                        String refreshJti = jwtUtil.extractJti(refreshToken);
+                        long refreshExp = jwtUtil.extractExpiration(refreshToken).getTime();
+                        tokenBlacklistService.revoke(refreshJti, refreshExp);
+                        log.info("Refresh token revoked successfully via JWT blacklist");
+                    }
                 } catch (Exception e) {
                     log.warn("Failed to revoke refresh token: {}", e.getMessage());
                 }
@@ -276,6 +306,100 @@ public class AuthController {
         
         return payload;
     }
+
+    /**
+     * Check if user has refresh token
+     */
+    @GetMapping("/has-refresh-token")
+    public ApiResponse<Map<String, Boolean>> hasRefreshToken(
+            @RequestHeader(name = "Authorization") String authorization) {
+        try {
+            String token = authorization.substring(7);
+            String email = jwtUtil.extractUsername(token);
+            
+            if (email == null || email.trim().isEmpty()) {
+                return ApiResponse.error(ErrorCode.UNAUTHORIZED, null);
+            }
+            
+            Optional<User> userOpt = userService.findByEmail(email);
+            if (userOpt.isEmpty()) {
+                return ApiResponse.error(ErrorCode.UNAUTHORIZED, null);
+            }
+            
+            boolean hasToken = refreshTokenService.hasValidRefreshToken(userOpt.get().getId().toString());
+            Map<String, Boolean> response = new HashMap<>();
+            response.put("hasRefreshToken", hasToken);
+            
+            return ApiResponse.success(response);
+        } catch (Exception e) {
+            log.error("Error checking refresh token: {}", e.getMessage(), e);
+            return ApiResponse.error(ErrorCode.INTERNAL_SERVER_ERROR, null);
+        }
+    }
+
+    /**
+     * Revoke refresh token for current user
+     */
+    @PostMapping("/revoke-refresh-token")
+    public ApiResponse<String> revokeRefreshToken(
+            @RequestHeader(name = "Authorization") String authorization) {
+        try {
+            String token = authorization.substring(7);
+            String email = jwtUtil.extractUsername(token);
+            
+            if (email == null || email.trim().isEmpty()) {
+                return ApiResponse.error(ErrorCode.UNAUTHORIZED, null);
+            }
+            
+            Optional<User> userOpt = userService.findByEmail(email);
+            if (userOpt.isEmpty()) {
+                return ApiResponse.error(ErrorCode.UNAUTHORIZED, null);
+            }
+            
+            refreshTokenService.revokeRefreshToken(userOpt.get().getId().toString());
+            return ApiResponse.success("Refresh token revoked successfully");
+        } catch (Exception e) {
+            log.error("Error revoking refresh token: {}", e.getMessage(), e);
+            return ApiResponse.error(ErrorCode.INTERNAL_SERVER_ERROR, null);
+        }
+    }
+
+    /**
+     * Get refresh token for current user (admin only)
+     */
+    @GetMapping("/refresh-token")
+    public ApiResponse<Map<String, String>> getRefreshToken(
+            @RequestHeader(name = "Authorization") String authorization) {
+        try {
+            String token = authorization.substring(7);
+            String email = jwtUtil.extractUsername(token);
+            
+            if (email == null || email.trim().isEmpty()) {
+                return ApiResponse.error(ErrorCode.UNAUTHORIZED, null);
+            }
+            
+            Optional<User> userOpt = userService.findByEmail(email);
+            if (userOpt.isEmpty()) {
+                return ApiResponse.error(ErrorCode.UNAUTHORIZED, null);
+            }
+            
+            Optional<String> refreshTokenOpt = refreshTokenService.getRefreshToken(userOpt.get().getId().toString());
+            Map<String, String> response = new HashMap<>();
+            
+            if (refreshTokenOpt.isPresent()) {
+                response.put("refreshToken", refreshTokenOpt.get());
+                response.put("hasToken", "true");
+            } else {
+                response.put("hasToken", "false");
+            }
+            
+            return ApiResponse.success(response);
+        } catch (Exception e) {
+            log.error("Error getting refresh token: {}", e.getMessage(), e);
+            return ApiResponse.error(ErrorCode.INTERNAL_SERVER_ERROR, null);
+        }
+    }
+
 }
 
 

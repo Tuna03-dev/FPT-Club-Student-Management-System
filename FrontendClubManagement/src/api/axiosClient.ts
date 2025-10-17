@@ -8,9 +8,6 @@ import axios, {
 // Import AuthenticationResponse type
 interface AuthenticationResponse {
   accessToken: string;
-  refreshToken: string;
-  tokenType: string;
-  expiresIn: number;
   user: {
     id: number;
     email: string;
@@ -23,18 +20,12 @@ interface AuthenticationResponse {
 // ===== Token Helpers =====
 const getAccessToken = (): string | null => localStorage.getItem("accessToken");
 
-const getRefreshToken = (): string | null =>
-  localStorage.getItem("refreshToken");
-
 const setAccessToken = (token: string): void =>
   localStorage.setItem("accessToken", token);
 
-const setRefreshToken = (token: string): void =>
-  localStorage.setItem("refreshToken", token);
-
 const removeTokens = (): void => {
   localStorage.removeItem("accessToken");
-  localStorage.removeItem("refreshToken");
+  localStorage.removeItem("user");
 };
 
 // ===== API Response wrapper (match backend ApiResponse<T>) =====
@@ -78,25 +69,25 @@ axiosInstance.interceptors.response.use(
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
       try {
-        const refreshToken = getRefreshToken();
-        if (!refreshToken) {
-          throw new Error("No refresh token available");
-        }
-
+        // Use server-side refresh token API
         const refreshResponse = await axios.post<
           ApiResponse<AuthenticationResponse>
         >(
-          `${import.meta.env.VITE_API_URL || "/api"}/auth/refreshToken`,
-          { refreshToken },
-          { withCredentials: true }
+          `${
+            import.meta.env.VITE_API_URL || "/api"
+          }/auth/refreshTokenServerSide`,
+          {},
+          {
+            withCredentials: true,
+            headers: {
+              Authorization: `Bearer ${getAccessToken()}`,
+            },
+          }
         );
 
         if (refreshResponse.data.code === 200 && refreshResponse.data.data) {
           const authData = refreshResponse.data.data;
           setAccessToken(authData.accessToken);
-          if (authData.refreshToken) {
-            setRefreshToken(authData.refreshToken);
-          }
 
           originalRequest.headers = {
             ...originalRequest.headers,
