@@ -35,7 +35,10 @@ public class SecurityConfig {
             "/api/v1/auth/**",
             "/api/v1/public/**",
             "/oauth2/**",
-            "/login/**"
+            "/login/**",
+            "/test/**",
+            "/posts/**"
+
     };
     
     private final String[] SWAGGER_URL = {
