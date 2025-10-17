@@ -33,5 +33,8 @@ public class Team extends BaseEntity {
 
     @OneToMany(mappedBy = "team", cascade = CascadeType.ALL)
     private Set<RoleMemberShip> roleMemberships;
+
+    @OneToMany(mappedBy = "team", cascade = CascadeType.ALL)
+    private Set<Post> posts;
 }
 

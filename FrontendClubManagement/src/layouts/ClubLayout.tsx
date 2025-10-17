@@ -11,6 +11,7 @@ import {
   Clock,
 } from "lucide-react";
 import { NavLink, Outlet } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,6 +22,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { authService } from "@/services/authService";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -96,6 +98,21 @@ const teamColors: Record<string, string> = {
 export const ClubLayout = () => {
   const { t } = useTranslation("common");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const navigate = useNavigate();
+
+  const handleLogout = async () => {
+    try {
+      const success = await authService.logoutWithApi();
+      if (!success) {
+        console.warn("Logout API failed, but continuing with local logout");
+      }
+    } catch (error) {
+      console.error("Logout error:", error);
+    } finally {
+      authService.logout();
+      navigate("/login", { replace: true });
+    }
+  };
 
   return (
     <TooltipProvider delayDuration={200}>
@@ -188,10 +205,15 @@ export const ClubLayout = () => {
                 </TooltipContent>
               </Tooltip>
 
-              <Avatar className="h-8 w-8 cursor-pointer ring-2 ring-primary/20 hover:ring-primary/40 transition-all">
-                <AvatarImage src="https://github.com/shadcn.png" />
-                <AvatarFallback>CP</AvatarFallback>
-              </Avatar>
+              <div className="flex items-center gap-2">
+                <Avatar className="h-8 w-8 ring-2 ring-primary/20">
+                  <AvatarImage src="https://github.com/shadcn.png" />
+                  <AvatarFallback>U</AvatarFallback>
+                </Avatar>
+                <Button variant="ghost" size="sm" onClick={handleLogout}>
+                  {t("logout", { defaultValue: "Đăng xuất" })}
+                </Button>
+              </div>
 
               {/* Mobile Menu */}
               <DropdownMenu

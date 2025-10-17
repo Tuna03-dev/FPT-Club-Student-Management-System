@@ -7,6 +7,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -20,7 +21,6 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 
-
 @Configuration
 @RequiredArgsConstructor
 @EnableWebSecurity
@@ -31,10 +31,14 @@ public class SecurityConfig {
     private final UserDetailsService userDetailsService;
     
     private final String[] PUBLIC_URL = {
+            "api/**",
             "/api/v1/auth/**",
             "/api/v1/public/**",
             "/oauth2/**",
-            "/login/**"
+            "/login/**",
+            "/test/**",
+            "/posts/**"
+
     };
     
     private final String[] SWAGGER_URL = {
@@ -51,7 +55,9 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain configure(HttpSecurity http) throws Exception {
-        http.csrf(AbstractHttpConfigurer::disable)
+        http
+                .cors(Customizer.withDefaults())
+                .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(request -> request
                         .requestMatchers(SWAGGER_URL).permitAll()
                         .requestMatchers(PUBLIC_URL).permitAll()
