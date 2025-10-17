@@ -23,5 +23,13 @@
     "manage_events": "Quản lý sự kiện",
     "pending_requests": "Yêu cầu chờ duyệt"
   },
-  "search": "Tìm kiếm..."
+  "search": "Tìm kiếm...",
+  "post": {
+    "likes": "lượt thích",
+    "comments": "bình luận",
+    "like": "Thích",
+    "comment": "Bình luận",
+    "seeMore": "Xem thêm",
+    "seeLess": "Thu gọn"
+  }
 }

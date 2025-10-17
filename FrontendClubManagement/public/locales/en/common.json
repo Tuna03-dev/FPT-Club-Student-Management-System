@@ -24,5 +24,13 @@
     "manage_events": "Manage Events",
     "pending_requests": "Pending Requests"
   },
-  "search": "Search..."
+  "search": "Search...",
+  "post": {
+    "likes": "likes",
+    "comments": "comments",
+    "like": "Like",
+    "comment": "Comment",
+    "seeMore": "See more",
+    "seeLess": "See less"
+  }
 }
