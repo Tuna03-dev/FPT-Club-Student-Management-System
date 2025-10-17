@@ -26,6 +26,8 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.Cookie;
 import java.security.GeneralSecurityException;
 import java.util.*;
 import java.util.Optional;
@@ -48,7 +50,7 @@ public class AuthController {
     private String googleClientId;
 
     @PostMapping("/google")
-    public ApiResponse<AuthenticationResponse> loginWithGoogle(@Valid @RequestBody GoogleLoginRequest request, HttpServletRequest httpRequest) {
+    public ApiResponse<AuthenticationResponse> loginWithGoogle(@Valid @RequestBody GoogleLoginRequest request, HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
         try {
             GoogleIdToken.Payload payload = verifyIdToken(request.getIdToken());
             String email = payload.getEmail();
@@ -111,13 +113,26 @@ public class AuthController {
         String accessToken = jwtUtil.generateAccessToken(extraClaims, securityUser);
         String refreshToken = jwtUtil.generateRefreshToken(securityUser);
 
-        // Store refresh token in Redis
+        // Store refresh token in Redis with actual token expiration time
         try {
-            refreshTokenService.createRefreshToken(user, refreshToken);
-            log.info("Refresh token stored for user: {}", user.getEmail());
+            long refreshTokenExpiration = jwtUtil.extractExpirationTimeMillis(refreshToken);
+            refreshTokenService.createRefreshToken(user, refreshToken, refreshTokenExpiration);
+            log.info("Refresh token stored for user: {} with expiration: {}", user.getEmail(), refreshTokenExpiration);
         } catch (Exception e) {
             log.error("Failed to store refresh token for user: {}", user.getEmail(), e);
-            // Continue with login even if refresh token storage fails
+        }
+
+        // Set refresh token as HttpOnly cookie
+        try {
+            Cookie refreshTokenCookie = new Cookie("refreshToken", refreshToken);
+            refreshTokenCookie.setHttpOnly(true);
+            refreshTokenCookie.setSecure(false); // Set to false for development, true for production
+            refreshTokenCookie.setPath("/");
+            refreshTokenCookie.setMaxAge((int) ((jwtUtil.extractExpirationTimeMillis(refreshToken) - System.currentTimeMillis()) / 1000));
+            httpResponse.addCookie(refreshTokenCookie);
+            log.info("Refresh token cookie set for user: {}", user.getEmail());
+        } catch (Exception e) {
+            log.error("Failed to set refresh token cookie for user: {}", user.getEmail(), e);
         }
 
         AuthenticationResponse.UserInfo userInfo = AuthenticationResponse.UserInfo.builder()
@@ -145,14 +160,28 @@ public class AuthController {
      */
     @PostMapping("/refreshToken")
     public ApiResponse<AuthenticationResponse> refreshToken(
-            @RequestHeader(name = "Authorization") String authorization) {
+            HttpServletRequest request, HttpServletResponse response) {
         try {
-            // Extract access token from Authorization header
-            String accessToken = authorization.substring(7);
-            String email = jwtUtil.extractUsername(accessToken);
+            // Extract refresh token from HttpOnly cookie
+            String refreshToken = null;
+            if (request.getCookies() != null) {
+                for (Cookie cookie : request.getCookies()) {
+                    if ("refreshToken".equals(cookie.getName())) {
+                        refreshToken = cookie.getValue();
+                        break;
+                    }
+                }
+            }
             
+            if (refreshToken == null || refreshToken.trim().isEmpty()) {
+                log.warn("No refresh token found in cookies");
+                return ApiResponse.error(ErrorCode.UNAUTHORIZED, null);
+            }
+            
+            // Extract email from refresh token
+            String email = jwtUtil.extractUsername(refreshToken);
             if (email == null || email.trim().isEmpty()) {
-                log.warn("Invalid access token provided for refresh");
+                log.warn("Invalid refresh token provided");
                 return ApiResponse.error(ErrorCode.UNAUTHORIZED, null);
             }
             
@@ -171,9 +200,9 @@ public class AuthController {
                 return ApiResponse.error(ErrorCode.UNAUTHORIZED, null);
             }
             
-            // Check if user has a valid refresh token in Redis
-            if (!refreshTokenService.hasValidRefreshToken(user.getId().toString())) {
-                log.warn("No valid refresh token found for user: {}", email);
+            // Validate refresh token against stored token in Redis
+            if (!refreshTokenService.isValidRefreshToken(user.getId().toString(), refreshToken)) {
+                log.warn("Invalid refresh token for user: {}", email);
                 return ApiResponse.error(ErrorCode.UNAUTHORIZED, null);
             }
             
@@ -199,11 +228,25 @@ public class AuthController {
             refreshTokenService.revokeRefreshToken(user.getId().toString());
             
             try {
-                refreshTokenService.createRefreshToken(user, newRefreshToken);
-                log.info("New refresh token created for user: {}", email);
+                long refreshTokenExpiration = jwtUtil.extractExpirationTimeMillis(newRefreshToken);
+                refreshTokenService.createRefreshToken(user, newRefreshToken, refreshTokenExpiration);
+                log.info("New refresh token created for user: {} with expiration: {}", email, refreshTokenExpiration);
             } catch (Exception e) {
                 log.error("Failed to store new refresh token for user: {}", email, e);
                 // Continue with response even if refresh token storage fails
+            }
+
+            // Set new refresh token as HttpOnly cookie
+            try {
+                Cookie refreshTokenCookie = new Cookie("refreshToken", newRefreshToken);
+                refreshTokenCookie.setHttpOnly(true);
+                refreshTokenCookie.setSecure(false); // Set to false for development, true for production
+                refreshTokenCookie.setPath("/");
+                refreshTokenCookie.setMaxAge((int) ((jwtUtil.extractExpirationTimeMillis(newRefreshToken) - System.currentTimeMillis()) / 1000));
+                response.addCookie(refreshTokenCookie);
+                log.info("New refresh token cookie set for user: {}", email);
+            } catch (Exception e) {
+                log.error("Failed to set new refresh token cookie for user: {}", email, e);
             }
 
             AuthenticationResponse.UserInfo userInfo = AuthenticationResponse.UserInfo.builder()
@@ -229,50 +272,67 @@ public class AuthController {
     @PostMapping("/logout")
     public ApiResponse<String> logout(
             @RequestHeader(name = "Authorization", required = false) String authorization,
-            @RequestBody(required = false) Map<String, String> body) {
+            HttpServletRequest request, HttpServletResponse response) {
         
         try {
-            // Revoke access token
-            if (authorization != null && authorization.startsWith("Bearer ")) {
-                String token = authorization.substring(7);
-                try {
-                    String jti = jwtUtil.extractJti(token);
-                    long exp = jwtUtil.extractExpiration(token).getTime();
-                    tokenBlacklistService.revoke(jti, exp);
-                    log.info("Access token revoked successfully");
-                } catch (Exception e) {
-                    log.warn("Failed to revoke access token: {}", e.getMessage());
-                }
+            if (authorization == null || !authorization.startsWith("Bearer ")) {
+                log.warn("No valid authorization header provided for logout");
+                return ApiResponse.error(ErrorCode.UNAUTHORIZED, null);
             }
             
-            // Revoke refresh token if provided
-            if (body != null && body.containsKey("refreshToken")) {
-                String refreshToken = body.get("refreshToken");
-                try {
-                    // Revoke refresh token from Redis
-                    String email = jwtUtil.extractUsername(refreshToken);
-                    if (email != null) {
-                        Optional<User> userOpt = userService.findByEmail(email);
-                        if (userOpt.isPresent()) {
-                            refreshTokenService.revokeRefreshToken(userOpt.get().getId().toString());
-                            log.info("Refresh token revoked successfully from Redis");
-                        }
-                    } else {
-                        // Fallback to JWT blacklist if not found in Redis
-                        String refreshJti = jwtUtil.extractJti(refreshToken);
-                        long refreshExp = jwtUtil.extractExpiration(refreshToken).getTime();
-                        tokenBlacklistService.revoke(refreshJti, refreshExp);
-                        log.info("Refresh token revoked successfully via JWT blacklist");
-                    }
-                } catch (Exception e) {
-                    log.warn("Failed to revoke refresh token: {}", e.getMessage());
-                }
+            String accessToken = authorization.substring(7);
+            String email = jwtUtil.extractUsername(accessToken);
+            
+            if (email == null || email.trim().isEmpty()) {
+                log.warn("Invalid access token provided for logout");
+                return ApiResponse.error(ErrorCode.UNAUTHORIZED, null);
+            }
+            
+            // Find user to get user ID for refresh token revocation
+            Optional<User> userOpt = userService.findByEmail(email);
+            if (userOpt.isEmpty()) {
+                log.warn("User not found for logout: {}", email);
+                return ApiResponse.error(ErrorCode.UNAUTHORIZED, null);
+            }
+            
+            User user = userOpt.get();
+            String userId = user.getId().toString();
+            
+            // Revoke access token by adding to blacklist
+            try {
+                String jti = jwtUtil.extractJti(accessToken);
+                long exp = jwtUtil.extractExpirationTimeMillis(accessToken);
+                tokenBlacklistService.revoke(jti, exp);
+                log.info("Access token revoked successfully for user: {} with TTL: {}s", email, (exp - System.currentTimeMillis()) / 1000);
+            } catch (Exception e) {
+                log.warn("Failed to revoke access token for user: {}", email, e);
+            }
+            
+            // Revoke refresh token from Redis
+            try {
+                refreshTokenService.revokeRefreshToken(userId);
+                log.info("Refresh token revoked successfully from Redis for user: {}", email);
+            } catch (Exception e) {
+                log.warn("Failed to revoke refresh token from Redis for user: {}", email, e);
+            }
+
+            // Clear refresh token cookie
+            try {
+                Cookie refreshTokenCookie = new Cookie("refreshToken", "");
+                refreshTokenCookie.setHttpOnly(true);
+                refreshTokenCookie.setSecure(true);
+                refreshTokenCookie.setPath("/");
+                refreshTokenCookie.setMaxAge(0); // Expire immediately
+                response.addCookie(refreshTokenCookie);
+                log.info("Refresh token cookie cleared for user: {}", email);
+            } catch (Exception e) {
+                log.warn("Failed to clear refresh token cookie for user: {}", email, e);
             }
             
             return ApiResponse.success("Logout successful");
         } catch (Exception e) {
             log.error("Error during logout: {}", e.getMessage(), e);
-            return ApiResponse.success("Logout completed with warnings");
+            return ApiResponse.error(ErrorCode.INTERNAL_SERVER_ERROR, null);
         }
     }
 
@@ -306,100 +366,6 @@ public class AuthController {
         
         return payload;
     }
-
-    /**
-     * Check if user has refresh token
-     */
-    @GetMapping("/has-refresh-token")
-    public ApiResponse<Map<String, Boolean>> hasRefreshToken(
-            @RequestHeader(name = "Authorization") String authorization) {
-        try {
-            String token = authorization.substring(7);
-            String email = jwtUtil.extractUsername(token);
-            
-            if (email == null || email.trim().isEmpty()) {
-                return ApiResponse.error(ErrorCode.UNAUTHORIZED, null);
-            }
-            
-            Optional<User> userOpt = userService.findByEmail(email);
-            if (userOpt.isEmpty()) {
-                return ApiResponse.error(ErrorCode.UNAUTHORIZED, null);
-            }
-            
-            boolean hasToken = refreshTokenService.hasValidRefreshToken(userOpt.get().getId().toString());
-            Map<String, Boolean> response = new HashMap<>();
-            response.put("hasRefreshToken", hasToken);
-            
-            return ApiResponse.success(response);
-        } catch (Exception e) {
-            log.error("Error checking refresh token: {}", e.getMessage(), e);
-            return ApiResponse.error(ErrorCode.INTERNAL_SERVER_ERROR, null);
-        }
-    }
-
-    /**
-     * Revoke refresh token for current user
-     */
-    @PostMapping("/revoke-refresh-token")
-    public ApiResponse<String> revokeRefreshToken(
-            @RequestHeader(name = "Authorization") String authorization) {
-        try {
-            String token = authorization.substring(7);
-            String email = jwtUtil.extractUsername(token);
-            
-            if (email == null || email.trim().isEmpty()) {
-                return ApiResponse.error(ErrorCode.UNAUTHORIZED, null);
-            }
-            
-            Optional<User> userOpt = userService.findByEmail(email);
-            if (userOpt.isEmpty()) {
-                return ApiResponse.error(ErrorCode.UNAUTHORIZED, null);
-            }
-            
-            refreshTokenService.revokeRefreshToken(userOpt.get().getId().toString());
-            return ApiResponse.success("Refresh token revoked successfully");
-        } catch (Exception e) {
-            log.error("Error revoking refresh token: {}", e.getMessage(), e);
-            return ApiResponse.error(ErrorCode.INTERNAL_SERVER_ERROR, null);
-        }
-    }
-
-    /**
-     * Get refresh token for current user (admin only)
-     */
-    @GetMapping("/refresh-token")
-    public ApiResponse<Map<String, String>> getRefreshToken(
-            @RequestHeader(name = "Authorization") String authorization) {
-        try {
-            String token = authorization.substring(7);
-            String email = jwtUtil.extractUsername(token);
-            
-            if (email == null || email.trim().isEmpty()) {
-                return ApiResponse.error(ErrorCode.UNAUTHORIZED, null);
-            }
-            
-            Optional<User> userOpt = userService.findByEmail(email);
-            if (userOpt.isEmpty()) {
-                return ApiResponse.error(ErrorCode.UNAUTHORIZED, null);
-            }
-            
-            Optional<String> refreshTokenOpt = refreshTokenService.getRefreshToken(userOpt.get().getId().toString());
-            Map<String, String> response = new HashMap<>();
-            
-            if (refreshTokenOpt.isPresent()) {
-                response.put("refreshToken", refreshTokenOpt.get());
-                response.put("hasToken", "true");
-            } else {
-                response.put("hasToken", "false");
-            }
-            
-            return ApiResponse.success(response);
-        } catch (Exception e) {
-            log.error("Error getting refresh token: {}", e.getMessage(), e);
-            return ApiResponse.error(ErrorCode.INTERNAL_SERVER_ERROR, null);
-        }
-    }
-
 }
 
 

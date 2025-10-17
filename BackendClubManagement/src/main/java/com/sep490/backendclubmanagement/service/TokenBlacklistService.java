@@ -3,7 +3,6 @@ package com.sep490.backendclubmanagement.service;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
@@ -82,7 +81,29 @@ public class TokenBlacklistService {
     /**
      * Force revoke a token immediately (useful for admin operations)
      * @param jti JWT ID from token
+     * @param expiresAtMillis Token expiration time in milliseconds
      */
+    public void forceRevoke(String jti, long expiresAtMillis) {
+        if (jti == null) return;
+        
+        try {
+            String key = REVOKED_TOKEN_PREFIX + jti;
+            long currentTime = System.currentTimeMillis();
+            long ttlSeconds = Math.max(1, (expiresAtMillis - currentTime) / 1000);
+            
+            redisTemplate.opsForValue().set(key, "force-revoked", Duration.ofSeconds(ttlSeconds));
+            log.info("Token force revoked: jti={}, ttl={}s", jti, ttlSeconds);
+        } catch (Exception e) {
+            log.error("Failed to force revoke token: jti={}", jti, e);
+        }
+    }
+
+    /**
+     * Force revoke a token immediately with default long TTL (backward compatibility)
+     * @param jti JWT ID from token
+     * @deprecated Use forceRevoke(String jti, long expiresAtMillis) instead
+     */
+    @Deprecated
     public void forceRevoke(String jti) {
         if (jti == null) return;
         
@@ -110,35 +131,6 @@ public class TokenBlacklistService {
         }
     }
 
-    /**
-     * Clean up expired tokens (Redis TTL should handle this automatically, but this is a backup)
-     * Runs every hour to clean up any orphaned keys
-     */
-    @Scheduled(fixedRate = 3600000) // Run every hour
-    public void cleanupExpiredTokens() {
-        try {
-            Set<String> keys = redisTemplate.keys(REVOKED_TOKEN_PREFIX + "*");
-            if (keys != null && !keys.isEmpty()) {
-                long cleanedCount = 0;
-                for (String key : keys) {
-                    try {
-                        // Check if key exists (TTL should have removed it if expired)
-                        Boolean exists = redisTemplate.hasKey(key);
-                        if (Boolean.FALSE.equals(exists)) {
-                            cleanedCount++;
-                        }
-                    } catch (Exception e) {
-                        log.warn("Error checking key: {}", key, e);
-                    }
-                }
-                if (cleanedCount > 0) {
-                    log.info("Cleanup completed: {} expired tokens cleaned up", cleanedCount);
-                }
-            }
-        } catch (Exception e) {
-            log.error("Error during token cleanup", e);
-        }
-    }
 
     /**
      * Clear all revoked tokens (use with caution - admin operation)

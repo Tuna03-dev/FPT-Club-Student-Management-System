@@ -106,6 +106,13 @@ public class JwtUtil {
     }
 
     /**
+     * Extract expiration time in milliseconds from token
+     */
+    public long extractExpirationTimeMillis(String token) {
+        return extractExpiration(token).getTime();
+    }
+
+    /**
      * Extract authorities from token
      */
     @SuppressWarnings("unchecked")

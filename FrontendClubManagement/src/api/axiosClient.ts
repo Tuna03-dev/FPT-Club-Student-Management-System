@@ -69,19 +69,14 @@ axiosInstance.interceptors.response.use(
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
       try {
-        // Use server-side refresh token API
+        // Use server-side refresh token API (refresh token is sent via HttpOnly cookie)
         const refreshResponse = await axios.post<
           ApiResponse<AuthenticationResponse>
         >(
-          `${
-            import.meta.env.VITE_API_URL || "/api"
-          }/auth/refreshTokenServerSide`,
+          `${import.meta.env.VITE_API_URL || "/api"}/auth/refreshToken`,
           {},
           {
             withCredentials: true,
-            headers: {
-              Authorization: `Bearer ${getAccessToken()}`,
-            },
           }
         );
 

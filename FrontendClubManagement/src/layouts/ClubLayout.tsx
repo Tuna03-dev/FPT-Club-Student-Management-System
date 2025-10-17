@@ -50,9 +50,12 @@ export const ClubLayout = () => {
 
   const handleLogout = async () => {
     try {
-      await authService.logoutApi();
-    } catch (e) {
-      // ignore API errors; always clear tokens client-side
+      const success = await authService.logoutWithApi();
+      if (!success) {
+        console.warn("Logout API failed, but continuing with local logout");
+      }
+    } catch (error) {
+      console.error("Logout error:", error);
     } finally {
       authService.logout();
       navigate("/login", { replace: true });

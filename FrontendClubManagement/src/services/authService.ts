@@ -27,9 +27,7 @@ export const authService = {
   },
 
   refreshToken: async (): Promise<ApiResponse<AuthenticationResponse>> => {
-    return axiosClient.post<AuthenticationResponse>(
-      "/auth/refreshTokenServerSide"
-    );
+    return axiosClient.post<AuthenticationResponse>("/auth/refreshToken");
   },
 
   logoutApi: async (): Promise<ApiResponse<string>> => {
@@ -39,6 +37,19 @@ export const authService = {
   logout: () => {
     localStorage.removeItem("accessToken");
     localStorage.removeItem("user");
+  },
+
+  logoutWithApi: async (): Promise<boolean> => {
+    try {
+      await authService.logoutApi();
+      authService.logout();
+      return true;
+    } catch (error) {
+      console.error("Logout API error:", error);
+      // Even if API fails, clear local storage
+      authService.logout();
+      return false;
+    }
   },
 
   getCurrentUser: (): UserInfo | null => {

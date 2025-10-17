@@ -10,8 +10,9 @@ import java.time.Duration;
 import java.util.*;
 
 /**
- * Simple service for managing refresh tokens in Redis.
+ * Service for managing refresh tokens in Redis with automatic expiration based on JWT token expiry.
  * Uses simple key-value structure: refresh_token:{userId} -> refreshTokenString
+ * TTL is set based on the actual JWT token expiration time.
  */
 @Service
 @RequiredArgsConstructor
@@ -20,20 +21,35 @@ public class RefreshTokenService {
 
     private final RedisTemplate<String, Object> redisTemplate;
     private static final String REFRESH_TOKEN_PREFIX = "refresh_token:";
-    private static final long REFRESH_TOKEN_EXPIRY_DAYS = 7; // 7 days
 
     /**
-     * Store refresh token for user
+     * Store refresh token for user with custom expiration time
+     * @param userId User ID
+     * @param refreshToken Refresh token string
+     * @param expirationTimeMillis Token expiration time in milliseconds
      */
-    public void storeRefreshToken(String userId, String refreshToken) {
+    public void storeRefreshToken(String userId, String refreshToken, long expirationTimeMillis) {
         try {
             String key = REFRESH_TOKEN_PREFIX + userId;
-            redisTemplate.opsForValue().set(key, refreshToken, Duration.ofDays(REFRESH_TOKEN_EXPIRY_DAYS));
-            log.debug("Refresh token stored for user: {}", userId);
+            long currentTime = System.currentTimeMillis();
+            long ttlSeconds = Math.max(1, (expirationTimeMillis - currentTime) / 1000);
+            
+            redisTemplate.opsForValue().set(key, refreshToken, Duration.ofSeconds(ttlSeconds));
+            log.debug("Refresh token stored for user: {} with TTL: {}s", userId, ttlSeconds);
         } catch (Exception e) {
             log.error("Failed to store refresh token for user: {}", userId, e);
             throw new RuntimeException("Failed to store refresh token", e);
         }
+    }
+
+    /**
+     * Store refresh token for user (backward compatibility - uses default 1 day)
+     * @deprecated Use storeRefreshToken(String userId, String refreshToken, long expirationTimeMillis) instead
+     */
+    @Deprecated
+    public void storeRefreshToken(String userId, String refreshToken) {
+        long defaultExpiration = System.currentTimeMillis() + (24 * 60 * 60 * 1000L); // 1 day
+        storeRefreshToken(userId, refreshToken, defaultExpiration);
     }
 
     /**
@@ -84,39 +100,24 @@ public class RefreshTokenService {
     }
 
     /**
-     * Create and store refresh token for user
+     * Create and store refresh token for user with custom expiration time
+     * @param user User entity
+     * @param refreshToken Refresh token string
+     * @param expirationTimeMillis Token expiration time in milliseconds
      */
+    public void createRefreshToken(User user, String refreshToken, long expirationTimeMillis) {
+        storeRefreshToken(user.getId().toString(), refreshToken, expirationTimeMillis);
+    }
+
+    /**
+     * Create and store refresh token for user (backward compatibility)
+     * @deprecated Use createRefreshToken(User user, String refreshToken, long expirationTimeMillis) instead
+     */
+    @Deprecated
     public void createRefreshToken(User user, String refreshToken) {
         storeRefreshToken(user.getId().toString(), refreshToken);
     }
 
 
-    /**
-     * Clean up expired tokens (scheduled task)
-     */
-    public void cleanupExpiredTokens() {
-        try {
-            Set<String> keys = redisTemplate.keys(REFRESH_TOKEN_PREFIX + "*");
-            if (keys != null) {
-                int cleanedCount = 0;
-                for (String key : keys) {
-                    try {
-                        // Check if key exists (TTL should have removed it if expired)
-                        Boolean exists = redisTemplate.hasKey(key);
-                        if (Boolean.FALSE.equals(exists)) {
-                            cleanedCount++;
-                        }
-                    } catch (Exception e) {
-                        log.warn("Error checking key: {}", key, e);
-                    }
-                }
-                if (cleanedCount > 0) {
-                    log.info("Cleaned up {} expired refresh tokens", cleanedCount);
-                }
-            }
-        } catch (Exception e) {
-            log.error("Error during refresh token cleanup", e);
-        }
-    }
 
 }
