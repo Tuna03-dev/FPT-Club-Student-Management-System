@@ -6,7 +6,8 @@
     "members": "Members",
     "events": "Events",
     "notifications": "Notifications",
-    "settings": "Settings"
+    "settings": "Settings",
+    "management": "Management"
   },
   "teams": {
     "title": "Teams",
@@ -16,5 +17,20 @@
     "noi-vu": "Internal Affairs Team",
     "doi-ngoai": "External Affairs Team"
   },
-  "search": "Search..."
+  "management": {
+    "permissions": "Permissions",
+    "pending_posts": "Pending Posts",
+    "manage_members": "Manage Members",
+    "manage_events": "Manage Events",
+    "pending_requests": "Pending Requests"
+  },
+  "search": "Search...",
+  "post": {
+    "likes": "likes",
+    "comments": "comments",
+    "like": "Like",
+    "comment": "Comment",
+    "seeMore": "See more",
+    "seeLess": "See less"
+  }
 }
