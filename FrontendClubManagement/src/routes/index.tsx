@@ -8,6 +8,7 @@ import { Notifications } from "@/pages/myclub/Notifications";
 import { Settings } from "@/pages/myclub/Settings";
 import { EventsPage } from "@/pages/events/EventPageList";
 import NewsPageList from "@/pages/news/NewsPageList";
+import EventDetailPage from "@/pages/events/EventDetail";
 
 /**
  * Main application router
@@ -20,6 +21,10 @@ export const router = createBrowserRouter([
   {
     path: "/events",
     element: <EventsPage />,
+  },
+  {
+    path: "/events/:id",
+    element: <EventDetailPage />,
   },
   
   {

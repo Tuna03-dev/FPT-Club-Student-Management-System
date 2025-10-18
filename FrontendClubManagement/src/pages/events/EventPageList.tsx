@@ -1,112 +1,71 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { EventCard } from "../../components/features/event/EventCard"
 import { EventFilters } from "../../components/features/event/EventFilter"
 import { Calendar, Search } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-
-const events = [
-  {
-    id: 1,
-    title: "FPT Tech Talk: AI & Machine Learning",
-    date: "2025-01-20",
-    time: "14:00 - 16:00",
-    location: "Hội trường A, Tòa nhà Alpha",
-    category: "Workshop",
-    attendees: 120,
-    maxAttendees: 150,
-    image: "/ai-conference.png",
-    description: "Tham gia workshop về AI và Machine Learning với các chuyên gia hàng đầu từ FPT Software.",
-    organizer: "FPT AI Club",
-    status: "upcoming",
-  },
-  {
-    id: 2,
-    title: "Hackathon 2025: Code for Future",
-    date: "2025-01-25",
-    time: "08:00 - 20:00",
-    location: "Khu thực hành B",
-    category: "Competition",
-    attendees: 85,
-    maxAttendees: 100,
-    image: "/hackathon-coding-competition.jpg",
-    description: "24 giờ coding marathon với giải thưởng hấp dẫn lên đến 50 triệu đồng.",
-    organizer: "FPT Developer Club",
-    status: "upcoming",
-  },
-  {
-    id: 3,
-    title: "Soft Skills: Leadership & Communication",
-    date: "2025-01-22",
-    time: "18:00 - 20:00",
-    location: "Phòng 301, Tòa nhà Beta",
-    category: "Seminar",
-    attendees: 60,
-    maxAttendees: 80,
-    image: "/leadership-training-seminar.png",
-    description: "Phát triển kỹ năng lãnh đạo và giao tiếp hiệu quả cho sinh viên.",
-    organizer: "FPT Soft Skills Club",
-    status: "upcoming",
-  },
-  {
-    id: 4,
-    title: "FPT Music Night: Đêm nhạc sinh viên",
-    date: "2025-01-28",
-    time: "19:00 - 22:00",
-    location: "Sân khấu ngoài trời",
-    category: "Entertainment",
-    attendees: 200,
-    maxAttendees: 300,
-    image: "/music-concert-night-students.jpg",
-    description: "Đêm nhạc sôi động với các ban nhạc sinh viên và nghệ sĩ khách mời.",
-    organizer: "FPT Music Club",
-    status: "upcoming",
-  },
-  {
-    id: 5,
-    title: "Career Fair 2025",
-    date: "2025-02-01",
-    time: "09:00 - 17:00",
-    location: "Hội trường chính",
-    category: "Career",
-    attendees: 150,
-    maxAttendees: 500,
-    image: "/career-fair-job-recruitment.jpg",
-    description: "Ngày hội việc làm với hơn 50 doanh nghiệp hàng đầu tham gia tuyển dụng.",
-    organizer: "FPT Career Center",
-    status: "upcoming",
-  },
-  {
-    id: 6,
-    title: "Web Development Bootcamp",
-    date: "2025-02-05",
-    time: "13:00 - 17:00",
-    location: "Lab 402",
-    category: "Workshop",
-    attendees: 45,
-    maxAttendees: 50,
-    image: "/web-dev-bootcamp.png",
-    description: "Học React, Next.js và các công nghệ web hiện đại từ cơ bản đến nâng cao.",
-    organizer: "FPT Web Dev Club",
-    status: "upcoming",
-  },
-]
+import { computeEventStatus, getAllEventTypes, getAllEventsByFilter, type EventStatusFilter, type EventTypeDto, type EventData } from "@/service/EventService"
 
 export function EventsPage() {
   const [searchQuery, setSearchQuery] = useState("")
-  const [selectedCategory, setSelectedCategory] = useState("all")
-  const [selectedStatus, setSelectedStatus] = useState("all")
+  const [selectedTypeId, setSelectedTypeId] = useState<string>("all")
+  const [selectedStatus, setSelectedStatus] = useState<EventStatusFilter>("all")
+  const [eventTypes, setEventTypes] = useState<EventTypeDto[]>([])
+  const [events, setEvents] = useState<EventData[]>([])
+  const [loading, setLoading] = useState<boolean>(false)
+  const [error, setError] = useState<string>("")
 
-  const filteredEvents = events.filter((event) => {
-    const matchesSearch =
-      event.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      event.description.toLowerCase().includes(searchQuery.toLowerCase())
-    const matchesCategory = selectedCategory === "all" || event.category === selectedCategory
-    const matchesStatus = selectedStatus === "all" || event.status === selectedStatus
-    return matchesSearch && matchesCategory && matchesStatus
-  })
+  // Fetch event types once
+  useEffect(() => {
+    let mounted = true
+    getAllEventTypes()
+      .then((types) => {
+        if (mounted) setEventTypes(types)
+      })
+      .catch(() => {})
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  // Fetch events when keyword or type changes (server-side filtering & paging already applied on BE)
+  useEffect(() => {
+    let mounted = true
+    const controller = new AbortController()
+
+    const fetchData = async () => {
+      setLoading(true)
+      setError("")
+      try {
+        const res = await getAllEventsByFilter({
+          keyword: searchQuery || undefined,
+          eventTypeId: selectedTypeId !== "all" ? Number(selectedTypeId) : undefined,
+          page: 1,
+          size: 30,
+        })
+        if (mounted) setEvents(res.data)
+      } catch (mounted) {
+        if (mounted) setError("Không thể tải danh sách sự kiện")
+      } finally {
+        if (mounted) setLoading(false)
+      }
+    }
+
+    const debounce = setTimeout(fetchData, 300)
+    return () => {
+      mounted = false
+      controller.abort()
+      clearTimeout(debounce)
+    }
+  }, [searchQuery, selectedTypeId])
+
+  const filteredEvents = useMemo(() => {
+    if (selectedStatus === "all") return events
+    const nowIso = new Date().toISOString()
+    return events.filter((e) => computeEventStatus(nowIso, e.startTime, e.endTime) === selectedStatus)
+  }, [events, selectedStatus])
 
   return (
     <div className="min-h-screen bg-background">
@@ -148,7 +107,7 @@ export function EventsPage() {
           <div className="max-w-3xl">
             <div className="inline-flex items-center gap-2 bg-primary/10 text-primary px-4 py-2 rounded-full text-sm font-medium mb-6">
               <Calendar className="w-4 h-4" />
-              <span>Sự kiện sắp diễn ra</span>
+              <span>Sự kiện</span>
             </div>
             <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-4 text-balance">
               Khám phá các sự kiện tại FPT University
@@ -176,17 +135,21 @@ export function EventsPage() {
       <div className="container mx-auto px-4 py-12">
         <div className="mb-8">
           <EventFilters
-            selectedCategory={selectedCategory}
+            eventTypes={eventTypes}
+            selectedTypeId={selectedTypeId}
             selectedStatus={selectedStatus}
-            onCategoryChange={setSelectedCategory}
-            onStatusChange={setSelectedStatus}
+            onTypeChange={setSelectedTypeId}
+            onStatusChange={(s) => setSelectedStatus(s as EventStatusFilter)}
           />
         </div>
 
         <div className="flex items-center justify-between mb-6">
           <div>
             <h2 className="text-2xl font-bold text-foreground">Tất cả sự kiện</h2>
-            <p className="text-muted-foreground mt-1">Tìm thấy {filteredEvents.length} sự kiện</p>
+            <p className="text-muted-foreground mt-1">
+              {loading ? "Đang tải..." : `Tìm thấy ${filteredEvents.length} sự kiện`}
+            </p>
+            {error && <p className="text-destructive text-sm mt-2">{error}</p>}
           </div>
         </div>
 
@@ -196,7 +159,7 @@ export function EventsPage() {
           ))}
         </div>
 
-        {filteredEvents.length === 0 && (
+        {!loading && filteredEvents.length === 0 && (
           <div className="text-center py-16">
             <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
               <Calendar className="w-8 h-8 text-muted-foreground" />

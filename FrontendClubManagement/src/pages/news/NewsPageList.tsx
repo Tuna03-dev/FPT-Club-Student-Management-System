@@ -1,93 +1,48 @@
 "use client"
 
-import { useState } from "react"
-import { Search, Calendar, Tag, ArrowRight } from "lucide-react"
+import { useState, useEffect } from "react"
+import { Search, Calendar, ArrowRight } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-
-interface NewsItem {
-  id: number
-  title: string
-  excerpt: string
-  date: string
-  type: string
-  image: string
-  author: string
-}
-
-const newsData: NewsItem[] = [
-  {
-    id: 1,
-    title: "FPT Club tổ chức Hackathon 2024 - Cuộc thi lập trình lớn nhất năm",
-    excerpt: "Sự kiện Hackathon 2024 sẽ diễn ra vào tháng 11 với nhiều giải thưởng hấp dẫn dành cho sinh viên FPT.",
-    date: "15 Tháng 10, 2024",
-    type: "Sự kiện",
-    image: "/hackathon-coding-competition.jpg",
-    author: "Ban Tổ Chức",
-  },
-  {
-    id: 2,
-    title: "Workshop: Khám phá AI và Machine Learning cho người mới bắt đầu",
-    excerpt: "Tham gia workshop miễn phí về AI và ML với các chuyên gia hàng đầu trong ngành.",
-    date: "12 Tháng 10, 2024",
-    type: "Workshop",
-    image: "/ai-machine-learning-workshop.jpg",
-    author: "CLB Công Nghệ",
-  },
-  {
-    id: 3,
-    title: "Thông báo tuyển thành viên mới cho CLB Lập Trình FPT",
-    excerpt: "CLB Lập Trình FPT đang tìm kiếm những thành viên nhiệt huyết và đam mê công nghệ.",
-    date: "10 Tháng 10, 2024",
-    type: "Thông báo",
-    image: "/recruitment-team-technology.jpg",
-    author: "Ban Quản Trị",
-  },
-  {
-    id: 4,
-    title: "Chuyến tham quan công ty công nghệ hàng đầu Việt Nam",
-    excerpt: "Cơ hội tuyệt vời để các bạn sinh viên được trải nghiệm môi trường làm việc thực tế.",
-    date: "8 Tháng 10, 2024",
-    type: "Hoạt động",
-    image: "/tech-company-office-visit.jpg",
-    author: "CLB Nghề Nghiệp",
-  },
-  {
-    id: 5,
-    title: "Kết quả cuộc thi Code Challenge tháng 9",
-    excerpt: "Xin chúc mừng các bạn đã đạt giải trong cuộc thi Code Challenge tháng 9 vừa qua.",
-    date: "5 Tháng 10, 2024",
-    type: "Thông báo",
-    image: "/coding-competition-winners.png",
-    author: "Ban Giám Khảo",
-  },
-  {
-    id: 6,
-    title: "Seminar: Xu hướng công nghệ 2024 và cơ hội nghề nghiệp",
-    excerpt: "Tìm hiểu về các xu hướng công nghệ mới nhất và định hướng nghề nghiệp cho sinh viên IT.",
-    date: "1 Tháng 10, 2024",
-    type: "Seminar",
-    image: "/technology-trends-seminar.jpg",
-    author: "Diễn Giả Khách Mời",
-  },
-]
+import { getAllNewsByFilter, type NewsData } from "@/service/NewsService"
 
 export default function NewsPageList() {
   const [searchQuery, setSearchQuery] = useState("")
-  const [selectedType, setSelectedType] = useState("all")
+  const [news, setNews] = useState<NewsData[]>([])
+  const [loading, setLoading] = useState<boolean>(false)
+  const [error, setError] = useState<string>("")
 
-  const filteredNews = newsData.filter((news) => {
-    const matchesSearch =
-      news.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      news.excerpt.toLowerCase().includes(searchQuery.toLowerCase())
-    const matchesType = selectedType === "all" || news.type === selectedType
-    return matchesSearch && matchesType
-  })
+  // Fetch news when search query changes
+  useEffect(() => {
+    let mounted = true
+    const controller = new AbortController()
 
-  const newsTypes = ["all", ...Array.from(new Set(newsData.map((news) => news.type)))]
+    const fetchData = async () => {
+      setLoading(true)
+      setError("")
+      try {
+        const res = await getAllNewsByFilter({
+          keyword: searchQuery || undefined,
+          page: 1,
+          size: 30,
+        })
+        if (mounted) setNews(res.data)
+      } catch (e) {
+        if (mounted) setError("Không thể tải danh sách tin tức")
+      } finally {
+        if (mounted) setLoading(false)
+      }
+    }
+
+    const debounce = setTimeout(fetchData, 300)
+    return () => {
+      mounted = false
+      controller.abort()
+      clearTimeout(debounce)
+    }
+  }, [searchQuery])
 
   return (
     <div className="min-h-screen bg-background">
@@ -126,35 +81,19 @@ export default function NewsPageList() {
         </div>
       </section>
 
-      {/* Search and Filter Section */}
+      {/* Search Section */}
       <section className="py-8 border-b border-border bg-card/30">
         <div className="container mx-auto px-4">
-          <div className="max-w-4xl mx-auto">
-            <div className="flex flex-col md:flex-row gap-4">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                <Input
-                  type="text"
-                  placeholder="Tìm kiếm tin tức..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 h-12 bg-background"
-                />
-              </div>
-              <Select value={selectedType} onValueChange={setSelectedType}>
-                <SelectTrigger className="w-full md:w-[200px] h-12 bg-background">
-                  <Tag className="h-4 w-4 mr-2" />
-                  <SelectValue placeholder="Loại tin" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tất cả</SelectItem>
-                  {newsTypes.slice(1).map((type) => (
-                    <SelectItem key={type} value={type}>
-                      {type}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          <div className="max-w-2xl mx-auto">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+              <Input
+                type="text"
+                placeholder="Tìm kiếm tin tức..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10 h-12 bg-background"
+              />
             </div>
           </div>
         </div>
@@ -163,48 +102,76 @@ export default function NewsPageList() {
       {/* News Grid */}
       <section className="py-12 md:py-16">
         <div className="container mx-auto px-4">
-          {filteredNews.length === 0 ? (
+          {loading ? (
+            <div className="text-center py-16">
+              <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+              <p className="text-muted-foreground">Đang tải...</p>
+            </div>
+          ) : error ? (
+            <div className="text-center py-16">
+              <p className="text-destructive text-lg mb-4">{error}</p>
+            </div>
+          ) : news.length === 0 ? (
             <div className="text-center py-16">
               <p className="text-muted-foreground text-lg">Không tìm thấy tin tức phù hợp</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredNews.map((news) => (
-                <Card
-                  key={news.id}
-                  className="group overflow-hidden hover:shadow-lg transition-all duration-300 border-border/50"
-                >
-                  <div className="relative overflow-hidden aspect-video">
-                    <img
-                      src={news.image || "/placeholder.svg"}
-                      alt={news.title}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    />
-                    <div className="absolute top-4 left-4">
-                      <Badge className="bg-primary text-primary-foreground">{news.type}</Badge>
+              {news.map((newsItem) => {
+                const updatedDate = new Date(newsItem.updatedAt)
+                const formattedDate = updatedDate.toLocaleDateString("vi-VN", {
+                  day: "numeric",
+                  month: "long",
+                  year: "numeric"
+                })
+                
+                return (
+                  <Card
+                    key={newsItem.id}
+                    className="group overflow-hidden hover:shadow-lg transition-all duration-300 border-border/50"
+                  >
+                    <div className="relative overflow-hidden aspect-video">
+                      <img
+                        src={newsItem.thumbnailUrl || "/placeholder.svg"}
+                        alt={newsItem.title}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      />
+                      {newsItem.clubName && (
+                        <div className="absolute top-3 left-3">
+                          <Badge variant="secondary" className="bg-muted/80 text-foreground border-border">
+                            {newsItem.clubName}
+                          </Badge>
+                        </div>
+                      )}
+                      {newsItem.newsType && (
+                        <div className="absolute top-3 right-3">
+                          <Badge variant="secondary" className="bg-primary/10 text-primary border-primary/20">
+                            {newsItem.newsType}
+                          </Badge>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                  <CardContent className="p-6">
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground mb-3">
-                      <Calendar className="h-4 w-4" />
-                      <span>{news.date}</span>
-                    </div>
-                    <h3 className="text-xl font-bold text-foreground mb-3 line-clamp-2 group-hover:text-primary transition-colors text-balance">
-                      {news.title}
-                    </h3>
-                    <p className="text-muted-foreground mb-4 line-clamp-2 text-pretty leading-relaxed">
-                      {news.excerpt}
-                    </p>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-muted-foreground">{news.author}</span>
-                      <Button variant="ghost" size="sm" className="group/btn">
-                        Xem thêm
-                        <ArrowRight className="ml-2 h-4 w-4 group-hover/btn:translate-x-1 transition-transform" />
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                    <CardContent className="p-6">
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground mb-3">
+                        <Calendar className="h-4 w-4" />
+                        <span>{formattedDate}</span>
+                      </div>
+                      <h3 className="text-xl font-bold text-foreground mb-3 line-clamp-2 group-hover:text-primary transition-colors text-balance">
+                        {newsItem.title}
+                      </h3>
+                      <p className="text-muted-foreground mb-4 line-clamp-2 text-pretty leading-relaxed">
+                        {newsItem.content}
+                      </p>
+                      <div className="flex items-center justify-end">
+                        <Button variant="ghost" size="sm" className="group/btn">
+                          Xem thêm
+                          <ArrowRight className="ml-2 h-4 w-4 group-hover/btn:translate-x-1 transition-transform" />
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )
+              })}
             </div>
           )}
         </div>
