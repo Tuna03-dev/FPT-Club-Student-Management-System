@@ -5,7 +5,8 @@
     "members": "Thành viên",
     "events": "Sự kiện",
     "notifications": "Thông báo",
-    "settings": "Cài đặt"
+    "settings": "Cài đặt",
+    "management": "Quản lý"
   },
   "teams": {
     "title": "Phòng ban",
@@ -15,5 +16,20 @@
     "noi-vu": "Ban Nội vụ",
     "doi-ngoai": "Ban Đối ngoại"
   },
-  "search": "Tìm kiếm..."
+  "management": {
+    "permissions": "Phân quyền",
+    "pending_posts": "Bài viết chờ duyệt",
+    "manage_members": "Quản lý thành viên",
+    "manage_events": "Quản lý sự kiện",
+    "pending_requests": "Yêu cầu chờ duyệt"
+  },
+  "search": "Tìm kiếm...",
+  "post": {
+    "likes": "lượt thích",
+    "comments": "bình luận",
+    "like": "Thích",
+    "comment": "Bình luận",
+    "seeMore": "Xem thêm",
+    "seeLess": "Thu gọn"
+  }
 }
