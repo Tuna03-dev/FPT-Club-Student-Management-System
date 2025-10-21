@@ -13,6 +13,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import javax.crypto.SecretKey;
 import java.util.*;
@@ -33,6 +34,9 @@ public class JwtUtil {
 
     @Value("${jwt.refresh-token-expiration}")
     private long refreshTokenExpiration;
+
+    @Autowired(required = false)
+    private com.sep490.backendclubmanagement.service.TokenBlacklistService tokenBlacklistService;
 
     /**
      * Generate access token with user details and authorities
@@ -102,6 +106,13 @@ public class JwtUtil {
     }
 
     /**
+     * Extract expiration time in milliseconds from token
+     */
+    public long extractExpirationTimeMillis(String token) {
+        return extractExpiration(token).getTime();
+    }
+
+    /**
      * Extract authorities from token
      */
     @SuppressWarnings("unchecked")
@@ -159,11 +170,10 @@ public class JwtUtil {
         try {
             final String username = extractUsername(token);
             final String jti = extractJti(token);
-            
-            // Check if token is invalidated (logged out)
-            
-            return (username.equals(userDetails.getUsername()) 
-                    && !isTokenExpired(token));
+            boolean revoked = tokenBlacklistService != null && tokenBlacklistService.isRevoked(jti);
+            return (username.equals(userDetails.getUsername())
+                    && !isTokenExpired(token)
+                    && !revoked);
         } catch (JwtException e) {
             log.error("Token validation failed: {}", e.getMessage());
             return false;

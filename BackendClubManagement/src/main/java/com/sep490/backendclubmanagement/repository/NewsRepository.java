@@ -41,4 +41,18 @@ public interface NewsRepository extends JpaRepository<News, Long> {
     )
     Page<News> getAllNewsByFilter(@Param("request") NewsRequest request, Pageable pageable);
 
+    @Query(value = """
+                                     SELECT DISTINCT e.*
+                                         FROM news e
+                                         LEFT JOIN clubs c ON e.club_id = c.id
+                                         WHERE\s
+                                             (:#{#request.keyword} IS NULL\s
+                                                 OR e.title LIKE CONCAT('%', :#{#request.keyword}, '%')
+                                                 OR e.content LIKE CONCAT('%', :#{#request.keyword}, '%')
+                                                 OR e.news_type LIKE CONCAT('%', :#{#request.keyword}, '%')
+                                               )
+                                            AND e.is_draft = false
+          """, nativeQuery = true,countProjection = "e.id")
+    Page<News> getAllNewsByFilter(NewsRequest request, Pageable pageable);
+>>>>>>> origin/develop
 }

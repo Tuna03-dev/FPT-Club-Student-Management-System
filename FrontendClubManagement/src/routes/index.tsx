@@ -1,13 +1,19 @@
-import { createBrowserRouter, Navigate } from "react-router-dom"
-import MainLayout from "../layouts/MainLayout"
-import HomePage from "../pages/HomePage"
-import { ClubLayout } from "@/layouts/ClubLayout"
+import { createBrowserRouter, Navigate } from "react-router-dom";
+import MainLayout from "../layouts/MainLayout";
+import HomePage from "../pages/HomePage";
+import { ClubLayout } from "@/layouts/ClubLayout";
 
-import { Dashboard } from "@/pages/myclub/Dashboard"
-import { MemberList } from "@/pages/myclub/members/MemberList"
-import { EventList } from "@/pages/myclub/events/EventList"
-import { Notifications } from "@/pages/myclub/Notifications"
-import { Settings } from "@/pages/myclub/Settings"
+import { Dashboard } from "@/pages/myclub/Dashboard";
+import { MemberList } from "@/pages/myclub/members/MemberList";
+import { EventList } from "@/pages/myclub/events/EventList";
+import { Notifications } from "@/pages/myclub/Notifications";
+import { Settings } from "@/pages/myclub/Settings";
+
+import { EventsPage } from "@/pages/events/EventPageList";
+import NewsPageList from "@/pages/news/NewsPageList";
+import EventDetailPage from "@/pages/events/EventDetail";
+import ProtectedRoute from "../components/ProtectedRoute";
+import LoginPage from "@/pages/LoginPage/LoginPage";
 
 /**
  * Main application router
@@ -48,8 +54,28 @@ export const router = createBrowserRouter([
     ],
   },
   {
+    path: "/events",
+    element: <EventsPage />,
+  },
+  {
+    path: "/events/:id",
+    element: <EventDetailPage />,
+  },
+  {
+    path: "/news",
+    element: <NewsPageList />,
+  },
+  {
+    path: "/login",
+    element: <LoginPage />,
+  },
+  {
     path: "/myclub",
-    element: <ClubLayout />,
+    element: (
+      <ProtectedRoute>
+        <ClubLayout />
+      </ProtectedRoute>
+    ),
     children: [
       {
         index: true,
@@ -88,4 +114,4 @@ export const router = createBrowserRouter([
       </div>
     ),
   },
-])
+]);
