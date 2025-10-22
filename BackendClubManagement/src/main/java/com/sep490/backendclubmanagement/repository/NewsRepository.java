@@ -18,8 +18,8 @@ public interface NewsRepository extends JpaRepository<News, Long> {
                                              (:#{#request.keyword} IS NULL\s
                                                  OR e.title LIKE CONCAT('%', :#{#request.keyword}, '%')
                                                  OR e.content LIKE CONCAT('%', :#{#request.keyword}, '%')
+                                                 OR e.news_type LIKE CONCAT('%', :#{#request.keyword}, '%')
                                                )
-                                             AND (:#{#request.newsType} IS NULL OR e.news_type = :#{#request.newsType})
                                             AND e.is_draft = false
           """, nativeQuery = true,countProjection = "e.id")
     Page<News> getAllNewsByFilter(NewsRequest request, Pageable pageable);

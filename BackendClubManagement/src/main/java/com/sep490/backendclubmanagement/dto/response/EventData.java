@@ -19,6 +19,9 @@ public class EventData {
     private String endTime;
     private boolean isDraft;
     private Long clubId;
+    private String clubName;
     private List<String> mediaUrls;
+    private Long eventTypeId;
+    private String eventTypeName;
 
 }

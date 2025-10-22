@@ -2,11 +2,14 @@ package com.sep490.backendclubmanagement.repository;
 
 import com.sep490.backendclubmanagement.dto.request.EventRequest;
 import com.sep490.backendclubmanagement.entity.Event;
+import com.sep490.backendclubmanagement.entity.EventType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
+
+import java.util.List;
 
 @Repository
 public interface EventRepository extends JpaRepository<Event,Long> {
@@ -22,7 +25,6 @@ public interface EventRepository extends JpaRepository<Event,Long> {
                                                  OR e.title LIKE CONCAT('%', :#{#request.keyword}, '%')
                                                  OR e.description LIKE CONCAT('%', :#{#request.keyword}, '%')
                                                  OR e.location LIKE CONCAT('%', :#{#request.keyword}, '%'))
-                                             AND (:#{#request.clubId} IS NULL OR e.club_id = :#{#request.clubId})
                                              AND (:#{#request.eventTypeId} IS NULL OR e.event_type_id = :#{#request.eventTypeId})
                                              AND (
                                                  :#{#request.startTime} IS NULL\s
@@ -32,4 +34,7 @@ public interface EventRepository extends JpaRepository<Event,Long> {
                                             AND e.is_draft = false
           """, nativeQuery = true,countProjection = "e.id")
     public Page<Event> getAllByFilter(EventRequest request, Pageable pageable);
+
+    @Query("SELECT et FROM EventType et")
+    List<EventType> findAllEventTypes();
 }
