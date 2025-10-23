@@ -1,6 +1,10 @@
 spring:
   application:
     name: BackendClubManagement
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 40MB
 
   datasource:
   #    url: jdbc:mysql://gateway01.ap-southeast-1.prod.aws.tidbcloud.com:4000/club_management?sslMode=VERIFY_IDENTITY&sslCa=G:/CA_certs/isrgrootx1.pem
@@ -25,3 +29,11 @@ jwt:
   secret-key: ${JWT_SECRET_KEY:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
   access-token-expiration: 86400000 # 24 hours in milliseconds
   refresh-token-expiration: 604800000 # 7 days in milliseconds
+
+cloudinary:
+  cloud-name: ${CLOUDINARY_CLOUD_NAME:dbeir3ru4}
+  api-key: ${CLOUDINARY_API_KEY:421753392354964}
+  api-secret: ${CLOUDINARY_API_SECRET:0WDkFEGIim30YoPccM3FuDwshF4}
+
+
+
