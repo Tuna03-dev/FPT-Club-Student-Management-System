@@ -5,6 +5,23 @@ spring:
     multipart:
       max-file-size: 20MB
       max-request-size: 40MB
+  # Redis Cloud Configuration
+  data:
+    redis:
+      host: ${REDIS_HOST:redis-11525.c73.us-east-1-2.ec2.redns.redis-cloud.com}
+      port: ${REDIS_PORT:11525}
+      password: ${REDIS_PASSWORD:lOxiC0nwLO72HlrNMrgQjTGpWnA9yUZr}
+      database: ${REDIS_DATABASE:0}
+      ssl:
+        enabled: false
+      timeout: 5000ms
+      lettuce:
+        pool:
+          max-active: 20
+          max-idle: 10
+          min-idle: 2
+          max-wait: 3000ms
+        shutdown-timeout: 100ms
 
   datasource:
   #    url: jdbc:mysql://gateway01.ap-southeast-1.prod.aws.tidbcloud.com:4000/club_management?sslMode=VERIFY_IDENTITY&sslCa=G:/CA_certs/isrgrootx1.pem
@@ -27,6 +44,15 @@ host:
 
 jwt:
   secret-key: ${JWT_SECRET_KEY:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
+  access-token-expiration: 900000 # 15 minutes in milliseconds
+  refresh-token-expiration: 86400000 # 1 day in milliseconds (86400000 = 24 * 60 * 60 * 1000)
+
+google:
+  client-id: "982768167645-ol552hiben0blq9es83e1b2ici5l56nj.apps.googleusercontent.com"
+
+auth:
+  fap-api-url: ${FAP_API_URL:http://localhost:8081/api/allowed-users}
+
   access-token-expiration: 86400000 # 24 hours in milliseconds
   refresh-token-expiration: 604800000 # 7 days in milliseconds
 
