@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Users,
   Search,
@@ -13,6 +13,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+// import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
   SelectContent,
@@ -31,296 +32,191 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import MemberDetailDialog from "@/components/features/member/MemberDetailDialog";
+import {
+  memberService,
+  type MemberResponseDTO,
+} from "@/services/memberService";
+import { clubService, type SemesterDTO, type ClubRoleDTO } from "@/services/clubService";
+import { type PageResponse } from "@/types";
 
 import { toast } from "sonner";
 
-// Mock Club Roles
-export interface ClubRole {
-  id: number;
-  roleName: string;
-  roleCode: string;
-  description: string;
-  roleLevel: number;
-  systemRoleId: number;
-  systemRoleName: string;
-}
+// API paging + data state
+type MembersPage = PageResponse<MemberResponseDTO>;
 
-// Member interface
-export interface Member {
-  id: string;
-  name: string;
-  email: string;
-  phone: string;
-  avatar: string;
-  role: string;
-  status: string;
-  totalScore: number;
-  attendanceRate: number;
-  joinDate: string;
-  lastActive: string;
-  totalTerms: number;
-  currentTerm: {
-    name: string;
-    contributionScore: number;
-    attendanceRate: number;
-    role: string;
-    status: string;
-    department: string;
-  };
-  history: Array<{
-    term: string;
-    role: string;
-    status: string;
-    score: number;
-    attendance: number;
-    department: string;
-    date: string;
+const statusToLabel = (status?: boolean) => {
+  switch (status) {
+    case true:
+      return "Hoạt động";
+    case false:
+      return "Tạm nghỉ";
+    default:
+      return "Tạm nghỉ";
+  }
+};
+
+// Safely derive role info to display from currentTerm, else fallback to latest history
+const getDisplayRoleInfo = (
+  member: MemberResponseDTO
+): { roleName: string; roleLevel: number } | null => {
+  const current = member.currentTerm as unknown as
+    | {
+        roleName?: string;
+        roleLevel?: number;
+        isActive?: boolean;
+      }
+    | undefined;
+  if (current && current.roleName && current.isActive !== false) {
+    return {
+      roleName: current.roleName,
+      roleLevel: current.roleLevel ?? 999,
+    };
+  }
+  const history = (member.history || []) as Array<{
+    roleName?: string;
+    roleLevel?: number;
+    isActive?: boolean;
   }>;
-}
+  if (history.length > 0) {
+    const recentWithRole = history.find(
+      (h) => h && h.roleName && h.isActive !== false
+    );
+    if (recentWithRole?.roleName) {
+      return {
+        roleName: recentWithRole.roleName,
+        roleLevel: recentWithRole.roleLevel ?? 999,
+      };
+    }
+    const anyWithRole = history.find((h) => h && h.roleName);
+    if (anyWithRole?.roleName) {
+      return {
+        roleName: anyWithRole.roleName,
+        roleLevel: anyWithRole.roleLevel ?? 999,
+      };
+    }
+  }
+  return null;
+};
 
-const mockClubRoles: ClubRole[] = [
-  {
-    id: 1,
-    roleName: "Chủ tịch CLB",
-    roleCode: "club_president",
-    description: "Lãnh đạo và điều hành toàn bộ hoạt động của CLB",
-    roleLevel: 1,
-    systemRoleId: 3,
-    systemRoleName: "Club Officer",
-  },
-  {
-    id: 2,
-    roleName: "Phó chủ tịch",
-    roleCode: "vice_president",
-    description: "Hỗ trợ chủ tịch điều hành CLB",
-    roleLevel: 2,
-    systemRoleId: 3,
-    systemRoleName: "Club Officer",
-  },
-  {
-    id: 3,
-    roleName: "Trưởng ban Truyền thông",
-    roleCode: "head_pr",
-    description: "Quản lý hoạt động truyền thông và marketing",
-    roleLevel: 3,
-    systemRoleId: 4,
-    systemRoleName: "Team Officer",
-  },
-  {
-    id: 4,
-    roleName: "Trưởng ban Tổ chức",
-    roleCode: "head_event",
-    description: "Quản lý và tổ chức các sự kiện",
-    roleLevel: 3,
-    systemRoleId: 4,
-    systemRoleName: "Team Officer",
-  },
-  {
-    id: 5,
-    roleName: "Trưởng ban",
-    roleCode: "team_head",
-    description: "Quản lý một ban trong CLB",
-    roleLevel: 3,
-    systemRoleId: 4,
-    systemRoleName: "Team Officer",
-  },
-  {
-    id: 6,
-    roleName: "Thành viên cốt cán",
-    roleCode: "core_member",
-    description: "Thành viên tích cực tham gia hoạt động",
-    roleLevel: 4,
-    systemRoleId: 6,
-    systemRoleName: "Member",
-  },
-  {
-    id: 7,
-    roleName: "Thành viên",
-    roleCode: "member",
-    description: "Thành viên thường của CLB",
-    roleLevel: 5,
-    systemRoleId: 6,
-    systemRoleName: "Member",
-  },
-];
-
-// Mock data
-const mockMembers = [
-  {
-    id: "SE160001",
-    name: "Nguyễn Văn A",
-    email: "nguyenvana@fpt.edu.vn",
-    phone: "0123456789",
-    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=1",
-    role: "Phó chủ tịch",
-    status: "Đang hoạt động",
-    totalScore: 450,
-    attendanceRate: 92,
-    joinDate: "1/9/2022",
-    lastActive: "15/1/2024",
-    totalTerms: 6,
-    currentTerm: {
-      name: "Fall 2024",
-      contributionScore: 95,
-      attendanceRate: 95,
-      role: "Phó chủ tịch",
-      status: "Đang hoạt động",
-      department: "Ban chủ nhiệm",
-    },
-    history: [
-      {
-        term: "Summer 2024",
-        role: "Trưởng ban",
-        status: "Đang hoạt động",
-        score: 87,
-        attendance: 90,
-        department: "Ban kỹ thuật",
-        date: "1/5/2024",
-      },
-      {
-        term: "Spring 2024",
-        role: "Thành viên cốt cán",
-        status: "Đang hoạt động",
-        score: 78,
-        attendance: 88,
-        department: "Ban kỹ thuật",
-        date: "1/1/2024",
-      },
-      {
-        term: "Fall 2023",
-        role: "Thành viên cốt cán",
-        status: "Đang hoạt động",
-        score: 82,
-        attendance: 92,
-        department: "Ban học thuật",
-        date: "1/9/2023",
-      },
-    ],
-  },
-  {
-    id: "SE160002",
-    name: "Trần Thị B",
-    email: "tranthib@fpt.edu.vn",
-    phone: "0987654321",
-    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=2",
-    role: "Trưởng ban",
-    status: "Đang hoạt động",
-    totalScore: 420,
-    attendanceRate: 88,
-    joinDate: "1/9/2022",
-    lastActive: "14/1/2024",
-    totalTerms: 5,
-    currentTerm: {
-      name: "Fall 2024",
-      contributionScore: 90,
-      attendanceRate: 90,
-      role: "Trưởng ban",
-      status: "Đang hoạt động",
-      department: "Ban truyền thông",
-    },
-    history: [
-      {
-        term: "Summer 2024",
-        role: "Phó ban",
-        status: "Đang hoạt động",
-        score: 85,
-        attendance: 87,
-        department: "Ban truyền thông",
-        date: "1/5/2024",
-      },
-      {
-        term: "Spring 2024",
-        role: "Thành viên",
-        status: "Đang hoạt động",
-        score: 80,
-        attendance: 86,
-        department: "Ban truyền thông",
-        date: "1/1/2024",
-      },
-    ],
-  },
-  {
-    id: "SE160003",
-    name: "Lê Văn C",
-    email: "levanc@fpt.edu.vn",
-    phone: "0912345678",
-    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=3",
-    role: "Thành viên",
-    status: "Tạm nghỉ",
-    totalScore: 320,
-    attendanceRate: 75,
-    joinDate: "1/1/2023",
-    lastActive: "1/12/2023",
-    totalTerms: 4,
-    currentTerm: {
-      name: "Fall 2024",
-      contributionScore: 0,
-      attendanceRate: 0,
-      role: "Thành viên",
-      status: "Tạm nghỉ",
-      department: "Ban sự kiện",
-    },
-    history: [
-      {
-        term: "Spring 2024",
-        role: "Thành viên",
-        status: "Đang hoạt động",
-        score: 75,
-        attendance: 82,
-        department: "Ban sự kiện",
-        date: "1/1/2024",
-      },
-      {
-        term: "Fall 2023",
-        role: "Thành viên",
-        status: "Đang hoạt động",
-        score: 80,
-        attendance: 85,
-        department: "Ban sự kiện",
-        date: "1/9/2023",
-      },
-    ],
-  },
-];
+const getRoleColorByLevel = (roleLevel?: number): string => {
+  const level = roleLevel ?? 999;
+  if (level === 1) return "bg-primary/10 text-primary border-primary/20"; // Chủ tịch
+  if (level === 2)
+    return "bg-purple-500/10 text-purple-600 border-purple-500/20"; // Phó chủ tịch
+  if (level === 3) return "bg-blue-500/10 text-blue-600 border-blue-500/20"; // Trưởng ban/ban officer
+  if (level === 4) return "bg-sky-500/10 text-sky-600 border-sky-500/20"; // Core member
+  if (level >= 5) return "bg-muted text-muted-foreground border-muted"; // Member/others
+  return "bg-muted text-muted-foreground border-muted";
+};
 
 const Members = () => {
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedTerm, setSelectedTerm] = useState("all");
-  const [selectedStatus, setSelectedStatus] = useState("all");
+  const [selectedTerm, setSelectedTerm] = useState<string>("");
+  const [selectedStatus, setSelectedStatus] = useState("Hoạt động");
   const [selectedRole, setSelectedRole] = useState("all");
-  const [selectedMember, setSelectedMember] = useState<
-    (typeof mockMembers)[0] | null
-  >(null);
+  const [selectedMember, setSelectedMember] =
+    useState<MemberResponseDTO | null>(null);
+  const [page, setPage] = useState(0); // 0-based
+  const size = 10;
+  const [loading, setLoading] = useState(false);
+  const [membersPage, setMembersPage] = useState<MembersPage | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [semesters, setSemesters] = useState<SemesterDTO[]>([]);
+  const [clubRoles, setClubRoles] = useState<ClubRoleDTO[]>([]);
+
+  const clubId = 1; // TODO: replace with real club id from context/route
   const [isEditRoleOpen, setIsEditRoleOpen] = useState(false);
   const [selectedMemberRole, setSelectedMemberRole] = useState<string>("");
 
-  const filteredMembers = mockMembers.filter((member) => {
-    const matchesSearch =
-      member.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      member.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      member.email.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesStatus =
-      selectedStatus === "all" || member.status === selectedStatus;
-    const matchesRole = selectedRole === "all" || member.role === selectedRole;
-    return matchesSearch && matchesStatus && matchesRole;
-  });
-
-  const getRoleColor = (role: string) => {
-    const roleColors: Record<string, string> = {
-      "Phó chủ tịch": "bg-primary/10 text-primary border-primary/20",
-      "Trưởng ban": "bg-purple-500/10 text-purple-600 border-purple-500/20",
-      "Phó ban": "bg-blue-500/10 text-blue-600 border-blue-500/20",
-      "Thành viên cốt cán": "bg-blue-500/10 text-blue-600 border-blue-500/20",
-      "Thành viên": "bg-muted text-muted-foreground border-muted",
-    };
-    return roleColors[role] || "bg-muted text-muted-foreground border-muted";
+  const fetchSemesters = async () => {
+    try {
+      const res = await clubService.getSemesters(clubId);
+      if (res.code === 200 && res.data) {
+        setSemesters(res.data);
+        // Set current semester as default
+        const currentSemester = res.data.find(semester => semester.isCurrent);
+        if (currentSemester && !selectedTerm) {
+          setSelectedTerm(currentSemester.id.toString());
+        }
+      }
+    } catch (e: unknown) {
+      console.error("Error fetching semesters:", e);
+    }
   };
+
+  const fetchRoles = async () => {
+    try {
+      const res = await clubService.getRoles(clubId);
+      if (res.code === 200 && res.data) {
+        setClubRoles(res.data);
+      }
+    } catch (e: unknown) {
+      console.error("Error fetching roles:", e);
+    }
+  };
+
+  const fetchMembers = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const apiStatus =
+        selectedStatus === "Hoạt động"
+          ? "ACTIVE"
+          : selectedStatus === "Tạm nghỉ"
+          ? "LEFT"
+          : undefined;
+      
+      const res = await memberService.getMembers(clubId, {
+        page,
+        size,
+        searchTerm: searchQuery || undefined,
+        status: apiStatus,
+        semesterId: selectedTerm ? parseInt(selectedTerm) : undefined,
+        roleId: selectedRole !== "all" ? parseInt(selectedRole) : undefined,
+      });
+      
+      if (res.code === 200 && res.data) {
+        setMembersPage(res.data);
+      } else {
+        setError(res.message || "Không thể tải danh sách thành viên");
+      }
+    } catch (e: unknown) {
+      // Log the error so the caught variable is used and developers can inspect it
+      // while still showing a user-friendly message in the UI.
+      // eslint-disable-next-line no-console
+      console.error(e);
+      setError("Có lỗi khi tải danh sách thành viên");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchMembers();
+    fetchSemesters();
+    fetchRoles();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, size]);
+
+  // Refetch when search or filter changes
+  useEffect(() => {
+    // Reset to first page when changing filters/search
+    setPage(0);
+    fetchMembers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery, selectedStatus, selectedRole, selectedTerm]);
+
+  const filteredMembers = useMemo(() => {
+    // Server-side filtering is now handled by the API
+    return membersPage?.content ?? [];
+  }, [membersPage]);
+
+  // Deprecated: replaced by getRoleColorByLevel
 
   const getStatusColor = (status: string) => {
     const statusColors: Record<string, string> = {
-      "Đang hoạt động": "bg-green-500/10 text-green-600 border-green-500/20",
+      "Hoạt động": "bg-green-500/10 text-green-600 border-green-500/20",
       "Tạm nghỉ": "bg-yellow-500/10 text-yellow-600 border-yellow-500/20",
-      "Đã nghỉ": "bg-red-500/10 text-red-600 border-red-500/20",
     };
     return (
       statusColors[status] || "bg-muted text-muted-foreground border-muted"
@@ -333,12 +229,18 @@ const Members = () => {
       return;
     }
 
-    // Update role in mock data (in real app, this would be an API call)
-    if (selectedMember) {
-      selectedMember.role = selectedMemberRole;
-      toast.success("Cập nhật vai trò thành công");
-      setIsEditRoleOpen(false);
-    }
+    // TODO: Call API to update role; for now update local state view
+    // if (selectedMember) {
+    //   setSelectedMember({
+    //     ...selectedMember,
+    //     currentTerm: {
+    //       ...selectedMember.currentTerm,
+    //       role: selectedMemberRole,
+    //     },
+    //   });
+    //   toast.success("Cập nhật vai trò thành công");
+    //   setIsEditRoleOpen(false);
+    // }
   };
 
   return (
@@ -359,7 +261,7 @@ const Members = () => {
               </h1>
               <p className="text-muted-foreground mt-1">
                 <span className="font-semibold text-primary">
-                  {filteredMembers.length}
+                  {membersPage?.totalElements ?? 0}
                 </span>{" "}
                 thành viên
               </p>
@@ -387,24 +289,31 @@ const Members = () => {
 
               <Select value={selectedTerm} onValueChange={setSelectedTerm}>
                 <SelectTrigger className="border-primary/20">
-                  <SelectValue placeholder="Tất cả kỳ học" />
+                  <SelectValue placeholder="Chọn kỳ học" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Tất cả kỳ học</SelectItem>
-                  <SelectItem value="fall2024">Fall 2024</SelectItem>
-                  <SelectItem value="summer2024">Summer 2024</SelectItem>
+                  {semesters.map((semester) => (
+                    <SelectItem key={semester.id} value={semester.id.toString()}>
+                      <div className="flex items-center gap-2">
+                        <span>{semester.semesterName}</span>
+                        {semester.isCurrent && (
+                          <Badge variant="outline" className="text-xs">
+                            Hiện tại
+                          </Badge>
+                        )}
+                      </div>
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
 
               <Select value={selectedStatus} onValueChange={setSelectedStatus}>
                 <SelectTrigger className="border-primary/20">
-                  <SelectValue placeholder="Tất cả trạng thái" />
+                  <SelectValue placeholder="Chọn trạng thái" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Tất cả trạng thái</SelectItem>
-                  <SelectItem value="Đang hoạt động">Đang hoạt động</SelectItem>
+                  <SelectItem value="Hoạt động">Hoạt động</SelectItem>
                   <SelectItem value="Tạm nghỉ">Tạm nghỉ</SelectItem>
-                  <SelectItem value="Đã nghỉ">Đã nghỉ</SelectItem>
                 </SelectContent>
               </Select>
 
@@ -414,9 +323,16 @@ const Members = () => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Tất cả vai trò</SelectItem>
-                  <SelectItem value="Phó chủ tịch">Phó chủ tịch</SelectItem>
-                  <SelectItem value="Trưởng ban">Trưởng ban</SelectItem>
-                  <SelectItem value="Thành viên">Thành viên</SelectItem>
+                  {clubRoles.map((role) => (
+                    <SelectItem key={role.id} value={role.id.toString()}>
+                      <div className="flex items-center gap-2">
+                        <span>{role.roleName}</span>
+                        <Badge variant="outline" className="text-xs">
+                          Level {role.roleLevel}
+                        </Badge>
+                      </div>
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -425,99 +341,178 @@ const Members = () => {
 
         {/* Members List */}
         <div className="space-y-4">
-          {filteredMembers.map((member) => (
-            <Card
-              key={member.id}
-              className="border-primary/20 hover:border-primary/40 transition-all hover:shadow-glow hover:scale-[1.01] group bg-card/80 backdrop-blur-sm overflow-hidden relative"
+          {loading && (
+            <>
+              {Array.from({ length: 3 }).map((_, index) => (
+                <Card
+                  key={index}
+                  className="border-primary/20 bg-card/80 backdrop-blur-sm overflow-hidden relative"
+                >
+                  <CardContent className="p-6">
+                    <div className="flex flex-col lg:flex-row gap-6">
+                      {/* Member Info Skeleton */}
+                      <div className="flex items-start gap-3 sm:gap-4 flex-1">
+                        <div className="h-16 w-16 rounded-full bg-muted animate-pulse" />
+                        <div className="flex-1 space-y-2">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <div className="h-6 w-32 bg-muted animate-pulse rounded" />
+                            <div className="h-4 w-20 bg-muted animate-pulse rounded" />
+                          </div>
+                          <div className="flex items-center gap-3 flex-wrap">
+                            <div className="h-6 w-24 bg-muted animate-pulse rounded" />
+                            <div className="h-6 w-20 bg-muted animate-pulse rounded" />
+                          </div>
+                          <div className="flex items-center gap-4 flex-wrap">
+                            <div className="h-4 w-40 bg-muted animate-pulse rounded" />
+                            <div className="h-4 w-24 bg-muted animate-pulse rounded" />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Stats Skeleton */}
+                      <div className="flex items-center gap-3 sm:gap-6 flex-wrap lg:flex-nowrap">
+                        <div className="h-16 w-16 rounded-xl bg-muted animate-pulse" />
+                        <div className="h-16 w-20 rounded-xl bg-muted animate-pulse" />
+                        <div className="h-16 w-24 rounded-xl bg-muted animate-pulse" />
+                        <div className="h-8 w-24 bg-muted animate-pulse rounded" />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </>
+          )}
+          {error && (
+            <div className="text-center text-destructive py-6">{error}</div>
+          )}
+          {!loading &&
+            !error &&
+            filteredMembers.map((member) => (
+              <Card
+                key={`${member.userId}-${member.studentCode}`}
+                className="border-primary/20 hover:border-primary/40 transition-all hover:shadow-glow hover:scale-[1.01] group bg-card/80 backdrop-blur-sm overflow-hidden relative"
+              >
+                <div className="absolute inset-0 bg-gradient-to-r from-primary/0 via-primary/5 to-primary/0 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                <CardContent className=" relative z-10">
+                  <div className="flex flex-col lg:flex-row gap-6">
+                    {/* Member Info */}
+                    <div className="flex items-start gap-3 sm:gap-4 flex-1">
+                      <div className="relative">
+                        <div className="absolute inset-0 bg-gradient-to-br from-primary to-primary-glow blur-md opacity-20 rounded-full"></div>
+                        <Avatar className="h-14 w-14 sm:h-16 sm:w-16 ring-2 ring-primary/30 relative">
+                          <AvatarImage
+                            src={member.avatarUrl}
+                            alt={member.fullName}
+                          />
+                          <AvatarFallback className="bg-gradient-to-br from-primary to-primary-glow text-primary-foreground">
+                            {member.fullName.split(" ").pop()?.charAt(0)}
+                          </AvatarFallback>
+                        </Avatar>
+                      </div>
+
+                      <div className="flex-1 space-y-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h3 className="text-lg font-semibold">
+                            {member.fullName}
+                          </h3>
+                          <span className="text-sm text-muted-foreground">
+                            {member.studentCode}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-3 flex-wrap">
+                          {getDisplayRoleInfo(member) && (
+                            <Badge
+                              className={getRoleColorByLevel(
+                                getDisplayRoleInfo(member)?.roleLevel
+                              )}
+                            >
+                              {getDisplayRoleInfo(member)?.roleName}
+                            </Badge>
+                          )}
+                          <Badge
+                            className={getStatusColor(
+                              statusToLabel(member.currentTerm?.isActive)
+                            )}
+                          >
+                            {statusToLabel(member.currentTerm?.isActive)}
+                          </Badge>
+                        </div>
+
+                        <div className="flex items-center gap-4 text-sm text-muted-foreground flex-wrap">
+                          <div className="flex items-center gap-1">
+                            <Mail className="h-3 w-3" />
+                            <span>{member.email}</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Phone className="h-3 w-3" />
+                            <span>{member.phoneNumber}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Stats */}
+                    <div className="flex items-center gap-3 sm:gap-6 flex-wrap lg:flex-nowrap">
+                      <div className="text-center p-3 rounded-xl bg-gradient-to-br from-primary/10 to-primary-glow/10 border border-primary/20 min-w-[70px]">
+                        <div className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-primary to-primary-glow bg-clip-text text-transparent">
+                          {member.totalAttendanceRate}%
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          điểm danh
+                        </div>
+                      </div>
+                      <div className="hidden sm:block text-center p-3 rounded-xl bg-secondary/50 border border-border min-w-[90px]">
+                        <div className="text-sm font-medium flex items-center justify-center gap-1">
+                          <Calendar className="h-3 w-3" />
+                          {member.joinDate}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          Tham gia
+                        </div>
+                      </div>
+
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="border-primary/30 hover:bg-primary hover:text-primary-foreground hover:border-primary shadow-sm hover:shadow-glow transition-all"
+                        onClick={() => setSelectedMember(member)}
+                      >
+                        <Eye className="h-4 w-4 mr-2" />
+                        <span className="hidden sm:inline">Xem chi tiết</span>
+                        <span className="sm:hidden">Chi tiết</span>
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+        </div>
+
+        {/* Pagination Controls */}
+        <div className="flex items-center justify-between mt-6">
+          <div className="text-sm text-muted-foreground">
+            Trang {page + 1} / {membersPage?.totalPages ?? 1} — Tổng{" "}
+            {membersPage?.totalElements ?? 0}
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page === 0}
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
             >
-              <div className="absolute inset-0 bg-gradient-to-r from-primary/0 via-primary/5 to-primary/0 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-              <CardContent className=" relative z-10">
-                <div className="flex flex-col lg:flex-row gap-6">
-                  {/* Member Info */}
-                  <div className="flex items-start gap-3 sm:gap-4 flex-1">
-                    <div className="relative">
-                      <div className="absolute inset-0 bg-gradient-to-br from-primary to-primary-glow blur-md opacity-20 rounded-full"></div>
-                      <Avatar className="h-14 w-14 sm:h-16 sm:w-16 ring-2 ring-primary/30 relative">
-                        <AvatarImage src={member.avatar} alt={member.name} />
-                        <AvatarFallback className="bg-gradient-to-br from-primary to-primary-glow text-primary-foreground">
-                          {member.name.split(" ").pop()?.charAt(0)}
-                        </AvatarFallback>
-                      </Avatar>
-                    </div>
-
-                    <div className="flex-1 space-y-2">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <h3 className="text-lg font-semibold">{member.name}</h3>
-                        <span className="text-sm text-muted-foreground">
-                          {member.id}
-                        </span>
-                      </div>
-
-                      <div className="flex items-center gap-3 flex-wrap">
-                        <Badge className={getRoleColor(member.role)}>
-                          {member.role}
-                        </Badge>
-                        <Badge className={getStatusColor(member.status)}>
-                          {member.status}
-                        </Badge>
-                      </div>
-
-                      <div className="flex items-center gap-4 text-sm text-muted-foreground flex-wrap">
-                        <div className="flex items-center gap-1">
-                          <Mail className="h-3 w-3" />
-                          <span>{member.email}</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Phone className="h-3 w-3" />
-                          <span>{member.phone}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Stats */}
-                  <div className="flex items-center gap-3 sm:gap-6 flex-wrap lg:flex-nowrap">
-                    <div className="text-center p-3 rounded-xl bg-gradient-to-br from-primary/10 to-primary-glow/10 border border-primary/20 min-w-[70px]">
-                      <div className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-primary to-primary-glow bg-clip-text text-transparent">
-                        {member.totalScore}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        điểm tổng
-                      </div>
-                    </div>
-                    <div className="text-center p-3 rounded-xl bg-gradient-to-br from-primary/10 to-primary-glow/10 border border-primary/20 min-w-[70px]">
-                      <div className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-primary to-primary-glow bg-clip-text text-transparent">
-                        {member.attendanceRate}%
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        điểm danh
-                      </div>
-                    </div>
-                    <div className="hidden sm:block text-center p-3 rounded-xl bg-secondary/50 border border-border min-w-[90px]">
-                      <div className="text-sm font-medium flex items-center justify-center gap-1">
-                        <Calendar className="h-3 w-3" />
-                        {member.joinDate}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        Tham gia
-                      </div>
-                    </div>
-
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="border-primary/30 hover:bg-primary hover:text-primary-foreground hover:border-primary shadow-sm hover:shadow-glow transition-all"
-                      onClick={() => setSelectedMember(member)}
-                    >
-                      <Eye className="h-4 w-4 mr-2" />
-                      <span className="hidden sm:inline">Xem chi tiết</span>
-                      <span className="sm:hidden">Chi tiết</span>
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+              Trước
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!!membersPage && page >= membersPage.totalPages - 1}
+              onClick={() => setPage((p) => p + 1)}
+            >
+              Sau
+            </Button>
+          </div>
         </div>
 
         {/* Edit Role Dialog */}
@@ -529,7 +524,7 @@ const Members = () => {
                 Chỉnh sửa vai trò
               </DialogTitle>
               <DialogDescription>
-                Cập nhật vai trò cho {selectedMember?.name}
+                Cập nhật vai trò cho {selectedMember?.fullName}
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
@@ -543,7 +538,7 @@ const Members = () => {
                     <SelectValue placeholder="Chọn vai trò" />
                   </SelectTrigger>
                   <SelectContent>
-                    {mockClubRoles.map((role) => (
+                    {clubRoles.map((role) => (
                       <SelectItem key={role.id} value={role.roleName}>
                         <div className="flex items-center gap-2">
                           <span className="font-medium">{role.roleName}</span>
@@ -560,7 +555,7 @@ const Members = () => {
                 <div className="p-3 rounded-lg bg-secondary/30 border border-border">
                   <p className="text-sm text-muted-foreground">
                     {
-                      mockClubRoles.find(
+                      clubRoles.find(
                         (r) => r.roleName === selectedMemberRole
                       )?.description
                     }
