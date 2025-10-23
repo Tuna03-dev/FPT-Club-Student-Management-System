@@ -9,8 +9,10 @@ import { Settings } from "@/pages/myclub/Settings";
 import { EventsPage } from "@/pages/events/EventPageList";
 import NewsPageList from "@/pages/news/NewsPageList";
 import EventDetailPage from "@/pages/events/EventDetail";
-import ProtectedRoute from "../components/ProtectedRoute";
-import LoginPage from "@/pages/LoginPage/LoginPage";
+import LoginPage from "@/pages/login/Login";
+import { RecruitmentManagement } from "@/pages/myclub/recruitmentManagement/RecruitmentManagement";
+import { StudentRecruitment } from "@/pages/studentRecruitment/StudentRecruitment";
+import { ClubDetail } from "@/pages/clubDetail/ClubDetail";
 
 /**
  * Main application router
@@ -28,10 +30,17 @@ export const router = createBrowserRouter([
     path: "/events/:id",
     element: <EventDetailPage />,
   },
-
   {
     path: "news",
-    element : <NewsPageList />
+    element: <NewsPageList />,
+  },
+  {
+    path: "myRecruitmentApplication",
+    element: <StudentRecruitment />,
+  },
+  {
+    path: "clubDetail",
+    element: <ClubDetail />,
   },
   {
     path: "/login",
@@ -39,11 +48,7 @@ export const router = createBrowserRouter([
   },
   {
     path: "/myclub",
-    element: (
-      <ProtectedRoute>
-        <ClubLayout />
-      </ProtectedRoute>
-    ),
+    element: <ClubLayout />,
     children: [
       {
         index: true,
@@ -56,6 +61,10 @@ export const router = createBrowserRouter([
       {
         path: "events",
         element: <EventList />,
+      },
+      {
+        path: "recruitments",
+        element: <RecruitmentManagement />,
       },
       {
         path: "notifications",

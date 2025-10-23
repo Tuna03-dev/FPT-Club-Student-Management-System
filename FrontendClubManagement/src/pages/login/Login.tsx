@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { authService } from "../../services/authService";
 import { useNavigate } from "react-router-dom";
-import "./LoginPage.css";
+import "./Login.css";
 import logoImage from "@/assets/Logo_FPT_Education.png";
 declare global {
   interface Window {
@@ -64,7 +64,7 @@ const LoginPage: React.FC = () => {
         authService.setTokens(result.data.accessToken);
         authService.setUser(result.data.user);
 
-        navigate("/dashboard"); // Redirect to dashboard after successful login
+        navigate("/myclub"); // Redirect to dashboard after successful login
       } else {
         console.error("Login failed:", result.message);
         alert("Đăng nhập thất bại: " + result.message);
