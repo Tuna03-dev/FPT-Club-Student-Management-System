@@ -36,6 +36,7 @@ public class SecurityConfig {
             "/api/v1/public/**",
             "/oauth2/**",
             "/login/**",
+            "/api/homepage",
             "/test/**",
             "/posts/**"
 
