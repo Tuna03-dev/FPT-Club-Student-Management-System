@@ -7,7 +7,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
-public class ApplicationData {
+public class RecruitmentApplicationData {
     private Long id;
     private Long recruitmentId;
     private Long applicantId;
@@ -16,6 +16,8 @@ public class ApplicationData {
     private String reviewNotes;
     private LocalDateTime submittedDate;
     private LocalDateTime reviewedDate;
+    private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
     private List<ApplicationAnswerData> answers;
 
     @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
@@ -24,6 +26,8 @@ public class ApplicationData {
         private String questionText;
         private String answerText;
         private String fileUrl;
+        private LocalDateTime createdAt;
+        private LocalDateTime updatedAt;
     }
 }
 

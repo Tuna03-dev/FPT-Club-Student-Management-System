@@ -15,5 +15,3 @@ public class RecruitmentQuestionRequest {
     public Integer questionOrder;
     public List<String> options; // optional for select-type questions
 }
-
-

@@ -5,6 +5,8 @@ import com.sep490.backendclubmanagement.dto.response.*;
 import com.sep490.backendclubmanagement.entity.*;
 import com.sep490.backendclubmanagement.exception.AppException;
 import com.sep490.backendclubmanagement.exception.ErrorCode;
+import com.sep490.backendclubmanagement.mapper.RecruitmentApplicationMapper;
+import com.sep490.backendclubmanagement.mapper.RecruitmentMapper;
 import com.sep490.backendclubmanagement.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -15,67 +17,80 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
-public class RecruitmentService {
+public class RecruitmentService implements RecruitmentServiceInterface {
 
     private final RecruitmentRepository recruitmentRepository;
     private final RecruitmentApplicationRepository applicationRepository;
     private final RecruitmentFormQuestionRepository questionRepository;
     private final RecruitmentFormAnswerRepository answerRepository;
+    private final QuestionOptionRepository questionOptionRepository;
     private final UserRepository userRepository;
     private final EventRepository eventRepository; // placeholder if needed later
+    private final RecruitmentMapper recruitmentMapper;
+    private final RecruitmentApplicationMapper recruitmentApplicationMapper;
 
-    public Page<RecruitmentData> listRecruitments(Long clubId, RecruitmentStatus status, Pageable pageable) {
+    @Override
+    public PagedResponse<RecruitmentData> listRecruitments(Long clubId, RecruitmentStatus status, Pageable pageable) {
         Page<Recruitment> page = (status == null)
                 ? recruitmentRepository.findByClub_Id(clubId, pageable)
                 : recruitmentRepository.findByClub_IdAndStatus(clubId, status, pageable);
-        return page.map(this::toRecruitmentDataBasic);
+        Page<RecruitmentData> dataPage = page.map(recruitmentMapper::toDto);
+        return PagedResponse.of(dataPage);
     }
 
+    @Override
     public RecruitmentData getRecruitment(Long id) throws AppException {
         Recruitment r = recruitmentRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.INTERNAL_SERVER_ERROR));
+        // Load questions with options to include in the response
         List<RecruitmentFormQuestion> questions = questionRepository.findByRecruitment_IdOrderByQuestionOrderAsc(r.getId());
-        return toRecruitmentData(r, questions);
+        // Load options for each question
+        for (RecruitmentFormQuestion question : questions) {
+            List<QuestionOption> options = questionOptionRepository.findByQuestion_IdOrderByOptionOrderAsc(question.getId());
+            question.setOptions(options.stream().collect(java.util.stream.Collectors.toSet()));
+        }
+        r.setFormQuestions(questions.stream().collect(java.util.stream.Collectors.toSet()));
+        return recruitmentMapper.toDto(r);
     }
 
+    @Override
     @Transactional
     public RecruitmentData createRecruitment(Long clubId, RecruitmentCreateRequest req) {
-        Recruitment r = Recruitment.builder()
-                .title(req.title)
-                .description(req.description)
-                .startDate(req.startDate)
-                .endDate(req.endDate)
-                .maxApplicants(req.maxApplicants)
-                .requirements(req.requirements)
-                .status(RecruitmentStatus.DRAFT)
-                .club(Club.builder().id(clubId).build())
-                .build();
+        Recruitment r = recruitmentMapper.toEntity(req, clubId);
         r = recruitmentRepository.save(r);
         upsertQuestions(r, req.questions);
         List<RecruitmentFormQuestion> questions = questionRepository.findByRecruitment_IdOrderByQuestionOrderAsc(r.getId());
-        return toRecruitmentData(r, questions);
+        // Load options for each question
+        for (RecruitmentFormQuestion question : questions) {
+            List<QuestionOption> options = questionOptionRepository.findByQuestion_IdOrderByOptionOrderAsc(question.getId());
+            question.setOptions(options.stream().collect(java.util.stream.Collectors.toSet()));
+        }
+        r.setFormQuestions(questions.stream().collect(java.util.stream.Collectors.toSet()));
+        return recruitmentMapper.toDto(r);
     }
 
+    @Override
     @Transactional
     public RecruitmentData updateRecruitment(Long id, RecruitmentUpdateRequest req) throws AppException {
         Recruitment r = recruitmentRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.INTERNAL_SERVER_ERROR));
-        r.setTitle(req.title);
-        r.setDescription(req.description);
-        r.setStartDate(req.startDate);
-        r.setEndDate(req.endDate);
-        r.setMaxApplicants(req.maxApplicants);
-        r.setRequirements(req.requirements);
+        recruitmentMapper.updateEntity(r, req);
         recruitmentRepository.save(r);
         upsertQuestions(r, req.questions);
         List<RecruitmentFormQuestion> questions = questionRepository.findByRecruitment_IdOrderByQuestionOrderAsc(r.getId());
-        return toRecruitmentData(r, questions);
+        // Load options for each question
+        for (RecruitmentFormQuestion question : questions) {
+            List<QuestionOption> options = questionOptionRepository.findByQuestion_IdOrderByOptionOrderAsc(question.getId());
+            question.setOptions(options.stream().collect(java.util.stream.Collectors.toSet()));
+        }
+        r.setFormQuestions(questions.stream().collect(java.util.stream.Collectors.toSet()));
+        return recruitmentMapper.toDto(r);
     }
 
+    @Override
     @Transactional
     public void changeRecruitmentStatus(Long id, RecruitmentStatus status) throws AppException {
         Recruitment r = recruitmentRepository.findById(id)
@@ -84,20 +99,24 @@ public class RecruitmentService {
         recruitmentRepository.save(r);
     }
 
+    @Override
     @Transactional
     public void deleteRecruitment(Long id) {
         recruitmentRepository.deleteById(id);
     }
 
-    public Page<ApplicationData> listApplications(Long recruitmentId, RecruitmentApplicationStatus status, Pageable pageable) {
+    @Override
+    public PagedResponse<RecruitmentApplicationData> listApplications(Long recruitmentId, RecruitmentApplicationStatus status, Pageable pageable) {
         Page<RecruitmentApplication> page = (status == null)
                 ? applicationRepository.findByRecruitment_Id(recruitmentId, pageable)
                 : applicationRepository.findByRecruitment_IdAndStatus(recruitmentId, status, pageable);
-        return page.map(this::toApplicationDataBasic);
+        Page<RecruitmentApplicationData> dataPage = page.map(recruitmentApplicationMapper::toDto);
+        return PagedResponse.of(dataPage);
     }
 
+    @Override
     @Transactional
-    public ApplicationData submitApplication(Long applicantId, ApplicationSubmitRequest req) throws AppException {
+    public RecruitmentApplicationData submitApplication(Long applicantId, ApplicationSubmitRequest req) throws AppException {
         Recruitment recruitment = recruitmentRepository.findById(req.recruitmentId)
                 .orElseThrow(() -> new AppException(ErrorCode.INTERNAL_SERVER_ERROR));
         User applicant = userRepository.findById(applicantId)
@@ -127,15 +146,18 @@ public class RecruitmentService {
         return getApplication(app.getId());
     }
 
-    public ApplicationData getApplication(Long applicationId) throws AppException {
+    @Override
+    public RecruitmentApplicationData getApplication(Long applicationId) throws AppException {
         RecruitmentApplication app = applicationRepository.findById(applicationId)
                 .orElseThrow(() -> new AppException(ErrorCode.INTERNAL_SERVER_ERROR));
         List<RecruitmentFormAnswer> answers = answerRepository.findByApplication_Id(applicationId);
-        return toApplicationData(app, answers);
+        app.setAnswers(answers.stream().collect(java.util.stream.Collectors.toSet()));
+        return recruitmentApplicationMapper.toDto(app);
     }
 
+    @Override
     @Transactional
-    public ApplicationData reviewApplication(ApplicationReviewRequest req) throws AppException {
+    public RecruitmentApplicationData reviewApplication(ApplicationReviewRequest req) throws AppException {
         RecruitmentApplication app = applicationRepository.findById(req.applicationId)
                 .orElseThrow(() -> new AppException(ErrorCode.INTERNAL_SERVER_ERROR));
         app.setStatus(req.status);
@@ -145,6 +167,7 @@ public class RecruitmentService {
         return getApplication(app.getId());
     }
 
+    @Override
     @Transactional
     public void withdrawApplication(Long applicationId) {
         applicationRepository.findById(applicationId).ifPresent(app -> {
@@ -156,10 +179,18 @@ public class RecruitmentService {
 
     private void upsertQuestions(Recruitment recruitment, List<RecruitmentQuestionRequest> reqs) {
         if (reqs == null) return;
-        // Simplest: delete all existing and re-create per request
-        questionRepository.findByRecruitment_IdOrderByQuestionOrderAsc(recruitment.getId())
-                .forEach(q -> questionRepository.deleteById(q.getId()));
+        
+        // Delete all existing questions and their options
+        List<RecruitmentFormQuestion> existingQuestions = questionRepository.findByRecruitment_IdOrderByQuestionOrderAsc(recruitment.getId());
+        for (RecruitmentFormQuestion question : existingQuestions) {
+            // Delete options first
+            questionOptionRepository.findByQuestion_IdOrderByOptionOrderAsc(question.getId())
+                    .forEach(option -> questionOptionRepository.deleteById(option.getId()));
+            // Then delete question
+            questionRepository.deleteById(question.getId());
+        }
 
+        // Create new questions with options
         for (RecruitmentQuestionRequest q : reqs) {
             RecruitmentFormQuestion entity = RecruitmentFormQuestion.builder()
                     .questionText(q.questionText)
@@ -168,67 +199,25 @@ public class RecruitmentService {
                     .recruitment(recruitment)
                     .build();
             entity = questionRepository.save(entity);
+            
+            // Save question options if provided
             if (q.options != null && !q.options.isEmpty()) {
-                // We only persist text options via QuestionOption through cascade from question if mapped; skipped here for brevity
+                saveQuestionOptions(entity, q.options);
             }
         }
     }
 
-    private RecruitmentData toRecruitmentDataBasic(Recruitment r) {
-        return RecruitmentData.builder()
-                .id(r.getId())
-                .title(r.getTitle())
-                .description(r.getDescription())
-                .startDate(r.getStartDate())
-                .endDate(r.getEndDate())
-                .maxApplicants(r.getMaxApplicants())
-                .status(r.getStatus())
-                .requirements(r.getRequirements())
-                .clubId(r.getClub() != null ? r.getClub().getId() : null)
-                .build();
+    private void saveQuestionOptions(RecruitmentFormQuestion question, List<String> options) {
+        for (int i = 0; i < options.size(); i++) {
+            QuestionOption option = QuestionOption.builder()
+                    .optionText(options.get(i))
+                    .optionOrder(i + 1)
+                    .question(question)
+                    .build();
+            questionOptionRepository.save(option);
+        }
     }
 
-    private RecruitmentData toRecruitmentData(Recruitment r, List<RecruitmentFormQuestion> questions) {
-        List<RecruitmentQuestionData> qds = questions.stream().map(q ->
-                RecruitmentQuestionData.builder()
-                        .id(q.getId())
-                        .questionText(q.getQuestionText())
-                        .questionType(q.getQuestionType())
-                        .questionOrder(q.getQuestionOrder())
-                        .options(q.getOptions() == null ? List.of() : q.getOptions().stream().map(QuestionOption::getOptionText).collect(Collectors.toList()))
-                        .build()
-        ).toList();
-        RecruitmentData data = toRecruitmentDataBasic(r);
-        data.setQuestions(qds);
-        return data;
-    }
-
-    private ApplicationData toApplicationDataBasic(RecruitmentApplication app) {
-        return ApplicationData.builder()
-                .id(app.getId())
-                .recruitmentId(app.getRecruitment().getId())
-                .applicantId(app.getApplicant().getId())
-                .teamId(app.getTeamId())
-                .status(app.getStatus())
-                .reviewNotes(app.getReviewNotes())
-                .submittedDate(app.getSubmittedDate())
-                .reviewedDate(app.getReviewedDate())
-                .build();
-    }
-
-    private ApplicationData toApplicationData(RecruitmentApplication app, List<RecruitmentFormAnswer> answers) {
-        ApplicationData data = toApplicationDataBasic(app);
-        List<ApplicationData.ApplicationAnswerData> ans = answers.stream().map(a ->
-                ApplicationData.ApplicationAnswerData.builder()
-                        .questionId(a.getQuestion().getId())
-                        .questionText(a.getQuestion().getQuestionText())
-                        .answerText(a.getAnswerText())
-                        .fileUrl(a.getFileUrl())
-                        .build()
-        ).toList();
-        data.setAnswers(ans);
-        return data;
-    }
 }
 
 

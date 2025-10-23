@@ -18,6 +18,8 @@ public class RecruitmentData {
     private String requirements;
     private Long clubId;
     private List<RecruitmentQuestionData> questions;
+    private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
 }
 
 

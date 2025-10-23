@@ -5,27 +5,29 @@ import com.sep490.backendclubmanagement.dto.request.*;
 import com.sep490.backendclubmanagement.dto.response.*;
 import com.sep490.backendclubmanagement.entity.RecruitmentApplicationStatus;
 import com.sep490.backendclubmanagement.entity.RecruitmentStatus;
+import com.sep490.backendclubmanagement.entity.User;
 import com.sep490.backendclubmanagement.exception.AppException;
+import com.sep490.backendclubmanagement.exception.ErrorCode;
 import com.sep490.backendclubmanagement.service.RecruitmentService;
+import com.sep490.backendclubmanagement.service.UserService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.Instant;
-
 @RestController
-@RequestMapping("/recruitments")
+@RequestMapping("/api/recruitments")
 @RequiredArgsConstructor
 public class RecruitmentController {
 
     private final RecruitmentService recruitmentService;
+    private final UserService userService;
 
     @GetMapping("/clubs/{clubId}")
-    public ResponseEntity<ApiResponse<Page<RecruitmentData>>> listRecruitments(
+    public ResponseEntity<ApiResponse<PagedResponse<RecruitmentData>>> listRecruitments(
             @PathVariable Long clubId,
             @RequestParam(required = false) RecruitmentStatus status,
             @RequestParam(defaultValue = "0") int page,
@@ -33,9 +35,8 @@ public class RecruitmentController {
             @RequestParam(defaultValue = "startDate,desc") String sort
     ) {
         Pageable pageable = PageRequest.of(page, size, parseSort(sort));
-        Page<RecruitmentData> data = recruitmentService.listRecruitments(clubId, status, pageable);
-        return ResponseEntity.ok(ApiResponse.<Page<RecruitmentData>>builder()
-                .code(200).message("OK").timestamp(Instant.now()).data(data).build());
+        PagedResponse<RecruitmentData> data = recruitmentService.listRecruitments(clubId, status, pageable);
+        return ResponseEntity.ok(ApiResponse.success(data));
     }
 
     @GetMapping("/{id}")
@@ -79,7 +80,7 @@ public class RecruitmentController {
 
     // Applications
     @GetMapping("/{recruitmentId}/applications")
-    public ResponseEntity<ApiResponse<Page<ApplicationData>>> listApplications(
+    public ResponseEntity<ApiResponse<PagedResponse<RecruitmentApplicationData>>> listApplications(
             @PathVariable Long recruitmentId,
             @RequestParam(required = false) RecruitmentApplicationStatus status,
             @RequestParam(defaultValue = "0") int page,
@@ -87,28 +88,33 @@ public class RecruitmentController {
             @RequestParam(defaultValue = "submittedDate,desc") String sort
     ) {
         Pageable pageable = PageRequest.of(page, size, parseSort(sort));
-        Page<ApplicationData> data = recruitmentService.listApplications(recruitmentId, status, pageable);
+        PagedResponse<RecruitmentApplicationData> data = recruitmentService.listApplications(recruitmentId, status, pageable);
         return ResponseEntity.ok(ApiResponse.success(data));
     }
 
     @PostMapping("/applications/submit")
-    public ResponseEntity<ApiResponse<ApplicationData>> submit(
-            @RequestHeader("X-User-Id") Long applicantId,
+    public ResponseEntity<ApiResponse<RecruitmentApplicationData>> submit(
+            Authentication authentication,
             @RequestBody ApplicationSubmitRequest request
     ) throws AppException {
-        ApplicationData data = recruitmentService.submitApplication(applicantId, request);
+        // Get current user from authentication
+//        String email = authentication.getName();
+//        User currentUser = userService.findByEmail(email)
+//                .orElseThrow(() -> new AppException(ErrorCode.UNAUTHORIZED));
+        
+        RecruitmentApplicationData data = recruitmentService.submitApplication(Long.parseLong("6"), request);
         return ResponseEntity.ok(ApiResponse.success(data));
     }
 
     @GetMapping("/applications/{applicationId}")
-    public ResponseEntity<ApiResponse<ApplicationData>> getApplication(@PathVariable Long applicationId) throws AppException {
-        ApplicationData data = recruitmentService.getApplication(applicationId);
+    public ResponseEntity<ApiResponse<RecruitmentApplicationData>> getApplication(@PathVariable Long applicationId) throws AppException {
+        RecruitmentApplicationData data = recruitmentService.getApplication(applicationId);
         return ResponseEntity.ok(ApiResponse.success(data));
     }
 
     @PostMapping("/applications/review")
-    public ResponseEntity<ApiResponse<ApplicationData>> review(@RequestBody ApplicationReviewRequest request) throws AppException {
-        ApplicationData data = recruitmentService.reviewApplication(request);
+    public ResponseEntity<ApiResponse<RecruitmentApplicationData>> review(@RequestBody ApplicationReviewRequest request) throws AppException {
+        RecruitmentApplicationData data = recruitmentService.reviewApplication(request);
         return ResponseEntity.ok(ApiResponse.success(data));
     }
 
