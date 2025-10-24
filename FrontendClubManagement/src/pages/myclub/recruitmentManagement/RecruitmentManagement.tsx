@@ -277,19 +277,29 @@ export function RecruitmentManagement() {
 
         // Map API data to component format
         const mappedApplications: RecruitmentApplication[] =
-          response.content.map((a) => ({
-            application_id: a.id.toString(),
-            user_id: a.userId.toString(),
-            user_name: a.userName,
-            user_email: a.userEmail,
-            user_phone: a.userPhone,
-            student_id: a.studentId,
-            submitted_at: a.submittedDate,
-            status: a.status.toLowerCase() as ApplicationStatus,
-            answers: a.answers || {},
-            score: a.score,
-            notes: a.notes,
-          }));
+          response.content.map((a) => {
+            // Convert answers array to object format for the component
+            const answersMap: Record<string, any> = {};
+            if (a.answers && Array.isArray(a.answers)) {
+              a.answers.forEach((answer) => {
+                answersMap[answer.questionId.toString()] = answer.answerText || answer.fileUrl || "";
+              });
+            }
+            
+            return {
+              application_id: a.id.toString(),
+              user_id: a.applicantId.toString(),
+              user_name: a.userName,
+              user_email: a.userEmail,
+              user_phone: a.userPhone,
+              student_id: a.studentId,
+              submitted_at: a.submittedDate,
+              status: a.status.toLowerCase() as ApplicationStatus,
+              answers: answersMap,
+              score: a.score,
+              notes: a.reviewNotes,
+            };
+          });
 
         setApplications(mappedApplications);
 

@@ -11,6 +11,10 @@ public class RecruitmentApplicationData {
     private Long id;
     private Long recruitmentId;
     private Long applicantId;
+    private String userName;
+    private String userEmail;
+    private String userPhone;
+    private String studentId;
     private Long teamId;
     private RecruitmentApplicationStatus status;
     private String reviewNotes;

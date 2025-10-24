@@ -39,18 +39,30 @@ export interface RecruitmentData {
 
 export interface RecruitmentApplicationData {
   id: number;
-  userId: number;
+  recruitmentId: number;
+  applicantId: number;
   userName: string;
   userEmail: string;
   userPhone?: string;
   studentId: string;
+  teamId?: number;
   submittedDate: string;
-  status: "PENDING" | "APPROVED" | "REJECTED" | "INTERVIEW";
-  answers?: Record<string, any>;
+  reviewedDate?: string;
+  status: "PENDING" | "APPROVED" | "REJECTED" | "INTERVIEW" | "SUBMITTED";
+  reviewNotes?: string;
   score?: number;
-  notes?: string;
-  reviewedBy?: number;
-  reviewedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+  answers?: ApplicationAnswerData[];
+}
+
+export interface ApplicationAnswerData {
+  questionId: number;
+  questionText: string;
+  answerText?: string;
+  fileUrl?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface RecruitmentFilterRequest {

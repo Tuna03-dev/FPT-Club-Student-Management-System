@@ -8,7 +8,8 @@ public enum ErrorCode {
     INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, 500, "Internal server error"),
     VALIDATION_ERROR(HttpStatus.BAD_REQUEST, 1000, "Validation failed"),
     UNAUTHORIZED(HttpStatus.FORBIDDEN, 403, "User is not allowed to access"),
-    NOT_FOUND(HttpStatus.NOT_FOUND,404, "Resource not found");
+    NOT_FOUND(HttpStatus.NOT_FOUND,404, "Resource not found"),
+    CLUB_NOT_FOUND(HttpStatus.NOT_FOUND, 1001, "Club not found");
 
     private final HttpStatus httpStatus;
     private final int code;

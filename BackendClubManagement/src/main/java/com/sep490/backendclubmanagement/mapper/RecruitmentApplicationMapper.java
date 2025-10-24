@@ -17,6 +17,10 @@ public interface RecruitmentApplicationMapper {
     // Map recruitment.id → recruitmentId and applicant.id → applicantId
     @Mapping(source = "recruitment.id", target = "recruitmentId")
     @Mapping(source = "applicant.id", target = "applicantId")
+    @Mapping(source = "applicant.fullName", target = "userName")
+    @Mapping(source = "applicant.email", target = "userEmail")
+    @Mapping(source = "applicant.phoneNumber", target = "userPhone")
+    @Mapping(source = "applicant.studentCode", target = "studentId")
     @Mapping(target = "answers", ignore = true)
     RecruitmentApplicationData toDto(RecruitmentApplication application);
 
