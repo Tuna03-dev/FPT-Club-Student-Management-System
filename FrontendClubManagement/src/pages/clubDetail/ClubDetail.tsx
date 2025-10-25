@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -29,10 +30,16 @@ import {
   Mail,
   Phone,
   Globe,
+  Loader2,
 } from "lucide-react";
+import { getClubDetailById, type ClubDetailData } from "@/service/ClubService";
+import {
+  getRecruitmentsByClubId,
+  type RecruitmentData,
+} from "@/service/RecruitmentService";
 
 interface ClubDetailProps {
-  clubId: string;
+  clubId?: string;
 }
 
 interface Event {
@@ -67,33 +74,70 @@ interface RecruitmentInfo {
   applicants: number;
 }
 
-export function ClubDetail() {
-  const [isFollowing, setIsFollowing] = useState(false);
-  const [activeTab, setActiveTab] = useState("overview");
+export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
+  const params = useParams();
+  const clubId = propClubId || params.clubId;
 
-  // Mock club data
-  const club = {
-    name: "CLB Lập trình FPT",
-    description:
-      "Câu lạc bộ dành cho những sinh viên đam mê lập trình, công nghệ và phát triển phần mềm",
-    image: "/club-banner.jpg",
-    logo: "/club-logo.jpg",
-    category: "Công nghệ",
-    president: "Nguyễn Văn A",
-    presidentAvatar: "/placeholder.svg?height=40&width=40",
-    establishedYear: 2018,
-    memberCount: 234,
-    rating: 4.8,
-    totalRatings: 156,
-    description_full:
-      "CLB Lập trình FPT là một trong những câu lạc bộ lâu đời và hoạt động nhất tại trường. Chúng tôi tập trung vào việc phát triển kỹ năng lập trình, chia sẻ kiến thức công nghệ mới nhất, và tạo cơ hội kết nối cho các sinh viên yêu thích lập trình. Thông qua các workshop, hackathon, và dự án thực tế, chúng tôi giúp các thành viên phát triển kỹ năng chuyên môn và xây dựng mạng lưới chuyên nghiệp.",
-    contactInfo: {
-      zalo: "https://zalo.me/g/programming-fpt",
-      messenger: "https://m.me/programming-fpt",
-      email: "programming.club@fpt.edu.vn",
-      phone: "0123456789",
-    },
+  const [activeTab, setActiveTab] = useState("overview");
+  const [loading, setLoading] = useState(true);
+  const [club, setClub] = useState<ClubDetailData | null>(null);
+  const [recruitments, setRecruitments] = useState<RecruitmentData[]>([]);
+  const [recruitmentsLoaded, setRecruitmentsLoaded] = useState(false);
+  const [loadingRecruitments, setLoadingRecruitments] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Fetch club data only (isRecruiting is included in response)
+  useEffect(() => {
+    const fetchClubData = async () => {
+      if (!clubId) {
+        setError("Club ID not found");
+        setLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        setError(null);
+
+        const clubData = await getClubDetailById(Number(clubId));
+        setClub(clubData);
+        // Note: clubData.isRecruiting is already set by Backend
+      } catch (err) {
+        console.error("Error fetching club data:", err);
+        setError("Không thể tải thông tin câu lạc bộ");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchClubData();
+  }, [clubId]);
+
+  // Fetch recruitments when tab is clicked
+  const fetchRecruitments = async () => {
+    if (recruitmentsLoaded || !clubId) return;
+
+    try {
+      setLoadingRecruitments(true);
+      const recruitmentsResponse = await getRecruitmentsByClubId(
+        Number(clubId),
+        { status: "OPEN", page: 0, size: 20 }
+      );
+      setRecruitments(recruitmentsResponse.content);
+      setRecruitmentsLoaded(true);
+    } catch (err) {
+      console.error("Error fetching recruitments:", err);
+    } finally {
+      setLoadingRecruitments(false);
+    }
   };
+
+  // Load recruitments when recruitment tab is activated
+  useEffect(() => {
+    if (activeTab === "recruitment") {
+      fetchRecruitments();
+    }
+  }, [activeTab]);
 
   const events: Event[] = [
     {
@@ -166,30 +210,49 @@ export function ClubDetail() {
     },
   ];
 
-  const recruitmentInfo: RecruitmentInfo[] = [
-    {
-      id: "1",
-      position: "Tuyển thành viên",
-      department: "",
-      requirements: [
-        "Có kinh nghiệm lập trình ít nhất 2 năm",
-        "Thành thạo ít nhất 2 ngôn ngữ lập trình",
-        "Có khả năng lãnh đạo và quản lý dự án",
-        "Cam kết hoạt động tối thiểu 10 giờ/tuần",
-      ],
-      deadline: "2024-02-15",
-      spots: 1,
-      applicants: 8,
-    },
-  ];
+  // Format date helper
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString("vi-VN");
+  };
+
+  // Loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-12 w-12 animate-spin mx-auto text-primary mb-4" />
+          <p className="text-muted-foreground">
+            Đang tải thông tin câu lạc bộ...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error || !club) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Card className="max-w-md w-full mx-4">
+          <CardContent className="text-center py-12">
+            <p className="text-red-500 mb-4">
+              {error || "Không tìm thấy câu lạc bộ"}
+            </p>
+            <Button onClick={() => window.history.back()}>Quay lại</Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
       {/* Hero Banner */}
       <div className="relative h-64 md:h-80 bg-gradient-to-r from-blue-500 to-purple-600 overflow-hidden">
         <img
-          src={club.image || "/placeholder.svg"}
-          alt={club.name}
+          src={club.bannerUrl || "/placeholder.svg"}
+          alt={club.clubName}
           className="w-full h-full object-cover opacity-80"
         />
         <div className="absolute inset-0 bg-black/30" />
@@ -202,8 +265,8 @@ export function ClubDetail() {
             {/* Logo */}
             <div className="relative z-10">
               <Avatar className="h-32 w-32 border-4 border-background shadow-lg">
-                <AvatarImage src={club.logo || "/placeholder.svg"} />
-                <AvatarFallback>{club.name[0]}</AvatarFallback>
+                <AvatarImage src={club.logoUrl || "/placeholder.svg"} />
+                <AvatarFallback>{club.clubName[0]}</AvatarFallback>
               </Avatar>
             </div>
 
@@ -213,8 +276,9 @@ export function ClubDetail() {
                 <div>
                   <div className="flex items-center gap-3 mb-2">
                     <h1 className="text-3xl md:text-4xl font-bold text-foreground">
-                      {club.name}
+                      {club.clubName}
                     </h1>
+                    <Badge variant="secondary">{club.categoryName}</Badge>
                   </div>
                   <p className="text-muted-foreground mt-1">
                     {club.description}
@@ -228,49 +292,39 @@ export function ClubDetail() {
                   <Users className="h-5 w-5 text-muted-foreground" />
                   <div>
                     <p className="text-sm text-muted-foreground">Thành viên</p>
-                    <p className="font-semibold">{club.memberCount}</p>
+                    <p className="font-semibold">{club.totalMembers}</p>
                   </div>
                 </div>
-                {/* <div className="flex items-center gap-2">
-                  <Star className="h-5 w-5 text-yellow-500 fill-yellow-500" />
-                  <div>
-                    <p className="text-sm text-muted-foreground">Đánh giá</p>
-                    <p className="font-semibold">
-                      {club.rating} ({club.totalRatings} đánh giá)
-                    </p>
-                  </div>
-                </div> */}
                 <div className="flex items-center gap-2">
                   <Calendar className="h-5 w-5 text-muted-foreground" />
                   <div>
-                    <p className="text-sm text-muted-foreground">Thành lập</p>
-                    <p className="font-semibold">{club.establishedYear}</p>
+                    <p className="text-sm text-muted-foreground">Sự kiện</p>
+                    <p className="font-semibold">{club.totalEvents}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <MessageSquare className="h-5 w-5 text-muted-foreground" />
+                  <div>
+                    <p className="text-sm text-muted-foreground">Bài viết</p>
+                    <p className="font-semibold">{club.totalPosts}</p>
                   </div>
                 </div>
               </div>
 
               {/* Action Buttons */}
               <div className="flex flex-wrap gap-3 items-center">
-                {/* <Button
-                  onClick={() => setIsFollowing(!isFollowing)}
-                  variant={isFollowing ? "secondary" : "default"}
-                  className="gap-2"
-                >
-                  <Bell className="h-4 w-4" />
-                  {isFollowing ? "Đang theo dõi" : "Theo dõi"}
-                </Button>
-                <Button variant="outline" className="gap-2 bg-transparent">
-                  <Share2 className="h-4 w-4" />
-                  Chia sẻ
-                </Button>
-                <Button variant="outline" className="gap-2 bg-transparent">
-                  <MessageSquare className="h-4 w-4" />
-                  Liên hệ
-                </Button> */}
-                <Badge className="bg-red-500 hover:bg-red-600 text-white animate-pulse ml-auto md:ml-2">
-                  <Zap className="h-3 w-3 mr-1" />
-                  Đang tuyển
-                </Badge>
+                {club.isRecruiting && (
+                  <div className="ml-auto md:ml-2">
+                    <Badge className="relative bg-red-500 hover:bg-red-600 text-white animate-pulse shadow-lg">
+                      <Zap className="h-3 w-3 mr-1 animate-bounce" />
+                      Đang tuyển
+                      <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+                      </span>
+                    </Badge>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -291,7 +345,12 @@ export function ClubDetail() {
               <TabsTrigger value="news">Tin tức</TabsTrigger>
               <TabsTrigger value="recruitment" className="relative">
                 Tuyển dụng
-                <span className="absolute top-1 right-1 h-2 w-2 bg-red-500 rounded-full animate-pulse" />
+                {club.isRecruiting && (
+                  <span className="absolute top-1 right-1 flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                  </span>
+                )}
               </TabsTrigger>
             </TabsList>
 
@@ -307,29 +366,35 @@ export function ClubDetail() {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <p className="text-foreground leading-relaxed">
-                    {club.description_full}
+                    {club.description}
                   </p>
 
                   {/* President Info */}
-                  <div className="mt-6 p-4 bg-accent/5 rounded-lg border border-accent/20">
-                    <p className="text-sm text-muted-foreground mb-3">
-                      Chủ tịch câu lạc bộ
-                    </p>
-                    <div className="flex items-center gap-3">
-                      <Avatar>
-                        <AvatarImage
-                          src={club.presidentAvatar || "/placeholder.svg"}
-                        />
-                        <AvatarFallback>{club.president[0]}</AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <p className="font-semibold">{club.president}</p>
-                        <p className="text-sm text-muted-foreground">
-                          Chủ tịch CLB
-                        </p>
+                  {club.president && (
+                    <div className="mt-6 p-4 bg-accent/5 rounded-lg border border-accent/20">
+                      <p className="text-sm text-muted-foreground mb-3">
+                        Chủ tịch câu lạc bộ
+                      </p>
+                      <div className="flex items-center gap-3">
+                        <Avatar>
+                          <AvatarImage
+                            src={club.president.avatarUrl || "/placeholder.svg"}
+                          />
+                          <AvatarFallback>
+                            {club.president.fullName[0]}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <p className="font-semibold">
+                            {club.president.fullName}
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            {club.president.email}
+                          </p>
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  )}
                 </CardContent>
               </Card>
 
@@ -343,69 +408,77 @@ export function ClubDetail() {
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <a
-                      href={club.contactInfo.zalo}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-accent/5 transition-colors"
-                    >
-                      <div className="h-10 w-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                        <MessageSquare className="h-5 w-5 text-blue-600" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium">Zalo Group</p>
-                        <p className="text-xs text-muted-foreground">
-                          Tham gia nhóm Zalo
-                        </p>
-                      </div>
-                    </a>
+                    {club.fbUrl && (
+                      <a
+                        href={club.fbUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-accent/5 transition-colors"
+                      >
+                        <div className="h-10 w-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                          <MessageSquare className="h-5 w-5 text-blue-600" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium">Facebook</p>
+                          <p className="text-xs text-muted-foreground">
+                            Theo dõi trên Facebook
+                          </p>
+                        </div>
+                      </a>
+                    )}
 
-                    <a
-                      href={club.contactInfo.messenger}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-accent/5 transition-colors"
-                    >
-                      <div className="h-10 w-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                        <MessageSquare className="h-5 w-5 text-blue-600" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium">Messenger</p>
-                        <p className="text-xs text-muted-foreground">
-                          Nhắn tin qua Messenger
-                        </p>
-                      </div>
-                    </a>
+                    {club.igUrl && (
+                      <a
+                        href={club.igUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-accent/5 transition-colors"
+                      >
+                        <div className="h-10 w-10 bg-pink-100 rounded-lg flex items-center justify-center">
+                          <Globe className="h-5 w-5 text-pink-600" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium">Instagram</p>
+                          <p className="text-xs text-muted-foreground">
+                            Theo dõi trên Instagram
+                          </p>
+                        </div>
+                      </a>
+                    )}
 
-                    <a
-                      href={`mailto:${club.contactInfo.email}`}
-                      className="flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-accent/5 transition-colors"
-                    >
-                      <div className="h-10 w-10 bg-red-100 rounded-lg flex items-center justify-center">
-                        <Mail className="h-5 w-5 text-red-600" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium">Email</p>
-                        <p className="text-xs text-muted-foreground">
-                          {club.contactInfo.email}
-                        </p>
-                      </div>
-                    </a>
+                    {club.email && (
+                      <a
+                        href={`mailto:${club.email}`}
+                        className="flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-accent/5 transition-colors"
+                      >
+                        <div className="h-10 w-10 bg-red-100 rounded-lg flex items-center justify-center">
+                          <Mail className="h-5 w-5 text-red-600" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium">Email</p>
+                          <p className="text-xs text-muted-foreground">
+                            {club.email}
+                          </p>
+                        </div>
+                      </a>
+                    )}
 
-                    <a
-                      href={`tel:${club.contactInfo.phone}`}
-                      className="flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-accent/5 transition-colors"
-                    >
-                      <div className="h-10 w-10 bg-green-100 rounded-lg flex items-center justify-center">
-                        <Phone className="h-5 w-5 text-green-600" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium">Điện thoại</p>
-                        <p className="text-xs text-muted-foreground">
-                          {club.contactInfo.phone}
-                        </p>
-                      </div>
-                    </a>
+                    {club.phone && (
+                      <a
+                        href={`tel:${club.phone}`}
+                        className="flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-accent/5 transition-colors"
+                      >
+                        <div className="h-10 w-10 bg-green-100 rounded-lg flex items-center justify-center">
+                          <Phone className="h-5 w-5 text-green-600" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium">Điện thoại</p>
+                          <p className="text-xs text-muted-foreground">
+                            {club.phone}
+                          </p>
+                        </div>
+                      </a>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -521,98 +594,109 @@ export function ClubDetail() {
 
             {/* Recruitment Tab */}
             <TabsContent value="recruitment" className="space-y-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-2xl font-bold">Tuyển dụng thành viên</h2>
-                <Badge variant="secondary">
-                  {recruitmentInfo.length} vị trí
-                </Badge>
-              </div>
-
-              {recruitmentInfo.length > 0 ? (
-                <div className="space-y-4">
-                  {recruitmentInfo.map((position) => (
-                    <Card
-                      key={position.id}
-                      className="hover:shadow-lg transition-shadow"
-                    >
-                      <CardHeader>
-                        <div className="flex items-start justify-between">
-                          <div>
-                            <CardTitle className="flex items-center gap-2">
-                              <Award className="h-5 w-5 text-accent" />
-                              {position.position}
-                            </CardTitle>
-                            <CardDescription className="mt-1">
-                              {position.department}
-                            </CardDescription>
-                          </div>
-                          <Badge
-                            variant="secondary"
-                            className="bg-accent/10 text-accent"
-                          >
-                            {position.spots} vị trí
-                          </Badge>
-                        </div>
-                      </CardHeader>
-                      <CardContent className="space-y-4">
-                        {/* Requirements */}
-                        <div>
-                          <p className="text-sm font-semibold mb-2">Yêu cầu:</p>
-                          <ul className="space-y-1">
-                            {position.requirements.map((req, idx) => (
-                              <li
-                                key={idx}
-                                className="text-sm text-muted-foreground flex items-start gap-2"
-                              >
-                                <span className="text-accent mt-1">•</span>
-                                <span>{req}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-
-                        {/* Stats */}
-                        <div className="grid grid-cols-3 gap-4 p-3 bg-accent/5 rounded-lg">
-                          <div>
-                            <p className="text-xs text-muted-foreground">
-                              Hạn chót
-                            </p>
-                            <p className="font-semibold text-sm">
-                              {position.deadline}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-muted-foreground">
-                              Vị trí còn lại
-                            </p>
-                            <p className="font-semibold text-sm">
-                              {position.spots}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-muted-foreground">
-                              Đơn ứng tuyển
-                            </p>
-                            <p className="font-semibold text-sm">
-                              {position.applicants}
-                            </p>
-                          </div>
-                        </div>
-
-                        <Button className="w-full">Ứng tuyển ngay</Button>
-                      </CardContent>
-                    </Card>
-                  ))}
+              {/* Loading state for recruitments */}
+              {loadingRecruitments ? (
+                <div className="flex flex-col items-center justify-center py-12">
+                  <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
+                  <p className="text-muted-foreground">
+                    Đang tải thông tin tuyển dụng...
+                  </p>
                 </div>
               ) : (
-                <Card>
-                  <CardContent className="text-center py-12">
-                    <TrendingUp className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                    <p className="text-muted-foreground">
-                      Hiện tại câu lạc bộ không có vị trí tuyển dụng
-                    </p>
-                  </CardContent>
-                </Card>
+                <>
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-2xl font-bold">
+                      Tuyển dụng thành viên
+                    </h2>
+                    <Badge variant="secondary">
+                      {recruitments.length} đợt tuyển
+                    </Badge>
+                  </div>
+
+                  {recruitments.length > 0 ? (
+                    <div className="space-y-4">
+                      {recruitments.map((recruitment) => (
+                        <Card
+                          key={recruitment.id}
+                          className="hover:shadow-lg transition-shadow"
+                        >
+                          <CardHeader>
+                            <div className="flex items-start justify-between">
+                              <div>
+                                <CardTitle className="flex items-center gap-2">
+                                  <Award className="h-5 w-5 text-accent" />
+                                  {recruitment.title}
+                                </CardTitle>
+                                <CardDescription className="mt-1">
+                                  {recruitment.description}
+                                </CardDescription>
+                              </div>
+                              <Badge
+                                variant="secondary"
+                                className="bg-green-100 text-green-700"
+                              >
+                                {recruitment.status}
+                              </Badge>
+                            </div>
+                          </CardHeader>
+                          <CardContent className="space-y-4">
+                            {/* Requirements */}
+                            {recruitment.requirements && (
+                              <div>
+                                <p className="text-sm font-semibold mb-2">
+                                  Yêu cầu:
+                                </p>
+                                <p className="text-sm text-muted-foreground whitespace-pre-line">
+                                  {recruitment.requirements}
+                                </p>
+                              </div>
+                            )}
+
+                            {/* Stats */}
+                            <div className="grid grid-cols-3 gap-4 p-3 bg-accent/5 rounded-lg">
+                              <div>
+                                <p className="text-xs text-muted-foreground">
+                                  Bắt đầu
+                                </p>
+                                <p className="font-semibold text-sm">
+                                  {formatDate(recruitment.startDate)}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-muted-foreground">
+                                  Hạn chót
+                                </p>
+                                <p className="font-semibold text-sm">
+                                  {formatDate(recruitment.endDate)}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-muted-foreground">
+                                  Số lượng
+                                </p>
+                                <p className="font-semibold text-sm">
+                                  {recruitment.maxApplicants ||
+                                    "Không giới hạn"}
+                                </p>
+                              </div>
+                            </div>
+
+                            <Button className="w-full">Ứng tuyển ngay</Button>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  ) : (
+                    <Card>
+                      <CardContent className="text-center py-12">
+                        <TrendingUp className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                        <p className="text-muted-foreground">
+                          Hiện tại câu lạc bộ không có đợt tuyển dụng nào
+                        </p>
+                      </CardContent>
+                    </Card>
+                  )}
+                </>
               )}
             </TabsContent>
           </Tabs>

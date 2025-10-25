@@ -36,7 +36,9 @@ import {
 import {
   getRecruitmentsByClubId,
   getApplicationsByRecruitmentId,
+  getRecruitmentById,
   createRecruitment,
+  updateRecruitment,
   type RecruitmentData,
   type RecruitmentApplicationData,
   type RecruitmentCreateRequest,
@@ -44,12 +46,12 @@ import {
 import { authService } from "@/services/authService";
 import { toast } from "sonner";
 
-type RecruitmentStatus = "draft" | "active" | "closed" | "completed";
+type RecruitmentStatus = "draft" | "open" | "closed" | "cancelled";
 type ApplicationStatus = "pending" | "approved" | "rejected" | "interview";
 type QuestionType = "TEXT" | "MCQ" | "CHECKBOX" | "FILE";
 
 interface RecruitmentForm {
-  form_id: string;
+  form_id?: string; // Optional for new questions
   question_text: string;
   question_type: QuestionType;
   question_order: number;
@@ -93,16 +95,16 @@ interface Recruitment {
 
 const statusLabels: Record<RecruitmentStatus, string> = {
   draft: "Bản nháp",
-  active: "Đang tuyển",
+  open: "Đang mở",
   closed: "Đã đóng",
-  completed: "Hoàn thành",
+  cancelled: "Đã hủy",
 };
 
 const statusColors: Record<RecruitmentStatus, string> = {
   draft: "bg-gray-100 text-gray-700",
-  active: "bg-green-100 text-green-700",
+  open: "bg-green-100 text-green-700",
   closed: "bg-red-100 text-red-700",
-  completed: "bg-blue-100 text-blue-700",
+  cancelled: "bg-blue-100 text-blue-700",
 };
 
 const applicationStatusLabels: Record<ApplicationStatus, string> = {
@@ -144,6 +146,7 @@ export function RecruitmentManagement() {
   const [applicationsLoading, setApplicationsLoading] = useState(false);
   const [createLoading, setCreateLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [editingRecruitment, setEditingRecruitment] = useState<Recruitment | null>(null);
 
   // Get current user and clubId
   const currentUser = authService.getCurrentUser();
@@ -170,17 +173,17 @@ export function RecruitmentManagement() {
     },
     {
       question_text: "Bạn muốn tham gia phòng ban nào?",
-      question_type: "MCQ",
+          question_type: "MCQ",
       question_order: 2,
-      options: [
+          options: [
         "Ban Chuyên môn",
         "Ban Truyền thông",
         "Ban Tổ chức",
         "Ban Nội vụ",
         "Ban Đối ngoại",
-      ],
-      required: true,
-    },
+          ],
+          required: true,
+        },
   ]);
 
   // Function to fetch recruitments
@@ -192,9 +195,9 @@ export function RecruitmentManagement() {
         statusFilter !== "all"
           ? (statusFilter.toUpperCase() as
               | "DRAFT"
-              | "ACTIVE"
+              | "OPEN"
               | "CLOSED"
-              | "COMPLETED")
+              | "CANCELLED")
           : undefined;
 
       const response = await getRecruitmentsByClubId(clubId, {
@@ -362,6 +365,7 @@ export function RecruitmentManagement() {
     setFormQuestions((prev) => [
       ...prev,
       {
+        // No form_id for new questions - will be created by backend
         question_text: "",
         question_type: "TEXT",
         question_order: prev.length + 1,
@@ -442,6 +446,130 @@ export function RecruitmentManagement() {
     );
   };
 
+  const handleEditRecruitment = async (recruitment: Recruitment) => {
+    try {
+      setLoading(true);
+      
+      // Fetch fresh data from API to ensure we have the latest data
+      const freshData = await getRecruitmentById(parseInt(recruitment.recruitment_id));
+      
+      // Map API data to component format
+      const mappedRecruitment: Recruitment = {
+        recruitment_id: freshData.id.toString(),
+        club_id: freshData.clubId.toString(),
+        semester_id: "Fall2024",
+        semester_name: "Fall 2024",
+        title: freshData.title,
+        description: freshData.description,
+        start_date: freshData.startDate,
+        end_date: freshData.endDate,
+        status: freshData.status.toLowerCase() as RecruitmentStatus,
+        max_applications: freshData.maxApplicants,
+        requirements: freshData.requirements ? freshData.requirements.split("\n") : [],
+        benefits: [],
+        form_questions: (freshData.questions || []).map((q) => ({
+          form_id: q.id.toString(),
+          question_text: q.questionText,
+          question_type: (q.questionType === "FILE_UPLOAD" ? "FILE" : q.questionType) as QuestionType,
+          question_order: q.questionOrder,
+          options: q.options,
+          required: true,
+        })),
+        applications: [],
+        created_at: freshData.createdAt,
+        updated_at: freshData.updatedAt,
+      };
+      
+      // Load recruitment data into form
+      setEditingRecruitment(mappedRecruitment);
+      setNewRecruitment({
+        title: mappedRecruitment.title,
+        description: mappedRecruitment.description,
+        start_date: mappedRecruitment.start_date.split("T")[0], // Convert ISO to date input format
+        end_date: mappedRecruitment.end_date.split("T")[0],
+        max_applications: mappedRecruitment.max_applications?.toString() || "",
+        requirements: mappedRecruitment.requirements.length > 0 ? mappedRecruitment.requirements : [""],
+        benefits: mappedRecruitment.benefits?.length > 0 ? mappedRecruitment.benefits : [""],
+      });
+      
+      // Load questions with fallback
+      const questionsToLoad = mappedRecruitment.form_questions && mappedRecruitment.form_questions.length > 0
+        ? mappedRecruitment.form_questions.map((q) => ({
+            form_id: q.form_id, // Keep the ID for update
+            question_text: q.question_text,
+            question_type: q.question_type,
+            question_order: q.question_order,
+            options: q.options,
+            required: q.required,
+          }))
+        : [
+            {
+              question_text: "Tại sao bạn muốn tham gia câu lạc bộ?",
+              question_type: "TEXT" as QuestionType,
+              question_order: 1,
+              required: true,
+            },
+            {
+              question_text: "Bạn muốn tham gia phòng ban nào?",
+              question_type: "MCQ" as QuestionType,
+              question_order: 2,
+              options: [
+                "Ban Chuyên môn",
+                "Ban Truyền thông",
+                "Ban Tổ chức",
+                "Ban Nội vụ",
+                "Ban Đối ngoại",
+              ],
+              required: true,
+            },
+          ];
+      
+      setFormQuestions(questionsToLoad);
+      setActiveTab("create");
+    } catch (err: any) {
+      console.error("Error loading recruitment for edit:", err);
+      toast.error("Không thể tải dữ liệu đợt tuyển dụng");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditingRecruitment(null);
+    // Reset form
+    setNewRecruitment({
+      title: "",
+      description: "",
+      start_date: "",
+      end_date: "",
+      max_applications: "",
+      requirements: [""],
+      benefits: [""],
+    });
+    setFormQuestions([
+      {
+        question_text: "Tại sao bạn muốn tham gia câu lạc bộ?",
+        question_type: "TEXT",
+        question_order: 1,
+        required: true,
+      },
+      {
+        question_text: "Bạn muốn tham gia phòng ban nào?",
+        question_type: "MCQ",
+        question_order: 2,
+        options: [
+          "Ban Chuyên môn",
+          "Ban Truyền thông",
+          "Ban Tổ chức",
+          "Ban Nội vụ",
+          "Ban Đối ngoại",
+        ],
+        required: true,
+      },
+    ]);
+    setActiveTab("list");
+  };
+
   const handleCreateRecruitment = async () => {
     // Validation
     if (!newRecruitment.title.trim()) {
@@ -510,7 +638,7 @@ export function RecruitmentManagement() {
         .filter((r) => r.trim())
         .join("\n"),
       questions: formQuestions.map((q, index) => ({
-        id: null,
+        id: q.form_id ? parseInt(q.form_id) : null, // Use existing ID if available, null for new questions
         questionText: q.question_text,
         questionType:
           q.question_type === "FILE" ? "FILE_UPLOAD" : q.question_type,
@@ -524,10 +652,21 @@ export function RecruitmentManagement() {
 
     setCreateLoading(true);
     try {
-      const createdRecruitment = await createRecruitment(clubId, requestData);
-      toast.success("Tạo đợt tuyển dụng thành công!");
+      if (editingRecruitment) {
+        // Update existing recruitment
+        await updateRecruitment(
+          parseInt(editingRecruitment.recruitment_id),
+          requestData
+        );
+        toast.success("Cập nhật đợt tuyển dụng thành công!");
+      } else {
+        // Create new recruitment
+        await createRecruitment(clubId, requestData);
+        toast.success("Tạo đợt tuyển dụng thành công!");
+      }
 
       // Reset form
+      setEditingRecruitment(null);
       setNewRecruitment({
         title: "",
         description: "",
@@ -565,8 +704,13 @@ export function RecruitmentManagement() {
       // Refetch recruitments
       await fetchRecruitments();
     } catch (err: any) {
-      console.error("Error creating recruitment:", err);
-      toast.error(err.message || "Không thể tạo đợt tuyển dụng");
+      console.error("Error saving recruitment:", err);
+      toast.error(
+        err.message ||
+          (editingRecruitment
+            ? "Không thể cập nhật đợt tuyển dụng"
+            : "Không thể tạo đợt tuyển dụng")
+      );
     } finally {
       setCreateLoading(false);
     }
@@ -605,7 +749,41 @@ export function RecruitmentManagement() {
               </Button>
               <Button
                 variant={activeTab === "create" ? "secondary" : "outline"}
-                onClick={() => setActiveTab("create")}
+                onClick={() => {
+                  setEditingRecruitment(null);
+                  // Reset form to default when creating new
+                  setNewRecruitment({
+                    title: "",
+                    description: "",
+                    start_date: "",
+                    end_date: "",
+                    max_applications: "",
+                    requirements: [""],
+                    benefits: [""],
+                  });
+                  setFormQuestions([
+                    {
+                      question_text: "Tại sao bạn muốn tham gia câu lạc bộ?",
+                      question_type: "TEXT",
+                      question_order: 1,
+                      required: true,
+                    },
+                    {
+                      question_text: "Bạn muốn tham gia phòng ban nào?",
+                      question_type: "MCQ",
+                      question_order: 2,
+                      options: [
+                        "Ban Chuyên môn",
+                        "Ban Truyền thông",
+                        "Ban Tổ chức",
+                        "Ban Nội vụ",
+                        "Ban Đối ngoại",
+                      ],
+                      required: true,
+                    },
+                  ]);
+                  setActiveTab("create");
+                }}
                 className="border-primary/30 hover:bg-primary hover:text-primary-foreground hover:border-primary shadow-sm hover:shadow-glow transition-all"
               >
                 <Plus className="h-4 w-4 mr-2" />
@@ -655,9 +833,9 @@ export function RecruitmentManagement() {
                 <SelectContent>
                   <SelectItem value="all">Tất cả trạng thái</SelectItem>
                   <SelectItem value="draft">Bản nháp</SelectItem>
-                  <SelectItem value="active">Đang tuyển</SelectItem>
+                  <SelectItem value="open">Đang mở</SelectItem>
                   <SelectItem value="closed">Đã đóng</SelectItem>
-                  <SelectItem value="completed">Hoàn thành</SelectItem>
+                  <SelectItem value="cancelled">Đã hủy</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -685,113 +863,114 @@ export function RecruitmentManagement() {
 
             {/* Recruitment Cards */}
             {!loading && !error && (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {filteredRecruitments.map((recruitment) => (
-                  <Card
-                    key={recruitment.recruitment_id}
-                    className="hover:shadow-lg transition-shadow"
-                  >
-                    <CardHeader>
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <CardTitle className="text-lg mb-2">
-                            {recruitment.title}
-                          </CardTitle>
-                          <div className="flex items-center gap-2 mb-2">
-                            <Badge className={statusColors[recruitment.status]}>
-                              {statusLabels[recruitment.status]}
-                            </Badge>
-                            <Badge variant="outline" className="text-xs">
-                              {recruitment.semester_name}
-                            </Badge>
-                          </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {filteredRecruitments.map((recruitment) => (
+                <Card
+                  key={recruitment.recruitment_id}
+                  className="hover:shadow-lg transition-shadow"
+                >
+                  <CardHeader>
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <CardTitle className="text-lg mb-2">
+                          {recruitment.title}
+                        </CardTitle>
+                        <div className="flex items-center gap-2 mb-2">
+                          <Badge className={statusColors[recruitment.status]}>
+                            {statusLabels[recruitment.status]}
+                          </Badge>
+                          <Badge variant="outline" className="text-xs">
+                            {recruitment.semester_name}
+                          </Badge>
                         </div>
                       </div>
-                    </CardHeader>
-                    <CardContent>
-                      <p className="text-sm text-muted-foreground mb-4 line-clamp-3">
-                        {recruitment.description}
-                      </p>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm text-muted-foreground mb-4 line-clamp-3">
+                      {recruitment.description}
+                    </p>
 
-                      <div className="grid grid-cols-2 gap-4 mb-4 text-sm">
-                        <div>
+                    <div className="grid grid-cols-2 gap-4 mb-4 text-sm">
+                      <div>
                           <span className="text-muted-foreground">
                             Bắt đầu:
                           </span>
-                          <div className="font-medium">
+                        <div className="font-medium">
                             {new Date(
                               recruitment.start_date
                             ).toLocaleDateString("vi-VN")}
-                          </div>
                         </div>
-                        <div>
+                      </div>
+                      <div>
                           <span className="text-muted-foreground">
                             Kết thúc:
                           </span>
-                          <div className="font-medium">
-                            {new Date(recruitment.end_date).toLocaleDateString(
-                              "vi-VN"
-                            )}
-                          </div>
+                        <div className="font-medium">
+                          {new Date(recruitment.end_date).toLocaleDateString(
+                            "vi-VN"
+                          )}
                         </div>
-                        <div>
-                          <span className="text-muted-foreground">
-                            Đơn ứng tuyển:
-                          </span>
-                          <div className="font-medium">
-                            {recruitment.applications.length}
-                            {recruitment.max_applications &&
-                              ` / ${recruitment.max_applications}`}
-                          </div>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">
+                          Đơn ứng tuyển:
+                        </span>
+                        <div className="font-medium">
+                          {recruitment.applications.length}
+                          {recruitment.max_applications &&
+                            ` / ${recruitment.max_applications}`}
                         </div>
-                        <div>
+                      </div>
+                      <div>
                           <span className="text-muted-foreground">
                             Đã duyệt:
                           </span>
-                          <div className="font-medium text-green-600">
-                            {
-                              recruitment.applications.filter(
-                                (app) => app.status === "approved"
-                              ).length
-                            }
-                          </div>
+                        <div className="font-medium text-green-600">
+                          {
+                            recruitment.applications.filter(
+                              (app) => app.status === "approved"
+                            ).length
+                          }
                         </div>
                       </div>
+                    </div>
 
-                      <div className="flex gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setSelectedRecruitment(recruitment);
-                            setActiveTab("applications");
-                          }}
-                          className="bg-transparent"
-                        >
-                          <Eye className="h-4 w-4 mr-2" />
-                          Xem đơn
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="bg-transparent"
-                        >
-                          <Edit className="h-4 w-4 mr-2" />
-                          Chỉnh sửa
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="bg-transparent"
-                        >
-                          <Share2 className="h-4 w-4 mr-2" />
-                          Chia sẻ
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setSelectedRecruitment(recruitment);
+                          setActiveTab("applications");
+                        }}
+                        className="bg-transparent"
+                      >
+                        <Eye className="h-4 w-4 mr-2" />
+                        Xem đơn
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="bg-transparent"
+                         onClick={() => handleEditRecruitment(recruitment)}
+                      >
+                        <Edit className="h-4 w-4 mr-2" />
+                        Chỉnh sửa
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="bg-transparent"
+                      >
+                        <Share2 className="h-4 w-4 mr-2" />
+                        Chia sẻ
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
             )}
 
             {!loading && !error && filteredRecruitments.length === 0 && (
@@ -813,9 +992,33 @@ export function RecruitmentManagement() {
           </div>
         )}
 
-        {/* Create Recruitment Tab */}
+        {/* Create/Edit Recruitment Tab */}
         {activeTab === "create" && (
           <div className="max-w-4xl mx-auto space-y-8">
+            {/* Form Title */}
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-2xl font-bold">
+                  {editingRecruitment ? "Chỉnh sửa đợt tuyển dụng" : "Tạo đợt tuyển dụng mới"}
+                </h2>
+                <p className="text-muted-foreground mt-1">
+                  {editingRecruitment
+                    ? "Cập nhật thông tin đợt tuyển dụng"
+                    : "Điền thông tin để tạo đợt tuyển dụng mới"}
+                </p>
+              </div>
+              {editingRecruitment && (
+                <Button
+                  variant="outline"
+                  onClick={handleCancelEdit}
+                  className="bg-transparent"
+                >
+                  <XCircle className="h-4 w-4 mr-2" />
+                  Hủy chỉnh sửa
+                </Button>
+              )}
+            </div>
+
             <Card>
               <CardHeader>
                 <CardTitle>Thông tin cơ bản</CardTitle>
@@ -961,7 +1164,14 @@ export function RecruitmentManagement() {
                 {formQuestions.map((question, index) => (
                   <div key={index} className="border rounded-lg p-4 space-y-4">
                     <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
                       <Label>Câu hỏi {index + 1}</Label>
+                        {editingRecruitment && !question.form_id && (
+                          <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                            Mới
+                          </Badge>
+                        )}
+                      </div>
                       <Button
                         variant="outline"
                         size="sm"
@@ -1045,9 +1255,9 @@ export function RecruitmentManagement() {
                                 </span>
                                 <Input
                                   value={option}
-                                  onChange={(e) =>
+                          onChange={(e) =>
                                     updateOption(
-                                      index,
+                              index,
                                       optionIndex,
                                       e.target.value
                                     )
@@ -1121,7 +1331,7 @@ export function RecruitmentManagement() {
             <div className="flex gap-4 justify-end">
               <Button
                 variant="outline"
-                onClick={() => setActiveTab("list")}
+                onClick={editingRecruitment ? handleCancelEdit : () => setActiveTab("list")}
                 className="bg-transparent"
                 disabled={createLoading}
               >
@@ -1142,12 +1352,12 @@ export function RecruitmentManagement() {
                 {createLoading ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Đang tạo...
+                    {editingRecruitment ? "Đang cập nhật..." : "Đang tạo..."}
                   </>
                 ) : (
                   <>
-                    <Send className="h-4 w-4 mr-2" />
-                    Tạo và Công bố
+                <Send className="h-4 w-4 mr-2" />
+                    {editingRecruitment ? "Cập nhật" : "Tạo và Công bố"}
                   </>
                 )}
               </Button>
@@ -1222,33 +1432,33 @@ export function RecruitmentManagement() {
 
             {/* Applications List */}
             {!applicationsLoading && (
-              <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-                {filteredApplications.map((application) => (
-                  <Card
-                    key={application.application_id}
-                    className="hover:shadow-lg transition-shadow"
-                  >
-                    <CardHeader>
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-center gap-3">
-                          <Avatar className="h-10 w-10">
-                            <AvatarImage
-                              src={application.avatar || "/placeholder.svg"}
-                            />
-                            <AvatarFallback>
-                              {application.user_name.charAt(0)}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div>
-                            <h4 className="font-medium">
-                              {application.user_name}
-                            </h4>
-                            <p className="text-sm text-muted-foreground">
-                              {application.student_id}
-                            </p>
-                          </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+              {filteredApplications.map((application) => (
+                <Card
+                  key={application.application_id}
+                  className="hover:shadow-lg transition-shadow"
+                >
+                  <CardHeader>
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-center gap-3">
+                        <Avatar className="h-10 w-10">
+                          <AvatarImage
+                            src={application.avatar || "/placeholder.svg"}
+                          />
+                          <AvatarFallback>
+                            {application.user_name.charAt(0)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <h4 className="font-medium">
+                            {application.user_name}
+                          </h4>
+                          <p className="text-sm text-muted-foreground">
+                            {application.student_id}
+                          </p>
                         </div>
-                        {/* {application.score && (
+                      </div>
+                      {/* {application.score && (
                         <div className="text-right">
                           <div className="text-lg font-bold text-primary">
                             {application.score}
@@ -1258,96 +1468,96 @@ export function RecruitmentManagement() {
                           </div>
                         </div>
                       )} */}
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <Badge
+                          className={
+                            applicationStatusColors[application.status]
+                          }
+                        >
+                          {applicationStatusLabels[application.status]}
+                        </Badge>
+                        <span className="text-xs text-muted-foreground">
+                          {new Date(
+                            application.submitted_at
+                          ).toLocaleDateString("vi-VN")}
+                        </span>
                       </div>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <Badge
-                            className={
-                              applicationStatusColors[application.status]
-                            }
-                          >
-                            {applicationStatusLabels[application.status]}
-                          </Badge>
-                          <span className="text-xs text-muted-foreground">
-                            {new Date(
-                              application.submitted_at
-                            ).toLocaleDateString("vi-VN")}
-                          </span>
-                        </div>
 
-                        <div className="text-sm">
-                          <div className="text-muted-foreground">Email:</div>
+                      <div className="text-sm">
+                        <div className="text-muted-foreground">Email:</div>
                           <div className="truncate">
                             {application.user_email}
                           </div>
+                      </div>
+
+                      {application.user_phone && (
+                        <div className="text-sm">
+                          <div className="text-muted-foreground">SĐT:</div>
+                          <div>{application.user_phone}</div>
                         </div>
+                      )}
 
-                        {application.user_phone && (
-                          <div className="text-sm">
-                            <div className="text-muted-foreground">SĐT:</div>
-                            <div>{application.user_phone}</div>
-                          </div>
-                        )}
-
-                        {application.notes && (
-                          <div className="text-sm">
+                      {application.notes && (
+                        <div className="text-sm">
                             <div className="text-muted-foreground">
                               Ghi chú:
                             </div>
-                            <div className="text-xs bg-muted/50 rounded p-2">
-                              {application.notes}
-                            </div>
+                          <div className="text-xs bg-muted/50 rounded p-2">
+                            {application.notes}
                           </div>
-                        )}
-
-                        <div className="flex gap-2 pt-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setSelectedApplication(application)}
-                            className="bg-transparent"
-                          >
-                            <Eye className="h-4 w-4 mr-1" />
-                            Xem
-                          </Button>
-                          {application.status === "pending" && (
-                            <>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() =>
-                                  handleUpdateApplicationStatus(
-                                    application.application_id,
-                                    "approved"
-                                  )
-                                }
-                                className="bg-transparent text-green-600 border-green-200 hover:bg-green-50"
-                              >
-                                <CheckCircle className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() =>
-                                  handleUpdateApplicationStatus(
-                                    application.application_id,
-                                    "rejected"
-                                  )
-                                }
-                                className="bg-transparent text-red-600 border-red-200 hover:bg-red-50"
-                              >
-                                <XCircle className="h-4 w-4" />
-                              </Button>
-                            </>
-                          )}
                         </div>
+                      )}
+
+                      <div className="flex gap-2 pt-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setSelectedApplication(application)}
+                          className="bg-transparent"
+                        >
+                          <Eye className="h-4 w-4 mr-1" />
+                          Xem
+                        </Button>
+                        {application.status === "pending" && (
+                          <>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                handleUpdateApplicationStatus(
+                                  application.application_id,
+                                  "approved"
+                                )
+                              }
+                              className="bg-transparent text-green-600 border-green-200 hover:bg-green-50"
+                            >
+                              <CheckCircle className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                handleUpdateApplicationStatus(
+                                  application.application_id,
+                                  "rejected"
+                                )
+                              }
+                              className="bg-transparent text-red-600 border-red-200 hover:bg-red-50"
+                            >
+                              <XCircle className="h-4 w-4" />
+                            </Button>
+                          </>
+                        )}
                       </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
             )}
 
             {!applicationsLoading && filteredApplications.length === 0 && (
@@ -1460,7 +1670,7 @@ export function RecruitmentManagement() {
                             selectedApplication.answers[question.form_id] ? (
                               <a
                                 href={
-                                  selectedApplication.answers[question.form_id]
+                            selectedApplication.answers[question.form_id]
                                 }
                                 target="_blank"
                                 rel="noopener noreferrer"

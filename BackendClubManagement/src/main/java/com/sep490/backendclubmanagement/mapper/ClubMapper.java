@@ -8,6 +8,8 @@ import org.mapstruct.Mapping;
 import org.mapstruct.AfterMapping;
 import org.mapstruct.MappingTarget;
 
+import java.time.LocalDateTime;
+
 @Mapper(componentModel = "spring")
 public interface ClubMapper {
 
@@ -19,6 +21,7 @@ public interface ClubMapper {
     @Mapping(target = "totalMembers", ignore = true)
     @Mapping(target = "totalEvents", ignore = true)
     @Mapping(target = "totalPosts", ignore = true)
+    @Mapping(target = "isRecruiting", ignore = true)
     @Mapping(target = "president", ignore = true)
     ClubDetailData toClubDetailData(Club club);
 
@@ -49,10 +52,32 @@ public interface ClubMapper {
         } else {
             target.setTotalPosts(0L);
         }
+        
+        // Check if club is recruiting
+        target.setIsRecruiting(checkIsRecruiting(source));
 
         // Map president info
         ClubPresidentData presidentData = findClubPresident(source);
         target.setPresident(presidentData);
+    }
+    
+    /**
+     * Check if club has active recruitment
+     */
+    default Boolean checkIsRecruiting(Club club) {
+        if (club.getRecruitments() == null) {
+            return false;
+        }
+        
+        LocalDateTime now = LocalDateTime.now();
+        return club.getRecruitments().stream()
+                .anyMatch(recruitment -> 
+                    recruitment.getStatus() == RecruitmentStatus.OPEN
+                    && recruitment.getStartDate() != null
+                    && recruitment.getEndDate() != null
+                    && !now.isBefore(recruitment.getStartDate())
+                    && !now.isAfter(recruitment.getEndDate())
+                );
     }
 
     /**

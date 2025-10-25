@@ -39,13 +39,14 @@ public class ClubDetailData {
     private Long totalEvents;
     private Long totalPosts;
     
+    // Recruitment info
+    private Boolean isRecruiting; // Câu lạc bộ đang mở đợt tuyển
+    
     // President info
     private ClubPresidentData president;
     
     // Timestamps
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
-
-
 }
 

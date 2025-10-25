@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -15,134 +15,121 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, Send, AlertCircle, CheckCircle } from "lucide-react";
-
-interface FormQuestion {
-  id: string;
-  questionText: string;
-  questionType: "TEXT" | "MCQ" | "CHECKBOX";
-  options?: string[];
-  required: boolean;
-  order: number;
-}
-
-interface ClubInfo {
-  clubId: string;
-  clubName: string;
-  clubImage: string;
-  description: string;
-  requirements: string[];
-  recruitmentTitle: string;
-}
+import { ArrowLeft, Send, AlertCircle, CheckCircle, Loader2 } from "lucide-react";
+import { 
+  getRecruitmentById, 
+  submitApplication, 
+  type RecruitmentData,
+  type ApplicationSubmitRequest 
+} from "@/service/RecruitmentService";
+import { getClubDetailById, type ClubDetailData } from "@/service/ClubService";
 
 interface ClubApplicationFormProps {
-  clubId: string;
+  recruitmentId: number;
   onBack?: () => void;
 }
 
 export function ClubApplicationForm({
-  clubId,
+  recruitmentId,
   onBack,
 }: ClubApplicationFormProps) {
   const [formAnswers, setFormAnswers] = useState<Record<string, any>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
-  const [studentInfo, setStudentInfo] = useState({
-    fullName: "",
-    studentId: "",
-    email: "",
-    phone: "",
-  });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [recruitment, setRecruitment] = useState<RecruitmentData | null>(null);
+  const [club, setClub] = useState<ClubDetailData | null>(null);
 
-  // Mock club data - thay thế bằng API call thực tế
-  const clubInfo: ClubInfo = {
-    clubId: clubId,
-    clubName: "CLB Lập trình FPT",
-    clubImage: "/programming-club.jpg",
-    description:
-      "Câu lạc bộ dành cho những bạn đam mê lập trình, muốn học hỏi và phát triển kỹ năng công nghệ",
-    requirements: [
-      "Sinh viên năm 1-3 tại FPT University",
-      "Có kiến thức cơ bản về lập trình",
-      "Cam kết tham gia hoạt động của CLB",
-      "Sẵn sàng học hỏi và chia sẻ kinh nghiệm",
-    ],
-    recruitmentTitle: "Tuyển thành viên mới - Kỳ 1/2024",
-  };
+  // Fetch recruitment and club data
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        
+        const recruitmentData = await getRecruitmentById(recruitmentId);
+        setRecruitment(recruitmentData);
+        
+        const clubData = await getClubDetailById(recruitmentData.clubId);
+        setClub(clubData);
+      } catch (err) {
+        console.error("Error fetching data:", err);
+        setError("Không thể tải thông tin tuyển dụng");
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  const formQuestions: FormQuestion[] = [
-    {
-      id: "1",
-      questionText: "Tại sao bạn muốn tham gia CLB Lập trình FPT?",
-      questionType: "TEXT",
-      required: true,
-      order: 1,
-    },
-    {
-      id: "2",
-      questionText: "Bạn có kinh nghiệm với ngôn ngữ lập trình nào?",
-      questionType: "MCQ",
-      options: [
-        "JavaScript",
-        "Python",
-        "Java",
-        "C++",
-        "C#",
-        "Chưa có kinh nghiệm",
-      ],
-      required: true,
-      order: 2,
-    },
-    {
-      id: "3",
-      questionText:
-        "Bạn có thể tham gia các hoạt động nào? (Chọn nhiều đáp án)",
-      questionType: "CHECKBOX",
-      options: [
-        "Workshop",
-        "Hackathon",
-        "Dự án nhóm",
-        "Mentoring",
-        "Tổ chức sự kiện",
-      ],
-      required: true,
-      order: 3,
-    },
-    {
-      id: "4",
-      questionText: "Mô tả về bản thân, mục tiêu học tập và kỳ vọng từ CLB",
-      questionType: "TEXT",
-      required: false,
-      order: 4,
-    },
-  ];
+    fetchData();
+  }, [recruitmentId]);
 
   const handleSubmitApplication = async () => {
-    // Validate required fields
-    const requiredQuestions = formQuestions.filter((q) => q.required);
-    const allAnswered = requiredQuestions.every((q) => formAnswers[q.id]);
-    const studentInfoComplete =
-      studentInfo.fullName && studentInfo.studentId && studentInfo.email;
+    if (!recruitment) return;
 
-    if (!allAnswered || !studentInfoComplete) {
-      alert("Vui lòng điền đầy đủ thông tin bắt buộc");
+    // Validate required questions
+    const requiredQuestions = recruitment.questions?.filter(
+      (q) => q.questionType !== "FILE" // Assuming all questions are required
+    ) || [];
+    
+    const allAnswered = requiredQuestions.every((q) => formAnswers[q.id]);
+
+    if (!allAnswered) {
+      alert("Vui lòng trả lời đầy đủ tất cả các câu hỏi");
       return;
     }
 
     setIsSubmitting(true);
 
-    // Simulate API call
-    setTimeout(() => {
-      console.log("[v0] Application submitted:", {
-        clubId,
-        studentInfo,
-        answers: formAnswers,
-      });
-      setIsSubmitting(false);
+    try {
+      // Prepare answers for API
+      const answers = Object.entries(formAnswers).map(([questionId, answer]) => ({
+        questionId: Number(questionId),
+        answerText: Array.isArray(answer) ? answer.join(", ") : String(answer),
+      }));
+
+      const request: ApplicationSubmitRequest = {
+        recruitmentId: recruitment.id,
+        answers,
+      };
+
+      await submitApplication(request);
       setSubmitSuccess(true);
-    }, 1500);
+    } catch (err) {
+      console.error("Error submitting application:", err);
+      alert("Đã có lỗi xảy ra khi gửi đơn ứng tuyển. Vui lòng thử lại.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
+  // Loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-12 w-12 animate-spin mx-auto text-primary mb-4" />
+          <p className="text-muted-foreground">Đang tải thông tin tuyển dụng...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error || !recruitment || !club) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Card className="max-w-md w-full mx-4">
+          <CardContent className="text-center py-12">
+            <p className="text-red-500 mb-4">{error || "Không tìm thấy thông tin tuyển dụng"}</p>
+            <Button onClick={onBack}>Quay lại</Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Success state
   if (submitSuccess) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
@@ -155,7 +142,7 @@ export function ClubApplicationForm({
             </div>
             <h2 className="text-2xl font-bold mb-2">Gửi đơn thành công!</h2>
             <p className="text-muted-foreground mb-6">
-              Đơn ứng tuyển của bạn đã được gửi đến {clubInfo.clubName}. Chúng
+              Đơn ứng tuyển của bạn đã được gửi đến {club.clubName}. Chúng
               tôi sẽ xem xét và liên hệ với bạn trong vòng 3-5 ngày làm việc.
             </p>
             <div className="space-y-2">
@@ -187,7 +174,7 @@ export function ClubApplicationForm({
             )}
             <div>
               <h1 className="text-3xl font-bold">Đơn ứng tuyển</h1>
-              <p className="text-muted-foreground">{clubInfo.clubName}</p>
+              <p className="text-muted-foreground">{club.clubName}</p>
             </div>
           </div>
 
@@ -196,100 +183,28 @@ export function ClubApplicationForm({
             <CardHeader>
               <div className="flex items-start space-x-4">
                 <img
-                  src={clubInfo.clubImage || "/placeholder.svg"}
-                  alt={clubInfo.clubName}
+                  src={club.logoUrl || "/placeholder.svg"}
+                  alt={club.clubName}
                   className="w-20 h-20 rounded-lg object-cover"
                 />
                 <div className="flex-1">
                   <CardTitle className="text-xl">
-                    {clubInfo.recruitmentTitle}
+                    {recruitment.title}
                   </CardTitle>
                   <CardDescription className="mt-2">
-                    {clubInfo.description}
+                    {recruitment.description}
                   </CardDescription>
-                  <div className="mt-4">
-                    <p className="text-sm font-medium mb-2">Yêu cầu:</p>
-                    <ul className="text-sm text-muted-foreground space-y-1">
-                      {clubInfo.requirements.map((req, index) => (
-                        <li key={index} className="flex items-start">
-                          <span className="w-1 h-1 bg-muted-foreground rounded-full mt-2 mr-2 flex-shrink-0"></span>
-                          {req}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
+                  {recruitment.requirements && (
+                    <div className="mt-4">
+                      <p className="text-sm font-medium mb-2">Yêu cầu:</p>
+                      <p className="text-sm text-muted-foreground whitespace-pre-line">
+                        {recruitment.requirements}
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
             </CardHeader>
-          </Card>
-
-          {/* Application Form */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Thông tin cá nhân</CardTitle>
-              <CardDescription>Vui lòng điền thông tin của bạn</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="fullName">
-                    Họ và tên <span className="text-red-500">*</span>
-                  </Label>
-                  <Input
-                    id="fullName"
-                    placeholder="Nhập họ và tên"
-                    value={studentInfo.fullName}
-                    onChange={(e) =>
-                      setStudentInfo({
-                        ...studentInfo,
-                        fullName: e.target.value,
-                      })
-                    }
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="studentId">
-                    Mã sinh viên <span className="text-red-500">*</span>
-                  </Label>
-                  <Input
-                    id="studentId"
-                    placeholder="Ví dụ: SE123456"
-                    value={studentInfo.studentId}
-                    onChange={(e) =>
-                      setStudentInfo({
-                        ...studentInfo,
-                        studentId: e.target.value,
-                      })
-                    }
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="email">
-                    Email <span className="text-red-500">*</span>
-                  </Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="your.email@fpt.edu.vn"
-                    value={studentInfo.email}
-                    onChange={(e) =>
-                      setStudentInfo({ ...studentInfo, email: e.target.value })
-                    }
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="phone">Số điện thoại</Label>
-                  <Input
-                    id="phone"
-                    placeholder="0123456789"
-                    value={studentInfo.phone}
-                    onChange={(e) =>
-                      setStudentInfo({ ...studentInfo, phone: e.target.value })
-                    }
-                  />
-                </div>
-              </div>
-            </CardContent>
           </Card>
 
           {/* Form Questions */}
@@ -301,107 +216,111 @@ export function ClubApplicationForm({
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-8">
-              {formQuestions
-                .sort((a, b) => a.order - b.order)
-                .map((question, index) => (
-                  <div key={question.id} className="space-y-3">
-                    <div className="flex items-start justify-between">
-                      <Label className="text-base font-medium">
-                        {index + 1}. {question.questionText}
-                      </Label>
-                      {question.required && (
+              {recruitment.questions && recruitment.questions.length > 0 ? (
+                recruitment.questions
+                  .sort((a, b) => a.questionOrder - b.questionOrder)
+                  .map((question, index) => (
+                    <div key={question.id} className="space-y-3">
+                      <div className="flex items-start justify-between">
+                        <Label className="text-base font-medium">
+                          {index + 1}. {question.questionText}
+                        </Label>
                         <Badge variant="destructive" className="ml-2">
                           Bắt buộc
                         </Badge>
+                      </div>
+
+                      {question.questionType === "TEXT" && (
+                        <Textarea
+                          placeholder="Nhập câu trả lời của bạn..."
+                          value={formAnswers[question.id] || ""}
+                          onChange={(e) =>
+                            setFormAnswers((prev) => ({
+                              ...prev,
+                              [question.id]: e.target.value,
+                            }))
+                          }
+                          className="min-h-[120px]"
+                        />
+                      )}
+
+                      {question.questionType === "MCQ" && question.options && (
+                        <RadioGroup
+                          value={formAnswers[question.id] || ""}
+                          onValueChange={(value) =>
+                            setFormAnswers((prev) => ({
+                              ...prev,
+                              [question.id]: value,
+                            }))
+                          }
+                        >
+                          {question.options.map((option, optIndex) => (
+                            <div
+                              key={optIndex}
+                              className="flex items-center space-x-2"
+                            >
+                              <RadioGroupItem
+                                value={option}
+                                id={`${question.id}-${optIndex}`}
+                              />
+                              <Label
+                                htmlFor={`${question.id}-${optIndex}`}
+                                className="font-normal cursor-pointer"
+                              >
+                                {option}
+                              </Label>
+                            </div>
+                          ))}
+                        </RadioGroup>
+                      )}
+
+                      {question.questionType === "CHECKBOX" && question.options && (
+                        <div className="space-y-2">
+                          {question.options.map((option, optIndex) => (
+                            <div
+                              key={optIndex}
+                              className="flex items-center space-x-2"
+                            >
+                              <Checkbox
+                                id={`${question.id}-${optIndex}`}
+                                checked={(
+                                  formAnswers[question.id] || []
+                                ).includes(option)}
+                                onCheckedChange={(checked) => {
+                                  const currentAnswers =
+                                    formAnswers[question.id] || [];
+                                  if (checked) {
+                                    setFormAnswers((prev) => ({
+                                      ...prev,
+                                      [question.id]: [...currentAnswers, option],
+                                    }));
+                                  } else {
+                                    setFormAnswers((prev) => ({
+                                      ...prev,
+                                      [question.id]: currentAnswers.filter(
+                                        (a: string) => a !== option
+                                      ),
+                                    }));
+                                  }
+                                }}
+                              />
+                              <Label
+                                htmlFor={`${question.id}-${optIndex}`}
+                                className="font-normal cursor-pointer"
+                              >
+                                {option}
+                              </Label>
+                            </div>
+                          ))}
+                        </div>
                       )}
                     </div>
-
-                    {question.questionType === "TEXT" && (
-                      <Textarea
-                        placeholder="Nhập câu trả lời của bạn..."
-                        value={formAnswers[question.id] || ""}
-                        onChange={(e) =>
-                          setFormAnswers((prev) => ({
-                            ...prev,
-                            [question.id]: e.target.value,
-                          }))
-                        }
-                        className="min-h-[120px]"
-                      />
-                    )}
-
-                    {question.questionType === "MCQ" && (
-                      <RadioGroup
-                        value={formAnswers[question.id] || ""}
-                        onValueChange={(value) =>
-                          setFormAnswers((prev) => ({
-                            ...prev,
-                            [question.id]: value,
-                          }))
-                        }
-                      >
-                        {question.options?.map((option, optIndex) => (
-                          <div
-                            key={optIndex}
-                            className="flex items-center space-x-2"
-                          >
-                            <RadioGroupItem
-                              value={option}
-                              id={`${question.id}-${optIndex}`}
-                            />
-                            <Label
-                              htmlFor={`${question.id}-${optIndex}`}
-                              className="font-normal cursor-pointer"
-                            >
-                              {option}
-                            </Label>
-                          </div>
-                        ))}
-                      </RadioGroup>
-                    )}
-
-                    {question.questionType === "CHECKBOX" && (
-                      <div className="space-y-2">
-                        {question.options?.map((option, optIndex) => (
-                          <div
-                            key={optIndex}
-                            className="flex items-center space-x-2"
-                          >
-                            <Checkbox
-                              id={`${question.id}-${optIndex}`}
-                              checked={(
-                                formAnswers[question.id] || []
-                              ).includes(option)}
-                              onCheckedChange={(checked) => {
-                                const currentAnswers =
-                                  formAnswers[question.id] || [];
-                                if (checked) {
-                                  setFormAnswers((prev) => ({
-                                    ...prev,
-                                    [question.id]: [...currentAnswers, option],
-                                  }));
-                                } else {
-                                  setFormAnswers((prev) => ({
-                                    ...prev,
-                                    [question.id]: currentAnswers.filter(
-                                      (a: string) => a !== option
-                                    ),
-                                  }));
-                                }
-                              }}
-                            />
-                            <Label
-                              htmlFor={`${question.id}-${optIndex}`}
-                              className="font-normal cursor-pointer"
-                            >
-                              {option}
-                            </Label>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ))}
+                  ))
+              ) : (
+                <p className="text-muted-foreground text-center py-8">
+                  Không có câu hỏi nào cho đợt tuyển dụng này.
+                </p>
+              )}
 
               {/* Info Box */}
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-start gap-3">

@@ -17,6 +17,8 @@ public interface ClubRepository extends JpaRepository<Club, Long> {
             "LEFT JOIN FETCH cm.user " +
             "LEFT JOIN FETCH cm.roleMemberships rm " +
             "LEFT JOIN FETCH rm.clubRole " +
+            "LEFT JOIN FETCH rm.semester " +
+            "LEFT JOIN FETCH c.recruitments " +
             "WHERE c.id = :id")
     Optional<Club> findByIdWithDetails(@Param("id") Long id);
 
@@ -27,6 +29,8 @@ public interface ClubRepository extends JpaRepository<Club, Long> {
             "LEFT JOIN FETCH cm.user " +
             "LEFT JOIN FETCH cm.roleMemberships rm " +
             "LEFT JOIN FETCH rm.clubRole " +
+            "LEFT JOIN FETCH rm.semester " +
+            "LEFT JOIN FETCH c.recruitments " +
             "WHERE c.clubCode = :clubCode")
     Optional<Club> findByClubCodeWithDetails(@Param("clubCode") String clubCode);
 }

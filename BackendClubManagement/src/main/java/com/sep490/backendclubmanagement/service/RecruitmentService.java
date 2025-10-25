@@ -17,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -180,25 +181,52 @@ public class RecruitmentService implements RecruitmentServiceInterface {
     private void upsertQuestions(Recruitment recruitment, List<RecruitmentQuestionRequest> reqs) {
         if (reqs == null) return;
         
-        // Delete all existing questions and their options
+        // Get existing questions
         List<RecruitmentFormQuestion> existingQuestions = questionRepository.findByRecruitment_IdOrderByQuestionOrderAsc(recruitment.getId());
-        for (RecruitmentFormQuestion question : existingQuestions) {
-            // Delete options first
-            questionOptionRepository.findByQuestion_IdOrderByOptionOrderAsc(question.getId())
-                    .forEach(option -> questionOptionRepository.deleteById(option.getId()));
-            // Then delete question
-            questionRepository.deleteById(question.getId());
+        
+        // Collect IDs of questions that should be kept
+        Set<Long> requestedQuestionIds = reqs.stream()
+                .map(q -> q.id)
+                .filter(id -> id != null)
+                .collect(java.util.stream.Collectors.toSet());
+        
+        // Delete questions that are not in the request (orphaned questions)
+        for (RecruitmentFormQuestion existingQuestion : existingQuestions) {
+            if (!requestedQuestionIds.contains(existingQuestion.getId())) {
+                // Delete options first
+                questionOptionRepository.findByQuestion_IdOrderByOptionOrderAsc(existingQuestion.getId())
+                        .forEach(option -> questionOptionRepository.deleteById(option.getId()));
+                // Then delete question
+                questionRepository.deleteById(existingQuestion.getId());
+            }
         }
 
-        // Create new questions with options
+        // Create or update questions
         for (RecruitmentQuestionRequest q : reqs) {
-            RecruitmentFormQuestion entity = RecruitmentFormQuestion.builder()
-                    .questionText(q.questionText)
-                    .questionType(q.questionType)
-                    .questionOrder(q.questionOrder)
-                    .recruitment(recruitment)
-                    .build();
-            entity = questionRepository.save(entity);
+            RecruitmentFormQuestion entity;
+            
+            if (q.id != null) {
+                // UPDATE existing question
+                entity = questionRepository.findById(q.id)
+                        .orElseThrow(() -> new RuntimeException("Question not found: " + q.id));
+                entity.setQuestionText(q.questionText);
+                entity.setQuestionType(q.questionType);
+                entity.setQuestionOrder(q.questionOrder);
+                entity = questionRepository.save(entity);
+                
+                // Delete old options and create new ones
+                questionOptionRepository.findByQuestion_IdOrderByOptionOrderAsc(entity.getId())
+                        .forEach(option -> questionOptionRepository.deleteById(option.getId()));
+            } else {
+                // CREATE new question
+                entity = RecruitmentFormQuestion.builder()
+                        .questionText(q.questionText)
+                        .questionType(q.questionType)
+                        .questionOrder(q.questionOrder)
+                        .recruitment(recruitment)
+                        .build();
+                entity = questionRepository.save(entity);
+            }
             
             // Save question options if provided
             if (q.options != null && !q.options.isEmpty()) {

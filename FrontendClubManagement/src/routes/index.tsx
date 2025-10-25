@@ -39,7 +39,7 @@ export const router = createBrowserRouter([
     element: <StudentRecruitment />,
   },
   {
-    path: "clubDetail",
+    path: "clubDetail/:clubId",
     element: <ClubDetail />,
   },
   {

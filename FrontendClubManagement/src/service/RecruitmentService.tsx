@@ -29,7 +29,7 @@ export interface RecruitmentData {
   startDate: string; // ISO string
   endDate: string;   // ISO string
   maxApplicants?: number;
-  status: "DRAFT" | "ACTIVE" | "CLOSED" | "COMPLETED";
+  status: "DRAFT" | "OPEN" | "CLOSED" | "CANCELLED";
   requirements?: string;
   clubId: number;
   questions?: RecruitmentQuestionData[];
@@ -66,7 +66,7 @@ export interface ApplicationAnswerData {
 }
 
 export interface RecruitmentFilterRequest {
-  status?: "DRAFT" | "ACTIVE" | "CLOSED" | "COMPLETED";
+  status?: "DRAFT" | "OPEN" | "CLOSED" | "CANCELLED";
   page?: number;
   size?: number;
   sort?: string;
@@ -164,7 +164,7 @@ export async function createRecruitment(
 // Update recruitment
 export async function updateRecruitment(
   id: number,
-  data: Partial<RecruitmentData>
+  data: RecruitmentCreateRequest
 ): Promise<RecruitmentData> {
   const res = await axiosClient.put<RecruitmentData>(
     `/recruitments/${id}`,
@@ -177,7 +177,7 @@ export async function updateRecruitment(
 // Change recruitment status
 export async function changeRecruitmentStatus(
   id: number,
-  status: "DRAFT" | "ACTIVE" | "CLOSED" | "COMPLETED"
+  status: "DRAFT" | "OPEN" | "CLOSED" | "CANCELLED"
 ): Promise<void> {
   await axiosClient.patch<void>(
     `/recruitments/${id}/status?status=${status}`
@@ -187,5 +187,29 @@ export async function changeRecruitmentStatus(
 // Delete recruitment
 export async function deleteRecruitment(id: number): Promise<void> {
   await axiosClient.delete<void>(`/recruitments/${id}`);
+}
+
+// Submit application
+export interface FormAnswerRequest {
+  questionId: number;
+  answerText?: string;
+  fileUrl?: string;
+}
+
+export interface ApplicationSubmitRequest {
+  recruitmentId: number;
+  teamId?: number;
+  answers: FormAnswerRequest[];
+}
+
+export async function submitApplication(
+  request: ApplicationSubmitRequest
+): Promise<RecruitmentApplicationData> {
+  const res = await axiosClient.post<RecruitmentApplicationData>(
+    `/recruitments/applications/submit`,
+    request
+  );
+  if (!res.data) throw new Error("Failed to submit application");
+  return res.data;
 }
 
