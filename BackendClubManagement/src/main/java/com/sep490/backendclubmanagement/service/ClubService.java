@@ -1,7 +1,8 @@
 package com.sep490.backendclubmanagement.service;
 
 import com.sep490.backendclubmanagement.dto.response.ClubDetailData;
-import com.sep490.backendclubmanagement.entity.Club;
+import com.sep490.backendclubmanagement.dto.response.ClubPresidentData;
+import com.sep490.backendclubmanagement.entity.*;
 import com.sep490.backendclubmanagement.exception.AppException;
 import com.sep490.backendclubmanagement.exception.ErrorCode;
 import com.sep490.backendclubmanagement.mapper.ClubMapper;
@@ -24,8 +25,14 @@ public class ClubService implements ClubServiceInterface {
     public ClubDetailData getClubDetail(Long clubId) throws AppException {
         Club club = clubRepository.findByIdWithDetails(clubId)
                 .orElseThrow(() -> new AppException(ErrorCode.CLUB_NOT_FOUND));
-
-        return clubMapper.toClubDetailData(club);
+        
+        ClubDetailData result = clubMapper.toClubDetailData(club);
+        
+        // Find president manually and set to result
+        ClubPresidentData president = findClubPresidentManually(club);
+        result.setPresident(president);
+        
+        return result;
     }
 
     @Override
@@ -33,8 +40,49 @@ public class ClubService implements ClubServiceInterface {
     public ClubDetailData getClubDetailByCode(String clubCode) throws AppException {
         Club club = clubRepository.findByClubCodeWithDetails(clubCode)
                 .orElseThrow(() -> new AppException(ErrorCode.CLUB_NOT_FOUND));
+        
+        ClubDetailData result = clubMapper.toClubDetailData(club);
+        
+        // Find president manually and set to result
+        ClubPresidentData president = findClubPresidentManually(club);
+        result.setPresident(president);
+        
+        return result;
+    }
+    
+    /**
+     * Find club president for current semester
+     */
+    private ClubPresidentData findClubPresidentManually(Club club) {
+        if (club.getClubMemberships() == null) {
+            return null;
+        }
 
-        return clubMapper.toClubDetailData(club);
+        for (ClubMemberShip membership : club.getClubMemberships()) {
+            if (membership.getRoleMemberships() == null) {
+                continue;
+            }
+
+            for (RoleMemberShip roleMembership : membership.getRoleMemberships()) {
+                if (roleMembership.getClubRole() != null 
+                    && "CLUB_PRESIDENT".equals(roleMembership.getClubRole().getRoleCode())
+                    && Boolean.TRUE.equals(roleMembership.getIsActive())
+                    && roleMembership.getSemester() != null
+                    && Boolean.TRUE.equals(roleMembership.getSemester().getIsCurrent())) {
+                    
+                    User user = membership.getUser();
+                    if (user != null) {
+                        return ClubPresidentData.builder()
+                                .fullName(user.getFullName())
+                                .email(user.getEmail())
+                                .avatarUrl(user.getAvatarUrl())
+                                .build();
+                    }
+                }
+            }
+        }
+
+        return null;
     }
 }
 

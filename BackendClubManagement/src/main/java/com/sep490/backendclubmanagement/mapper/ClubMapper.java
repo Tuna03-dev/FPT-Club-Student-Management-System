@@ -22,14 +22,9 @@ public interface ClubMapper {
     @Mapping(target = "president", ignore = true)
     ClubDetailData toClubDetailData(Club club);
 
-    @Mapping(source = "user.id", target = "userId")
     @Mapping(source = "user.fullName", target = "fullName")
     @Mapping(source = "user.email", target = "email")
-    @Mapping(source = "user.phoneNumber", target = "phoneNumber")
-    @Mapping(source = "user.studentCode", target = "studentCode")
     @Mapping(source = "user.avatarUrl", target = "avatarUrl")
-    @Mapping(source = "joinDate", target = "joinDate")
-    @Mapping(target = "roleName", ignore = true)
     ClubPresidentData toPresidentData(ClubMemberShip membership);
 
     @AfterMapping
@@ -61,36 +56,33 @@ public interface ClubMapper {
     }
 
     /**
-     * Find club president (CLUB_PRESIDENT role)
+     * Find club president (CLUB_PRESIDENT role) for current semester
      */
     default ClubPresidentData findClubPresident(Club club) {
         if (club.getClubMemberships() == null) {
             return null;
         }
 
-        // Find president from club memberships
+        // Find president from club memberships for current semester
         for (ClubMemberShip membership : club.getClubMemberships()) {
             if (membership.getRoleMemberships() == null) {
                 continue;
             }
 
             for (RoleMemberShip roleMembership : membership.getRoleMemberships()) {
-                // Check if this role is CLUB_PRESIDENT and is active
+                // Check if this role is CLUB_PRESIDENT, is active, and belongs to current semester
                 if (roleMembership.getClubRole() != null 
                     && "CLUB_PRESIDENT".equals(roleMembership.getClubRole().getRoleCode())
-                    && Boolean.TRUE.equals(roleMembership.getIsActive())) {
+                    && Boolean.TRUE.equals(roleMembership.getIsActive())
+                    && roleMembership.getSemester() != null
+                    && Boolean.TRUE.equals(roleMembership.getSemester().getIsCurrent())) {
                     
                     User user = membership.getUser();
                     if (user != null) {
                         return ClubPresidentData.builder()
-                                .userId(user.getId())
                                 .fullName(user.getFullName())
                                 .email(user.getEmail())
-                                .phoneNumber(user.getPhoneNumber())
-                                .studentCode(user.getStudentCode())
                                 .avatarUrl(user.getAvatarUrl())
-                                .joinDate(membership.getJoinDate())
-                                .roleName(roleMembership.getClubRole().getRoleName())
                                 .build();
                     }
                 }
