@@ -38,7 +38,7 @@ public class SecurityConfig {
             "/login/**",
             "/api/homepage",
             "/test/**",
-            "/posts/**"
+            "/api/posts/**"
 
     };
     
