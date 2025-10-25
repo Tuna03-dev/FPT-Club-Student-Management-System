@@ -1,5 +1,3 @@
-"use client"
-
 import { useState, useEffect } from "react"
 import { Search, Calendar, ArrowRight } from "lucide-react"
 import { Input } from "@/components/ui/input"
