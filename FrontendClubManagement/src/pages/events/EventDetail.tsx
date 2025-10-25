@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { ArrowLeft, MapPin, Clock, Heart, ChevronLeft, ChevronRight, Facebook, Phone } from "lucide-react"
+import { MapPin, Clock, ChevronLeft, ChevronRight, Facebook, Phone } from "lucide-react"
 import { Link, useParams } from "react-router-dom"
 import { getEventById, computeEventStatus, type EventData } from "@/service/EventService"
 
@@ -10,7 +10,6 @@ export default function EventDetailPage() {
   const [event, setEvent] = useState<EventData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string>("")
-  const [isLiked, setIsLiked] = useState(false)
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
 
   useEffect(() => {
@@ -79,18 +78,6 @@ export default function EventDetailPage() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      {/* Header */}
-      <header className="sticky top-0 z-50 bg-white border-b border-border">
-        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
-          <Link to="/events" className="flex items-center gap-2 text-foreground hover:text-primary transition-colors">
-            <ArrowLeft className="w-5 h-5" />
-            <span className="text-sm font-medium">Quay lại</span>
-          </Link>
-          <button onClick={() => setIsLiked(!isLiked)} className="p-2 hover:bg-secondary rounded-lg transition-colors">
-            <Heart className={`w-5 h-5 ${isLiked ? "fill-primary text-primary" : "text-foreground"}`} />
-          </button>
-        </div>
-      </header>
 
       {/* Main Content */}
       <main className="flex-1 max-w-5xl mx-auto w-full px-4 py-6">
@@ -202,38 +189,7 @@ export default function EventDetailPage() {
         </div>
       </main>
 
-      <footer className="border-t border-border bg-card/30 py-8">
-        <div className="max-w-5xl mx-auto px-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-            <div>
-              <h3 className="font-bold mb-2">Về chúng tôi</h3>
-              <p className="text-sm opacity-90">Nền tảng quản lý câu lạc bộ sinh viên FPT</p>
-            </div>
-            <div>
-              <h3 className="font-bold mb-2">Liên kết nhanh</h3>
-              <ul className="text-sm space-y-1 opacity-90">
-                <li>
-                  <Link to="/events" className="hover:opacity-100">
-                    Sự kiện
-                  </Link>
-                </li>
-                <li>
-                  <Link to="/clubs" className="hover:opacity-100">
-                    Câu lạc bộ
-                  </Link>
-                </li>
-              </ul>
-            </div>
-            <div>
-              <h3 className="font-bold mb-2">Liên hệ</h3>
-              <p className="text-sm opacity-90">Email: info@fpt.edu.vn</p>
-            </div>
-          </div>
-          <div className="border-t border-background/20 pt-4 text-center text-sm opacity-75">
-            <p>&copy; 2025 FPT University Clubs. All rights reserved.</p>
-          </div>
-        </div>
-      </footer>
+      
     </div>
     )
 }

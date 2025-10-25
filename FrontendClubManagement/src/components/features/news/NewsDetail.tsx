@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Calendar, Tag, ArrowLeft, Heart, Facebook, Phone } from "lucide-react"
+import { Calendar, Tag, Facebook, Phone } from "lucide-react"
 import { Link } from "react-router-dom"
 import { getNewsById, type NewsData } from "@/service/NewsService"
 
@@ -13,7 +13,6 @@ export function NewsDetail({ newsId }: NewsDetailProps) {
   const [news, setNews] = useState<NewsData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string>("")
-  const [isLiked, setIsLiked] = useState(false)
 
   useEffect(() => {
     const fetchNews = async () => {
@@ -70,17 +69,6 @@ export function NewsDetail({ newsId }: NewsDetailProps) {
   return (
     <main className="min-h-screen bg-background flex flex-col">
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-white border-b border-border">
-        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
-          <Link to="/news" className="flex items-center gap-2 text-foreground hover:text-primary transition-colors">
-            <ArrowLeft className="w-5 h-5" />
-            <span className="text-sm font-medium">Quay lại</span>
-          </Link>
-          <button onClick={() => setIsLiked(!isLiked)} className="p-2 hover:bg-secondary rounded-lg transition-colors">
-            <Heart className={`w-5 h-5 ${isLiked ? "fill-primary text-primary" : "text-foreground"}`} />
-          </button>
-        </div>
-      </header>
 
       {/* Main content */}
       <div className="flex-1 max-w-4xl mx-auto px-4 py-8 w-full">
@@ -146,57 +134,6 @@ export function NewsDetail({ newsId }: NewsDetailProps) {
           </div>
         </div>
       </div>
-
-      <footer className="border-t border-border bg-card/30 py-8">
-        <div className="max-w-4xl mx-auto px-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {/* About section */}
-            <div>
-              <h3 className="font-semibold text-lg mb-3">Về FPT University</h3>
-              <p className="text-sm opacity-90">
-                Hệ thống quản lý câu lạc bộ của Đại học FPT, nơi kết nối các câu lạc bộ và sinh viên.
-              </p>
-            </div>
-
-            {/* Quick links */}
-            <div>
-              <h3 className="font-semibold text-lg mb-3">Liên kết nhanh</h3>
-              <ul className="space-y-2 text-sm">
-                <li>
-                  <Link to="/news" className="opacity-90 hover:opacity-100 transition-opacity">
-                    Tin tức
-                  </Link>
-                </li>
-                <li>
-                  <Link to="/events" className="opacity-90 hover:opacity-100 transition-opacity">
-                    Sự kiện
-                  </Link>
-                </li>
-                <li>
-                  <Link to="/clubs" className="opacity-90 hover:opacity-100 transition-opacity">
-                    Câu lạc bộ
-                  </Link>
-                </li>
-              </ul>
-            </div>
-
-            {/* Contact section */}
-            <div>
-              <h3 className="font-semibold text-lg mb-3">Liên hệ</h3>
-              <ul className="space-y-2 text-sm">
-                <li>Email: clubs@fpt.edu.vn</li>
-                <li>Điện thoại: (028) 7300 1000</li>
-                <li>Địa chỉ: Khu Công nghệ cao Hòa Lạc, Hà Nội</li>
-              </ul>
-            </div>
-          </div>
-
-          {/* Footer bottom */}
-          <div className="border-t border-background/20 mt-8 pt-8 text-center text-sm opacity-75">
-            <p>&copy; 2025 FPT University Club Management System. All rights reserved.</p>
-          </div>
-        </div>
-      </footer>
     </main>
   )
 }

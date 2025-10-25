@@ -87,74 +87,55 @@ export default function NewsPageList() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-50">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
-                <span className="text-primary-foreground font-bold text-lg">FPT</span>
-              </div>
-              <div>
-                <h1 className="text-xl font-bold text-foreground">FPT Club</h1>
-                <p className="text-xs text-muted-foreground">Quản lý câu lạc bộ</p>
-              </div>
-            </div>
-            <Button variant="outline" className="hidden md:flex bg-transparent">
-              Đăng nhập
-            </Button>
-          </div>
-        </div>
-      </header>
-
       {/* Hero Section */}
-      <section className="bg-gradient-to-br from-primary/10 via-accent/20 to-secondary/10 py-16 md:py-24">
+      <section className="bg-gradient-to-br from-primary/10 via-accent/20 to-secondary/10 py-8 md:py-12">
         <div className="container mx-auto px-4">
           <div className="max-w-3xl mx-auto text-center">
-            <Badge className="mb-4 bg-primary/20 text-primary border-primary/30">Tin tức & Sự kiện</Badge>
-            <h1 className="text-4xl md:text-6xl font-bold text-foreground mb-6 text-balance">
+            <Badge className="mb-3 bg-primary/20 text-primary border-primary/30">Tin tức & Sự kiện</Badge>
+            <h1 className="text-3xl md:text-5xl font-bold text-foreground mb-4 text-balance">
               Cập nhật tin tức mới nhất
             </h1>
-            <p className="text-lg md:text-xl text-muted-foreground text-pretty">
+            <p className="text-base md:text-lg text-muted-foreground text-pretty">
               Khám phá các hoạt động, sự kiện và thông báo từ các câu lạc bộ tại FPT University
             </p>
           </div>
         </div>
       </section>
 
-      {/* Search Section */}
-      <section className="py-8 border-b border-border bg-card/30">
+      {/* Search and Filters Section */}
+      <section className="py-4 border-b border-border bg-card/30">
         <div className="container mx-auto px-4">
-          <div className="max-w-2xl mx-auto">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-              <Input
-                type="text"
-                placeholder="Tìm kiếm tin tức..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 h-12 bg-background"
-              />
+          <div className="max-w-4xl mx-auto">
+            <div className="flex flex-col sm:flex-row gap-4 items-end">
+              {/* Search */}
+              <div className="flex-1 max-w-md">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                  <Input
+                    type="text"
+                    placeholder="Tìm kiếm tin tức..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-10 h-12 bg-background"
+                  />
+                </div>
+              </div>
+              
+              {/* Club Filter */}
+              <div className="w-full sm:w-auto">
+                <NewsFilters
+                  clubs={clubs}
+                  selectedClubId={selectedClubId}
+                  onClubChange={setSelectedClubId}
+                />
+              </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Filters */}
-      <section className="py-8 border-b border-border bg-card/30">
-        <div className="container mx-auto px-4">
-          <div className="max-w-4xl mx-auto">
-            <NewsFilters
-              clubs={clubs}
-              selectedClubId={selectedClubId}
-              onClubChange={setSelectedClubId}
-            />
-          </div>
-        </div>
-      </section>
-
       {/* News Grid */}
-      <section className="py-12 md:py-16">
+      <section className="py-6 md:py-8">
         <div className="container mx-auto px-4">
           {/* News Info */}
           <div className="mb-8">
@@ -294,15 +275,6 @@ export default function NewsPageList() {
           )}
         </div>
       </section>
-
-      {/* Footer */}
-      <footer className="border-t border-border bg-card/30 py-8">
-        <div className="container mx-auto px-4">
-          <div className="text-center text-muted-foreground">
-            <p className="text-sm">© 2025 FPT University Club Management. All rights reserved.</p>
-          </div>
-        </div>
-      </footer>
     </div>
   )
 }

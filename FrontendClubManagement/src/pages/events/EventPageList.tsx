@@ -102,38 +102,6 @@ export function EventsPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-50">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
-                <span className="text-primary-foreground font-bold text-lg">FPT</span>
-              </div>
-              <div>
-                <h1 className="text-xl font-bold text-foreground">FPT Club Management</h1>
-                <p className="text-sm text-muted-foreground">Quản lý câu lạc bộ sinh viên</p>
-              </div>
-            </div>
-            <nav className="hidden md:flex items-center gap-6">
-              <a href="#" className="text-sm font-medium text-foreground hover:text-primary transition-colors">
-                Trang chủ
-              </a>
-              <a href="#" className="text-sm font-medium text-primary">
-                Sự kiện
-              </a>
-              <a href="#" className="text-sm font-medium text-foreground hover:text-primary transition-colors">
-                Câu lạc bộ
-              </a>
-              <a href="#" className="text-sm font-medium text-foreground hover:text-primary transition-colors">
-                Liên hệ
-              </a>
-            </nav>
-            <Button className="hidden md:flex">Đăng nhập</Button>
-          </div>
-        </div>
-      </header>
-
       {/* Hero Section */}
       <section className="bg-gradient-to-br from-primary/10 via-accent/20 to-background border-b border-border">
         <div className="container mx-auto px-4 py-16">
@@ -264,14 +232,6 @@ export function EventsPage() {
             <p className="text-muted-foreground">Thử thay đổi bộ lọc hoặc từ khóa tìm kiếm</p>
           </div>
         )}
-          {/* Footer */}
-      <footer className="border-t border-border bg-card/30 py-8">
-        <div className="container mx-auto px-4">
-          <div className="text-center text-muted-foreground">
-            <p className="text-sm">© 2025 FPT University Club Management. All rights reserved.</p>
-          </div>
-        </div>
-      </footer>
       </div>
     </div>
   )

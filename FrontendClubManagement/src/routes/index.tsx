@@ -4,7 +4,7 @@ import HomePage from "../pages/HomePage";
 import { ClubLayout } from "@/layouts/ClubLayout";
 
 import { Dashboard } from "@/pages/myclub/Dashboard";
-import { MemberList } from "@/pages/myclub/members/MemberList";
+import  MemberList  from "@/pages/myclub/members/MemberList";
 import { EventList } from "@/pages/myclub/events/EventList";
 import { Notifications } from "@/pages/myclub/Notifications";
 import { Settings } from "@/pages/myclub/Settings";
@@ -30,11 +30,29 @@ export const router = createBrowserRouter([
       },
       {
         path: "events",
-        element: <div className="container mx-auto px-4 py-8">Trang Sự Kiện</div>,
+        children: [
+          {
+            index: true,
+            element: <EventsPage />,
+          },
+          {
+            path: ":id",
+            element: <EventDetailPage />,
+          },
+        ],
       },
       {
         path: "news",
-        element: <div className="container mx-auto px-4 py-8">Trang Tin Tức</div>,
+        children: [
+          {
+            index: true,
+            element: <NewsPageList />,
+          },
+          {
+            path: ":id",
+            element: <NewsPageDetail />,
+          },
+        ],
       },
       {
         path: "clubs",
@@ -53,22 +71,6 @@ export const router = createBrowserRouter([
         element: <Navigate to="/myclub" replace />,
       },
     ],
-  },
-  {
-    path: "/events",
-    element: <EventsPage />,
-  },
-  {
-    path: "/events/:id",
-    element: <EventDetailPage />,
-  },
-  {
-    path: "/news",
-    element: <NewsPageList />,
-  },
-  {
-    path: "/news/:id",
-    element: <NewsPageDetail />,
   },
   {
     path: "/login",
