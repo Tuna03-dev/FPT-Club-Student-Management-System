@@ -47,5 +47,31 @@ public interface PostRepository extends JpaRepository<Post, Long> {
             @Param("status") String status,
             Pageable pageable
     );
+    //Search
+    @EntityGraph(attributePaths = {
+            "club", "createdBy", "team",
+            "comments", "comments.user",
+            "likes", "likes.user",
+            "postMedia"
+    })
+    @Query("""
+           select p from Post p
+           where (:clubId is null or p.club.id = :clubId)
+             and (:teamId is null or p.team.id = :teamId)
+             and (:clubWide is null or p.IsClubWide = :clubWide)
+             and p.status = :status
+             and (
+                   lower(p.title)   like lower(concat('%', :q, '%'))
+                or lower(p.content) like lower(concat('%', :q, '%'))
+             )
+           """)
+    Page<Post> searchPosts(
+            @Param("clubId")   Long clubId,          // null => bỏ lọc
+            @Param("teamId")   Long teamId,          // null => bỏ lọc
+            @Param("clubWide") Boolean clubWide,     // null => bỏ lọc
+            @Param("status")   String status,        // ví dụ: "PUBLISHED"
+            @Param("q")        String q,             // từ khóa
+            Pageable pageable
+    );
 
 }

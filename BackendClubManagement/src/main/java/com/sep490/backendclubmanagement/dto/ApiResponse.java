@@ -46,4 +46,13 @@ public class ApiResponse<T> {
                 .errors(errors)
                 .build();
     }
+    public static <T> ApiResponse<T> error(ErrorCode errorCode, String customMessage, List<FieldError> errors) {
+        return ApiResponse.<T>builder()
+                .code(errorCode.getCode())
+                .message(customMessage != null ? customMessage : errorCode.getMessage())
+                .timestamp(Instant.now())
+                .errors(errors)
+                .build();
+    }
+
 }

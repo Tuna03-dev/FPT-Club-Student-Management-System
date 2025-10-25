@@ -5,6 +5,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.mapstruct.Builder;
 
+import java.time.LocalDateTime;
+
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
@@ -16,4 +18,6 @@ public class NewsData {
     private String newsType;
     private boolean isDraft;
     private Long clubId;
+    private String clubName;
+    private String updatedAt;
 }
