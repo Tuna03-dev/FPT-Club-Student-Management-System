@@ -20,7 +20,7 @@ public interface ClubRepository extends JpaRepository<Club, Long> {
             c.id, c.clubName, c.logoUrl, c.description
         )
         FROM Club c
-        WHERE c.isFeatured = true
+        WHERE c.isFeatured = true   
     """)
     List<FeaturedClubDTO> findFeaturedClubs();
 
