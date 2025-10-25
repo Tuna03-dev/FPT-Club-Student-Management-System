@@ -6,15 +6,22 @@ import com.sep490.backendclubmanagement.entity.ClubMemberShipStatus;
 import org.springframework.data.domain.Pageable;
 
 public interface MemberService {
-    PageResponse<MemberResponse> getMembersByClub(Long clubId, Pageable pageable);
     
     // Consolidated method for all filtering needs
     PageResponse<MemberResponse> getMembersWithFilters(
         Long clubId, 
         ClubMemberShipStatus status, 
         Long semesterId, 
-        Long roleId, 
+        Long roleId,
+        Boolean isActive,
         String searchTerm, 
+        Pageable pageable
+    );
+    
+    // Dedicated method for filtering left members
+    PageResponse<MemberResponse> getLeftMembers(
+        Long clubId,
+        String searchTerm,
         Pageable pageable
     );
 }

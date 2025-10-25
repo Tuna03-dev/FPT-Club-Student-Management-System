@@ -24,12 +24,13 @@ public class MemberController {
             @RequestParam(defaultValue = "ACTIVE") String status, // "ACTIVE" or "LEFT"
             @RequestParam(required = false) Long semesterId, // Filter by semester
             @RequestParam(required = false) Long roleId, // Filter by club role
+            @RequestParam(defaultValue = "true") Boolean isActive, // Filter by role membership active status (default: true)
             @RequestParam(required = false) String searchTerm, // Search by name or student code
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
-        
+
         Pageable pageable = PageRequest.of(page, size);
-        
+
         ClubMemberShipStatus memberStatus = null;
         if (status != null && !status.isEmpty()) {
             try {
@@ -38,10 +39,26 @@ public class MemberController {
                 // Invalid status, will be treated as null (no filter)
             }
         }
-        
+
         PageResponse<MemberResponse> result = memberService.getMembersWithFilters(
-                clubId, memberStatus, semesterId, roleId, searchTerm, pageable);
-        
+                clubId, memberStatus, semesterId, roleId, isActive, searchTerm, pageable);
+
+        return ApiResponse.success(result);
+    }
+
+    // Dedicated endpoint for left members
+    @GetMapping("/{clubId}/members/left")
+    public ApiResponse<PageResponse<MemberResponse>> getLeftMembers(
+            @PathVariable Long clubId,
+            @RequestParam(required = false) String searchTerm, // Search by name or student code
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+
+        Pageable pageable = PageRequest.of(page, size);
+
+        PageResponse<MemberResponse> result = memberService.getLeftMembers(
+                clubId, searchTerm, pageable);
+
         return ApiResponse.success(result);
     }
 }

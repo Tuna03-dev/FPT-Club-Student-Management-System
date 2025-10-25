@@ -56,8 +56,10 @@ export interface MemberResponseDTO {
 
 export interface GetMembersParams {
   status?: string; // ACTIVE | LEFT
-  semesterId?: number;
+  // backend may accept numeric id or semester code string
+  semesterId?: number | string;
   roleId?: number;
+  isActive?: boolean; // true for active members, false for inactive members
   searchTerm?: string;
   page?: number;
   size?: number;
@@ -73,11 +75,30 @@ export const memberService = {
     if (params.semesterId != null)
       query.set("semesterId", String(params.semesterId));
     if (params.roleId != null) query.set("roleId", String(params.roleId));
+    if (params.isActive !== undefined)
+      query.set("isActive", String(params.isActive));
     if (params.searchTerm) query.set("searchTerm", params.searchTerm);
     query.set("page", String(params.page ?? 0));
     query.set("size", String(params.size ?? 10));
 
     const url = `/clubs/${clubId}/members?${query.toString()}`;
+    return axiosClient.get<PageResponse<MemberResponseDTO>>(url);
+  },
+
+  async getLeftMembers(
+    clubId: number,
+    params: {
+      searchTerm?: string;
+      page?: number;
+      size?: number;
+    } = {}
+  ): Promise<ApiResponse<PageResponse<MemberResponseDTO>>> {
+    const query = new URLSearchParams();
+    if (params.searchTerm) query.set("searchTerm", params.searchTerm);
+    query.set("page", String(params.page ?? 0));
+    query.set("size", String(params.size ?? 10));
+
+    const url = `/clubs/${clubId}/members/left?${query.toString()}`;
     return axiosClient.get<PageResponse<MemberResponseDTO>>(url);
   },
   async changeRole(clubId: number, userId: number, roleId: number) {

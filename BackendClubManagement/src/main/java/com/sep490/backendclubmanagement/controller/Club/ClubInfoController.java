@@ -31,3 +31,4 @@ public class ClubInfoController {
         return ApiResponse.success(clubRoles);
     }
 }
+

@@ -12,6 +12,7 @@ import com.sep490.backendclubmanagement.entity.User;
 import com.sep490.backendclubmanagement.repository.ClubMemberShipRepository;
 import com.sep490.backendclubmanagement.repository.SemesterRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -23,30 +24,13 @@ import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class MemberServiceImpl implements MemberService{
 
     private final ClubMemberShipRepository clubMemberShipRepository;
     private final SemesterRepository semesterRepository;
 
-    @Override
-    public PageResponse<MemberResponse> getMembersByClub(Long clubId, Pageable pageable) {
-        Page<ClubMemberShip> memberShipsPage = clubMemberShipRepository.findByClub_Id(clubId, pageable);
-        
-        List<MemberResponse> memberResponses = memberShipsPage.getContent()
-                .stream()
-                .map(this::mapToMemberResponse)
-                .toList();
-        
-        return PageResponse.<MemberResponse>builder()
-                .content(memberResponses)
-                .pageNumber(memberShipsPage.getNumber())
-                .pageSize(memberShipsPage.getSize())
-                .totalElements(memberShipsPage.getTotalElements())
-                .totalPages(memberShipsPage.getTotalPages())
-                .hasNext(memberShipsPage.hasNext())
-                .hasPrevious(memberShipsPage.hasPrevious())
-                .build();
-    }
+
 
     @Override
     public PageResponse<MemberResponse> getMembersWithFilters(
@@ -54,28 +38,95 @@ public class MemberServiceImpl implements MemberService{
             ClubMemberShipStatus status,
             Long semesterId,
             Long roleId,
+            Boolean isActive,
             String searchTerm,
             Pageable pageable) {
 
         // Get all filtered members
         List<ClubMemberShip> allMembers = clubMemberShipRepository.findMembersWithFiltersList(
-                clubId, status, semesterId, roleId, searchTerm);
+                clubId, status, searchTerm);
+
+        // Get semester info if filtering by semester
+        Semester targetSemester = null;
+        if (semesterId != null) {
+            targetSemester = semesterRepository.findById(semesterId).orElse(null);
+        } else {
+            // Lấy kỳ hiện tại
+            targetSemester = semesterRepository.findAll().stream()
+                    .filter(Semester::getIsCurrent)
+                    .findFirst()
+                    .orElse(null);
+        }
+
+        final Semester semester = targetSemester;
+        final Long effectiveSemesterId = semester != null ? semester.getId() : null;
+
+        List<ClubMemberShip> filteredMembers = allMembers.stream()
+                .filter(cms -> {
+                    // 1️⃣ Filter theo kỳ học (semester)
+                    if (semester != null) {
+                        boolean joinedBeforeSemesterEnd = cms.getJoinDate().isBefore(semester.getEndDate())
+                                || cms.getJoinDate().isEqual(semester.getEndDate());
+
+                        boolean notLeftBeforeSemesterStart = cms.getEndDate() == null
+                                || cms.getEndDate().isAfter(semester.getStartDate())
+                                || cms.getEndDate().isEqual(semester.getStartDate());
+
+                        if (!joinedBeforeSemesterEnd || !notLeftBeforeSemesterStart) {
+                            return false; // Member không thuộc kỳ học này
+                        }
+                    }
+
+                    // 2️⃣ Filter theo role hoặc isActive
+                    if (roleId != null || isActive != null) {
+                        List<RoleMemberShip> relevantRoleMemberships = cms.getRoleMemberships().stream()
+                                .filter(rm -> {
+                                    // Nếu có filter theo kỳ, chỉ lấy role thuộc kỳ đó
+                                    if (semester != null && rm.getSemester() != null
+                                            && !rm.getSemester().getId().equals(semester.getId())) {
+                                        return false;
+                                    }
+                                    return true;
+                                })
+                                .toList();
+
+                        // 🧩 Nếu isActive = false → chỉ cần kiểm tra không có role active trong kỳ
+                        // → Bỏ qua filter roleId vì member không còn role nào đang active
+                        if (Boolean.FALSE.equals(isActive)) {
+                            return relevantRoleMemberships.isEmpty();
+                        }
+
+                        // ✅ Nếu isActive = true → phải có ít nhất 1 role active, có thể thêm filter roleId
+                        if (Boolean.TRUE.equals(isActive)) {
+                            return relevantRoleMemberships.stream()
+                                    .anyMatch(rm -> Boolean.TRUE.equals(rm.getIsActive()) &&
+                                            (roleId == null || (rm.getClubRole() != null &&
+                                                    rm.getClubRole().getId().equals(roleId))));
+                        }
+
+                        // ✅ Nếu chỉ filter theo roleId (isActive = null)
+                        if (roleId != null) {
+                            return relevantRoleMemberships.stream()
+                                    .anyMatch(rm -> rm.getClubRole() != null &&
+                                            rm.getClubRole().getId().equals(roleId));
+                        }
+                    }
+
+                    // 3️⃣ Không có filter role/active → pass qua
+                    return true;
+                })
+                .toList();
+
+
+        log.info("Filtered members: {}", filteredMembers.size());
 
         // Sort manually based on status
-        List<ClubMemberShip> sortedMembers = allMembers.stream()
+        List<ClubMemberShip> sortedMembers = filteredMembers.stream()
                 .sorted((m1, m2) -> {
                     if (status == ClubMemberShipStatus.ACTIVE) {
                         // Sort by role level for active members
-                        Integer roleLevel1 = m1.getRoleMemberships().stream()
-                                .filter(rm -> rm.getClubRole() != null)
-                                .map(rm -> rm.getClubRole().getRoleLevel())
-                                .min(Integer::compareTo)
-                                .orElse(999);
-                        Integer roleLevel2 = m2.getRoleMemberships().stream()
-                                .filter(rm -> rm.getClubRole() != null)
-                                .map(rm -> rm.getClubRole().getRoleLevel())
-                                .min(Integer::compareTo)
-                                .orElse(999);
+                        Integer roleLevel1 = getRoleLevelForSorting(m1, effectiveSemesterId, roleId, isActive);
+                        Integer roleLevel2 = getRoleLevelForSorting(m2, effectiveSemesterId, roleId, isActive);
 
                         int roleComparison = roleLevel1.compareTo(roleLevel2);
                         if (roleComparison != 0) {
@@ -97,7 +148,7 @@ public class MemberServiceImpl implements MemberService{
                 sortedMembers.subList(startIndex, endIndex) : List.of();
 
         List<MemberResponse> memberResponses = pageContent.stream()
-                .map(this::mapToMemberResponse)
+                .map(cms -> mapToMemberResponse(cms, semesterId))
                 .toList();
 
         return PageResponse.<MemberResponse>builder()
@@ -111,7 +162,110 @@ public class MemberServiceImpl implements MemberService{
                 .build();
     }
 
-    private MemberResponse mapToMemberResponse(ClubMemberShip clubMemberShip) {
+    @Override
+    public PageResponse<MemberResponse> getLeftMembers(
+            Long clubId,
+            String searchTerm,
+            Pageable pageable) {
+
+        // Get all left members with basic filters
+        List<ClubMemberShip> allLeftMembers = clubMemberShipRepository.findMembersWithFiltersList(
+                clubId, ClubMemberShipStatus.LEFT, searchTerm);
+
+        log.info("Filtered left members: {}", allLeftMembers.size());
+
+        // Sort by end date (most recent departures first), then by name
+        List<ClubMemberShip> sortedMembers = allLeftMembers.stream()
+                .sorted((m1, m2) -> {
+                    // Primary sort by end date (most recent first)
+                    if (m1.getEndDate() != null && m2.getEndDate() != null) {
+                        int dateComparison = m2.getEndDate().compareTo(m1.getEndDate());
+                        if (dateComparison != 0) {
+                            return dateComparison;
+                        }
+                    } else if (m1.getEndDate() != null) {
+                        return -1; // m1 has end date, m2 doesn't
+                    } else if (m2.getEndDate() != null) {
+                        return 1; // m2 has end date, m1 doesn't
+                    }
+                    
+                    // Secondary sort by full name
+                    return m1.getUser().getFullName().compareTo(m2.getUser().getFullName());
+                })
+                .toList();
+
+        // Manual pagination
+        int totalElements = sortedMembers.size();
+        int totalPages = (int) Math.ceil((double) totalElements / pageable.getPageSize());
+        int startIndex = pageable.getPageNumber() * pageable.getPageSize();
+        int endIndex = Math.min(startIndex + pageable.getPageSize(), totalElements);
+
+        List<ClubMemberShip> pageContent = startIndex < totalElements ?
+                sortedMembers.subList(startIndex, endIndex) : List.of();
+
+        List<MemberResponse> memberResponses = pageContent.stream()
+                .map(cms -> mapToMemberResponse(cms, null)) // No specific semester for left members
+                .toList();
+
+        return PageResponse.<MemberResponse>builder()
+                .content(memberResponses)
+                .pageNumber(pageable.getPageNumber())
+                .pageSize(pageable.getPageSize())
+                .totalElements(totalElements)
+                .totalPages(totalPages)
+                .hasNext(pageable.getPageNumber() < totalPages - 1)
+                .hasPrevious(pageable.getPageNumber() > 0)
+                .build();
+    }
+
+    private Integer getRoleLevelForSorting(ClubMemberShip clubMemberShip, Long effectiveSemesterId, Long roleId, Boolean isActive) {
+        // Get all role memberships for the specific semester
+        List<RoleMemberShip> relevantRoleMemberships = clubMemberShip.getRoleMemberships().stream()
+                .filter(rm -> {
+                    // If filtering by semester, only check roles in that semester
+                    if (effectiveSemesterId != null && rm.getSemester() != null
+                            && !rm.getSemester().getId().equals(effectiveSemesterId)) {
+                        return false;
+                    }
+                    return true;
+                })
+                .toList();
+
+        // If isActive=false, return a high number (999) since they have no roles
+        // Note: When isActive=false, we ignore roleId filter since member has no roles
+        if (isActive != null && !isActive) {
+            return relevantRoleMemberships.isEmpty() ? 999 : 1000;
+        }
+
+        // If isActive=true, find the minimum role level among active roles
+        if (isActive != null && isActive) {
+            return relevantRoleMemberships.stream()
+                    .filter(rm -> Boolean.TRUE.equals(rm.getIsActive()))
+                    .filter(rm -> rm.getClubRole() != null)
+                    .filter(rm -> roleId == null || rm.getClubRole().getId().equals(roleId))
+                    .map(rm -> rm.getClubRole().getRoleLevel())
+                    .min(Integer::compareTo)
+                    .orElse(999);
+        }
+
+        // If only filtering by roleId (isActive is null)
+        if (roleId != null) {
+            return relevantRoleMemberships.stream()
+                    .filter(rm -> rm.getClubRole() != null && rm.getClubRole().getId().equals(roleId))
+                    .map(rm -> rm.getClubRole().getRoleLevel())
+                    .min(Integer::compareTo)
+                    .orElse(999);
+        }
+
+        // No filters, return minimum role level
+        return relevantRoleMemberships.stream()
+                .filter(rm -> rm.getClubRole() != null)
+                .map(rm -> rm.getClubRole().getRoleLevel())
+                .min(Integer::compareTo)
+                .orElse(999);
+    }
+
+    private MemberResponse mapToMemberResponse(ClubMemberShip clubMemberShip, Long querySemesterId) {
         User user = clubMemberShip.getUser();
 
         List<Object[]> semesterRows = semesterRepository.findSemestersWithRoleByMembership(
@@ -125,48 +279,27 @@ public class MemberServiceImpl implements MemberService{
                 .distinct()
                 .count();
 
-        CurrentTermResponse currentTermResponse = semesterRows.stream()
-                .map(row -> {
-                    Semester sem = (Semester) row[0];
-                    RoleMemberShip rm = (RoleMemberShip) row[1];
-                    if (!Boolean.TRUE.equals(sem.getIsCurrent())) {
-                        return null;
-                    }
-                    return CurrentTermResponse.builder()
-                            .semesterName(sem.getSemesterName())
-                            .semesterCode(sem.getSemesterCode())
-                            .roleName(rm != null && rm.getClubRole() != null ? rm.getClubRole().getRoleName() : null)
-                            .roleCode(rm != null && rm.getClubRole() != null ? rm.getClubRole().getRoleCode() : null)
-                            .roleLevel(rm != null && rm.getClubRole() != null ? rm.getClubRole().getRoleLevel() : null)
-                            .teamName(rm != null && rm.getTeam() != null ? rm.getTeam().getTeamName() : null)
-                            .attendanceRate(100) // TODO: Tính thật dựa trên attendance
-                            .status(clubMemberShip.getStatus().name())
-                            .isActive(rm != null && Boolean.TRUE.equals(rm.getIsActive()))
-                            .startDate(sem.getStartDate().toString())
-                            .endDate(sem.getEndDate().toString())
-                            .build();
-                })
-                .filter(r -> r != null)
-                .findFirst()
-                .orElse(null);
+        CurrentTermResponse currentTermResponse = null;
 
-        // Fallback: if current term is null or inactive, choose nearest active term from history
-        if (currentTermResponse == null || Boolean.FALSE.equals(currentTermResponse.getIsActive())) {
-            CurrentTermResponse fallback = semesterRows.stream()
+        // If querySemesterId is provided, show info for that specific semester
+        if (querySemesterId != null) {
+            currentTermResponse = semesterRows.stream()
                     .map(row -> {
                         Semester sem = (Semester) row[0];
                         RoleMemberShip rm = (RoleMemberShip) row[1];
-                        if (rm == null || !Boolean.TRUE.equals(rm.getIsActive())) return null;
+                        if (!sem.getId().equals(querySemesterId)) {
+                            return null;
+                        }
                         return CurrentTermResponse.builder()
                                 .semesterName(sem.getSemesterName())
                                 .semesterCode(sem.getSemesterCode())
-                                .roleName(rm.getClubRole() != null ? rm.getClubRole().getRoleName() : null)
-                                .roleCode(rm.getClubRole() != null ? rm.getClubRole().getRoleCode() : null)
-                                .roleLevel(rm.getClubRole() != null ? rm.getClubRole().getRoleLevel() : null)
-                                .teamName(rm.getTeam() != null ? rm.getTeam().getTeamName() : null)
-                                .attendanceRate(100)
+                                .roleName(rm != null && rm.getClubRole() != null ? rm.getClubRole().getRoleName() : null)
+                                .roleCode(rm != null && rm.getClubRole() != null ? rm.getClubRole().getRoleCode() : null)
+                                .roleLevel(rm != null && rm.getClubRole() != null ? rm.getClubRole().getRoleLevel() : null)
+                                .teamName(rm != null && rm.getTeam() != null ? rm.getTeam().getTeamName() : null)
+                                .attendanceRate(100) // TODO: Tính thật dựa trên attendance
                                 .status(clubMemberShip.getStatus().name())
-                                .isActive(true)
+                                .isActive(rm != null && Boolean.TRUE.equals(rm.getIsActive()))
                                 .startDate(sem.getStartDate().toString())
                                 .endDate(sem.getEndDate().toString())
                                 .build();
@@ -174,6 +307,90 @@ public class MemberServiceImpl implements MemberService{
                     .filter(r -> r != null)
                     .findFirst()
                     .orElse(null);
+        } else {
+            // If no specific semester query, show current semester info
+            currentTermResponse = semesterRows.stream()
+                    .map(row -> {
+                        Semester sem = (Semester) row[0];
+                        RoleMemberShip rm = (RoleMemberShip) row[1];
+                        if (!Boolean.TRUE.equals(sem.getIsCurrent())) {
+                            return null;
+                        }
+                        return CurrentTermResponse.builder()
+                                .semesterName(sem.getSemesterName())
+                                .semesterCode(sem.getSemesterCode())
+                                .roleName(rm != null && rm.getClubRole() != null ? rm.getClubRole().getRoleName() : null)
+                                .roleCode(rm != null && rm.getClubRole() != null ? rm.getClubRole().getRoleCode() : null)
+                                .roleLevel(rm != null && rm.getClubRole() != null ? rm.getClubRole().getRoleLevel() : null)
+                                .teamName(rm != null && rm.getTeam() != null ? rm.getTeam().getTeamName() : null)
+                                .attendanceRate(100) // TODO: Tính thật dựa trên attendance
+                                .status(clubMemberShip.getStatus().name())
+                                .isActive(rm != null && Boolean.TRUE.equals(rm.getIsActive()))
+                                .startDate(sem.getStartDate().toString())
+                                .endDate(sem.getEndDate().toString())
+                                .build();
+                    })
+                    .filter(r -> r != null)
+                    .findFirst()
+                    .orElse(null);
+        }
+
+        // Fallback: if current term is null or inactive, choose nearest active term from history
+        if (currentTermResponse == null || Boolean.FALSE.equals(currentTermResponse.getIsActive())) {
+            CurrentTermResponse fallback = null;
+
+            if (querySemesterId != null) {
+                // If querying specific semester but no role found, show semester info without role
+                fallback = semesterRows.stream()
+                        .map(row -> {
+                            Semester sem = (Semester) row[0];
+                            if (!sem.getId().equals(querySemesterId)) {
+                                return null;
+                            }
+                            return CurrentTermResponse.builder()
+                                    .semesterName(sem.getSemesterName())
+                                    .semesterCode(sem.getSemesterCode())
+                                    .roleName(null)
+                                    .roleCode(null)
+                                    .roleLevel(null)
+                                    .teamName(null)
+                                    .attendanceRate(100)
+                                    .status(clubMemberShip.getStatus().name())
+                                    .isActive(false)
+                                    .startDate(sem.getStartDate().toString())
+                                    .endDate(sem.getEndDate().toString())
+                                    .build();
+                        })
+                        .filter(r -> r != null)
+                        .findFirst()
+                        .orElse(null);
+            } else {
+                // If no specific semester query, find nearest active term from history
+                fallback = semesterRows.stream()
+                        .map(row -> {
+                            Semester sem = (Semester) row[0];
+                            RoleMemberShip rm = (RoleMemberShip) row[1];
+
+                            if (rm == null || !Boolean.TRUE.equals(rm.getIsActive())) return null;
+                            return CurrentTermResponse.builder()
+                                    .semesterName(sem.getSemesterName())
+                                    .semesterCode(sem.getSemesterCode())
+                                    .roleName(rm.getClubRole() != null ? rm.getClubRole().getRoleName() : null)
+                                    .roleCode(rm.getClubRole() != null ? rm.getClubRole().getRoleCode() : null)
+                                    .roleLevel(rm.getClubRole() != null ? rm.getClubRole().getRoleLevel() : null)
+                                    .teamName(rm.getTeam() != null ? rm.getTeam().getTeamName() : null)
+                                    .attendanceRate(100)
+                                    .status(clubMemberShip.getStatus().name())
+                                    .isActive(false)
+                                    .startDate(sem.getStartDate().toString())
+                                    .endDate(sem.getEndDate().toString())
+                                    .build();
+                        })
+                        .filter(r -> r != null)
+                        .findFirst()
+                        .orElse(null);
+            }
+
             if (fallback != null) {
                 currentTermResponse = fallback;
             }

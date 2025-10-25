@@ -10,3 +10,4 @@ import java.util.List;
 public interface ClubRoleRepository extends JpaRepository<ClubRole, Long> {
     List<ClubRole> findByClubId(Long clubId);
 }
+

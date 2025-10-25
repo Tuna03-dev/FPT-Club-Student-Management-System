@@ -19,3 +19,4 @@ public class SemesterResponse {
     private LocalDate endDate;
     private Boolean isCurrent;
 }
+
