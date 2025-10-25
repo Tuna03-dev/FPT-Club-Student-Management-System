@@ -8,6 +8,7 @@ import { Notifications } from "@/pages/myclub/Notifications";
 import { Settings } from "@/pages/myclub/Settings";
 import { EventsPage } from "@/pages/events/EventPageList";
 import NewsPageList from "@/pages/news/NewsPageList";
+import NewsPageDetail from "@/pages/news/NewsPageDetail";
 import EventDetailPage from "@/pages/events/EventDetail";
 import ProtectedRoute from "../components/ProtectedRoute";
 import LoginPage from "@/pages/LoginPage/LoginPage";
@@ -32,6 +33,10 @@ export const router = createBrowserRouter([
   {
     path: "news",
     element : <NewsPageList />
+  },
+  {
+    path: "/news/:id",
+    element: <NewsPageDetail />,
   },
   {
     path: "/login",

@@ -6,4 +6,5 @@ import lombok.Data;
 public class NewsRequest extends  PageableRequest {
     private String keyword;
     private String newsType;
+    private Long clubId;
 }

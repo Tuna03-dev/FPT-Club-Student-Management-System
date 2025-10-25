@@ -15,11 +15,7 @@ public interface NewsRepository extends JpaRepository<News, Long> {
                                          FROM news e
                                          LEFT JOIN clubs c ON e.club_id = c.id
                                          WHERE\s
-                                             (:#{#request.keyword} IS NULL\s
-                                                 OR e.title LIKE CONCAT('%', :#{#request.keyword}, '%')
-                                                 OR e.content LIKE CONCAT('%', :#{#request.keyword}, '%')
-                                                 OR e.news_type LIKE CONCAT('%', :#{#request.keyword}, '%')
-                                               )
+                                             (:#{#request.clubId} IS NULL OR e.club_id = :#{#request.clubId})
                                             AND e.is_draft = false
           """, nativeQuery = true,countProjection = "e.id")
     Page<News> getAllNewsByFilter(NewsRequest request, Pageable pageable);

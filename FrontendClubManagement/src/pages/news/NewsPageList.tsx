@@ -6,15 +6,41 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { getAllNewsByFilter, type NewsData } from "@/service/NewsService"
+import { Link } from "react-router-dom"
+import { NewsFilters } from "@/components/features/news/NewsFilter"
+import { NewsCardSkeleton } from "@/components/features/news/NewsCardSkeleton"
+import { getAllNewsByFilter, getAllClubs, type NewsData, type ClubDto } from "@/service/NewsService"
 
 export default function NewsPageList() {
   const [searchQuery, setSearchQuery] = useState("")
+  const [selectedClubId, setSelectedClubId] = useState<string>("all")
+  const [clubs, setClubs] = useState<ClubDto[]>([])
   const [news, setNews] = useState<NewsData[]>([])
   const [loading, setLoading] = useState<boolean>(false)
   const [error, setError] = useState<string>("")
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
 
-  // Fetch news when search query changes
+  // Fetch clubs once
+  useEffect(() => {
+    let mounted = true
+    
+    const fetchClubs = async () => {
+      try {
+        const clubsData = await getAllClubs()
+        if (mounted) setClubs(clubsData)
+      } catch (error) {
+        console.error("Error fetching clubs:", error)
+      }
+    }
+    
+    fetchClubs()
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  // Fetch news when search query, club, or page changes
   useEffect(() => {
     let mounted = true
     const controller = new AbortController()
@@ -25,11 +51,16 @@ export default function NewsPageList() {
       try {
         const res = await getAllNewsByFilter({
           keyword: searchQuery || undefined,
-          page: 1,
-          size: 30,
+          clubId: selectedClubId !== "all" ? Number(selectedClubId) : undefined,
+          page: currentPage,
+          size: 12,
         })
-        if (mounted) setNews(res.data)
+        if (mounted) {
+          setNews(res.data)
+          setTotalPages(Math.ceil(res.total / 12))
+        }
       } catch (e) {
+        console.error("Error fetching news:", e)
         if (mounted) setError("Không thể tải danh sách tin tức")
       } finally {
         if (mounted) setLoading(false)
@@ -42,7 +73,17 @@ export default function NewsPageList() {
       controller.abort()
       clearTimeout(debounce)
     }
-  }, [searchQuery])
+  }, [searchQuery, selectedClubId, currentPage])
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchQuery, selectedClubId])
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -99,13 +140,36 @@ export default function NewsPageList() {
         </div>
       </section>
 
+      {/* Filters */}
+      <section className="py-8 border-b border-border bg-card/30">
+        <div className="container mx-auto px-4">
+          <div className="max-w-4xl mx-auto">
+            <NewsFilters
+              clubs={clubs}
+              selectedClubId={selectedClubId}
+              onClubChange={setSelectedClubId}
+            />
+          </div>
+        </div>
+      </section>
+
       {/* News Grid */}
       <section className="py-12 md:py-16">
         <div className="container mx-auto px-4">
+          {/* News Info */}
+          <div className="mb-8">
+            <h2 className="text-2xl font-bold text-foreground mb-2">Tất cả tin tức</h2>
+            <p className="text-muted-foreground">
+              {loading ? "Đang tải..." : `Trang ${currentPage} - Hiển thị ${news.length} tin tức`}
+            </p>
+            {error && <p className="text-destructive text-sm mt-2">{error}</p>}
+          </div>
+
           {loading ? (
-            <div className="text-center py-16">
-              <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-              <p className="text-muted-foreground">Đang tải...</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {Array.from({ length: 12 }, (_, i) => (
+                <NewsCardSkeleton key={i} />
+              ))}
             </div>
           ) : error ? (
             <div className="text-center py-16">
@@ -163,15 +227,69 @@ export default function NewsPageList() {
                         {newsItem.content}
                       </p>
                       <div className="flex items-center justify-end">
-                        <Button variant="ghost" size="sm" className="group/btn">
-                          Xem thêm
-                          <ArrowRight className="ml-2 h-4 w-4 group-hover/btn:translate-x-1 transition-transform" />
-                        </Button>
+                        <Link to={`/news/${newsItem.id}`}>
+                          <Button variant="ghost" size="sm" className="group/btn">
+                            Xem chi tiết
+                            <ArrowRight className="ml-2 h-4 w-4 group-hover/btn:translate-x-1 transition-transform" />
+                          </Button>
+                        </Link>
                       </div>
                     </CardContent>
                   </Card>
                 )
               })}
+            </div>
+          )}
+
+          {/* Pagination */}
+          {!loading && totalPages > 1 && (
+            <div className="flex items-center justify-center mt-12">
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={currentPage === 1}
+                >
+                  Trước
+                </Button>
+                
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    let pageNum;
+                    if (totalPages <= 5) {
+                      pageNum = i + 1;
+                    } else if (currentPage <= 3) {
+                      pageNum = i + 1;
+                    } else if (currentPage >= totalPages - 2) {
+                      pageNum = totalPages - 4 + i;
+                    } else {
+                      pageNum = currentPage - 2 + i;
+                    }
+                    
+                    return (
+                      <Button
+                        key={pageNum}
+                        variant={currentPage === pageNum ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => handlePageChange(pageNum)}
+                        className="w-10 h-10"
+                      >
+                        {pageNum}
+                      </Button>
+                    );
+                  })}
+                </div>
+                
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                >
+                  Sau
+                </Button>
+              </div>
             </div>
           )}
         </div>

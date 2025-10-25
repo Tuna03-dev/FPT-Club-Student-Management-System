@@ -22,7 +22,8 @@ export default function EventDetailPage() {
         setError("")
         const eventData = await getEventById(Number(id))
         setEvent(eventData)
-      } catch (err) {
+      } catch (e) {
+        console.error("Error fetching news:", e)
         setError("Không thể tải thông tin sự kiện")
       } finally {
         setLoading(false)
