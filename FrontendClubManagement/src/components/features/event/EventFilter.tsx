@@ -2,13 +2,16 @@
 
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import type { EventTypeDto } from "@/service/EventService"
+import type { EventTypeDto, ClubDto } from "@/service/EventService"
 
 interface EventFiltersProps {
   eventTypes: EventTypeDto[]
+  clubs: ClubDto[]
   selectedTypeId: string
+  selectedClubId: string
   selectedStatus: string
   onTypeChange: (eventTypeId: string) => void
+  onClubChange: (clubId: string) => void
   onStatusChange: (status: string) => void
 }
 
@@ -21,9 +24,12 @@ const statuses = [
 
 export function EventFilters({
   eventTypes,
+  clubs,
   selectedTypeId,
+  selectedClubId,
   selectedStatus,
   onTypeChange,
+  onClubChange,
   onStatusChange,
 }: EventFiltersProps) {
   return (
@@ -41,6 +47,25 @@ export function EventFilters({
             {eventTypes.map((type) => (
               <SelectItem key={type.id} value={String(type.id)}>
                 {type.typeName}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="flex-1">
+        <Label htmlFor="club-select" className="text-sm font-medium mb-2 block">
+          Câu lạc bộ
+        </Label>
+        <Select value={selectedClubId} onValueChange={onClubChange}>
+          <SelectTrigger id="club-select" className="w-full">
+            <SelectValue placeholder="Chọn câu lạc bộ" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem key="all" value="all">Tất cả</SelectItem>
+            {clubs.map((club) => (
+              <SelectItem key={club.id} value={String(club.id)}>
+                {club.clubName}
               </SelectItem>
             ))}
           </SelectContent>

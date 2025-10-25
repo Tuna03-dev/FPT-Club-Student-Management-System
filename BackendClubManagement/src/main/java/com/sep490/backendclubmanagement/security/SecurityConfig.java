@@ -40,7 +40,8 @@ public class SecurityConfig {
             "/test/**",
             "/posts/**",
             "/api/my-club/**",
-            "/api/management/**"
+            "/api/management/**",
+            "/api/posts/**"
 
     };
 

@@ -9,4 +9,5 @@ public class EventRequest extends PageableRequest {
     private Long eventTypeId;
     private LocalDateTime startTime;
     private LocalDateTime endTime;
+    private Long clubId;
 }

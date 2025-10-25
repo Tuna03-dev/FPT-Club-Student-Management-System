@@ -20,8 +20,14 @@ export interface NewsResponse {
 
 export interface NewsFilterRequest {
   keyword?: string;
+  clubId?: number;
   page?: number;
   size?: number;
+}
+
+export interface ClubDto {
+  id: number;
+  clubName: string;
 }
 
 export async function getAllNewsByFilter(
@@ -33,4 +39,15 @@ export async function getAllNewsByFilter(
   );
   if (!res.data) throw new Error("Empty response");
   return res.data;
+}
+
+export async function getNewsById(id: number): Promise<NewsData> {
+  const res = await axiosClient.get<NewsData>(`/news/${id}`);
+  if (!res.data) throw new Error("News not found");
+  return res.data;
+}
+
+export async function getAllClubs(): Promise<ClubDto[]> {
+  const res = await axiosClient.get<ClubDto[]>("/events/get-all-club");
+  return res.data ?? [];
 }

@@ -1,4 +1,4 @@
-import { createBrowserRouter, Navigate } from "react-router-dom";
+import { createBrowserRouter } from "react-router-dom";
 import MainLayout from "@/layouts/MainLayout";
 import HomePage from "@/pages/HomePage";
 import { ClubLayout } from "@/layouts/ClubLayout";
@@ -11,6 +11,7 @@ import { Settings } from "@/pages/myclub/Settings";
 
 import { EventsPage } from "@/pages/events/EventPageList";
 import NewsPageList from "@/pages/news/NewsPageList";
+import NewsPageDetail from "@/pages/news/NewsPageDetail";
 import EventDetailPage from "@/pages/events/EventDetail";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import LoginPage from "@/pages/LoginPage/LoginPage";
@@ -19,23 +20,38 @@ import ClubSelect from "@/pages/myclub/ClubSelect";
 import TeamDetailPage from "@/pages/myclub/teams/TeamDetail";
 
 export const router = createBrowserRouter([
+  // Public shell
   {
     path: "/",
     element: <MainLayout />,
     children: [
       { index: true, element: <HomePage /> },
-      { path: "events", element: <div className="container mx-auto px-4 py-8">Trang Sự Kiện</div> },
-      { path: "news", element: <div className="container mx-auto px-4 py-8">Trang Tin Tức</div> },
+
+      // Events
+      {
+        path: "events",
+        children: [
+          { index: true, element: <EventsPage /> },
+          { path: ":id", element: <EventDetailPage /> },
+        ],
+      },
+
+      // News
+      {
+        path: "news",
+        children: [
+          { index: true, element: <NewsPageList /> },
+          { path: ":id", element: <NewsPageDetail /> },
+        ],
+      },
+
       { path: "clubs", element: <div className="container mx-auto px-4 py-8">Trang Câu lạc bộ/Hội nhóm</div> },
       { path: "achievements", element: <div className="container mx-auto px-4 py-8">Trang Thành tích</div> },
       { path: "contact", element: <div className="container mx-auto px-4 py-8">Trang Liên hệ</div> },
-      // { path: "myclub", element: <Navigate to="/myclub" replace /> },
     ],
   },
 
-  { path: "/events", element: <EventsPage /> },
-  { path: "/events/:id", element: <EventDetailPage /> },
-  { path: "/news", element: <NewsPageList /> },
+  // Auth (tách riêng nếu muốn ẩn header/footer)
   { path: "/login", element: <LoginPage /> },
 
   // MyClub entry
@@ -47,7 +63,8 @@ export const router = createBrowserRouter([
       </ProtectedRoute>
     ),
   },
-  // Select when in multiple clubs
+
+  // Select khi có nhiều CLB
   {
     path: "/myclub/select",
     element: (
@@ -56,7 +73,8 @@ export const router = createBrowserRouter([
       </ProtectedRoute>
     ),
   },
-  // Club pages
+
+  // Khu vực nội bộ theo clubId
   {
     path: "/myclub/:clubId",
     element: (
@@ -70,12 +88,11 @@ export const router = createBrowserRouter([
       { path: "events", element: <EventList /> },
       { path: "notifications", element: <Notifications /> },
       { path: "settings", element: <Settings /> },
-
-      // Team detail (API #4)
-      { path: "teams/:teamId", element: <TeamDetailPage /> },
+      { path: "teams/:teamId", element: <TeamDetailPage /> }, // Team detail
     ],
   },
 
+  // 404
   {
     path: "*",
     element: (

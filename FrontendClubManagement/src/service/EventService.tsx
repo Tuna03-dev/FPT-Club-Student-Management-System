@@ -24,6 +24,7 @@ export interface EventResponse {
 export interface EventFilterRequest {
   keyword?: string;
   eventTypeId?: number;
+  clubId?: number;
   startTime?: string; // ISO
   endTime?: string;   // ISO
   page?: number;
@@ -33,6 +34,11 @@ export interface EventFilterRequest {
 export interface EventTypeDto {
   id: number;
   typeName: string;
+}
+
+export interface ClubDto {
+  id: number;
+  clubName: string;
 }
 
 export async function getAllEventsByFilter(
@@ -49,6 +55,13 @@ export async function getAllEventsByFilter(
 export async function getAllEventTypes(): Promise<EventTypeDto[]> {
   const res = await axiosClient.get<EventTypeDto[]>(
     "/events/get-all-event-types"
+  );
+  return res.data ?? [];
+}
+
+export async function getAllClubs(): Promise<ClubDto[]> {
+  const res = await axiosClient.get<ClubDto[]>(
+    "/events/get-all-club"
   );
   return res.data ?? [];
 }

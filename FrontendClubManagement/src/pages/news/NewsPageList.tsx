@@ -4,15 +4,41 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { getAllNewsByFilter, type NewsData } from "@/service/NewsService"
+import { Link } from "react-router-dom"
+import { NewsFilters } from "@/components/features/news/NewsFilter"
+import { NewsCardSkeleton } from "@/components/features/news/NewsCardSkeleton"
+import { getAllNewsByFilter, getAllClubs, type NewsData, type ClubDto } from "@/service/NewsService"
 
 export default function NewsPageList() {
   const [searchQuery, setSearchQuery] = useState("")
+  const [selectedClubId, setSelectedClubId] = useState<string>("all")
+  const [clubs, setClubs] = useState<ClubDto[]>([])
   const [news, setNews] = useState<NewsData[]>([])
   const [loading, setLoading] = useState<boolean>(false)
   const [error, setError] = useState<string>("")
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
 
-  // Fetch news when search query changes
+  // Fetch clubs once
+  useEffect(() => {
+    let mounted = true
+    
+    const fetchClubs = async () => {
+      try {
+        const clubsData = await getAllClubs()
+        if (mounted) setClubs(clubsData)
+      } catch (error) {
+        console.error("Error fetching clubs:", error)
+      }
+    }
+    
+    fetchClubs()
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  // Fetch news when search query, club, or page changes
   useEffect(() => {
     let mounted = true
     const controller = new AbortController()
@@ -23,11 +49,16 @@ export default function NewsPageList() {
       try {
         const res = await getAllNewsByFilter({
           keyword: searchQuery || undefined,
-          page: 1,
-          size: 30,
+          clubId: selectedClubId !== "all" ? Number(selectedClubId) : undefined,
+          page: currentPage,
+          size: 12,
         })
-        if (mounted) setNews(res.data)
+        if (mounted) {
+          setNews(res.data)
+          setTotalPages(Math.ceil(res.total / 12))
+        }
       } catch (e) {
+        console.error("Error fetching news:", e)
         if (mounted) setError("Không thể tải danh sách tin tức")
       } finally {
         if (mounted) setLoading(false)
@@ -40,70 +71,84 @@ export default function NewsPageList() {
       controller.abort()
       clearTimeout(debounce)
     }
-  }, [searchQuery])
+  }, [searchQuery, selectedClubId, currentPage])
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchQuery, selectedClubId])
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-50">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
-                <span className="text-primary-foreground font-bold text-lg">FPT</span>
-              </div>
-              <div>
-                <h1 className="text-xl font-bold text-foreground">FPT Club</h1>
-                <p className="text-xs text-muted-foreground">Quản lý câu lạc bộ</p>
-              </div>
-            </div>
-            <Button variant="outline" className="hidden md:flex bg-transparent">
-              Đăng nhập
-            </Button>
-          </div>
-        </div>
-      </header>
-
       {/* Hero Section */}
-      <section className="bg-gradient-to-br from-primary/10 via-accent/20 to-secondary/10 py-16 md:py-24">
+      <section className="bg-gradient-to-br from-primary/10 via-accent/20 to-secondary/10 py-8 md:py-12">
         <div className="container mx-auto px-4">
           <div className="max-w-3xl mx-auto text-center">
-            <Badge className="mb-4 bg-primary/20 text-primary border-primary/30">Tin tức & Sự kiện</Badge>
-            <h1 className="text-4xl md:text-6xl font-bold text-foreground mb-6 text-balance">
+            <Badge className="mb-3 bg-primary/20 text-primary border-primary/30">Tin tức & Sự kiện</Badge>
+            <h1 className="text-3xl md:text-5xl font-bold text-foreground mb-4 text-balance">
               Cập nhật tin tức mới nhất
             </h1>
-            <p className="text-lg md:text-xl text-muted-foreground text-pretty">
+            <p className="text-base md:text-lg text-muted-foreground text-pretty">
               Khám phá các hoạt động, sự kiện và thông báo từ các câu lạc bộ tại FPT University
             </p>
           </div>
         </div>
       </section>
 
-      {/* Search Section */}
-      <section className="py-8 border-b border-border bg-card/30">
+      {/* Search and Filters Section */}
+      <section className="py-4 border-b border-border bg-card/30">
         <div className="container mx-auto px-4">
-          <div className="max-w-2xl mx-auto">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-              <Input
-                type="text"
-                placeholder="Tìm kiếm tin tức..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 h-12 bg-background"
-              />
+          <div className="max-w-4xl mx-auto">
+            <div className="flex flex-col sm:flex-row gap-4 items-end">
+              {/* Search */}
+              <div className="flex-1 max-w-md">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                  <Input
+                    type="text"
+                    placeholder="Tìm kiếm tin tức..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-10 h-12 bg-background"
+                  />
+                </div>
+              </div>
+              
+              {/* Club Filter */}
+              <div className="w-full sm:w-auto">
+                <NewsFilters
+                  clubs={clubs}
+                  selectedClubId={selectedClubId}
+                  onClubChange={setSelectedClubId}
+                />
+              </div>
             </div>
           </div>
         </div>
       </section>
 
       {/* News Grid */}
-      <section className="py-12 md:py-16">
+      <section className="py-6 md:py-8">
         <div className="container mx-auto px-4">
+          {/* News Info */}
+          <div className="mb-8">
+            <h2 className="text-2xl font-bold text-foreground mb-2">Tất cả tin tức</h2>
+            <p className="text-muted-foreground">
+              {loading ? "Đang tải..." : `Trang ${currentPage} - Hiển thị ${news.length} tin tức`}
+            </p>
+            {error && <p className="text-destructive text-sm mt-2">{error}</p>}
+          </div>
+
           {loading ? (
-            <div className="text-center py-16">
-              <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-              <p className="text-muted-foreground">Đang tải...</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {Array.from({ length: 12 }, (_, i) => (
+                <NewsCardSkeleton key={i} />
+              ))}
             </div>
           ) : error ? (
             <div className="text-center py-16">
@@ -161,10 +206,12 @@ export default function NewsPageList() {
                         {newsItem.content}
                       </p>
                       <div className="flex items-center justify-end">
-                        <Button variant="ghost" size="sm" className="group/btn">
-                          Xem thêm
-                          <ArrowRight className="ml-2 h-4 w-4 group-hover/btn:translate-x-1 transition-transform" />
-                        </Button>
+                        <Link to={`/news/${newsItem.id}`}>
+                          <Button variant="ghost" size="sm" className="group/btn">
+                            Xem chi tiết
+                            <ArrowRight className="ml-2 h-4 w-4 group-hover/btn:translate-x-1 transition-transform" />
+                          </Button>
+                        </Link>
                       </div>
                     </CardContent>
                   </Card>
@@ -172,17 +219,60 @@ export default function NewsPageList() {
               })}
             </div>
           )}
+
+          {/* Pagination */}
+          {!loading && totalPages > 1 && (
+            <div className="flex items-center justify-center mt-12">
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={currentPage === 1}
+                >
+                  Trước
+                </Button>
+                
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    let pageNum;
+                    if (totalPages <= 5) {
+                      pageNum = i + 1;
+                    } else if (currentPage <= 3) {
+                      pageNum = i + 1;
+                    } else if (currentPage >= totalPages - 2) {
+                      pageNum = totalPages - 4 + i;
+                    } else {
+                      pageNum = currentPage - 2 + i;
+                    }
+                    
+                    return (
+                      <Button
+                        key={pageNum}
+                        variant={currentPage === pageNum ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => handlePageChange(pageNum)}
+                        className="w-10 h-10"
+                      >
+                        {pageNum}
+                      </Button>
+                    );
+                  })}
+                </div>
+                
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                >
+                  Sau
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       </section>
-
-      {/* Footer */}
-      <footer className="border-t border-border bg-card/30 py-8">
-        <div className="container mx-auto px-4">
-          <div className="text-center text-muted-foreground">
-            <p className="text-sm">© 2025 FPT University Club Management. All rights reserved.</p>
-          </div>
-        </div>
-      </footer>
     </div>
   )
 }

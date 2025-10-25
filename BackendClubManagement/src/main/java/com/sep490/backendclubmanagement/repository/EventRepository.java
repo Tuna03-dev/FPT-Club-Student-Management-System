@@ -2,6 +2,7 @@ package com.sep490.backendclubmanagement.repository;
 
 import com.sep490.backendclubmanagement.dto.request.EventRequest;
 import com.sep490.backendclubmanagement.dto.response.UpcomingEventDTO;
+import com.sep490.backendclubmanagement.entity.Club;
 import com.sep490.backendclubmanagement.entity.Event;
 import com.sep490.backendclubmanagement.entity.EventType;
 import org.springframework.data.domain.Page;
@@ -32,11 +33,9 @@ public interface EventRepository extends JpaRepository<Event, Long> {
                                          LEFT JOIN event_types et ON e.event_type_id = et.id
                                          LEFT JOIN event_media em ON em.event_id = e.id
                                          WHERE\s
-                                             (:#{#request.keyword} IS NULL\s
-                                                 OR e.title LIKE CONCAT('%', :#{#request.keyword}, '%')
-                                                 OR e.description LIKE CONCAT('%', :#{#request.keyword}, '%')
-                                                 OR e.location LIKE CONCAT('%', :#{#request.keyword}, '%'))
-                                             AND (:#{#request.eventTypeId} IS NULL OR e.event_type_id = :#{#request.eventTypeId})
+                                             
+                                              (:#{#request.eventTypeId} IS NULL OR e.event_type_id = :#{#request.eventTypeId})
+                                             AND (:#{#request.clubId} IS NULL OR e.club_id = :#{#request.clubId})
                                              AND (
                                                  :#{#request.startTime} IS NULL\s
                                                  OR :#{#request.endTime} IS NULL\s
@@ -48,4 +47,7 @@ public interface EventRepository extends JpaRepository<Event, Long> {
 
     @Query("SELECT et FROM EventType et")
     List<EventType> findAllEventTypes();
+
+    @Query("SELECT c FROM Club c")
+    List<Club> findAllClubs();
 }
