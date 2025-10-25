@@ -13,8 +13,7 @@ import java.util.List;
 
 @Repository
 public interface ClubRepository extends JpaRepository<Club, Long> {
-}
-
+    
     // 🔹 Lấy danh sách CLB có cờ isFeatured = true (để hiển thị lên homepage)
     @Query("""
         SELECT new com.sep490.backendclubmanagement.dto.response.FeaturedClubDTO(
