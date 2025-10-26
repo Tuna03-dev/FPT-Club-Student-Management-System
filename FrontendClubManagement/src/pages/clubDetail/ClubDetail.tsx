@@ -17,12 +17,7 @@ import {
   Calendar,
   MapPin,
   Users,
-  Star,
-  Share2,
-  Bell,
   MessageSquare,
-  Heart,
-  Eye,
   Clock,
   Zap,
   Award,
@@ -64,15 +59,15 @@ interface News {
   likes: number;
 }
 
-interface RecruitmentInfo {
-  id: string;
-  position: string;
-  department: string;
-  requirements: string[];
-  deadline: string;
-  spots: number;
-  applicants: number;
-}
+// interface RecruitmentInfo {
+//   id: string;
+//   position: string;
+//   department: string;
+//   requirements: string[];
+//   deadline: string;
+//   spots: number;
+//   applicants: number;
+// }
 
 export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
   const params = useParams();
