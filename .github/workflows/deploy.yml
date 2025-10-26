@@ -5,6 +5,9 @@ on:
     branches:
       - develop
       - main
+    paths:
+      - "BackendClubManagement/**"
+      - "FapAPI/**"
 
 jobs:
   build-and-deploy:

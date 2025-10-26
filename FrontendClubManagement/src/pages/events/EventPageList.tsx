@@ -2,35 +2,53 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { EventCard } from "../../components/features/event/EventCard"
+import { EventCardSkeleton } from "../../components/features/event/EventCardSkeleton"
 import { EventFilters } from "../../components/features/event/EventFilter"
 import { Calendar, Search } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { computeEventStatus, getAllEventTypes, getAllEventsByFilter, type EventStatusFilter, type EventTypeDto, type EventData } from "@/service/EventService"
+import { computeEventStatus, getAllEventTypes, getAllClubs, getAllEventsByFilter, type EventStatusFilter, type EventTypeDto, type ClubDto, type EventData } from "@/service/EventService"
 
 export function EventsPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedTypeId, setSelectedTypeId] = useState<string>("all")
+  const [selectedClubId, setSelectedClubId] = useState<string>("all")
   const [selectedStatus, setSelectedStatus] = useState<EventStatusFilter>("all")
   const [eventTypes, setEventTypes] = useState<EventTypeDto[]>([])
+  const [clubs, setClubs] = useState<ClubDto[]>([])
   const [events, setEvents] = useState<EventData[]>([])
   const [loading, setLoading] = useState<boolean>(false)
   const [error, setError] = useState<string>("")
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  
 
-  // Fetch event types once
+  // Fetch event types and clubs once
   useEffect(() => {
     let mounted = true
-    getAllEventTypes()
-      .then((types) => {
-        if (mounted) setEventTypes(types)
-      })
-      .catch(() => {})
+    
+    const fetchData = async () => {
+      try {
+        const [types, clubsData] = await Promise.all([
+          getAllEventTypes(),
+          getAllClubs()
+        ])
+        if (mounted) {
+          setEventTypes(types)
+          setClubs(clubsData)
+        }
+      } catch (error) {
+        console.error("Error fetching data:", error)
+      }
+    }
+    
+    fetchData()
     return () => {
       mounted = false
     }
   }, [])
 
-  // Fetch events when keyword or type changes (server-side filtering & paging already applied on BE)
+  // Fetch events when keyword, type, club, or page changes (server-side filtering & paging already applied on BE)
   useEffect(() => {
     let mounted = true
     const controller = new AbortController()
@@ -42,11 +60,16 @@ export function EventsPage() {
         const res = await getAllEventsByFilter({
           keyword: searchQuery || undefined,
           eventTypeId: selectedTypeId !== "all" ? Number(selectedTypeId) : undefined,
-          page: 1,
-          size: 30,
+          clubId: selectedClubId !== "all" ? Number(selectedClubId) : undefined,
+          page: currentPage,
+          size: 12,
         })
-        if (mounted) setEvents(res.data)
-      } catch (mounted) {
+        if (mounted) {
+          setEvents(res.data)
+          setTotalPages(Math.ceil(res.total / 12))
+        }
+      } catch (e) {
+        console.error("Error fetching events:", e)
         if (mounted) setError("Không thể tải danh sách sự kiện")
       } finally {
         if (mounted) setLoading(false)
@@ -59,7 +82,12 @@ export function EventsPage() {
       controller.abort()
       clearTimeout(debounce)
     }
-  }, [searchQuery, selectedTypeId])
+  }, [searchQuery, selectedTypeId, selectedClubId, currentPage])
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchQuery, selectedTypeId, selectedClubId, selectedStatus])
 
   const filteredEvents = useMemo(() => {
     if (selectedStatus === "all") return events
@@ -67,40 +95,13 @@ export function EventsPage() {
     return events.filter((e) => computeEventStatus(nowIso, e.startTime, e.endTime) === selectedStatus)
   }, [events, selectedStatus])
 
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-50">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
-                <span className="text-primary-foreground font-bold text-lg">FPT</span>
-              </div>
-              <div>
-                <h1 className="text-xl font-bold text-foreground">FPT Club Management</h1>
-                <p className="text-sm text-muted-foreground">Quản lý câu lạc bộ sinh viên</p>
-              </div>
-            </div>
-            <nav className="hidden md:flex items-center gap-6">
-              <a href="#" className="text-sm font-medium text-foreground hover:text-primary transition-colors">
-                Trang chủ
-              </a>
-              <a href="#" className="text-sm font-medium text-primary">
-                Sự kiện
-              </a>
-              <a href="#" className="text-sm font-medium text-foreground hover:text-primary transition-colors">
-                Câu lạc bộ
-              </a>
-              <a href="#" className="text-sm font-medium text-foreground hover:text-primary transition-colors">
-                Liên hệ
-              </a>
-            </nav>
-            <Button className="hidden md:flex">Đăng nhập</Button>
-          </div>
-        </div>
-      </header>
-
       {/* Hero Section */}
       <section className="bg-gradient-to-br from-primary/10 via-accent/20 to-background border-b border-border">
         <div className="container mx-auto px-4 py-16">
@@ -136,9 +137,12 @@ export function EventsPage() {
         <div className="mb-8">
           <EventFilters
             eventTypes={eventTypes}
+            clubs={clubs}
             selectedTypeId={selectedTypeId}
+            selectedClubId={selectedClubId}
             selectedStatus={selectedStatus}
             onTypeChange={setSelectedTypeId}
+            onClubChange={setSelectedClubId}
             onStatusChange={(s) => setSelectedStatus(s as EventStatusFilter)}
           />
         </div>
@@ -147,17 +151,77 @@ export function EventsPage() {
           <div>
             <h2 className="text-2xl font-bold text-foreground">Tất cả sự kiện</h2>
             <p className="text-muted-foreground mt-1">
-              {loading ? "Đang tải..." : `Tìm thấy ${filteredEvents.length} sự kiện`}
+              {loading ? "Đang tải..." : `Trang ${currentPage} - Hiển thị ${filteredEvents.length} sự kiện${selectedStatus !== "all" ? ` (đã lọc theo trạng thái)` : ""}`}
             </p>
             {error && <p className="text-destructive text-sm mt-2">{error}</p>}
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredEvents.map((event) => (
-            <EventCard key={event.id} event={event} />
-          ))}
-        </div>
+        {loading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {Array.from({ length: 12 }, (_, i) => (
+              <EventCardSkeleton key={i} />
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredEvents.map((event) => (
+              <EventCard key={event.id} event={event} />
+            ))}
+          </div>
+        )}
+
+        {/* Pagination */}
+        {!loading && totalPages > 1 && (
+          <div className="flex items-center justify-center mt-12">
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handlePageChange(currentPage - 1)}
+                disabled={currentPage === 1}
+              >
+                Trước
+              </Button>
+              
+              <div className="flex items-center gap-1">
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  let pageNum;
+                  if (totalPages <= 5) {
+                    pageNum = i + 1;
+                  } else if (currentPage <= 3) {
+                    pageNum = i + 1;
+                  } else if (currentPage >= totalPages - 2) {
+                    pageNum = totalPages - 4 + i;
+                  } else {
+                    pageNum = currentPage - 2 + i;
+                  }
+                  
+                  return (
+                    <Button
+                      key={pageNum}
+                      variant={currentPage === pageNum ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => handlePageChange(pageNum)}
+                      className="w-10 h-10"
+                    >
+                      {pageNum}
+                    </Button>
+                  );
+                })}
+              </div>
+              
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handlePageChange(currentPage + 1)}
+                disabled={currentPage === totalPages}
+              >
+                Sau
+              </Button>
+            </div>
+          </div>
+        )}
 
         {!loading && filteredEvents.length === 0 && (
           <div className="text-center py-16">

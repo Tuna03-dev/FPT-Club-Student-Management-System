@@ -21,6 +21,9 @@ public class News extends BaseEntity {
     @Column(name = "title", nullable = false, length = 500)
     private String title;
 
+    @Column(name = "is_spotlight")
+    private boolean isSpotlight = false;
+
     @Column(name = "content", nullable = false, columnDefinition = "TEXT")
     private String content;
 
@@ -29,6 +32,7 @@ public class News extends BaseEntity {
 
     @Column(name = "news_type", length = 100)
     private String newsType;
+
 
     @Column(name = "is_draft")
     private Boolean isDraft = true;

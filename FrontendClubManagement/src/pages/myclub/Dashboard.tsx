@@ -1,89 +1,196 @@
+import { useState, useEffect } from "react";
 import { CreatePost } from "@/components/features/post/CreatePost";
 import { PostCard } from "@/components/features/post/PostCard";
-
-// Mock data for posts
-const mockPosts = [
-  {
-    id: "1",
-    author: {
-      name: "Nguyễn Văn An",
-      avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=1",
-      role: "Chủ tịch CLB",
-    },
-    content:
-      "Chúc mừng các thành viên mới đã tham gia câu lạc bộ! Hãy cùng nhau xây dựng một cộng đồng năng động và sáng tạo. 🎉",
-    timestamp: "2 giờ trước",
-    likes: 45,
-    comments: 12,
-    shares: 3,
-  },
-  {
-    id: "2",
-    author: {
-      name: "Trần Thị Bình",
-      avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=2",
-      role: "Phó chủ tịch",
-    },
-    content:
-      '📢 Thông báo: Workshop "Kỹ năng làm việc nhóm" sẽ diễn ra vào thứ 7 tuần sau.\n\n📅 Thời gian: 14:00 - 17:00\n📍 Địa điểm: Hội trường A\n\nMọi người đăng ký tham gia nhé!',
-    image: "https://images.unsplash.com/photo-1552664730-d307ca884978?w=800",
-    timestamp: "5 giờ trước",
-    likes: 82,
-    comments: 24,
-    shares: 15,
-  },
-  {
-    id: "3",
-    author: {
-      name: "Lê Minh Cường",
-      avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=3",
-      role: "Ban Chuyên môn",
-    },
-    content:
-      "Cảm ơn mọi người đã tham gia buổi họp hôm nay! Chúng ta đã có những quyết định quan trọng cho dự án sắp tới. 💪",
-    timestamp: "1 ngày trước",
-    likes: 34,
-    comments: 8,
-    shares: 2,
-  },
-  {
-    id: "4",
-    author: {
-      name: "Phạm Thu Hà",
-      avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=4",
-      role: "Ban Truyền thông",
-    },
-    content:
-      "🎨 Cuộc thi thiết kế Logo cho CLB đã chính thức bắt đầu!\n\nHạn nộp bài: 30/10/2024\nGiải thưởng: 5.000.000 VNĐ\n\nHãy thể hiện tài năng của bạn nhé! ✨",
-    image: "https://images.unsplash.com/photo-1561070791-2526d30994b5?w=800",
-    timestamp: "2 ngày trước",
-    likes: 156,
-    comments: 45,
-    shares: 28,
-  },
-];
+import { postService, type PostWithRelationsData } from "@/services/postService";
+import { toast } from "sonner";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Card, CardContent } from "@/components/ui/card";
 
 export const Dashboard = () => {
+  const [posts, setPosts] = useState<PostWithRelationsData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+
+  const clubId = 1; // TODO: Get from context/route
+
+  const loadPosts = async (pageNum: number = 0, reset: boolean = true) => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const response = await postService.getClubWidePosts(clubId, {
+        page: pageNum,
+        size: 10,
+        sort: "createdAt,desc",
+      });
+
+      if (response.code === 200 && response.data) {
+        const newPosts = response.data.content;
+        if (reset) {
+          setPosts(newPosts);
+        } else {
+          setPosts(prev => [...prev, ...newPosts]);
+        }
+        setHasMore(response.data.hasNext);
+        setPage(pageNum);
+      } else {
+        const message = response.message || "Không thể tải bài viết";
+        setError(message);
+        toast.error(message);
+      }
+    } catch (err) {
+      console.error("Error loading posts:", err);
+      const message = "Có lỗi khi tải bài viết";
+      setError(message);
+      toast.error(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadPosts(0, true);
+  }, []);
+
+  const loadMore = () => {
+    if (!loading && hasMore) {
+      loadPosts(page + 1, false);
+    }
+  };
+
+  const refreshPosts = () => {
+    loadPosts(0, true);
+  };
+
+  const convertPostToCard = (post: PostWithRelationsData) => ({
+    id: post.id.toString(),
+    author: {
+      name: post.authorName,
+      avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=default", // Default avatar
+      role: "Thành viên", // Default role
+    },
+    content: post.content,
+    images: post.media
+      .filter(m => m.mediaType === "IMAGE")
+      .map(m => m.mediaUrl), // Get all images
+    timestamp: formatTimestamp(post.createdAt),
+    likes: post.likes.length,
+    comments: post.comments.length,
+    shares: 0, // Backend doesn't have shares field, using default
+  });
+
+  const formatTimestamp = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffInHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60));
+    
+    if (diffInHours < 1) return "Vừa xong";
+    if (diffInHours < 24) return `${diffInHours} giờ trước`;
+    
+    const diffInDays = Math.floor(diffInHours / 24);
+    if (diffInDays < 7) return `${diffInDays} ngày trước`;
+    
+    return date.toLocaleDateString('vi-VN');
+  };
+
   return (
     <div className="min-h-full bg-secondary/20">
-      <div className="max-w-2xl mx-auto p-6 space-y-4">
+      <div className="max-w-lg mx-auto p-4 space-y-4">
         {/* Create Post */}
-        <CreatePost />
+        <CreatePost onPostCreated={refreshPosts} />
+
+        {/* Loading State */}
+        {loading && posts.length === 0 && (
+          <div className="space-y-4">
+            {Array.from({ length: 3 }).map((_, index) => (
+              <Card key={index} className="p-6">
+                <CardContent className="space-y-4">
+                  <div className="flex items-center gap-3">
+                    <Skeleton className="h-10 w-10 rounded-full" />
+                    <div className="space-y-2">
+                      <Skeleton className="h-4 w-32" />
+                      <Skeleton className="h-3 w-20" />
+                    </div>
+                  </div>
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-3/4" />
+                  <Skeleton className="h-32 w-full" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+
+        {/* Error State */}
+        {error && (
+          <Card className="p-6 border-destructive/20">
+            <CardContent>
+              <div className="text-center space-y-4">
+                <div className="text-destructive font-semibold">
+                  {error}
+                </div>
+                <button
+                  onClick={refreshPosts}
+                  className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+                >
+                  Thử lại
+                </button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Posts Feed */}
-        <div className="space-y-4">
-          {mockPosts.map((post) => (
-            <PostCard
-              key={post.id}
-              author={post.author}
-              content={post.content}
-              image={post.image}
-              timestamp={post.timestamp}
-              likes={post.likes}
-              comments={post.comments}
-            />
-          ))}
-        </div>
+        {!loading && !error && posts.length > 0 && (
+          <div className="space-y-4">
+            {posts.map((post) => (
+              <PostCard
+                key={post.id}
+                {...convertPostToCard(post)}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* Empty State */}
+        {!loading && !error && posts.length === 0 && (
+          <Card className="p-6">
+            <CardContent>
+              <div className="text-center space-y-4">
+                <div className="text-muted-foreground">
+                  Chưa có bài viết nào
+                </div>
+                <button
+                  onClick={refreshPosts}
+                  className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+                >
+                  Tải lại
+                </button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Load More Button */}
+        {!loading && hasMore && posts.length > 0 && (
+          <div className="flex justify-center pt-4">
+            <button
+              onClick={loadMore}
+              className="px-6 py-2 bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/80 transition-colors"
+            >
+              Tải thêm
+            </button>
+          </div>
+        )}
+
+        {/* Loading More State */}
+        {loading && posts.length > 0 && (
+          <div className="flex justify-center pt-4">
+            <div className="text-muted-foreground">Đang tải...</div>
+          </div>
+        )}
       </div>
     </div>
   );
