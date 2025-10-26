@@ -6,7 +6,7 @@ import com.sep490.backendclubmanagement.entity.ClubMemberShip;
 import com.sep490.backendclubmanagement.entity.Team;
 import com.sep490.backendclubmanagement.entity.User;
 import com.sep490.backendclubmanagement.exception.AccessDeniedException;
-import com.sep490.backendclubmanagement.repository.ClubMembershipRepository;
+import com.sep490.backendclubmanagement.repository.ClubMemberShipRepository;
 import com.sep490.backendclubmanagement.repository.RoleMembershipRepository;
 import com.sep490.backendclubmanagement.repository.TeamRepository;
 import com.sep490.backendclubmanagement.repository.UserRepository;
@@ -23,7 +23,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class MyClubService {
 
-    private final ClubMembershipRepository clubMembershipRepository;
+    private final ClubMemberShipRepository clubMembershipRepository;
     private final RoleMembershipRepository roleMembershipRepository;
     private final TeamRepository teamRepository;
     private final UserRepository userRepository;  // ✅ thêm dòng này
