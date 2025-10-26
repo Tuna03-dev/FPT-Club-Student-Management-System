@@ -4,7 +4,7 @@ import HomePage from "../pages/HomePage";
 import { ClubLayout } from "@/layouts/ClubLayout";
 
 import { Dashboard } from "@/pages/myclub/Dashboard";
-import  MemberList  from "@/pages/myclub/members/MemberList";
+import MemberList from "@/pages/myclub/members/MemberList";
 import { EventList } from "@/pages/myclub/events/EventList";
 import { Notifications } from "@/pages/myclub/Notifications";
 import { Settings } from "@/pages/myclub/Settings";
@@ -13,8 +13,10 @@ import { EventsPage } from "@/pages/events/EventPageList";
 import NewsPageList from "@/pages/news/NewsPageList";
 import NewsPageDetail from "@/pages/news/NewsPageDetail";
 import EventDetailPage from "@/pages/events/EventDetail";
-import ProtectedRoute from "../components/ProtectedRoute";
-import LoginPage from "@/pages/LoginPage/LoginPage";
+import LoginPage from "@/pages/login/Login";
+import { RecruitmentManagement } from "@/pages/myclub/recruitmentManagement/RecruitmentManagement";
+import { StudentRecruitment } from "@/pages/studentRecruitment/StudentRecruitment";
+import { ClubDetail } from "@/pages/clubDetail/ClubDetail";
 
 /**
  * Main application router
@@ -56,15 +58,23 @@ export const router = createBrowserRouter([
       },
       {
         path: "clubs",
-        element: <div className="container mx-auto px-4 py-8">Trang Câu lạc bộ/Hội nhóm</div>,
+        element: (
+          <div className="container mx-auto px-4 py-8">
+            Trang Câu lạc bộ/Hội nhóm
+          </div>
+        ),
       },
       {
         path: "achievements",
-        element: <div className="container mx-auto px-4 py-8">Trang Thành tích</div>,
+        element: (
+          <div className="container mx-auto px-4 py-8">Trang Thành tích</div>
+        ),
       },
       {
         path: "contact",
-        element: <div className="container mx-auto px-4 py-8">Trang Liên hệ</div>,
+        element: (
+          <div className="container mx-auto px-4 py-8">Trang Liên hệ</div>
+        ),
       },
       {
         path: "myclub",
@@ -73,16 +83,32 @@ export const router = createBrowserRouter([
     ],
   },
   {
+    path: "/events",
+    element: <EventsPage />,
+  },
+  {
+    path: "/events/:id",
+    element: <EventDetailPage />,
+  },
+  {
+    path: "news",
+    element: <NewsPageList />,
+  },
+  {
+    path: "myRecruitmentApplication",
+    element: <StudentRecruitment />,
+  },
+  {
+    path: "clubDetail/:clubId",
+    element: <ClubDetail />,
+  },
+  {
     path: "/login",
     element: <LoginPage />,
   },
   {
     path: "/myclub",
-    element: (
-      <ProtectedRoute>
-        <ClubLayout />
-      </ProtectedRoute>
-    ),
+    element: <ClubLayout />,
     children: [
       {
         index: true,
@@ -95,6 +121,10 @@ export const router = createBrowserRouter([
       {
         path: "events",
         element: <EventList />,
+      },
+      {
+        path: "recruitments",
+        element: <RecruitmentManagement />,
       },
       {
         path: "notifications",

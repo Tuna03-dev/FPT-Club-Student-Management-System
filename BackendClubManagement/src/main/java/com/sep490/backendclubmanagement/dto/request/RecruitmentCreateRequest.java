@@ -1,0 +1,25 @@
+package com.sep490.backendclubmanagement.dto.request;
+
+import com.sep490.backendclubmanagement.entity.RecruitmentStatus;
+import jakarta.validation.constraints.Future;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+
+import java.time.LocalDateTime;
+import java.util.List;
+
+public class RecruitmentCreateRequest {
+    @NotBlank
+    public String title;
+    public String description;
+    @NotNull
+    public LocalDateTime startDate;
+    @NotNull @Future
+    public LocalDateTime endDate;
+    public Integer maxApplicants;
+    public String requirements;
+    public RecruitmentStatus status; // DRAFT or OPEN
+    public List<RecruitmentQuestionRequest> questions;
+}
+
+

@@ -9,6 +9,7 @@ import {
   Shield,
   FileText,
   Clock,
+  Briefcase,
 } from "lucide-react";
 import { NavLink, Outlet } from "react-router-dom";
 import { useNavigate } from "react-router-dom";
@@ -64,6 +65,12 @@ const managementItems = [
     label: "Quản lý sự kiện",
   },
   {
+    key: "manage_recruitments",
+    url: "/myclub/recruitments",
+    icon: Briefcase,
+    label: "Quản lý tuyển thành viên",
+  },
+  {
     key: "pending_requests",
     url: "/myclub/pending-requests",
     icon: Clock,
@@ -76,6 +83,7 @@ const managementColors: Record<string, string> = {
   pending_posts: "bg-gradient-to-br from-yellow-500 to-yellow-600",
   manage_members: "bg-gradient-to-br from-blue-500 to-blue-600",
   manage_events: "bg-gradient-to-br from-green-500 to-green-600",
+  manage_recruitments: "bg-gradient-to-br from-red-500 to-red-600",
   pending_requests: "bg-gradient-to-br from-orange-500 to-orange-600",
 };
 
