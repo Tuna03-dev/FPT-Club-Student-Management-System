@@ -46,13 +46,16 @@ public class RecruitmentService implements RecruitmentServiceInterface {
     public RecruitmentData getRecruitment(Long id) throws AppException {
         Recruitment r = recruitmentRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.INTERNAL_SERVER_ERROR));
+        
         // Load questions with options to include in the response
         List<RecruitmentFormQuestion> questions = questionRepository.findByRecruitment_IdOrderByQuestionOrderAsc(r.getId());
+        
         // Load options for each question
         for (RecruitmentFormQuestion question : questions) {
             List<QuestionOption> options = questionOptionRepository.findByQuestion_IdOrderByOptionOrderAsc(question.getId());
             question.setOptions(options.stream().collect(java.util.stream.Collectors.toSet()));
         }
+        
         r.setFormQuestions(questions.stream().collect(java.util.stream.Collectors.toSet()));
         return recruitmentMapper.toDto(r);
     }

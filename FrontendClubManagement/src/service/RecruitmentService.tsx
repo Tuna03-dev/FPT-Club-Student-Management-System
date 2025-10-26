@@ -94,6 +94,7 @@ export interface RecruitmentCreateRequest {
   endDate: string;   // ISO datetime string
   maxApplicants?: number;
   requirements?: string;
+  status?: "DRAFT" | "OPEN"; // Status of recruitment
   questions?: RecruitmentQuestionRequest[];
 }
 
@@ -178,10 +179,12 @@ export async function updateRecruitment(
 export async function changeRecruitmentStatus(
   id: number,
   status: "DRAFT" | "OPEN" | "CLOSED" | "CANCELLED"
-): Promise<void> {
-  await axiosClient.patch<void>(
+): Promise<RecruitmentData> {
+  const res = await axiosClient.patch<RecruitmentData>(
     `/recruitments/${id}/status?status=${status}`
   );
+  if (!res.data) throw new Error("Failed to change recruitment status");
+  return res.data;
 }
 
 // Delete recruitment

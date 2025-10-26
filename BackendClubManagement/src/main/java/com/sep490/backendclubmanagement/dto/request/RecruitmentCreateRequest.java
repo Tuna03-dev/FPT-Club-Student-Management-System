@@ -1,5 +1,6 @@
 package com.sep490.backendclubmanagement.dto.request;
 
+import com.sep490.backendclubmanagement.entity.RecruitmentStatus;
 import jakarta.validation.constraints.Future;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -17,6 +18,7 @@ public class RecruitmentCreateRequest {
     public LocalDateTime endDate;
     public Integer maxApplicants;
     public String requirements;
+    public RecruitmentStatus status; // DRAFT or OPEN
     public List<RecruitmentQuestionRequest> questions;
 }
 

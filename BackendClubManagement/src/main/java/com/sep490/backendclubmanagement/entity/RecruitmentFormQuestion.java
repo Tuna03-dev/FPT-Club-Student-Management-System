@@ -27,6 +27,9 @@ public class RecruitmentFormQuestion extends BaseEntity {
     @Column(name = "question_order")
     private Integer questionOrder;
 
+    @Column(name = "is_required")
+    private Integer isRequired;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "recruitment_id", nullable = false)
     private Recruitment recruitment;
