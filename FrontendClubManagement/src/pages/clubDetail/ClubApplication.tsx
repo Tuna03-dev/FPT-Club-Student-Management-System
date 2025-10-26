@@ -10,17 +10,22 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, Send, AlertCircle, CheckCircle, Loader2 } from "lucide-react";
-import { 
-  getRecruitmentById, 
-  submitApplication, 
+import {
+  ArrowLeft,
+  Send,
+  AlertCircle,
+  CheckCircle,
+  Loader2,
+} from "lucide-react";
+import {
+  getRecruitmentById,
+  submitApplication,
   type RecruitmentData,
-  type ApplicationSubmitRequest 
+  type ApplicationSubmitRequest,
 } from "@/service/RecruitmentService";
 import { getClubDetailById, type ClubDetailData } from "@/service/ClubService";
 
@@ -47,10 +52,10 @@ export function ClubApplicationForm({
       try {
         setLoading(true);
         setError(null);
-        
+
         const recruitmentData = await getRecruitmentById(recruitmentId);
         setRecruitment(recruitmentData);
-        
+
         const clubData = await getClubDetailById(recruitmentData.clubId);
         setClub(clubData);
       } catch (err) {
@@ -68,10 +73,11 @@ export function ClubApplicationForm({
     if (!recruitment) return;
 
     // Validate required questions
-    const requiredQuestions = recruitment.questions?.filter(
-      (q) => q.questionType !== "FILE" // Assuming all questions are required
-    ) || [];
-    
+    const requiredQuestions =
+      recruitment.questions?.filter(
+        (q) => q.questionType !== "FILE" // Assuming all questions are required
+      ) || [];
+
     const allAnswered = requiredQuestions.every((q) => formAnswers[q.id]);
 
     if (!allAnswered) {
@@ -83,10 +89,14 @@ export function ClubApplicationForm({
 
     try {
       // Prepare answers for API
-      const answers = Object.entries(formAnswers).map(([questionId, answer]) => ({
-        questionId: Number(questionId),
-        answerText: Array.isArray(answer) ? answer.join(", ") : String(answer),
-      }));
+      const answers = Object.entries(formAnswers).map(
+        ([questionId, answer]) => ({
+          questionId: Number(questionId),
+          answerText: Array.isArray(answer)
+            ? answer.join(", ")
+            : String(answer),
+        })
+      );
 
       const request: ApplicationSubmitRequest = {
         recruitmentId: recruitment.id,
@@ -109,7 +119,9 @@ export function ClubApplicationForm({
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
           <Loader2 className="h-12 w-12 animate-spin mx-auto text-primary mb-4" />
-          <p className="text-muted-foreground">Đang tải thông tin tuyển dụng...</p>
+          <p className="text-muted-foreground">
+            Đang tải thông tin tuyển dụng...
+          </p>
         </div>
       </div>
     );
@@ -121,7 +133,9 @@ export function ClubApplicationForm({
       <div className="min-h-screen bg-background flex items-center justify-center">
         <Card className="max-w-md w-full mx-4">
           <CardContent className="text-center py-12">
-            <p className="text-red-500 mb-4">{error || "Không tìm thấy thông tin tuyển dụng"}</p>
+            <p className="text-red-500 mb-4">
+              {error || "Không tìm thấy thông tin tuyển dụng"}
+            </p>
             <Button onClick={onBack}>Quay lại</Button>
           </CardContent>
         </Card>
@@ -142,8 +156,8 @@ export function ClubApplicationForm({
             </div>
             <h2 className="text-2xl font-bold mb-2">Gửi đơn thành công!</h2>
             <p className="text-muted-foreground mb-6">
-              Đơn ứng tuyển của bạn đã được gửi đến {club.clubName}. Chúng
-              tôi sẽ xem xét và liên hệ với bạn trong vòng 3-5 ngày làm việc.
+              Đơn ứng tuyển của bạn đã được gửi đến {club.clubName}. Chúng tôi
+              sẽ xem xét và liên hệ với bạn trong vòng 3-5 ngày làm việc.
             </p>
             <div className="space-y-2">
               <p className="text-sm text-muted-foreground">
@@ -188,9 +202,7 @@ export function ClubApplicationForm({
                   className="w-20 h-20 rounded-lg object-cover"
                 />
                 <div className="flex-1">
-                  <CardTitle className="text-xl">
-                    {recruitment.title}
-                  </CardTitle>
+                  <CardTitle className="text-xl">{recruitment.title}</CardTitle>
                   <CardDescription className="mt-2">
                     {recruitment.description}
                   </CardDescription>
@@ -274,46 +286,50 @@ export function ClubApplicationForm({
                         </RadioGroup>
                       )}
 
-                      {question.questionType === "CHECKBOX" && question.options && (
-                        <div className="space-y-2">
-                          {question.options.map((option, optIndex) => (
-                            <div
-                              key={optIndex}
-                              className="flex items-center space-x-2"
-                            >
-                              <Checkbox
-                                id={`${question.id}-${optIndex}`}
-                                checked={(
-                                  formAnswers[question.id] || []
-                                ).includes(option)}
-                                onCheckedChange={(checked) => {
-                                  const currentAnswers =
-                                    formAnswers[question.id] || [];
-                                  if (checked) {
-                                    setFormAnswers((prev) => ({
-                                      ...prev,
-                                      [question.id]: [...currentAnswers, option],
-                                    }));
-                                  } else {
-                                    setFormAnswers((prev) => ({
-                                      ...prev,
-                                      [question.id]: currentAnswers.filter(
-                                        (a: string) => a !== option
-                                      ),
-                                    }));
-                                  }
-                                }}
-                              />
-                              <Label
-                                htmlFor={`${question.id}-${optIndex}`}
-                                className="font-normal cursor-pointer"
+                      {question.questionType === "CHECKBOX" &&
+                        question.options && (
+                          <div className="space-y-2">
+                            {question.options.map((option, optIndex) => (
+                              <div
+                                key={optIndex}
+                                className="flex items-center space-x-2"
                               >
-                                {option}
-                              </Label>
-                            </div>
-                          ))}
-                        </div>
-                      )}
+                                <Checkbox
+                                  id={`${question.id}-${optIndex}`}
+                                  checked={(
+                                    formAnswers[question.id] || []
+                                  ).includes(option)}
+                                  onCheckedChange={(checked) => {
+                                    const currentAnswers =
+                                      formAnswers[question.id] || [];
+                                    if (checked) {
+                                      setFormAnswers((prev) => ({
+                                        ...prev,
+                                        [question.id]: [
+                                          ...currentAnswers,
+                                          option,
+                                        ],
+                                      }));
+                                    } else {
+                                      setFormAnswers((prev) => ({
+                                        ...prev,
+                                        [question.id]: currentAnswers.filter(
+                                          (a: string) => a !== option
+                                        ),
+                                      }));
+                                    }
+                                  }}
+                                />
+                                <Label
+                                  htmlFor={`${question.id}-${optIndex}`}
+                                  className="font-normal cursor-pointer"
+                                >
+                                  {option}
+                                </Label>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                     </div>
                   ))
               ) : (
