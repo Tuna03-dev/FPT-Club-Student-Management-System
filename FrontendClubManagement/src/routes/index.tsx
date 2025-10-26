@@ -1,6 +1,6 @@
 import { createBrowserRouter, Navigate } from "react-router-dom";
-import MainLayout from "../layouts/MainLayout";
-import HomePage from "../pages/HomePage";
+import MainLayout from "@/layouts/MainLayout";
+import HomePage from "@/pages/HomePage";
 import { ClubLayout } from "@/layouts/ClubLayout";
 
 import { Dashboard } from "@/pages/myclub/Dashboard";
@@ -13,49 +13,39 @@ import { EventsPage } from "@/pages/events/EventPageList";
 import NewsPageList from "@/pages/news/NewsPageList";
 import NewsPageDetail from "@/pages/news/NewsPageDetail";
 import EventDetailPage from "@/pages/events/EventDetail";
-import LoginPage from "@/pages/login/Login";
+import ProtectedRoute from "@/components/ProtectedRoute";
+import MyClubRedirect from "@/pages/myclub/MyClubRedirect";
+import ClubSelect from "@/pages/myclub/ClubSelect";
+import TeamDetailPage from "@/pages/myclub/teams/TeamDetail";
 import { RecruitmentManagement } from "@/pages/myclub/recruitmentManagement/RecruitmentManagement";
 import { StudentRecruitment } from "@/pages/studentRecruitment/StudentRecruitment";
 import { ClubDetail } from "@/pages/clubDetail/ClubDetail";
 
-/**
- * Main application router
- */
+import LoginPage from "@/pages/login/Login";
+
 export const router = createBrowserRouter([
   {
     path: "/",
     element: <MainLayout />,
     children: [
-      {
-        index: true,
-        element: <HomePage />,
-      },
+      { index: true, element: <HomePage /> },
+
       {
         path: "events",
         children: [
-          {
-            index: true,
-            element: <EventsPage />,
-          },
-          {
-            path: ":id",
-            element: <EventDetailPage />,
-          },
+          { index: true, element: <EventsPage /> },
+          { path: ":id", element: <EventDetailPage /> },
         ],
       },
+
       {
         path: "news",
         children: [
-          {
-            index: true,
-            element: <NewsPageList />,
-          },
-          {
-            path: ":id",
-            element: <NewsPageDetail />,
-          },
+          { index: true, element: <NewsPageList /> },
+          { path: ":id", element: <NewsPageDetail /> },
         ],
       },
+
       {
         path: "clubs",
         element: (
@@ -76,70 +66,52 @@ export const router = createBrowserRouter([
           <div className="container mx-auto px-4 py-8">Trang Liên hệ</div>
         ),
       },
-      {
-        path: "myclub",
-        element: <Navigate to="/myclub" replace />,
-      },
+
+      { path: "myRecruitmentApplication", element: <StudentRecruitment /> },
+      { path: "clubDetail/:clubId", element: <ClubDetail /> },
     ],
   },
-  {
-    path: "/events",
-    element: <EventsPage />,
-  },
-  {
-    path: "/events/:id",
-    element: <EventDetailPage />,
-  },
-  {
-    path: "news",
-    element: <NewsPageList />,
-  },
-  {
-    path: "myRecruitmentApplication",
-    element: <StudentRecruitment />,
-  },
-  {
-    path: "clubDetail/:clubId",
-    element: <ClubDetail />,
-  },
-  {
-    path: "/login",
-    element: <LoginPage />,
-  },
+
+  { path: "/login", element: <LoginPage /> },
+
   {
     path: "/myclub",
-    element: <ClubLayout />,
+    element: (
+      <ProtectedRoute>
+        <MyClubRedirect />
+      </ProtectedRoute>
+    ),
+  },
+
+  {
+    path: "/myclub/select",
+    element: (
+      <ProtectedRoute>
+        <ClubSelect />
+      </ProtectedRoute>
+    ),
+  },
+
+  {
+    path: "/myclub/:clubId",
+    element: (
+      <ProtectedRoute>
+        <ClubLayout />
+      </ProtectedRoute>
+    ),
     children: [
-      {
-        index: true,
-        element: <Dashboard />,
-      },
-      {
-        path: "members",
-        element: <MemberList />,
-      },
-      {
-        path: "events",
-        element: <EventList />,
-      },
-      {
-        path: "recruitments",
-        element: <RecruitmentManagement />,
-      },
-      {
-        path: "notifications",
-        element: <Notifications />,
-      },
-      {
-        path: "settings",
-        element: <Settings />,
-      },
-      {
-        path: "team/:slug",
-        element: <Dashboard />,
-      },
+      { index: true, element: <Dashboard /> },
+      { path: "members", element: <MemberList /> },
+      { path: "events", element: <EventList /> },
+      { path: "recruitments", element: <RecruitmentManagement /> },
+      { path: "notifications", element: <Notifications /> },
+      { path: "settings", element: <Settings /> },
+      { path: "teams/:teamId", element: <TeamDetailPage /> },
+
+      { path: "myclub", element: <Navigate to="." replace /> },
     ],
   },
+
   {
     path: "*",
     element: (
