@@ -60,4 +60,14 @@ public class GlobalExceptionHandler {
                 .status(ErrorCode.INTERNAL_SERVER_ERROR.getHttpStatus())
                 .body(ApiResponse.error(ErrorCode.INTERNAL_SERVER_ERROR, null));
     }
+    @ExceptionHandler(NotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleNotFound(NotFoundException ex) {
+        log.warn("Resource not found: {}", ex.getMessage());
+
+        return ResponseEntity
+                .status(ErrorCode.NOT_FOUND.getHttpStatus())
+                .body(ApiResponse.error(ErrorCode.NOT_FOUND, ex.getMessage(), null));
+    }
+
+
 }

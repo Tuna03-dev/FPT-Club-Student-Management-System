@@ -1,6 +1,10 @@
 spring:
   application:
     name: BackendClubManagement
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 40MB
   # Redis Cloud Configuration
   data:
     redis:
@@ -48,3 +52,14 @@ google:
 
 auth:
   fap-api-url: ${FAP_API_URL:http://localhost:8081/api/allowed-users}
+
+  access-token-expiration: 86400000 # 24 hours in milliseconds
+  refresh-token-expiration: 604800000 # 7 days in milliseconds
+
+cloudinary:
+  cloud-name: ${CLOUDINARY_CLOUD_NAME:dbeir3ru4}
+  api-key: ${CLOUDINARY_API_KEY:421753392354964}
+  api-secret: ${CLOUDINARY_API_SECRET:0WDkFEGIim30YoPccM3FuDwshF4}
+
+
+

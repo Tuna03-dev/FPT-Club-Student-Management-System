@@ -5,10 +5,6 @@
       "destination": "http://20.239.233.135:8080/api/:path*"
     },
     {
-      "source": "/auth/:path*",
-      "destination": "http://20.239.233.135:8080/auth/:path*"
-    },
-    {
       "source": "/(.*)", 
       "destination": "/"
     }
