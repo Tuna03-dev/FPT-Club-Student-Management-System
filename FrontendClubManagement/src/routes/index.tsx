@@ -4,7 +4,7 @@ import HomePage from "../pages/HomePage";
 import { ClubLayout } from "@/layouts/ClubLayout";
 
 import { Dashboard } from "@/pages/myclub/Dashboard";
-import  MemberList  from "@/pages/myclub/members/MemberList";
+import MemberList from "@/pages/myclub/members/MemberList";
 import { EventList } from "@/pages/myclub/events/EventList";
 import { Notifications } from "@/pages/myclub/Notifications";
 import { Settings } from "@/pages/myclub/Settings";
@@ -58,22 +58,29 @@ export const router = createBrowserRouter([
       },
       {
         path: "clubs",
-        element: <div className="container mx-auto px-4 py-8">Trang Câu lạc bộ/Hội nhóm</div>,
+        element: (
+          <div className="container mx-auto px-4 py-8">
+            Trang Câu lạc bộ/Hội nhóm
+          </div>
+        ),
       },
       {
         path: "achievements",
-        element: <div className="container mx-auto px-4 py-8">Trang Thành tích</div>,
+        element: (
+          <div className="container mx-auto px-4 py-8">Trang Thành tích</div>
+        ),
       },
       {
         path: "contact",
-        element: <div className="container mx-auto px-4 py-8">Trang Liên hệ</div>,
+        element: (
+          <div className="container mx-auto px-4 py-8">Trang Liên hệ</div>
+        ),
       },
       {
         path: "myclub",
         element: <Navigate to="/myclub" replace />,
       },
     ],
-    element: <Navigate to="/myclub" replace />,
   },
   {
     path: "/events",
