@@ -49,7 +49,7 @@ public class User extends BaseEntity {
     @Column(name = "provider_id", length = 100)
     private String providerId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.EAGER) // thay cho LAZY
     @JoinColumn(name = "system_role_id")
     private SystemRole systemRole;
 
