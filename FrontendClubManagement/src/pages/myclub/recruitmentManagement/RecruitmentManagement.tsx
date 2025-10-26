@@ -84,6 +84,7 @@ interface Recruitment {
   requirements?: string[];
   benefits?: string[];
   form_questions: RecruitmentForm[];
+  teamOptionIds?: number[];
   applications: RecruitmentApplication[];
   created_at: string;
   updated_at: string;
@@ -144,6 +145,7 @@ export function RecruitmentManagement() {
   const [error, setError] = useState<string | null>(null);
   const [editingRecruitment, setEditingRecruitment] =
     useState<Recruitment | null>(null);
+  const [changingStatusId, setChangingStatusId] = useState<string | null>(null);
 
   // Get current user and clubId
   // const currentUser = authService.getCurrentUser();
@@ -193,6 +195,7 @@ export function RecruitmentManagement() {
           options: q.options,
           required: true, // TODO: Get from API if available
         })),
+        teamOptionIds: r.teamOptionIds,
         applications: [], // Will be fetched separately when needed
         created_at: r.createdAt,
         updated_at: r.updatedAt,
@@ -312,6 +315,12 @@ export function RecruitmentManagement() {
   }, [applications, searchQuery, applicationStatusFilter]);
 
   const handleEditRecruitment = async (recruitment: Recruitment) => {
+    // Check if recruitment is closed
+    if (recruitment.status === "closed") {
+      toast.error("Không thể chỉnh sửa đợt tuyển dụng đã đóng");
+      return;
+    }
+
     try {
       setLoading(true);
 
@@ -346,10 +355,14 @@ export function RecruitmentManagement() {
           options: q.options,
           required: true,
         })),
+        teamOptionIds: freshData.teamOptionIds, // Map team options
         applications: [],
         created_at: freshData.createdAt,
         updated_at: freshData.updatedAt,
       };
+
+      console.log("Mapped recruitment for editing:", mappedRecruitment);
+      console.log("Team options from API:", freshData.teamOptionIds);
 
       // Load recruitment data into form
       setEditingRecruitment(mappedRecruitment);
@@ -419,7 +432,11 @@ export function RecruitmentManagement() {
     newStatus: "OPEN" | "CLOSED"
   ) => {
     try {
-      setLoading(true);
+      console.log(`Changing recruitment ${recruitmentId} status to ${newStatus}`);
+      
+      // Set loading state for this specific button
+      setChangingStatusId(recruitmentId);
+      
       await changeRecruitmentStatus(parseInt(recruitmentId), newStatus);
 
       const statusText = newStatus === "OPEN" ? "mở" : "đóng";
@@ -427,15 +444,33 @@ export function RecruitmentManagement() {
         `${statusText === "mở" ? "Mở" : "Đóng"} đơn tuyển dụng thành công!`
       );
 
-      // Refetch recruitments to update the list
-      await fetchRecruitments();
+      // Update the recruitment in the local state immediately for instant UI update
+      setRecruitments((prevRecruitments) =>
+        prevRecruitments.map((r) =>
+          r.recruitment_id === recruitmentId
+            ? { ...r, status: newStatus.toLowerCase() as RecruitmentStatus }
+            : r
+        )
+      );
+
+      // Reset filter to "all" to show the updated recruitment
+      // (so it doesn't disappear if user was filtering by specific status)
+      if (statusFilter !== "all") {
+        console.log("Resetting filter to 'all' to show updated recruitment");
+        setStatusFilter("all");
+      }
+
+      console.log("Status changed successfully, list updated");
     } catch (err: any) {
       console.error("Error changing recruitment status:", err);
       toast.error(
         err.message || "Không thể thay đổi trạng thái đơn tuyển dụng"
       );
+      
+      // Refetch on error to ensure consistency
+      await fetchRecruitments();
     } finally {
-      setLoading(false);
+      setChangingStatusId(null);
     }
   };
 
@@ -563,6 +598,11 @@ export function RecruitmentManagement() {
                             <Badge className={statusColors[recruitment.status]}>
                               {statusLabels[recruitment.status]}
                             </Badge>
+                            {recruitment.status === "closed" && (
+                              <Badge variant="outline" className="text-xs text-muted-foreground">
+                                🔒 Không thể chỉnh sửa
+                              </Badge>
+                            )}
                             {/* <Badge variant="outline" className="text-xs">
                               {recruitment.semester_name}
                             </Badge> */}
@@ -638,6 +678,8 @@ export function RecruitmentManagement() {
                           size="sm"
                           className="bg-transparent"
                           onClick={() => handleEditRecruitment(recruitment)}
+                          disabled={recruitment.status === "closed"}
+                          title={recruitment.status === "closed" ? "Không thể chỉnh sửa đợt tuyển dụng đã đóng" : "Chỉnh sửa đợt tuyển dụng"}
                         >
                           <Edit className="h-4 w-4 mr-2" />
                           Chỉnh sửa
@@ -652,10 +694,20 @@ export function RecruitmentManagement() {
                                 "OPEN"
                               )
                             }
+                            disabled={changingStatusId === recruitment.recruitment_id}
                             className="bg-transparent text-green-600 border-green-200 hover:bg-green-50 hover:text-green-700"
                           >
-                            <Unlock className="h-4 w-4 mr-2" />
-                            Mở đơn
+                            {changingStatusId === recruitment.recruitment_id ? (
+                              <>
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                Đang xử lý...
+                              </>
+                            ) : (
+                              <>
+                                <Unlock className="h-4 w-4 mr-2" />
+                                Mở đơn
+                              </>
+                            )}
                           </Button>
                         )}
                         {recruitment.status === "open" && (
@@ -668,10 +720,20 @@ export function RecruitmentManagement() {
                                 "CLOSED"
                               )
                             }
+                            disabled={changingStatusId === recruitment.recruitment_id}
                             className="bg-transparent text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
                           >
-                            <Lock className="h-4 w-4 mr-2" />
-                            Đóng đơn
+                            {changingStatusId === recruitment.recruitment_id ? (
+                              <>
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                Đang xử lý...
+                              </>
+                            ) : (
+                              <>
+                                <Lock className="h-4 w-4 mr-2" />
+                                Đóng đơn
+                              </>
+                            )}
                           </Button>
                         )}
                         <Button
@@ -711,6 +773,7 @@ export function RecruitmentManagement() {
         {/* Create/Edit Recruitment Tab */}
         {activeTab === "create" && (
           <RecruitmentForm
+            clubId={clubId}
             editingRecruitment={editingRecruitment}
             onSave={handleSaveRecruitment}
             onCancel={handleCancelForm}

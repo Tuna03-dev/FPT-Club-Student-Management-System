@@ -33,6 +33,7 @@ export interface RecruitmentData {
   requirements?: string;
   clubId: number;
   questions?: RecruitmentQuestionData[];
+  teamOptionIds?: number[]; // Danh sách ID của các team cho phép sinh viên lựa chọn
   createdAt: string;
   updatedAt: string;
 }
@@ -96,6 +97,7 @@ export interface RecruitmentCreateRequest {
   requirements?: string;
   status?: "DRAFT" | "OPEN"; // Status of recruitment
   questions?: RecruitmentQuestionRequest[];
+  teamOptionIds?: number[]; // Danh sách ID của các team cho phép sinh viên lựa chọn
 }
 
 // Get all recruitments by club ID

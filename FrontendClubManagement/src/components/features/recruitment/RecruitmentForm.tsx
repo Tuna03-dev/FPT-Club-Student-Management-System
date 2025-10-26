@@ -14,7 +14,10 @@ import {
 import { Label } from "@/components/ui/label";
 import { Plus, XCircle, Trash2, Send, Loader2 } from "lucide-react";
 import { type RecruitmentCreateRequest } from "@/service/RecruitmentService";
+import { getVisibleTeams } from "@/api/teams";
+import type { VisibleTeamDTO } from "@/types/team";
 import { toast } from "sonner";
+import { Checkbox } from "@/components/ui/checkbox";
 
 type QuestionType = "TEXT" | "MCQ" | "CHECKBOX" | "FILE";
 
@@ -37,9 +40,11 @@ interface RecruitmentFormData {
   requirements?: string[];
   benefits?: string[];
   form_questions: EditableFormQuestion[];
+  teamOptionIds?: number[];
 }
 
 interface RecruitmentFormProps {
+  clubId: number;
   editingRecruitment: RecruitmentFormData | null;
   onSave: (data: RecruitmentCreateRequest, isEdit: boolean) => Promise<void>;
   onCancel: () => void;
@@ -47,6 +52,7 @@ interface RecruitmentFormProps {
 }
 
 export function RecruitmentForm({
+  clubId,
   editingRecruitment,
   onSave,
   onCancel,
@@ -70,24 +76,36 @@ export function RecruitmentForm({
       question_order: 1,
       required: true,
     },
-    {
-      question_text: "Bạn muốn tham gia phòng ban nào?",
-      question_type: "MCQ",
-      question_order: 2,
-      options: [
-        "Ban Chuyên môn",
-        "Ban Truyền thông",
-        "Ban Tổ chức",
-        "Ban Nội vụ",
-        "Ban Đối ngoại",
-      ],
-      required: true,
-    },
   ]);
 
-  // Load data when editing
+  // Teams state
+  const [availableTeams, setAvailableTeams] = useState<VisibleTeamDTO[]>([]);
+  const [selectedTeamIds, setSelectedTeamIds] = useState<number[]>([]);
+  const [loadingTeams, setLoadingTeams] = useState(false);
+
+  // Load teams when component mounts
+  useEffect(() => {
+    const fetchTeams = async () => {
+      try {
+        setLoadingTeams(true);
+        const teams = await getVisibleTeams(clubId);
+        setAvailableTeams(teams);
+      } catch (error) {
+        console.error("Error loading teams:", error);
+        toast.error("Không thể tải danh sách phòng ban");
+      } finally {
+        setLoadingTeams(false);
+      }
+    };
+
+    fetchTeams();
+  }, [clubId]);
+
+  // Load data when editing - This effect handles form data loading
   useEffect(() => {
     if (editingRecruitment) {
+      console.log("Loading editing recruitment data:", editingRecruitment);
+      
       setNewRecruitment({
         title: editingRecruitment.title,
         description: editingRecruitment.description,
@@ -113,60 +131,45 @@ export function RecruitmentForm({
                 question_order: 1,
                 required: true,
               },
-              {
-                question_text: "Bạn muốn tham gia phòng ban nào?",
-                question_type: "MCQ" as QuestionType,
-                question_order: 2,
-                options: [
-                  "Ban Chuyên môn",
-                  "Ban Truyền thông",
-                  "Ban Tổ chức",
-                  "Ban Nội vụ",
-                  "Ban Đối ngoại",
-                ],
-                required: true,
-              },
             ];
 
       setFormQuestions(questionsToLoad);
-    } else {
-      // Reset to default for new recruitment
-      resetForm();
+      
+      // Load team options immediately if available
+      if (editingRecruitment.teamOptionIds && editingRecruitment.teamOptionIds.length > 0) {
+        console.log("Setting team options from editing recruitment:", editingRecruitment.teamOptionIds);
+        setSelectedTeamIds(editingRecruitment.teamOptionIds);
+      } else {
+        console.log("No team options in editing recruitment");
+        setSelectedTeamIds([]);
+      }
     }
   }, [editingRecruitment]);
 
-  const resetForm = () => {
-    setNewRecruitment({
-      title: "",
-      description: "",
-      start_date: "",
-      end_date: "",
-      max_applications: "",
-      requirements: [""],
-      benefits: [""],
-    });
-    setFormQuestions([
-      {
-        question_text: "Tại sao bạn muốn tham gia câu lạc bộ?",
-        question_type: "TEXT",
-        question_order: 1,
-        required: true,
-      },
-      {
-        question_text: "Bạn muốn tham gia phòng ban nào?",
-        question_type: "MCQ",
-        question_order: 2,
-        options: [
-          "Ban Chuyên môn",
-          "Ban Truyền thông",
-          "Ban Tổ chức",
-          "Ban Nội vụ",
-          "Ban Đối ngoại",
-        ],
-        required: true,
-      },
-    ]);
-  };
+  // Reset form when explicitly cancelled or switching to create mode
+  useEffect(() => {
+    if (!editingRecruitment) {
+      console.log("No editing recruitment, resetting form");
+      setNewRecruitment({
+        title: "",
+        description: "",
+        start_date: "",
+        end_date: "",
+        max_applications: "",
+        requirements: [""],
+        benefits: [""],
+      });
+      setFormQuestions([
+        {
+          question_text: "Tại sao bạn muốn tham gia câu lạc bộ?",
+          question_type: "TEXT",
+          question_order: 1,
+          required: true,
+        },
+      ]);
+      setSelectedTeamIds([]);
+    }
+  }, [editingRecruitment]);
 
   const addRequirement = () => {
     setNewRecruitment((prev) => ({
@@ -286,6 +289,12 @@ export function RecruitmentForm({
       return false;
     }
 
+    // Validate team selection
+    if (availableTeams.length > 0 && selectedTeamIds.length === 0) {
+      toast.error("Vui lòng chọn ít nhất một phòng ban cho đợt tuyển dụng");
+      return false;
+    }
+
     // Validate questions
     for (let i = 0; i < formQuestions.length; i++) {
       const q = formQuestions[i];
@@ -353,6 +362,7 @@ export function RecruitmentForm({
             ? (q.options || []).filter((opt) => opt.trim())
             : undefined,
       })),
+      teamOptionIds: selectedTeamIds,
     };
   };
 
@@ -534,6 +544,91 @@ export function RecruitmentForm({
         </CardContent>
       </Card>
 
+      {/* Team Selection */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            Lựa chọn phòng ban
+          </CardTitle>
+          <p className="text-sm text-muted-foreground mt-2">
+            Chọn các phòng ban mà sinh viên có thể lựa chọn khi nộp đơn ứng
+            tuyển. Sinh viên sẽ phải chọn một trong các phòng ban này khi nộp
+            đơn. Nếu sinh viên được chấp nhận sẽ được xếp vào phòng ban đã chọn.
+          </p>
+        </CardHeader>
+        <CardContent>
+          {loadingTeams ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+              <span className="ml-2 text-muted-foreground">
+                Đang tải danh sách phòng ban...
+              </span>
+            </div>
+          ) : availableTeams.length === 0 ? (
+            <div className="text-center py-8 border-2 border-dashed border-red-200 rounded-lg bg-red-50">
+              <p className="text-red-600 font-medium">
+                ⚠️ Chưa có phòng ban nào trong câu lạc bộ.
+              </p>
+              <p className="text-sm mt-2 text-red-500">
+                Vui lòng tạo phòng ban trước khi thiết lập tuyển dụng.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {availableTeams.map((team) => (
+                <div
+                  key={team.teamId}
+                  className="flex items-center space-x-3 border rounded-lg p-3 hover:bg-accent/50 transition-colors"
+                >
+                  <Checkbox
+                    id={`team-${team.teamId}`}
+                    checked={selectedTeamIds.includes(team.teamId)}
+                    onCheckedChange={(checked) => {
+                      if (checked) {
+                        setSelectedTeamIds((prev) => [...prev, team.teamId]);
+                      } else {
+                        setSelectedTeamIds((prev) =>
+                          prev.filter((id) => id !== team.teamId)
+                        );
+                      }
+                    }}
+                  />
+                  <Label
+                    htmlFor={`team-${team.teamId}`}
+                    className="flex-1 cursor-pointer"
+                  >
+                    <div className="font-medium">{team.teamName}</div>
+                    {team.description && (
+                      <div className="text-xs text-muted-foreground line-clamp-1">
+                        {team.description}
+                      </div>
+                    )}
+                  </Label>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {availableTeams.length > 0 && (
+            <div className="mt-4 pt-4 border-t">
+              {selectedTeamIds.length > 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  ✓ Đã chọn{" "}
+                  <span className="font-semibold text-primary">
+                    {selectedTeamIds.length}
+                  </span>{" "}
+                  phòng ban
+                </p>
+              ) : (
+                <p className="text-sm text-red-500">
+                  ⚠️ Vui lòng chọn ít nhất một phòng ban
+                </p>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Form Questions */}
       <Card>
         <CardHeader>
@@ -712,11 +807,14 @@ export function RecruitmentForm({
           variant="outline"
           className="bg-transparent"
           onClick={handleSaveDraft}
-          disabled={createLoading}
+          disabled={createLoading || availableTeams.length === 0}
         >
           Lưu bản nháp
         </Button>
-        <Button onClick={handlePublish} disabled={createLoading}>
+        <Button
+          onClick={handlePublish}
+          disabled={createLoading || availableTeams.length === 0}
+        >
           {createLoading ? (
             <>
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -730,6 +828,12 @@ export function RecruitmentForm({
           )}
         </Button>
       </div>
+
+      {availableTeams.length === 0 && !loadingTeams && (
+        <div className="text-center text-sm text-red-500 mt-2">
+          💡 Cần có ít nhất một phòng ban để tạo đợt tuyển dụng
+        </div>
+      )}
     </div>
   );
 }

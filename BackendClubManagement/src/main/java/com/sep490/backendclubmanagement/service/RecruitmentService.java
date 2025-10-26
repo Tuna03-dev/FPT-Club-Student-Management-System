@@ -28,6 +28,8 @@ public class RecruitmentService implements RecruitmentServiceInterface {
     private final RecruitmentFormQuestionRepository questionRepository;
     private final RecruitmentFormAnswerRepository answerRepository;
     private final QuestionOptionRepository questionOptionRepository;
+    private final TeamOptionRepository teamOptionRepository;
+    private final TeamRepository teamRepository;
     private final UserRepository userRepository;
     private final EventRepository eventRepository; // placeholder if needed later
     private final RecruitmentMapper recruitmentMapper;
@@ -57,6 +59,11 @@ public class RecruitmentService implements RecruitmentServiceInterface {
         }
         
         r.setFormQuestions(questions.stream().collect(java.util.stream.Collectors.toSet()));
+        
+        // Load team options
+        List<TeamOption> teamOptions = teamOptionRepository.findByRecruitment_Id(r.getId());
+        r.setTeamOptions(teamOptions.stream().collect(java.util.stream.Collectors.toSet()));
+        
         return recruitmentMapper.toDto(r);
     }
 
@@ -66,6 +73,8 @@ public class RecruitmentService implements RecruitmentServiceInterface {
         Recruitment r = recruitmentMapper.toEntity(req, clubId);
         r = recruitmentRepository.save(r);
         upsertQuestions(r, req.questions);
+        upsertTeamOptions(r, req.teamOptionIds);
+        
         List<RecruitmentFormQuestion> questions = questionRepository.findByRecruitment_IdOrderByQuestionOrderAsc(r.getId());
         // Load options for each question
         for (RecruitmentFormQuestion question : questions) {
@@ -73,6 +82,11 @@ public class RecruitmentService implements RecruitmentServiceInterface {
             question.setOptions(options.stream().collect(java.util.stream.Collectors.toSet()));
         }
         r.setFormQuestions(questions.stream().collect(java.util.stream.Collectors.toSet()));
+        
+        // Load team options
+        List<TeamOption> teamOptions = teamOptionRepository.findByRecruitment_Id(r.getId());
+        r.setTeamOptions(teamOptions.stream().collect(java.util.stream.Collectors.toSet()));
+        
         return recruitmentMapper.toDto(r);
     }
 
@@ -81,9 +95,17 @@ public class RecruitmentService implements RecruitmentServiceInterface {
     public RecruitmentData updateRecruitment(Long id, RecruitmentUpdateRequest req) throws AppException {
         Recruitment r = recruitmentRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.INTERNAL_SERVER_ERROR));
+        
+        // Check if recruitment is closed
+        if (r.getStatus() == RecruitmentStatus.CLOSED) {
+            throw new AppException(ErrorCode.RECRUITMENT_CLOSED);
+        }
+        
         recruitmentMapper.updateEntity(r, req);
         recruitmentRepository.save(r);
         upsertQuestions(r, req.questions);
+        upsertTeamOptions(r, req.teamOptionIds);
+        
         List<RecruitmentFormQuestion> questions = questionRepository.findByRecruitment_IdOrderByQuestionOrderAsc(r.getId());
         // Load options for each question
         for (RecruitmentFormQuestion question : questions) {
@@ -91,6 +113,11 @@ public class RecruitmentService implements RecruitmentServiceInterface {
             question.setOptions(options.stream().collect(java.util.stream.Collectors.toSet()));
         }
         r.setFormQuestions(questions.stream().collect(java.util.stream.Collectors.toSet()));
+        
+        // Load team options
+        List<TeamOption> teamOptions = teamOptionRepository.findByRecruitment_Id(r.getId());
+        r.setTeamOptions(teamOptions.stream().collect(java.util.stream.Collectors.toSet()));
+        
         return recruitmentMapper.toDto(r);
     }
 
@@ -246,6 +273,46 @@ public class RecruitmentService implements RecruitmentServiceInterface {
                     .question(question)
                     .build();
             questionOptionRepository.save(option);
+        }
+    }
+
+    private void upsertTeamOptions(Recruitment recruitment, List<Long> teamIds) {
+        // Validate teamIds is not null or empty (should be enforced by validation, but double-check)
+        if (teamIds == null || teamIds.isEmpty()) {
+            throw new RuntimeException("teamOptionIds không được để trống. Phải chọn ít nhất một phòng ban.");
+        }
+        
+        // Get existing team options
+        List<TeamOption> existingTeamOptions = teamOptionRepository.findByRecruitment_Id(recruitment.getId());
+        
+        // Extract existing team IDs
+        Set<Long> existingTeamIds = existingTeamOptions.stream()
+                .map(teamOption -> teamOption.getTeam().getId())
+                .collect(java.util.stream.Collectors.toSet());
+        
+        // Convert request team IDs to set
+        Set<Long> requestedTeamIds = new java.util.HashSet<>(teamIds);
+        
+        // Delete team options that are not in the request (orphaned team options)
+        for (TeamOption existingTeamOption : existingTeamOptions) {
+            if (!requestedTeamIds.contains(existingTeamOption.getTeam().getId())) {
+                teamOptionRepository.deleteById(existingTeamOption.getId());
+            }
+        }
+        
+        // Create new team options that are not in existing
+        for (Long teamId : requestedTeamIds) {
+            if (!existingTeamIds.contains(teamId)) {
+                // Verify team exists
+                Team team = teamRepository.findById(teamId)
+                        .orElseThrow(() -> new RuntimeException("Team not found: " + teamId));
+                
+                TeamOption teamOption = TeamOption.builder()
+                        .recruitment(recruitment)
+                        .team(team)
+                        .build();
+                teamOptionRepository.save(teamOption);
+            }
         }
     }
 
