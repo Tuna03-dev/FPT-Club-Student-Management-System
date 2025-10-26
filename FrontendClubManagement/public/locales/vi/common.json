@@ -21,6 +21,7 @@
     "pending_posts": "Bài viết chờ duyệt",
     "manage_members": "Quản lý thành viên",
     "manage_events": "Quản lý sự kiện",
+    "manage_recruitments": "Quản lý tuyển thành viên",
     "pending_requests": "Yêu cầu chờ duyệt"
   },
   "search": "Tìm kiếm...",
@@ -31,5 +32,13 @@
     "comment": "Bình luận",
     "seeMore": "Xem thêm",
     "seeLess": "Thu gọn"
+  },
+  "login": {
+    "title": "Hệ thống Quản lý Câu lạc bộ",
+    "subtitle": "Đại học FPT",
+    "description": "Kết nối sinh viên, quản lý hoạt động và phát triển cộng đồng câu lạc bộ",
+    "instruction": "Sử dụng tài khoản Google <b>@fpt.edu.vn</b> của bạn để truy cập hệ thống",
+    "loginFailed": "Đăng nhập thất bại:",
+    "loginError": "Có lỗi xảy ra khi đăng nhập"
   }
 }

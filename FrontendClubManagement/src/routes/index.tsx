@@ -1,10 +1,10 @@
-import { createBrowserRouter } from "react-router-dom";
+import { createBrowserRouter, Navigate } from "react-router-dom";
 import MainLayout from "@/layouts/MainLayout";
 import HomePage from "@/pages/HomePage";
 import { ClubLayout } from "@/layouts/ClubLayout";
 
 import { Dashboard } from "@/pages/myclub/Dashboard";
-import Members from "@/pages/myclub/members/MemberList";
+import MemberList from "@/pages/myclub/members/MemberList";
 import { EventList } from "@/pages/myclub/events/EventList";
 import { Notifications } from "@/pages/myclub/Notifications";
 import { Settings } from "@/pages/myclub/Settings";
@@ -14,20 +14,22 @@ import NewsPageList from "@/pages/news/NewsPageList";
 import NewsPageDetail from "@/pages/news/NewsPageDetail";
 import EventDetailPage from "@/pages/events/EventDetail";
 import ProtectedRoute from "@/components/ProtectedRoute";
-import LoginPage from "@/pages/LoginPage/LoginPage";
 import MyClubRedirect from "@/pages/myclub/MyClubRedirect";
 import ClubSelect from "@/pages/myclub/ClubSelect";
 import TeamDetailPage from "@/pages/myclub/teams/TeamDetail";
+import { RecruitmentManagement } from "@/pages/myclub/recruitmentManagement/RecruitmentManagement";
+import { StudentRecruitment } from "@/pages/studentRecruitment/StudentRecruitment";
+import { ClubDetail } from "@/pages/clubDetail/ClubDetail";
+
+import LoginPage from "@/pages/login/Login";
 
 export const router = createBrowserRouter([
-  // Public shell
   {
     path: "/",
     element: <MainLayout />,
     children: [
       { index: true, element: <HomePage /> },
 
-      // Events
       {
         path: "events",
         children: [
@@ -36,7 +38,6 @@ export const router = createBrowserRouter([
         ],
       },
 
-      // News
       {
         path: "news",
         children: [
@@ -45,16 +46,34 @@ export const router = createBrowserRouter([
         ],
       },
 
-      { path: "clubs", element: <div className="container mx-auto px-4 py-8">Trang Câu lạc bộ/Hội nhóm</div> },
-      { path: "achievements", element: <div className="container mx-auto px-4 py-8">Trang Thành tích</div> },
-      { path: "contact", element: <div className="container mx-auto px-4 py-8">Trang Liên hệ</div> },
+      {
+        path: "clubs",
+        element: (
+          <div className="container mx-auto px-4 py-8">
+            Trang Câu lạc bộ/Hội nhóm
+          </div>
+        ),
+      },
+      {
+        path: "achievements",
+        element: (
+          <div className="container mx-auto px-4 py-8">Trang Thành tích</div>
+        ),
+      },
+      {
+        path: "contact",
+        element: (
+          <div className="container mx-auto px-4 py-8">Trang Liên hệ</div>
+        ),
+      },
+
+      { path: "myRecruitmentApplication", element: <StudentRecruitment /> },
+      { path: "clubDetail/:clubId", element: <ClubDetail /> },
     ],
   },
 
-  // Auth (tách riêng nếu muốn ẩn header/footer)
   { path: "/login", element: <LoginPage /> },
 
-  // MyClub entry
   {
     path: "/myclub",
     element: (
@@ -64,7 +83,6 @@ export const router = createBrowserRouter([
     ),
   },
 
-  // Select khi có nhiều CLB
   {
     path: "/myclub/select",
     element: (
@@ -74,7 +92,6 @@ export const router = createBrowserRouter([
     ),
   },
 
-  // Khu vực nội bộ theo clubId
   {
     path: "/myclub/:clubId",
     element: (
@@ -84,15 +101,17 @@ export const router = createBrowserRouter([
     ),
     children: [
       { index: true, element: <Dashboard /> },
-      { path: "members", element: <Members /> },
+      { path: "members", element: <MemberList /> },
       { path: "events", element: <EventList /> },
+      { path: "recruitments", element: <RecruitmentManagement /> },
       { path: "notifications", element: <Notifications /> },
       { path: "settings", element: <Settings /> },
-      { path: "teams/:teamId", element: <TeamDetailPage /> }, // Team detail
+      { path: "teams/:teamId", element: <TeamDetailPage /> },
+
+      { path: "myclub", element: <Navigate to="." replace /> },
     ],
   },
 
-  // 404
   {
     path: "*",
     element: (

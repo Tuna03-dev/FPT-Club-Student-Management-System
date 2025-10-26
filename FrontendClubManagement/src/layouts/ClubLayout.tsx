@@ -1,6 +1,16 @@
 // src/layouts/ClubLayout.tsx
 import {
-  Home, Users, Calendar, Bell, Settings, Search, Shield, FileText, Clock,
+  Home,
+  Users,
+  Calendar,
+  Bell,
+  Settings,
+  Search,
+  Menu,
+  Shield,
+  FileText,
+  Clock,
+  Briefcase,
 } from "lucide-react";
 import { NavLink, Outlet, useParams, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -9,14 +19,20 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
-  Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
 } from "@/components/ui/tooltip";
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { authService } from "@/services/authService";
 import { useTeams } from "@/hooks/useTeams";
-import { Menu } from "lucide-react";
+
 const navItems = [
   { key: "dashboard", url: "", icon: Home },
   { key: "members", url: "/members", icon: Users },
@@ -24,11 +40,13 @@ const navItems = [
   { key: "notifications", url: "/notifications", icon: Bell },
 ];
 
+// Giữ URL “sau clubId” (không prefix /myclub) để build link: /myclub/:clubId + url
 const managementItems = [
   { key: "permissions", url: "/permissions", icon: Shield, label: "Phân quyền" },
   { key: "pending_posts", url: "/pending-posts", icon: FileText, label: "Bài viết chờ duyệt" },
   { key: "manage_members", url: "/members", icon: Users, label: "Quản lý thành viên" },
   { key: "manage_events", url: "/events", icon: Calendar, label: "Quản lý sự kiện" },
+  { key: "manage_recruitments", url: "/recruitments", icon: Briefcase, label: "Quản lý tuyển thành viên" },
   { key: "pending_requests", url: "/pending-requests", icon: Clock, label: "Yêu cầu chờ duyệt" },
 ];
 
@@ -37,6 +55,7 @@ const managementColors: Record<string, string> = {
   pending_posts: "bg-gradient-to-br from-yellow-500 to-yellow-600",
   manage_members: "bg-gradient-to-br from-blue-500 to-blue-600",
   manage_events: "bg-gradient-to-br from-green-500 to-green-600",
+  manage_recruitments: "bg-gradient-to-br from-red-500 to-red-600",
   pending_requests: "bg-gradient-to-br from-orange-500 to-orange-600",
 };
 
@@ -52,8 +71,11 @@ export const ClubLayout = () => {
   const { data: teams, loading, error } = useTeams(validClubId ? numericClubId : undefined);
 
   const handleLogout = async () => {
-    try { await authService.logoutWithApi(); } catch { /* ignore */ }
-    finally {
+    try {
+      await authService.logoutWithApi();
+    } catch {
+      /* ignore */
+    } finally {
       authService.logout();
       navigate("/login", { replace: true });
     }
@@ -80,7 +102,11 @@ export const ClubLayout = () => {
               </div>
               <div className="relative w-full max-w-[240px] hidden md:block">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input type="search" placeholder={t("search")} className="pl-9 h-9 bg-secondary/50 border-0" />
+                <Input
+                  type="search"
+                  placeholder={t("search")}
+                  className="pl-9 h-9 bg-secondary/50 border-0"
+                />
               </div>
             </div>
 
@@ -94,7 +120,9 @@ export const ClubLayout = () => {
                       end={item.url === ""}
                       className={({ isActive }) =>
                         `flex items-center justify-center px-8 py-2 rounded-lg transition-all relative ${
-                          isActive ? "text-primary" : "text-muted-foreground hover:bg-secondary"
+                          isActive
+                            ? "text-primary"
+                            : "text-muted-foreground hover:bg-secondary"
                         }`
                       }
                     >
@@ -178,7 +206,9 @@ export const ClubLayout = () => {
               {/* Management */}
               <div>
                 <div className="px-3 mb-4">
-                  <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">QUẢN LÝ</h2>
+                  <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    QUẢN LÝ
+                  </h2>
                 </div>
                 <div className="space-y-2">
                   {managementItems.map((item) => (
@@ -187,11 +217,15 @@ export const ClubLayout = () => {
                       to={`/myclub/${clubId}${item.url}`}
                       className={({ isActive }) =>
                         `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                          isActive ? "bg-primary/10 text-primary shadow-sm" : "text-foreground hover:bg-secondary"
+                          isActive
+                            ? "bg-primary/10 text-primary shadow-sm"
+                            : "text-foreground hover:bg-secondary"
                         }`
                       }
                     >
-                      <div className={`h-8 w-8 rounded-lg ${managementColors[item.key]} flex items-center justify-center text-white shadow-sm`}>
+                      <div
+                        className={`h-8 w-8 rounded-lg ${managementColors[item.key]} flex items-center justify-center text-white shadow-sm`}
+                      >
                         <item.icon className="h-4 w-4" />
                       </div>
                       <span>{item.label}</span>
@@ -203,10 +237,14 @@ export const ClubLayout = () => {
               {/* Teams (API #3) */}
               <div>
                 <div className="px-3 mb-4">
-                  <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Phòng ban</h2>
+                  <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    Phòng ban
+                  </h2>
                 </div>
 
-                {loading && <p className="px-3 text-xs text-muted-foreground">Đang tải…</p>}
+                {loading && (
+                  <p className="px-3 text-xs text-muted-foreground">Đang tải…</p>
+                )}
                 {error && <p className="px-3 text-xs text-red-600">{error}</p>}
 
                 {teams?.map((team) => (
@@ -215,7 +253,9 @@ export const ClubLayout = () => {
                     to={`/myclub/${clubId}/teams/${team.teamId}`}
                     className={({ isActive }) =>
                       `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                        isActive ? "bg-primary/10 text-primary shadow-sm" : "text-foreground hover:bg-secondary"
+                        isActive
+                          ? "bg-primary/10 text-primary shadow-sm"
+                          : "text-foreground hover:bg-secondary"
                       }`
                     }
                   >
@@ -223,7 +263,9 @@ export const ClubLayout = () => {
                       {team.teamName.charAt(0).toUpperCase()}
                     </div>
                     <div className="flex-1 truncate">{team.teamName}</div>
-                    <span className="text-[10px] text-muted-foreground">{team.memberCount}</span>
+                    <span className="text-[10px] text-muted-foreground">
+                      {team.memberCount}
+                    </span>
                   </NavLink>
                 ))}
               </div>

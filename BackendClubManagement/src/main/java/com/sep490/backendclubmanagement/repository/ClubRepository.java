@@ -8,8 +8,10 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.data.repository.query.Param;
 
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface ClubRepository extends JpaRepository<Club, Long> {
@@ -23,12 +25,24 @@ public interface ClubRepository extends JpaRepository<Club, Long> {
         WHERE c.isFeatured = true   
     """)
     List<FeaturedClubDTO> findFeaturedClubs();
+    Optional<Club> findByClubCode(String clubCode);
 
     // 🔹 Reset toàn bộ CLB về không nổi bật
     @Modifying
     @Transactional
     @Query("UPDATE Club c SET c.isFeatured = false")
     void resetAllFeatured();
+    @Query("SELECT DISTINCT c FROM Club c " +
+            "LEFT JOIN FETCH c.campus " +
+            "LEFT JOIN FETCH c.clubCategory " +
+            "LEFT JOIN FETCH c.clubMemberships cm " +
+            "LEFT JOIN FETCH cm.user " +
+            "LEFT JOIN FETCH cm.roleMemberships rm " +
+            "LEFT JOIN FETCH rm.clubRole " +
+            "LEFT JOIN FETCH rm.semester " +
+            "LEFT JOIN FETCH c.recruitments " +
+            "WHERE c.id = :id")
+    Optional<Club> findByIdWithDetails(@Param("id") Long id);
 
     // 🔹 Tìm ID của các CLB có nhiều event nhất
     @Query("""
@@ -45,4 +59,15 @@ public interface ClubRepository extends JpaRepository<Club, Long> {
     @Transactional
     @Query("UPDATE Club c SET c.isFeatured = true WHERE c.id IN :clubIds")
     void updateFeaturedClubs(List<Long> clubIds);
+    @Query("SELECT DISTINCT c FROM Club c " +
+            "LEFT JOIN FETCH c.campus " +
+            "LEFT JOIN FETCH c.clubCategory " +
+            "LEFT JOIN FETCH c.clubMemberships cm " +
+            "LEFT JOIN FETCH cm.user " +
+            "LEFT JOIN FETCH cm.roleMemberships rm " +
+            "LEFT JOIN FETCH rm.clubRole " +
+            "LEFT JOIN FETCH rm.semester " +
+            "LEFT JOIN FETCH c.recruitments " +
+            "WHERE c.clubCode = :clubCode")
+    Optional<Club> findByClubCodeWithDetails(@Param("clubCode") String clubCode);
 }
