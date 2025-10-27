@@ -9,12 +9,15 @@ public enum ErrorCode {
     VALIDATION_ERROR(HttpStatus.BAD_REQUEST, 1000, "Validation failed"),
     UNAUTHORIZED(HttpStatus.FORBIDDEN, 403, "User is not allowed to access"),
     INSUFFICIENT_PERMISSION(HttpStatus.FORBIDDEN, 403, "Insufficient permission"),
+    FORBIDDEN(HttpStatus.FORBIDDEN, 403, "User is not allowed to access"),
     CLUB_NOT_FOUND(HttpStatus.NOT_FOUND, 2000, "Club not found"),
     NOT_FOUND(HttpStatus.NOT_FOUND,404, "Resource not found"),
     ROLE_NOT_FOUND(HttpStatus.NOT_FOUND, 2001, "Role not found"),
     MEMBER_NOT_FOUND(HttpStatus.NOT_FOUND, 2002, "Member not found"),
     USER_NOT_FOUND(HttpStatus.NOT_FOUND, 2003, "User not found"),
-    UNAUTHENTICATED(HttpStatus.UNAUTHORIZED, 401, "User is not authenticated");
+    UNAUTHENTICATED(HttpStatus.UNAUTHORIZED, 401, "User is not authenticated"),
+
+    RECRUITMENT_CLOSED(HttpStatus.BAD_REQUEST, 3000, "Không thể chỉnh sửa đợt tuyển dụng đã đóng");
 
     private final HttpStatus httpStatus;
     private final int code;

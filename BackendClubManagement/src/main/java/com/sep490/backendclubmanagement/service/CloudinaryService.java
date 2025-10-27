@@ -37,5 +37,31 @@ public class CloudinaryService {
         }
     }
 
+    /**
+     * Upload file (PDF, DOC, DOCX, etc.) to Cloudinary
+     * @param file MultipartFile to upload
+     * @return UploadResult with file URL and metadata
+     */
+    public UploadResult uploadFile(MultipartFile file) {
+        try {
+            var result = cloudinary.uploader().upload(
+                    file.getBytes(),
+                    ObjectUtils.asMap(
+                            "folder", "club/recruitment",
+                            "resource_type", "raw", // Use 'raw' for non-image files
+                            "overwrite", false
+                    )
+            );
+            return new UploadResult(
+                    (String) result.get("secure_url"),
+                    (String) result.get("public_id"),
+                    (String) result.get("format"),
+                    ((Number) result.get("bytes")).longValue()
+            );
+        } catch (Exception e) {
+            throw new RuntimeException("Cloudinary upload fail: " + e.getMessage(), e);
+        }
+    }
+
     public record UploadResult(String url, String publicId, String format, long bytes) {}
 }

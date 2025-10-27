@@ -29,28 +29,33 @@ public class SecurityConfig {
     
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final UserDetailsService userDetailsService;
-    
+    private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
+
     private final String[] PUBLIC_URL = {
-            "api/**",
+//            "/api/**",
+            "/api/auth/google",
             "/api/v1/auth/**",
             "/api/v1/public/**",
             "/oauth2/**",
             "/login/**",
             "/api/homepage",
             "/test/**",
+            "/posts/**",
+            "/api/my-club/**",
+            "/api/management/**",
             "/api/posts/**"
 
     };
-    
+
     private final String[] SWAGGER_URL = {
-            "/v2/api-docs", 
-            "/v3/api-docs", 
+            "/v2/api-docs",
+            "/v3/api-docs",
             "v3/api-docs/**",
-            "/swagger-ui/**", 
-            "/configuration/ui", 
-            "/swagger-resources/**", 
-            "/configuration/security", 
-            "/swagger-ui.html", 
+            "/swagger-ui/**",
+            "/configuration/ui",
+            "/swagger-resources/**",
+            "/configuration/security",
+            "/swagger-ui.html",
             "/webjars/**"
     };
 
@@ -64,6 +69,8 @@ public class SecurityConfig {
                         .requestMatchers(PUBLIC_URL).permitAll()
                         .anyRequest().authenticated())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .exceptionHandling(exception -> exception
+                        .authenticationEntryPoint(jwtAuthenticationEntryPoint))
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();

@@ -50,5 +50,8 @@ public class Recruitment extends BaseEntity {
 
     @OneToMany(mappedBy = "recruitment", cascade = CascadeType.ALL)
     private Set<RecruitmentApplication> applications;
+
+    @OneToMany(mappedBy = "recruitment", cascade = CascadeType.ALL)
+    private Set<TeamOption> teamOptions;
 }
 

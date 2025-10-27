@@ -9,4 +9,10 @@ import java.util.List;
 @Repository
 public interface TeamRepository extends JpaRepository<Team, Long> {
     List<Team> findByClubId(Long clubId);
+
+    // 🔹 Lấy danh sách team của một CLB cụ thể
+    List<Team> findAllByClubId(Long clubId);
+
+    // 🔹 Lấy danh sách team của nhiều CLB cùng lúc
+    List<Team> findAllByClubIdIn(List<Long> clubIds);
 }
