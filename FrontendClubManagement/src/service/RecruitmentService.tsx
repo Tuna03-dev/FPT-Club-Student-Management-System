@@ -49,7 +49,7 @@ export interface RecruitmentApplicationData {
   teamId?: number;
   submittedDate: string;
   reviewedDate?: string;
-  status: "PENDING" | "APPROVED" | "REJECTED" | "INTERVIEW" | "SUBMITTED";
+  status: "UNDER_REVIEW" | "ACCEPTED" | "REJECTED" | "INTERVIEWED";
   reviewNotes?: string;
   score?: number;
   createdAt: string;
@@ -74,7 +74,7 @@ export interface RecruitmentFilterRequest {
 }
 
 export interface ApplicationFilterRequest {
-  status?: "PENDING" | "APPROVED" | "REJECTED" | "INTERVIEW";
+  status?: "UNDER_REVIEW" | "ACCEPTED" | "REJECTED" | "INTERVIEWED";
   page?: number;
   size?: number;
   sort?: string;

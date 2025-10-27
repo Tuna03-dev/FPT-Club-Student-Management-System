@@ -128,13 +128,6 @@ public class RecruitmentController {
         return ResponseEntity.ok(ApiResponse.success(data));
     }
 
-    // Withdraw application (path variable with action)
-    @PostMapping("/applications/{applicationId}/withdraw")
-    public ResponseEntity<ApiResponse<Void>> withdraw(@PathVariable Long applicationId) {
-        recruitmentService.withdrawApplication(applicationId);
-        return ResponseEntity.ok(ApiResponse.success(null));
-    }
-
     private Sort parseSort(String sort) {
         String[] parts = sort.split(",");
         String prop = parts.length > 0 ? parts[0] : "createdAt";

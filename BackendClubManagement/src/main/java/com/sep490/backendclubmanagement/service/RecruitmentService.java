@@ -175,7 +175,7 @@ public class RecruitmentService implements RecruitmentServiceInterface {
                 .recruitment(recruitment)
                 .applicant(applicant)
                 .teamId(req.teamId)
-                .status(RecruitmentApplicationStatus.SUBMITTED)
+                .status(RecruitmentApplicationStatus.UNDER_REVIEW)
                 .submittedDate(LocalDateTime.now())
                 .build();
         app = applicationRepository.save(app);
@@ -240,8 +240,10 @@ public class RecruitmentService implements RecruitmentServiceInterface {
     public RecruitmentApplicationData getApplication(Long applicationId) throws AppException {
         RecruitmentApplication app = applicationRepository.findById(applicationId)
                 .orElseThrow(() -> new AppException(ErrorCode.INTERNAL_SERVER_ERROR));
+        
         List<RecruitmentFormAnswer> answers = answerRepository.findByApplication_Id(applicationId);
         app.setAnswers(answers.stream().collect(java.util.stream.Collectors.toSet()));
+        
         return recruitmentApplicationMapper.toDto(app);
     }
 
@@ -257,15 +259,6 @@ public class RecruitmentService implements RecruitmentServiceInterface {
         return getApplication(app.getId());
     }
 
-    @Override
-    @Transactional
-    public void withdrawApplication(Long applicationId) {
-        applicationRepository.findById(applicationId).ifPresent(app -> {
-            app.setStatus(RecruitmentApplicationStatus.WITHDRAWN);
-            app.setReviewedDate(LocalDateTime.now());
-            applicationRepository.save(app);
-        });
-    }
 
     private void upsertQuestions(Recruitment recruitment, List<RecruitmentQuestionRequest> reqs) {
         if (reqs == null) return;
