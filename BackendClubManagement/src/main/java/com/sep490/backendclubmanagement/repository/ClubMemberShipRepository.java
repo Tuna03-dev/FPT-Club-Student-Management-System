@@ -30,4 +30,10 @@ public interface ClubMemberShipRepository extends JpaRepository<ClubMemberShip, 
             @Param("searchTerm") String searchTerm
     );
 
+    @Query("""
+    SELECT cms FROM ClubMemberShip cms
+    WHERE cms.club.id = :clubId AND cms.user.id = :userId
+    """)
+    ClubMemberShip findByClubIdAndUserId(@Param("clubId") Long clubId, @Param("userId") Long userId);
+
 }

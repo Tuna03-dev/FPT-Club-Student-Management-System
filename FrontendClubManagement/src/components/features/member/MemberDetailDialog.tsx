@@ -32,18 +32,26 @@ import {
 import { toast } from "sonner";
 import { useState } from "react";
 import { type MemberResponseDTO } from "@/services/memberService";
+import { type ClubRoleDTO, type TeamDTO } from "@/services/clubService";
+import { memberService } from "@/services/memberService";
+import { authService } from "@/services/authService";
 
 interface MemberDetailDialogProps {
   member: MemberResponseDTO | null;
   isOpen: boolean;
   onClose: () => void;
   clubId?: number;
+  roles: ClubRoleDTO[];
+  teams: TeamDTO[];
 }
 
 const MemberDetailDialog = ({
   member,
   isOpen,
   onClose,
+  clubId,
+  roles,
+  teams,
 }: MemberDetailDialogProps) => {
   // Dialog states
   const [isEditRoleOpen, setIsEditRoleOpen] = useState(false);
@@ -53,34 +61,22 @@ const MemberDetailDialog = ({
   const [selectedRole, setSelectedRole] = useState<string>("");
   const [selectedTeam, setSelectedTeam] = useState<string>("");
 
-  // Mock data for roles and teams
-  const mockRoles = [
-    { id: 1, name: "Chủ tịch", level: 1 },
-    { id: 2, name: "Phó chủ tịch", level: 2 },
-    { id: 3, name: "Trưởng ban", level: 3 },
-    { id: 4, name: "Phó ban", level: 4 },
-    { id: 5, name: "Thành viên cốt cán", level: 5 },
-    { id: 6, name: "Thành viên", level: 6 },
-  ];
-
-  const mockTeams = [
-    "Ban chủ nhiệm",
-    "Ban truyền thông",
-    "Ban sự kiện",
-    "Ban học thuật",
-    "Ban kỹ thuật",
-    "Ban đối ngoại",
-  ];
 
   // action handlers
   const handleChangeRole = async () => {
-    if (!member || !selectedRole) {
+    if (!member || !selectedRole || !clubId) {
       toast.error("Vui lòng chọn vai trò");
       return;
     }
     try {
-      // TODO: Replace with actual API call
-      // await memberService.changeRole(clubId, member.userId, selectedRole);
+      const roleId = parseInt(selectedRole);
+      const currentUser = authService.getCurrentUser();
+      if (!currentUser || !currentUser.id) {
+        toast.error("Không xác định người dùng hiện tại");
+        return;
+      }
+      const currentUserId = currentUser.id;
+      await memberService.changeRole(clubId, member.userId, roleId, currentUserId);
       toast.success("Cập nhật vai trò thành công");
       setIsEditRoleOpen(false);
       onClose();
@@ -91,13 +87,13 @@ const MemberDetailDialog = ({
   };
 
   const handleAssignTeam = async () => {
-    if (!member || !selectedTeam) {
+    if (!member || !selectedTeam || !clubId) {
       toast.error("Vui lòng chọn ban");
       return;
     }
     try {
-      // TODO: Replace with actual API call
-      // await memberService.assignTeam(clubId, member.userId, selectedTeam);
+      const teamId = parseInt(selectedTeam);
+      await memberService.assignTeam(clubId, member.userId, teamId);
       toast.success("Phân ban thành công");
       setIsAssignTeamOpen(false);
       onClose();
@@ -108,7 +104,7 @@ const MemberDetailDialog = ({
   };
 
   const handleToggleActive = async () => {
-    if (!member) return;
+    if (!member || !clubId) return;
     // do not allow toggling if member has left
     const membershipStatus = (
       member as unknown as { membershipStatus?: string }
@@ -118,9 +114,13 @@ const MemberDetailDialog = ({
       return;
     }
     try {
-      // TODO: Replace with actual API call
-      // const currentlyActive = member.currentTerm?.isActive === true;
-      // await memberService.changeStatus(clubId, member.userId, currentlyActive ? "INACTIVE" : "ACTIVE");
+      const currentlyActive = member.currentTerm?.isActive === true;
+      await memberService.changeStatus(
+        clubId,
+        member.userId,
+        !currentlyActive,
+        { semesterId: undefined }
+      );
       toast.success("Cập nhật trạng thái thành công");
       setIsChangeStatusOpen(false);
       onClose();
@@ -131,10 +131,9 @@ const MemberDetailDialog = ({
   };
 
   const handleRemove = async () => {
-    if (!member) return;
+    if (!member || !clubId) return;
     try {
-      // TODO: Replace with actual API call
-      // await memberService.removeMember(clubId, member.userId);
+      await memberService.removeMember(clubId, member.userId);
       toast.success("Đã đá thành viên khỏi CLB");
       setIsRemoveOpen(false);
       onClose();
@@ -147,14 +146,19 @@ const MemberDetailDialog = ({
   const openEditRoleDialog = () => {
     if (member) {
       const currentRole = getDisplayRoleInfo(member)?.roleName || "";
-      setSelectedRole(currentRole);
+      // Find the role ID that matches the current role name
+      const currentRoleObj = roles.find(role => role.roleName === currentRole);
+      setSelectedRole(currentRoleObj ? currentRoleObj.id.toString() : "");
       setIsEditRoleOpen(true);
     }
   };
 
   const openAssignTeamDialog = () => {
     if (member) {
-      setSelectedTeam(member.currentTerm?.teamName || "");
+      const currentTeamName = member.currentTerm?.teamName || "";
+      // Find the team ID that matches the current team name
+      const currentTeamObj = teams.find(team => team.teamName === currentTeamName);
+      setSelectedTeam(currentTeamObj ? currentTeamObj.id.toString() : "");
       setIsAssignTeamOpen(true);
     }
   };
@@ -575,13 +579,10 @@ const MemberDetailDialog = ({
                   <SelectValue placeholder="Chọn vai trò" />
                 </SelectTrigger>
                 <SelectContent>
-                  {mockRoles.map((role) => (
-                    <SelectItem key={role.id} value={role.name}>
+                  {roles.map((role) => (
+                    <SelectItem key={role.id} value={role.id.toString()}>
                       <div className="flex items-center gap-2">
-                        <span className="font-medium">{role.name}</span>
-                        <Badge variant="outline" className="text-xs">
-                          Level {role.level}
-                        </Badge>
+                        <span className="font-medium">{role.roleName}</span>
                       </div>
                     </SelectItem>
                   ))}
@@ -591,8 +592,8 @@ const MemberDetailDialog = ({
             {selectedRole && (
               <div className="p-3 rounded-lg bg-secondary/30 border border-border">
                 <p className="text-sm text-muted-foreground">
-                  Vai trò {selectedRole} có quyền hạn và trách nhiệm tương ứng
-                  trong CLB.
+                  {roles.find(role => role.id.toString() === selectedRole)?.description || 
+                   `Vai trò ${roles.find(role => role.id.toString() === selectedRole)?.roleName} có quyền hạn và trách nhiệm tương ứng trong CLB.`}
                 </p>
               </div>
             )}
@@ -626,9 +627,9 @@ const MemberDetailDialog = ({
                   <SelectValue placeholder="Chọn ban" />
                 </SelectTrigger>
                 <SelectContent>
-                  {mockTeams.map((team) => (
-                    <SelectItem key={team} value={team}>
-                      {team}
+                  {teams.map((team) => (
+                    <SelectItem key={team.id} value={team.id.toString()}>
+                      {team.teamName}
                     </SelectItem>
                   ))}
                 </SelectContent>
