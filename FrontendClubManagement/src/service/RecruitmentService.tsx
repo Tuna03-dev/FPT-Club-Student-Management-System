@@ -33,6 +33,7 @@ export interface RecruitmentData {
   requirements?: string;
   clubId: number;
   questions?: RecruitmentQuestionData[];
+  teamOptionIds?: number[]; // Danh sách ID của các team cho phép sinh viên lựa chọn
   createdAt: string;
   updatedAt: string;
 }
@@ -48,7 +49,7 @@ export interface RecruitmentApplicationData {
   teamId?: number;
   submittedDate: string;
   reviewedDate?: string;
-  status: "PENDING" | "APPROVED" | "REJECTED" | "INTERVIEW" | "SUBMITTED";
+  status: "UNDER_REVIEW" | "ACCEPTED" | "REJECTED" | "INTERVIEWED";
   reviewNotes?: string;
   score?: number;
   createdAt: string;
@@ -73,7 +74,7 @@ export interface RecruitmentFilterRequest {
 }
 
 export interface ApplicationFilterRequest {
-  status?: "PENDING" | "APPROVED" | "REJECTED" | "INTERVIEW";
+  status?: "UNDER_REVIEW" | "ACCEPTED" | "REJECTED" | "INTERVIEWED";
   page?: number;
   size?: number;
   sort?: string;
@@ -96,6 +97,7 @@ export interface RecruitmentCreateRequest {
   requirements?: string;
   status?: "DRAFT" | "OPEN"; // Status of recruitment
   questions?: RecruitmentQuestionRequest[];
+  teamOptionIds?: number[]; // Danh sách ID của các team cho phép sinh viên lựa chọn
 }
 
 // Get all recruitments by club ID
@@ -206,11 +208,32 @@ export interface ApplicationSubmitRequest {
 }
 
 export async function submitApplication(
-  request: ApplicationSubmitRequest
+  request: ApplicationSubmitRequest,
+  filesByQuestionId?: Map<number, File>
 ): Promise<RecruitmentApplicationData> {
+  const formData = new FormData();
+  
+  // Add request as JSON blob
+  formData.append(
+    "request",
+    new Blob([JSON.stringify(request)], { type: "application/json" })
+  );
+  
+  // Add files with questionId mapping if provided
+  if (filesByQuestionId && filesByQuestionId.size > 0) {
+    filesByQuestionId.forEach((file, questionId) => {
+      formData.append(`file_${questionId}`, file);
+    });
+  }
+  
   const res = await axiosClient.post<RecruitmentApplicationData>(
     `/recruitments/applications/submit`,
-    request
+    formData,
+    {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    }
   );
   if (!res.data) throw new Error("Failed to submit application");
   return res.data;

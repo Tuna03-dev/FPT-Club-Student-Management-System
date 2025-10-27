@@ -21,7 +21,10 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
@@ -104,6 +107,13 @@ public class AuthController {
         // Build a Spring Security user for token generation
         List<SimpleGrantedAuthority> authorities = List.of(new SimpleGrantedAuthority("ROLE_" + user.getSystemRole().getRoleName()));
         org.springframework.security.core.userdetails.User securityUser = new org.springframework.security.core.userdetails.User(user.getEmail(), "N/A", authorities);
+
+        // Set authentication in SecurityContext for current request
+        UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
+            securityUser, null, authorities
+        );
+        authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(httpRequest));
+        SecurityContextHolder.getContext().setAuthentication(authToken);
 
         Map<String, Object> extraClaims = new HashMap<>();
         extraClaims.put("fullName", user.getFullName());
@@ -215,6 +225,13 @@ public class AuthController {
                     "N/A",
                     authorities
             );
+
+            // Set authentication in SecurityContext for current request
+            UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
+                securityUser, null, authorities
+            );
+            authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+            SecurityContextHolder.getContext().setAuthentication(authToken);
 
             Map<String, Object> extraClaims = new HashMap<>();
             extraClaims.put("fullName", user.getFullName());

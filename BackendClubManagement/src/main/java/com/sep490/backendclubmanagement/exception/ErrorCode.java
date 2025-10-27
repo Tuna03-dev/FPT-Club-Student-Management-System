@@ -7,10 +7,11 @@ import org.springframework.http.HttpStatus;
 public enum ErrorCode {
     INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, 500, "Internal server error"),
     VALIDATION_ERROR(HttpStatus.BAD_REQUEST, 1000, "Validation failed"),
-//    UNAUTHORIZED(HttpStatus.UNAUTHORIZED, 401, "Unauthorized request"),
-    UNAUTHORIZED(HttpStatus.FORBIDDEN, 403, "User is not allowed to access"),
+    UNAUTHORIZED(HttpStatus.UNAUTHORIZED, 401, "Unauthorized request"),
+    FORBIDDEN(HttpStatus.FORBIDDEN, 403, "User is not allowed to access"),
     CLUB_NOT_FOUND(HttpStatus.NOT_FOUND, 2000, "Club not found"),
-    NOT_FOUND(HttpStatus.NOT_FOUND,404, "Resource not found");
+    NOT_FOUND(HttpStatus.NOT_FOUND,404, "Resource not found"),
+    RECRUITMENT_CLOSED(HttpStatus.BAD_REQUEST, 3000, "Không thể chỉnh sửa đợt tuyển dụng đã đóng");
 
     private final HttpStatus httpStatus;
     private final int code;
