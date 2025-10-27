@@ -23,6 +23,29 @@ public interface RoleMemberShipRepository extends JpaRepository<RoleMemberShip, 
     
     List<RoleMemberShip> findByClubMemberShipIdAndIsActive(Long clubMemberShipId, Boolean isActive);
 
+    @Query("""
+    SELECT CASE WHEN EXISTS (
+        SELECT 1
+        FROM RoleMemberShip rm
+        JOIN rm.clubMemberShip cm
+        LEFT JOIN rm.clubRole cr
+        WHERE cm.user.id = :userId
+          AND cm.club.id = :clubId
+          AND (:semesterId IS NULL OR rm.semester.id = :semesterId)
+          AND COALESCE(rm.isActive, TRUE) = TRUE
+          AND rm.team IS NULL
+          AND UPPER(TRIM(COALESCE(cr.roleName, ''))) IN (
+              'CLUB_PRESIDENT','PRESIDENT',
+              'VICE_PRESIDENT','CLUB_VP',
+              'CHỦ NHIỆM','CHU NHIEM',
+              'PHÓ CHỦ NHIỆM','PHO CHU NHIEM'
+          )
+    ) THEN TRUE ELSE FALSE END
+""")
+    boolean isClubAdmin(@Param("userId") Long userId,
+                        @Param("clubId") Long clubId,
+                        @Param("semesterId") Long semesterId);
+
 
     @Query("""
     SELECT new com.sep490.backendclubmanagement.dto.response.TeamMemberDTO(
