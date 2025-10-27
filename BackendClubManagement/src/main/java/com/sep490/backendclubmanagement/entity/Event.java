@@ -52,8 +52,7 @@ public class Event extends BaseEntity {
     @OneToMany(mappedBy = "event", cascade = CascadeType.ALL)
     private Set<EventAttendance> eventAttendances;
 
-    @OneToOne
-    @JoinColumn(name = "request_event_id", referencedColumnName = "id")
+    @OneToOne(mappedBy = "event", cascade = CascadeType.ALL)
     private RequestEvent requestEvent;
 
 
