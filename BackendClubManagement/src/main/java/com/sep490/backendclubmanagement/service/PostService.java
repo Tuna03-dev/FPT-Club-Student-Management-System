@@ -15,6 +15,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 @Service
@@ -50,63 +51,7 @@ public class PostService {
         Page<Post> page = postRepository.searchPosts(clubId, teamId, clubWide, "PUBLISHED", q, pageable);
         return page.map(this::toDetailsDTO);
     }
-//    @Transactional
-//    public PostWithRelationsData createPost(CreatePostRequest req, Long authorId) {
-//        // ====== Validate cơ bản ======
-//        if (Boolean.TRUE.equals(req.getClubWide())) {
-//            // Post toàn CLB -> bỏ teamId
-//            req.setTeamId(null);
-//        } else {
-//            // Team-only -> cần teamId
-//            if (req.getTeamId() == null) {
-//                throw new IllegalArgumentException("teamId is required when clubWide = false");
-//            }
-//        }
-//
-//        String status = (req.getStatus() == null || req.getStatus().isBlank())
-//                ? "DRAFT" : req.getStatus().trim();
-//
-//        // ====== Tham chiếu thực thể liên kết (không query toàn bộ) ======
-//        Club clubRef = em.getReference(Club.class, req.getClubId());
-//        Team teamRef = (req.getTeamId() != null) ? em.getReference(Team.class, req.getTeamId()) : null;
-//        User authorRef = (authorId != null) ? em.getReference(User.class, authorId) : null;
-//
-//        // ====== Tạo Post ======
-//        Post p = new Post();
-//        p.setTitle(req.getTitle());
-//        p.setContent(req.getContent());
-//        p.setStatus(status);
-//        p.setIsClubWide(Boolean.TRUE.equals(req.getClubWide()));
-//        if (req.getWithinClub() != null) p.setIsWithinClub(req.getWithinClub());
-//        p.setCreatedAt(LocalDateTime.now());
-//
-//        p.setClub(clubRef);
-//        p.setTeam(teamRef);
-//        p.setCreatedBy(authorRef);
-//
-//        // ====== Media (nếu có) ======
-//        Set<PostMedia> mediaSet = new LinkedHashSet<>();
-//        if (req.getMedia() != null) {
-//            for (CreatePostRequest.PostMediaItem it : req.getMedia()) {
-//                PostMedia pm = new PostMedia();
-//                pm.setTitle(it.getTitle());
-//                pm.setMediaUrl(it.getMediaUrl());
-//                pm.setMediaType(it.getMediaType());
-//                pm.setCaption(it.getCaption());
-//                pm.setDisplayOrder(it.getDisplayOrder());
-//                pm.setCreatedAt(LocalDateTime.now());
-//                pm.setPost(p);                 // QUAN TRỌNG: gắn quan hệ 2 chiều
-//                mediaSet.add(pm);
-//            }
-//        }
-//        p.setPostMedia(mediaSet);
-//
-//        // ====== Lưu DB ======
-//        Post saved = postRepository.save(p);
-//
-//        // ====== Map sang DTO dùng hàm bạn có sẵn ======
-//        return toDetailsDTO(saved);
-//    }
+
     @Transactional
     public PostWithRelationsData createPostWithUploads(
             CreatePostRequest req,
@@ -146,35 +91,89 @@ public class PostService {
                 : new ArrayList<>(req.getMedia());
 
         Set<PostMedia> mediaSet = new LinkedHashSet<>();
-
-        // Nếu có files => upload lên Cloudinary
+        // --- A) Nếu có files => upload lên Cloudinary (song song bằng @Async) ---
         if (files != null && !files.isEmpty()) {
+            // Tạo danh sách futures tương ứng với từng file để giữ được thứ tự
+            List<CompletableFuture<PostMedia>> futures = new ArrayList<>();
+
             for (int i = 0; i < files.size(); i++) {
+                final int idx = i;
                 MultipartFile f = files.get(i);
 
-                // Upload Cloudinary
-                CloudinaryService.UploadResult up = cloudinaryService.uploadImage(f);
-
                 // Lấy metadata tương ứng nếu có
-                CreatePostRequest.PostMediaItem mm = (i < meta.size()) ? meta.get(i) : null;
+                CreatePostRequest.PostMediaItem mm = (idx < meta.size()) ? meta.get(idx) : null;
 
-                PostMedia pm = new PostMedia();
-                pm.setTitle(mm != null && mm.getTitle() != null ? mm.getTitle() : filenameNoExt(f.getOriginalFilename()));
-                pm.setMediaUrl(up.url());     // URL ảnh Cloudinary
-                pm.setMediaType("IMAGE");
-                pm.setCaption(mm != null ? mm.getCaption() : null);
-                pm.setDisplayOrder(mm != null ? mm.getDisplayOrder() : i); // theo thứ tự file
-                pm.setCreatedAt(LocalDateTime.now());
-                pm.setPost(p);
-                mediaSet.add(pm);
+                // Gọi upload bất đồng bộ và map sang PostMedia
+                CompletableFuture<PostMedia> fu = cloudinaryService.uploadImageAsync(f)
+                        .thenApply(up -> {
+                            PostMedia pm = new PostMedia();
+                            pm.setTitle(mm != null && mm.getTitle() != null
+                                    ? mm.getTitle()
+                                    : filenameNoExt(f.getOriginalFilename()));
+                            pm.setMediaUrl(up.url());     // URL ảnh Cloudinary
+                            pm.setMediaType("IMAGE");
+                            pm.setCaption(mm != null ? mm.getCaption() : null);
+                            pm.setDisplayOrder(mm != null ? mm.getDisplayOrder() : idx); // theo thứ tự file
+                            pm.setCreatedAt(LocalDateTime.now());
+                            pm.setPost(p);
+                            return pm;
+                        });
+
+                futures.add(fu);
+            }
+
+            // Chờ tất cả upload hoàn tất trước khi lưu DB để đảm bảo nhất quán
+            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+
+            // Gom kết quả (nếu muốn skip file lỗi, bọc try/catch ở đây)
+            for (CompletableFuture<PostMedia> fu : futures) {
+                mediaSet.add(fu.join());
             }
         }
 
+//        // Nếu có files => upload lên Cloudinary
+//        if (files != null && !files.isEmpty()) {
+//            for (int i = 0; i < files.size(); i++) {
+//                MultipartFile f = files.get(i);
+//
+//                // Upload Cloudinary
+//                CloudinaryService.UploadResult up = cloudinaryService.uploadImage(f);
+//
+//                // Lấy metadata tương ứng nếu có
+//                CreatePostRequest.PostMediaItem mm = (i < meta.size()) ? meta.get(i) : null;
+//
+//                PostMedia pm = new PostMedia();
+//                pm.setTitle(mm != null && mm.getTitle() != null ? mm.getTitle() : filenameNoExt(f.getOriginalFilename()));
+//                pm.setMediaUrl(up.url());     // URL ảnh Cloudinary
+//                pm.setMediaType("IMAGE");
+//                pm.setCaption(mm != null ? mm.getCaption() : null);
+//                pm.setDisplayOrder(mm != null ? mm.getDisplayOrder() : i); // theo thứ tự file
+//                pm.setCreatedAt(LocalDateTime.now());
+//                pm.setPost(p);
+//                mediaSet.add(pm);
+//            }
+//        }
+
         // Nếu req.media có mục mà KHÔNG có file (ví dụ mediaUrl có sẵn), vẫn thêm
+//        if (meta.size() > (files == null ? 0 : files.size())) {
+//            for (int i = (files == null ? 0 : files.size()); i < meta.size(); i++) {
+//                CreatePostRequest.PostMediaItem mm = meta.get(i);
+//                if (mm.getMediaUrl() == null || mm.getMediaUrl().isBlank()) continue; // bỏ nếu thiếu URL
+//                PostMedia pm = new PostMedia();
+//                pm.setTitle(mm.getTitle());
+//                pm.setMediaUrl(mm.getMediaUrl());
+//                pm.setMediaType(mm.getMediaType() != null ? mm.getMediaType() : "IMAGE");
+//                pm.setCaption(mm.getCaption());
+//                pm.setDisplayOrder(mm.getDisplayOrder() != null ? mm.getDisplayOrder() : i);
+//                pm.setCreatedAt(LocalDateTime.now());
+//                pm.setPost(p);
+//                mediaSet.add(pm);
+//            }
         if (meta.size() > (files == null ? 0 : files.size())) {
             for (int i = (files == null ? 0 : files.size()); i < meta.size(); i++) {
                 CreatePostRequest.PostMediaItem mm = meta.get(i);
                 if (mm.getMediaUrl() == null || mm.getMediaUrl().isBlank()) continue; // bỏ nếu thiếu URL
+
                 PostMedia pm = new PostMedia();
                 pm.setTitle(mm.getTitle());
                 pm.setMediaUrl(mm.getMediaUrl());
@@ -253,25 +252,72 @@ public class PostService {
 
         if (files != null && !files.isEmpty()) {
             if (p.getPostMedia() == null) p.setPostMedia(new LinkedHashSet<>());
+
+            final int baseOrder = calcNextOrder(p);            // 👉 THÊM: chốt order bắt đầu
+
+            List<CompletableFuture<PostMedia>> futures = new ArrayList<>();  // 👉 THÊM: list futures
+
             for (int i = 0; i < files.size(); i++) {
+                final int idx = i;
                 MultipartFile f = files.get(i);
+                UpdatePostRequest.NewMediaMeta meta = (idx < metas.size()) ? metas.get(idx) : null;
 
-                // dùng lại CloudinaryService để upload, NHƯNG chỉ lưu URL vào DB
-                CloudinaryService.UploadResult up = cloudinaryService.uploadImage(f);
-                UpdatePostRequest.NewMediaMeta meta = (i < metas.size()) ? metas.get(i) : null;
+                // 👉 ĐỔI: dùng upload async thay vì đồng bộ
+                CompletableFuture<PostMedia> fu = cloudinaryService.uploadImageAsync(f)
+                        .thenApply(up -> {
+                            PostMedia pm = new PostMedia();
+                            pm.setTitle(meta != null && meta.getTitle() != null
+                                    ? meta.getTitle()
+                                    : filenameNoExt(f.getOriginalFilename()));
+                            pm.setMediaUrl(up.url()); // chỉ lưu URL
+                            pm.setMediaType(meta != null && meta.getMediaType() != null ? meta.getMediaType() : "IMAGE");
+                            pm.setCaption(meta != null ? meta.getCaption() : null);
 
-                PostMedia pm = new PostMedia();
-                pm.setTitle(meta != null && meta.getTitle() != null ? meta.getTitle() : filenameNoExt(f.getOriginalFilename()));
-                pm.setMediaUrl(up.url()); // chỉ lưu URL
-                pm.setMediaType(meta != null && meta.getMediaType() != null ? meta.getMediaType() : "IMAGE");
-                pm.setCaption(meta != null ? meta.getCaption() : null);
-                pm.setDisplayOrder(meta != null ? meta.getDisplayOrder() : calcNextOrder(p));
-                pm.setCreatedAt(LocalDateTime.now());
-                pm.setPost(p);
+                            // 👉 THÊM: tránh trùng order khi chạy song song
+                            Integer order = (meta != null && meta.getDisplayOrder() != null)
+                                    ? meta.getDisplayOrder()
+                                    : (baseOrder + idx);
+                            pm.setDisplayOrder(order);
 
-                p.getPostMedia().add(pm);
+                            pm.setCreatedAt(LocalDateTime.now());
+                            pm.setPost(p);
+                            return pm;
+                        });
+
+                futures.add(fu); // 👉 THÊM
+            }
+
+            // 👉 THÊM: đợi TẤT CẢ upload xong mới thêm vào post và lưu DB
+            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+
+            for (CompletableFuture<PostMedia> fu : futures) {
+                p.getPostMedia().add(fu.join()); // (có thể bọc try/catch nếu muốn skip lỗi từng file)
             }
         }
+//        List<UpdatePostRequest.NewMediaMeta> metas =
+//                (req.getNewMediasMeta() == null) ? List.of() : req.getNewMediasMeta();
+//
+//        if (files != null && !files.isEmpty()) {
+//            if (p.getPostMedia() == null) p.setPostMedia(new LinkedHashSet<>());
+//            for (int i = 0; i < files.size(); i++) {
+//                MultipartFile f = files.get(i);
+//
+//                // dùng lại CloudinaryService để upload, NHƯNG chỉ lưu URL vào DB
+//                CloudinaryService.UploadResult up = cloudinaryService.uploadImage(f);
+//                UpdatePostRequest.NewMediaMeta meta = (i < metas.size()) ? metas.get(i) : null;
+//
+//                PostMedia pm = new PostMedia();
+//                pm.setTitle(meta != null && meta.getTitle() != null ? meta.getTitle() : filenameNoExt(f.getOriginalFilename()));
+//                pm.setMediaUrl(up.url()); // chỉ lưu URL
+//                pm.setMediaType(meta != null && meta.getMediaType() != null ? meta.getMediaType() : "IMAGE");
+//                pm.setCaption(meta != null ? meta.getCaption() : null);
+//                pm.setDisplayOrder(meta != null ? meta.getDisplayOrder() : calcNextOrder(p));
+//                pm.setCreatedAt(LocalDateTime.now());
+//                pm.setPost(p);
+//
+//                p.getPostMedia().add(pm);
+//            }
+//        }
 
         Post saved = postRepository.save(p);
         return toDetailsDTO(saved);

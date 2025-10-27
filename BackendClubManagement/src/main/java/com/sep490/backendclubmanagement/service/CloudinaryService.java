@@ -3,11 +3,13 @@ package com.sep490.backendclubmanagement.service;
 import com.cloudinary.Cloudinary;
 import com.cloudinary.utils.ObjectUtils;
 import lombok.RequiredArgsConstructor;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 @Service
 @RequiredArgsConstructor
@@ -36,6 +38,23 @@ public class CloudinaryService {
             throw new RuntimeException("Cloudinary upload fail: " + e.getMessage(), e);
         }
     }
+    /**
+     * Upload BẤT ĐỒNG BỘ: chạy trên thread pool 'uploadExecutor'
+     * - Dùng cho upload song song nhiều ảnh trong PostService.
+     * - Trả về CompletableFuture để caller .join()/.allOf() quản lý đồng bộ cuối cùng.
+     */
+    @Async("uploadExecutor")
+    public CompletableFuture<UploadResult> uploadImageAsync(MultipartFile file) {
+        try {
+            // Tái sử dụng logic đồng bộ cho nhất quán
+            UploadResult res = uploadImage(file);
+            return CompletableFuture.completedFuture(res);
+        } catch (Exception e) {
+            // Đẩy lỗi ra future để phía gọi tự quyết định fail toàn bộ hay bỏ qua file lỗi
+            return CompletableFuture.failedFuture(e);
+        }
+    }
+
 
     public record UploadResult(String url, String publicId, String format, long bytes) {}
 }

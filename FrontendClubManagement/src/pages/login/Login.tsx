@@ -60,6 +60,7 @@ const LoginPage: React.FC = () => {
     setIsLoading(true);
     try {
       const result = await authService.loginWithGoogle(response.credential);
+      console.log("Login result:", result);
 
       if (result.code === 200 && result.data) {
         authService.setTokens(result.data.accessToken);
