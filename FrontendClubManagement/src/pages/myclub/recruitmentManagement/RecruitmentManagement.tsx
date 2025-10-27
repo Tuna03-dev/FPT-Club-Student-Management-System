@@ -29,6 +29,7 @@ import {
   Loader2,
   Lock,
   Unlock,
+  AlertTriangle,
 } from "lucide-react";
 import {
   getRecruitmentsByClubId,
@@ -41,6 +42,14 @@ import {
 } from "@/service/RecruitmentService";
 import { toast } from "sonner";
 import { RecruitmentForm } from "@/components/features/recruitment/RecruitmentForm";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 type RecruitmentStatus = "draft" | "open" | "closed" | "cancelled";
 type ApplicationStatus = "pending" | "approved" | "rejected" | "interview";
@@ -146,6 +155,15 @@ export function RecruitmentManagement() {
   const [editingRecruitment, setEditingRecruitment] =
     useState<Recruitment | null>(null);
   const [changingStatusId, setChangingStatusId] = useState<string | null>(null);
+
+  // Dialog states
+  const [statusChangeDialog, setStatusChangeDialog] = useState<{
+    open: boolean;
+    recruitmentId: string;
+    newStatus: "OPEN" | "CLOSED";
+    title: string;
+  } | null>(null);
+  const [cancelFormDialog, setCancelFormDialog] = useState(false);
 
   // Get current user and clubId
   // const currentUser = authService.getCurrentUser();
@@ -376,8 +394,14 @@ export function RecruitmentManagement() {
   };
 
   const handleCancelForm = () => {
+    // Show confirmation dialog
+    setCancelFormDialog(true);
+  };
+
+  const confirmCancelForm = () => {
     setEditingRecruitment(null);
     setActiveTab("list");
+    setCancelFormDialog(false);
   };
 
   const handleSaveRecruitment = async (
@@ -427,16 +451,33 @@ export function RecruitmentManagement() {
     console.log("Updating application status:", applicationId, newStatus);
   };
 
+  // Show status change confirmation dialog
+  const showStatusChangeDialog = (
+    recruitmentId: string,
+    newStatus: "OPEN" | "CLOSED",
+    title: string
+  ) => {
+    setStatusChangeDialog({
+      open: true,
+      recruitmentId,
+      newStatus,
+      title,
+    });
+  };
+
+  // Actual status change function (called after confirmation)
   const handleChangeRecruitmentStatus = async (
     recruitmentId: string,
     newStatus: "OPEN" | "CLOSED"
   ) => {
     try {
-      console.log(`Changing recruitment ${recruitmentId} status to ${newStatus}`);
-      
+      console.log(
+        `Changing recruitment ${recruitmentId} status to ${newStatus}`
+      );
+
       // Set loading state for this specific button
       setChangingStatusId(recruitmentId);
-      
+
       await changeRecruitmentStatus(parseInt(recruitmentId), newStatus);
 
       const statusText = newStatus === "OPEN" ? "mở" : "đóng";
@@ -466,12 +507,23 @@ export function RecruitmentManagement() {
       toast.error(
         err.message || "Không thể thay đổi trạng thái đơn tuyển dụng"
       );
-      
+
       // Refetch on error to ensure consistency
       await fetchRecruitments();
     } finally {
       setChangingStatusId(null);
+      setStatusChangeDialog(null);
     }
+  };
+
+  // Confirm status change
+  const confirmStatusChange = async () => {
+    if (!statusChangeDialog) return;
+
+    await handleChangeRecruitmentStatus(
+      statusChangeDialog.recruitmentId,
+      statusChangeDialog.newStatus
+    );
   };
 
   return (
@@ -599,7 +651,10 @@ export function RecruitmentManagement() {
                               {statusLabels[recruitment.status]}
                             </Badge>
                             {recruitment.status === "closed" && (
-                              <Badge variant="outline" className="text-xs text-muted-foreground">
+                              <Badge
+                                variant="outline"
+                                className="text-xs text-muted-foreground"
+                              >
                                 🔒 Không thể chỉnh sửa
                               </Badge>
                             )}
@@ -679,7 +734,11 @@ export function RecruitmentManagement() {
                           className="bg-transparent"
                           onClick={() => handleEditRecruitment(recruitment)}
                           disabled={recruitment.status === "closed"}
-                          title={recruitment.status === "closed" ? "Không thể chỉnh sửa đợt tuyển dụng đã đóng" : "Chỉnh sửa đợt tuyển dụng"}
+                          title={
+                            recruitment.status === "closed"
+                              ? "Không thể chỉnh sửa đợt tuyển dụng đã đóng"
+                              : "Chỉnh sửa đợt tuyển dụng"
+                          }
                         >
                           <Edit className="h-4 w-4 mr-2" />
                           Chỉnh sửa
@@ -689,12 +748,15 @@ export function RecruitmentManagement() {
                             variant="outline"
                             size="sm"
                             onClick={() =>
-                              handleChangeRecruitmentStatus(
+                              showStatusChangeDialog(
                                 recruitment.recruitment_id,
-                                "OPEN"
+                                "OPEN",
+                                recruitment.title
                               )
                             }
-                            disabled={changingStatusId === recruitment.recruitment_id}
+                            disabled={
+                              changingStatusId === recruitment.recruitment_id
+                            }
                             className="bg-transparent text-green-600 border-green-200 hover:bg-green-50 hover:text-green-700"
                           >
                             {changingStatusId === recruitment.recruitment_id ? (
@@ -715,12 +777,15 @@ export function RecruitmentManagement() {
                             variant="outline"
                             size="sm"
                             onClick={() =>
-                              handleChangeRecruitmentStatus(
+                              showStatusChangeDialog(
                                 recruitment.recruitment_id,
-                                "CLOSED"
+                                "CLOSED",
+                                recruitment.title
                               )
                             }
-                            disabled={changingStatusId === recruitment.recruitment_id}
+                            disabled={
+                              changingStatusId === recruitment.recruitment_id
+                            }
                             className="bg-transparent text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
                           >
                             {changingStatusId === recruitment.recruitment_id ? (
@@ -740,6 +805,7 @@ export function RecruitmentManagement() {
                           variant="outline"
                           size="sm"
                           className="bg-transparent"
+                          disabled={recruitment.status === "closed"}
                         >
                           <Share2 className="h-4 w-4 mr-2" />
                           Chia sẻ
@@ -1171,6 +1237,158 @@ export function RecruitmentManagement() {
           </Card>
         </div>
       )}
+
+      {/* Status Change Confirmation Dialog */}
+      <Dialog
+        open={statusChangeDialog?.open || false}
+        onOpenChange={(open) => !open && setStatusChangeDialog(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <div className="flex items-center gap-3">
+              <div
+                className={`p-3 rounded-full ${
+                  statusChangeDialog?.newStatus === "OPEN"
+                    ? "bg-green-100"
+                    : "bg-red-100"
+                }`}
+              >
+                <AlertTriangle
+                  className={`h-6 w-6 ${
+                    statusChangeDialog?.newStatus === "OPEN"
+                      ? "text-green-600"
+                      : "text-red-600"
+                  }`}
+                />
+              </div>
+              <div>
+                <DialogTitle>
+                  {statusChangeDialog?.newStatus === "OPEN"
+                    ? "Xác nhận mở đơn tuyển dụng"
+                    : "Xác nhận đóng đơn tuyển dụng"}
+                </DialogTitle>
+              </div>
+            </div>
+          </DialogHeader>
+          <DialogDescription className="py-4">
+            <div className="space-y-3">
+              <p className="text-base">
+                {statusChangeDialog?.newStatus === "OPEN" ? (
+                  <>
+                    Bạn có chắc chắn muốn{" "}
+                    <strong className="text-green-600">mở đơn</strong> cho đợt
+                    tuyển dụng:
+                  </>
+                ) : (
+                  <>
+                    Bạn có chắc chắn muốn{" "}
+                    <strong className="text-red-600">đóng đơn</strong> cho đợt
+                    tuyển dụng:
+                  </>
+                )}
+              </p>
+              <div className="bg-muted p-3 rounded-lg">
+                <p className="font-medium text-foreground">
+                  "{statusChangeDialog?.title}"
+                </p>
+              </div>
+              {statusChangeDialog?.newStatus === "OPEN" && (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                  <p className="text-sm text-green-800">
+                    ✓ Sinh viên sẽ có thể nộp đơn ứng tuyển sau khi mở
+                  </p>
+                </div>
+              )}
+              {statusChangeDialog?.newStatus === "CLOSED" && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                  <p className="text-sm text-red-800">
+                    ⚠️ Sau khi đóng, đợt tuyển dụng sẽ không thể chỉnh sửa và
+                    sinh viên không thể nộp đơn nữa
+                  </p>
+                </div>
+              )}
+            </div>
+          </DialogDescription>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setStatusChangeDialog(null)}
+              disabled={changingStatusId !== null}
+            >
+              Hủy
+            </Button>
+            <Button
+              onClick={confirmStatusChange}
+              disabled={changingStatusId !== null}
+              className={
+                statusChangeDialog?.newStatus === "OPEN"
+                  ? "bg-green-600 hover:bg-green-700"
+                  : "bg-red-600 hover:bg-red-700"
+              }
+            >
+              {changingStatusId ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Đang xử lý...
+                </>
+              ) : (
+                <>
+                  {statusChangeDialog?.newStatus === "OPEN"
+                    ? "Mở đơn"
+                    : "Đóng đơn"}
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cancel Form Confirmation Dialog */}
+      <Dialog open={cancelFormDialog} onOpenChange={setCancelFormDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <div className="flex items-center gap-3">
+              <div className="p-3 rounded-full bg-amber-100">
+                <AlertTriangle className="h-6 w-6 text-amber-600" />
+              </div>
+              <div>
+                <DialogTitle>Xác nhận hủy thao tác</DialogTitle>
+              </div>
+            </div>
+          </DialogHeader>
+          <DialogDescription className="py-4">
+            <div className="space-y-3">
+              <p className="text-base">
+                Bạn có chắc chắn muốn hủy{" "}
+                {editingRecruitment ? "chỉnh sửa" : "tạo mới"} đợt tuyển dụng?
+              </p>
+              {editingRecruitment && (
+                <div className="bg-muted p-3 rounded-lg">
+                  <p className="font-medium text-foreground">
+                    "{editingRecruitment.title}"
+                  </p>
+                </div>
+              )}
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                <p className="text-sm text-amber-800">
+                  ⚠️ Các thay đổi chưa lưu sẽ bị mất
+                </p>
+              </div>
+            </div>
+          </DialogDescription>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setCancelFormDialog(false)}
+            >
+              Tiếp tục chỉnh sửa
+            </Button>
+            <Button variant="destructive" onClick={confirmCancelForm}>
+              Hủy bỏ
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

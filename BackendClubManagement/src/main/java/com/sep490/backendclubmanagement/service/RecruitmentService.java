@@ -13,10 +13,14 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.MultiValueMap;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 @Service
@@ -34,6 +38,7 @@ public class RecruitmentService implements RecruitmentServiceInterface {
     private final EventRepository eventRepository; // placeholder if needed later
     private final RecruitmentMapper recruitmentMapper;
     private final RecruitmentApplicationMapper recruitmentApplicationMapper;
+    private final CloudinaryService cloudinaryService;
 
     @Override
     public PagedResponse<RecruitmentData> listRecruitments(Long clubId, RecruitmentStatus status, Pageable pageable) {
@@ -148,6 +153,19 @@ public class RecruitmentService implements RecruitmentServiceInterface {
     @Override
     @Transactional
     public RecruitmentApplicationData submitApplication(Long applicantId, ApplicationSubmitRequest req) throws AppException {
+        return submitApplication(applicantId, req, null);
+    }
+
+    /**
+     * Submit application with file upload support
+     * @param applicantId User ID of the applicant
+     * @param req Application submit request
+     * @param allFiles MultiValueMap containing files with keys like "file_<questionId>"
+     * @return Submitted application data
+     * @throws AppException if submission fails
+     */
+    @Transactional
+    public RecruitmentApplicationData submitApplication(Long applicantId, ApplicationSubmitRequest req, MultiValueMap<String, MultipartFile> allFiles) throws AppException {
         Recruitment recruitment = recruitmentRepository.findById(req.recruitmentId)
                 .orElseThrow(() -> new AppException(ErrorCode.INTERNAL_SERVER_ERROR));
         User applicant = userRepository.findById(applicantId)
@@ -162,13 +180,54 @@ public class RecruitmentService implements RecruitmentServiceInterface {
                 .build();
         app = applicationRepository.save(app);
 
+        // Build a map of questionId -> uploaded file URL
+        Map<Long, String> uploadedFileUrls = new HashMap<>();
+        if (allFiles != null && !allFiles.isEmpty()) {
+            // Parse files with format "file_<questionId>"
+            for (Map.Entry<String, List<MultipartFile>> entry : allFiles.entrySet()) {
+                String key = entry.getKey();
+                
+                // Skip non-file fields (like "request")
+                if (!key.startsWith("file_")) {
+                    continue;
+                }
+                
+                try {
+                    // Extract questionId from key "file_<questionId>"
+                    Long questionId = Long.parseLong(key.substring(5));
+                    List<MultipartFile> files = entry.getValue();
+                    
+                    if (files != null && !files.isEmpty()) {
+                        MultipartFile file = files.get(0); // Take first file
+                        if (file != null && !file.isEmpty()) {
+                            // Upload to Cloudinary
+                            CloudinaryService.UploadResult uploadResult = cloudinaryService.uploadFile(file);
+                            uploadedFileUrls.put(questionId, uploadResult.url());
+                        }
+                    }
+                } catch (NumberFormatException e) {
+                    // Invalid questionId format, skip
+                    continue;
+                } catch (Exception e) {
+                    throw new AppException(ErrorCode.INTERNAL_SERVER_ERROR);
+                }
+            }
+        }
+
         List<RecruitmentFormAnswer> answers = new ArrayList<>();
         for (ApplicationSubmitRequest.FormAnswerRequest a : req.answers) {
+            String fileUrl = a.fileUrl;
+            
+            // If file was uploaded for this question, use the uploaded URL
+            if (uploadedFileUrls.containsKey(a.questionId)) {
+                fileUrl = uploadedFileUrls.get(a.questionId);
+            }
+            
             RecruitmentFormAnswer ans = RecruitmentFormAnswer.builder()
                     .application(app)
                     .question(RecruitmentFormQuestion.builder().id(a.questionId).build())
                     .answerText(a.answerText)
-                    .fileUrl(a.fileUrl)
+                    .fileUrl(fileUrl)
                     .build();
             answers.add(ans);
         }

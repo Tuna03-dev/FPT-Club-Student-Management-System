@@ -16,7 +16,11 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.util.MultiValueMap;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/recruitments")
@@ -78,7 +82,32 @@ public class RecruitmentController {
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 
-    // Applications
+    // Applications - Note: Put specific paths before path variables to avoid routing conflicts
+    
+    // Submit application (specific path, must come before /{applicationId})
+    @PostMapping(path = "/applications/submit", consumes = "multipart/form-data")
+    public ResponseEntity<ApiResponse<RecruitmentApplicationData>> submit(
+            Authentication authentication,
+            @RequestPart("request") ApplicationSubmitRequest request,
+            @RequestParam MultiValueMap<String, MultipartFile> allFiles
+    ) throws AppException {
+        // Get current user from authentication
+        String email = authentication.getName();
+        User currentUser = userService.findByEmail(email)
+                .orElseThrow(() -> new AppException(ErrorCode.UNAUTHORIZED));
+        
+        RecruitmentApplicationData data = recruitmentService.submitApplication(currentUser.getId(), request, allFiles);
+        return ResponseEntity.ok(ApiResponse.success(data));
+    }
+
+    // Review application (specific path, must come before /{applicationId})
+    @PostMapping("/applications/review")
+    public ResponseEntity<ApiResponse<RecruitmentApplicationData>> review(@RequestBody ApplicationReviewRequest request) throws AppException {
+        RecruitmentApplicationData data = recruitmentService.reviewApplication(request);
+        return ResponseEntity.ok(ApiResponse.success(data));
+    }
+
+    // List applications for a recruitment
     @GetMapping("/{recruitmentId}/applications")
     public ResponseEntity<ApiResponse<PagedResponse<RecruitmentApplicationData>>> listApplications(
             @PathVariable Long recruitmentId,
@@ -92,32 +121,14 @@ public class RecruitmentController {
         return ResponseEntity.ok(ApiResponse.success(data));
     }
 
-    @PostMapping("/applications/submit")
-    public ResponseEntity<ApiResponse<RecruitmentApplicationData>> submit(
-            Authentication authentication,
-            @RequestBody ApplicationSubmitRequest request
-    ) throws AppException {
-        // Get current user from authentication
-//        String email = authentication.getName();
-//        User currentUser = userService.findByEmail(email)
-//                .orElseThrow(() -> new AppException(ErrorCode.UNAUTHORIZED));
-        
-        RecruitmentApplicationData data = recruitmentService.submitApplication(Long.parseLong("6"), request);
-        return ResponseEntity.ok(ApiResponse.success(data));
-    }
-
+    // Get application by ID (path variable, should come after specific paths)
     @GetMapping("/applications/{applicationId}")
     public ResponseEntity<ApiResponse<RecruitmentApplicationData>> getApplication(@PathVariable Long applicationId) throws AppException {
         RecruitmentApplicationData data = recruitmentService.getApplication(applicationId);
         return ResponseEntity.ok(ApiResponse.success(data));
     }
 
-    @PostMapping("/applications/review")
-    public ResponseEntity<ApiResponse<RecruitmentApplicationData>> review(@RequestBody ApplicationReviewRequest request) throws AppException {
-        RecruitmentApplicationData data = recruitmentService.reviewApplication(request);
-        return ResponseEntity.ok(ApiResponse.success(data));
-    }
-
+    // Withdraw application (path variable with action)
     @PostMapping("/applications/{applicationId}/withdraw")
     public ResponseEntity<ApiResponse<Void>> withdraw(@PathVariable Long applicationId) {
         recruitmentService.withdrawApplication(applicationId);

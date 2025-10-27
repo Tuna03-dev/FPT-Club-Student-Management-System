@@ -208,11 +208,32 @@ export interface ApplicationSubmitRequest {
 }
 
 export async function submitApplication(
-  request: ApplicationSubmitRequest
+  request: ApplicationSubmitRequest,
+  filesByQuestionId?: Map<number, File>
 ): Promise<RecruitmentApplicationData> {
+  const formData = new FormData();
+  
+  // Add request as JSON blob
+  formData.append(
+    "request",
+    new Blob([JSON.stringify(request)], { type: "application/json" })
+  );
+  
+  // Add files with questionId mapping if provided
+  if (filesByQuestionId && filesByQuestionId.size > 0) {
+    filesByQuestionId.forEach((file, questionId) => {
+      formData.append(`file_${questionId}`, file);
+    });
+  }
+  
   const res = await axiosClient.post<RecruitmentApplicationData>(
     `/recruitments/applications/submit`,
-    request
+    formData,
+    {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    }
   );
   if (!res.data) throw new Error("Failed to submit application");
   return res.data;
