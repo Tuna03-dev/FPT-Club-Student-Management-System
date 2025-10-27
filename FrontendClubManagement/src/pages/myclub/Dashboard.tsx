@@ -67,17 +67,17 @@ export const Dashboard = () => {
   const convertPostToCard = (post: PostWithRelationsData) => ({
     id: post.id.toString(),
     author: {
-      name: post.authorName,
+      name: post.authorName || "Người dùng",
       avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=default", // Default avatar
       role: "Thành viên", // Default role
     },
-    content: post.content,
-    images: post.media
-      .filter(m => m.mediaType === "IMAGE")
+    content: post.content || "",
+    images: (post.media || [])
+      .filter(m => m && m.mediaType === "IMAGE")
       .map(m => m.mediaUrl), // Get all images
-    timestamp: formatTimestamp(post.createdAt),
-    likes: post.likes.length,
-    comments: post.comments.length,
+    timestamp: formatTimestamp(post.createdAt || new Date().toISOString()),
+    likes: (post.likes || []).length,
+    comments: (post.comments || []).length,
     shares: 0, // Backend doesn't have shares field, using default
   });
 

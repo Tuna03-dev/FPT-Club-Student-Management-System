@@ -57,6 +57,14 @@ public interface RecruitmentMapper {
             builder.questions(questionData);
         }
         
+        // Map teamOptions - extract team IDs
+        if (recruitment.getTeamOptions() != null && !recruitment.getTeamOptions().isEmpty()) {
+            List<Long> teamOptionIds = recruitment.getTeamOptions().stream()
+                    .map(teamOption -> teamOption.getTeam().getId())
+                    .collect(Collectors.toList());
+            builder.teamOptionIds(teamOptionIds);
+        }
+        
         return builder.build();
     }
 

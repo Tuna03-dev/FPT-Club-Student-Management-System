@@ -29,9 +29,11 @@ public class SecurityConfig {
     
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final UserDetailsService userDetailsService;
+    private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
 
     private final String[] PUBLIC_URL = {
-            "/api/**",
+//            "/api/**",
+            "/api/auth/google",
             "/api/v1/auth/**",
             "/api/v1/public/**",
             "/oauth2/**",
@@ -67,6 +69,8 @@ public class SecurityConfig {
                         .requestMatchers(PUBLIC_URL).permitAll()
                         .anyRequest().authenticated())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .exceptionHandling(exception -> exception
+                        .authenticationEntryPoint(jwtAuthenticationEntryPoint))
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();

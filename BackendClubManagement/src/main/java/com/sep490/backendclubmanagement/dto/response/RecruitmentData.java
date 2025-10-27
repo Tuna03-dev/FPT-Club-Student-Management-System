@@ -18,6 +18,7 @@ public class RecruitmentData {
     private String requirements;
     private Long clubId;
     private List<RecruitmentQuestionData> questions;
+    private List<Long> teamOptionIds; // Danh sách ID của các team cho phép sinh viên lựa chọn
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }
