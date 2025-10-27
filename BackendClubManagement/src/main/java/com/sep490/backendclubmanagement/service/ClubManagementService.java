@@ -18,7 +18,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class ClubManagementService {
 
-    private final ClubMembershipRepository clubMembershipRepository;
+    private final ClubMemberShipRepository clubMembershipRepository;
     private final SemesterRepository semesterRepository;
     private final TeamRepository teamRepository;
     private final RoleMembershipRepository roleMembershipRepository;
