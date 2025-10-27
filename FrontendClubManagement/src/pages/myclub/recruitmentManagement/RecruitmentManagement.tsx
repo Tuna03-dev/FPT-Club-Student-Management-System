@@ -6,7 +6,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -14,7 +13,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Label } from "@/components/ui/label";
 import {
   Search,
   Plus,
@@ -24,12 +22,9 @@ import {
   XCircle,
   Eye,
   Edit,
-  Trash2,
-  Send,
   BarChart3,
   Download,
   MessageSquare,
-  Star,
   Share2,
   Loader2,
   Lock,
@@ -42,11 +37,8 @@ import {
   createRecruitment,
   updateRecruitment,
   changeRecruitmentStatus,
-  type RecruitmentData,
-  type RecruitmentApplicationData,
   type RecruitmentCreateRequest,
 } from "@/service/RecruitmentService";
-import { authService } from "@/services/authService";
 import { toast } from "sonner";
 import { RecruitmentForm } from "@/components/features/recruitment/RecruitmentForm";
 
@@ -154,7 +146,7 @@ export function RecruitmentManagement() {
     useState<Recruitment | null>(null);
 
   // Get current user and clubId
-  const currentUser = authService.getCurrentUser();
+  // const currentUser = authService.getCurrentUser();
   const clubId = 1; // Use user ID as clubId, or default to 1
 
   // Function to fetch recruitments
@@ -429,15 +421,19 @@ export function RecruitmentManagement() {
     try {
       setLoading(true);
       await changeRecruitmentStatus(parseInt(recruitmentId), newStatus);
-      
+
       const statusText = newStatus === "OPEN" ? "mở" : "đóng";
-      toast.success(`${statusText === "mở" ? "Mở" : "Đóng"} đơn tuyển dụng thành công!`);
-      
+      toast.success(
+        `${statusText === "mở" ? "Mở" : "Đóng"} đơn tuyển dụng thành công!`
+      );
+
       // Refetch recruitments to update the list
       await fetchRecruitments();
     } catch (err: any) {
       console.error("Error changing recruitment status:", err);
-      toast.error(err.message || "Không thể thay đổi trạng thái đơn tuyển dụng");
+      toast.error(
+        err.message || "Không thể thay đổi trạng thái đơn tuyển dụng"
+      );
     } finally {
       setLoading(false);
     }

@@ -12,16 +12,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import {
-  Plus,
-  XCircle,
-  Trash2,
-  Send,
-  Loader2,
-} from "lucide-react";
-import {
-  type RecruitmentCreateRequest,
-} from "@/service/RecruitmentService";
+import { Plus, XCircle, Trash2, Send, Loader2 } from "lucide-react";
+import { type RecruitmentCreateRequest } from "@/service/RecruitmentService";
 import { toast } from "sonner";
 
 type QuestionType = "TEXT" | "MCQ" | "CHECKBOX" | "FILE";
@@ -183,12 +175,12 @@ export function RecruitmentForm({
     }));
   };
 
-  const addBenefit = () => {
-    setNewRecruitment((prev) => ({
-      ...prev,
-      benefits: [...prev.benefits, ""],
-    }));
-  };
+  // const addBenefit = () => {
+  //   setNewRecruitment((prev) => ({
+  //     ...prev,
+  //     benefits: [...prev.benefits, ""],
+  //   }));
+  // };
 
   const addQuestion = () => {
     setFormQuestions((prev) => [
@@ -332,7 +324,9 @@ export function RecruitmentForm({
   };
 
   // Build request data
-  const buildRequestData = (status: "DRAFT" | "OPEN"): RecruitmentCreateRequest => {
+  const buildRequestData = (
+    status: "DRAFT" | "OPEN"
+  ): RecruitmentCreateRequest => {
     const startDate = new Date(newRecruitment.start_date).toISOString();
     const endDate = new Date(newRecruitment.end_date).toISOString();
 
@@ -670,9 +664,13 @@ export function RecruitmentForm({
 
               {question.question_type === "FILE" && (
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
-                  <p className="font-medium mb-1">📎 Lưu ý về câu hỏi tải file:</p>
+                  <p className="font-medium mb-1">
+                    📎 Lưu ý về câu hỏi tải file:
+                  </p>
                   <ul className="list-disc list-inside space-y-1 text-xs">
-                    <li>Ứng viên sẽ có thể tải lên file (PDF, Word, ảnh, v.v.)</li>
+                    <li>
+                      Ứng viên sẽ có thể tải lên file (PDF, Word, ảnh, v.v.)
+                    </li>
                     <li>
                       Nên chỉ định rõ loại file và kích thước tối đa trong câu
                       hỏi
@@ -735,4 +733,3 @@ export function RecruitmentForm({
     </div>
   );
 }
-
