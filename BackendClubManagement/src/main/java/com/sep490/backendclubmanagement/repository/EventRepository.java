@@ -50,4 +50,7 @@ public interface EventRepository extends JpaRepository<Event, Long> {
 
     @Query("SELECT c FROM Club c")
     List<Club> findAllClubs();
+
+    @Query("SELECT e FROM Event e WHERE e.club.id = :clubId AND e.isDraft = false")
+    List<Event> findByClubIdAndIsDraftFalse(Long clubId);
 }

@@ -9,6 +9,7 @@ import com.sep490.backendclubmanagement.dto.response.EventResponse;
 import com.sep490.backendclubmanagement.dto.response.EventTypesDto;
 import com.sep490.backendclubmanagement.entity.Club;
 import com.sep490.backendclubmanagement.service.EventService;
+import com.sep490.backendclubmanagement.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -39,4 +40,13 @@ public class EventController {
     public ApiResponse<List<ClubDto>> getAllClubs(){
         return ApiResponse.success(eventService.getAllClubs());
     }
+
+    @GetMapping("/club/{clubId}")
+    public ApiResponse<List<EventData>> getEventsByClubId(@PathVariable Long clubId) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        return ApiResponse.success(eventService.getEventsByClubId(clubId, userId));
+    }
+
+
+    
 }

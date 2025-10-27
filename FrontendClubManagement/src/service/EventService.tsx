@@ -7,7 +7,7 @@ export interface EventData {
   location: string;
   startTime: string; // ISO string
   endTime: string;   // ISO string
-  draft: boolean;
+  isDraft: boolean;
   clubId: number;
   clubName?: string;
   mediaUrls: string[];
@@ -70,6 +70,11 @@ export async function getEventById(id: number): Promise<EventData> {
   const res = await axiosClient.get<EventData>(`/events/${id}`);
   if (!res.data) throw new Error("Event not found");
   return res.data;
+}
+
+export async function getEventsByClubId(clubId: number): Promise<EventData[]> {
+  const res = await axiosClient.get<EventData[]>(`/events/club/${clubId}`);
+  return res.data ?? [];
 }
 
 export type EventStatusFilter = "all" | "upcoming" | "ongoing" | "completed";

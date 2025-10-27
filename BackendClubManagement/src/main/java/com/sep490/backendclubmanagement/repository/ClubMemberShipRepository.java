@@ -30,4 +30,8 @@ public interface ClubMemberShipRepository extends JpaRepository<ClubMemberShip, 
             @Param("searchTerm") String searchTerm
     );
 
+    @Query("SELECT COUNT(cms) > 0 FROM ClubMemberShip cms WHERE cms.club.id = :clubId AND cms.user.id = :userId AND cms.status = 'ACTIVE'")
+    boolean existsByClubIdAndUserIdAndStatusActive(@Param("clubId") Long clubId, @Param("userId") Long userId);
+
 }
+
