@@ -6,6 +6,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -27,7 +37,7 @@ import {
   Calendar,
 } from "lucide-react";
 
-type ApplicationStatus = "under_review" | "accepted" | "rejected" | "interviewed";
+type ApplicationStatus = "under_review" | "accepted" | "rejected" | "interview";
 type QuestionType = "TEXT" | "MCQ" | "CHECKBOX" | "FILE";
 
 interface RecruitmentForm {
@@ -65,21 +75,31 @@ interface ApplicationsListProps {
   selectedRecruitment: Recruitment;
   applications: RecruitmentApplication[];
   applicationsLoading: boolean;
-  onUpdateApplicationStatus: (applicationId: string, newStatus: ApplicationStatus) => void;
+  onUpdateApplicationStatus: (
+    applicationId: string,
+    newStatus: ApplicationStatus,
+    notes?: string
+  ) => void;
+}
+
+interface StatusChangeDialogData {
+  applicationId: string;
+  applicationName: string;
+  newStatus: ApplicationStatus;
 }
 
 const applicationStatusLabels: Record<ApplicationStatus, string> = {
   under_review: "Đang xem xét",
   accepted: "Đã duyệt",
   rejected: "Từ chối",
-  interviewed: "Đã phỏng vấn",
+  interview: "Phỏng vấn",
 };
 
 const applicationStatusColors: Record<ApplicationStatus, string> = {
   under_review: "bg-yellow-100 text-yellow-700",
   accepted: "bg-green-100 text-green-700",
   rejected: "bg-red-100 text-red-700",
-  interviewed: "bg-purple-100 text-purple-700",
+  interview: "bg-purple-100 text-purple-700",
 };
 
 export function ApplicationsList({
@@ -94,6 +114,84 @@ export function ApplicationsList({
   >("all");
   const [selectedApplication, setSelectedApplication] =
     useState<RecruitmentApplication | null>(null);
+
+  // Status change dialog state
+  const [statusChangeDialog, setStatusChangeDialog] =
+    useState<StatusChangeDialogData | null>(null);
+  const [notes, setNotes] = useState("");
+
+  // Notes-only dialog state
+  const [notesDialog, setNotesDialog] = useState<{
+    applicationId: string;
+    applicationName: string;
+    currentStatus: ApplicationStatus;
+    currentNotes?: string;
+  } | null>(null);
+
+  const handleStatusChange = (
+    applicationId: string,
+    applicationName: string,
+    newStatus: ApplicationStatus
+  ) => {
+    setStatusChangeDialog({ applicationId, applicationName, newStatus });
+    setNotes("");
+  };
+
+  const handleConfirmStatusChange = () => {
+    if (!statusChangeDialog) return;
+
+    // Validate: notes are required for interview status
+    if (statusChangeDialog.newStatus === "interview" && !notes.trim()) {
+      return; // Don't proceed if notes are empty for interview
+    }
+
+    onUpdateApplicationStatus(
+      statusChangeDialog.applicationId,
+      statusChangeDialog.newStatus,
+      notes.trim() || undefined
+    );
+
+    setStatusChangeDialog(null);
+    setSelectedApplication(null);
+  };
+
+  const handleCancelStatusChange = () => {
+    setStatusChangeDialog(null);
+    setNotes("");
+  };
+
+  const handleOpenNotesDialog = (
+    applicationId: string,
+    applicationName: string,
+    currentStatus: ApplicationStatus,
+    currentNotes?: string
+  ) => {
+    setNotesDialog({
+      applicationId,
+      applicationName,
+      currentStatus,
+      currentNotes,
+    });
+    setNotes(currentNotes || "");
+  };
+
+  const handleSaveNotes = () => {
+    if (!notesDialog) return;
+
+    onUpdateApplicationStatus(
+      notesDialog.applicationId,
+      notesDialog.currentStatus,
+      notes.trim() || undefined
+    );
+
+    setNotesDialog(null);
+    setSelectedApplication(null);
+  };
+
+  const handleCancelNotesDialog = () => {
+    setNotesDialog(null);
+    setNotes("");
+  };
 
   const filteredApplications = useMemo(() => {
     return applications.filter((app) => {
@@ -114,22 +212,10 @@ export function ApplicationsList({
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-2xl font-bold">
-              {selectedRecruitment.title}
-            </h2>
+            <h2 className="text-2xl font-bold">{selectedRecruitment.title}</h2>
             <p className="text-muted-foreground">
               {selectedRecruitment.applications.length} đơn ứng tuyển
             </p>
-          </div>
-          <div className="flex gap-2">
-            <Button variant="outline" className="bg-transparent">
-              <Download className="h-4 w-4 mr-2" />
-              Xuất Excel
-            </Button>
-            <Button variant="outline" className="bg-transparent">
-              <BarChart3 className="h-4 w-4 mr-2" />
-              Thống kê
-            </Button>
           </div>
         </div>
 
@@ -156,7 +242,7 @@ export function ApplicationsList({
             <SelectContent>
               <SelectItem value="all">Tất cả trạng thái</SelectItem>
               <SelectItem value="under_review">Đang xem xét</SelectItem>
-              <SelectItem value="interviewed">Đã phỏng vấn</SelectItem>
+              <SelectItem value="interview">Phỏng vấn</SelectItem>
               <SelectItem value="accepted">Đã duyệt</SelectItem>
               <SelectItem value="rejected">Từ chối</SelectItem>
             </SelectContent>
@@ -193,9 +279,7 @@ export function ApplicationsList({
                         </AvatarFallback>
                       </Avatar>
                       <div>
-                        <h4 className="font-medium">
-                          {application.user_name}
-                        </h4>
+                        <h4 className="font-medium">{application.user_name}</h4>
                         <p className="text-sm text-muted-foreground">
                           {application.student_id}
                         </p>
@@ -207,24 +291,20 @@ export function ApplicationsList({
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <Badge
-                        className={
-                          applicationStatusColors[application.status]
-                        }
+                        className={applicationStatusColors[application.status]}
                       >
                         {applicationStatusLabels[application.status]}
                       </Badge>
                       <span className="text-xs text-muted-foreground">
-                        {new Date(
-                          application.submitted_at
-                        ).toLocaleDateString("vi-VN")}
+                        {new Date(application.submitted_at).toLocaleDateString(
+                          "vi-VN"
+                        )}
                       </span>
                     </div>
 
                     <div className="text-sm">
                       <div className="text-muted-foreground">Email:</div>
-                      <div className="truncate">
-                        {application.user_email}
-                      </div>
+                      <div className="truncate">{application.user_email}</div>
                     </div>
 
                     {application.user_phone && (
@@ -235,11 +315,14 @@ export function ApplicationsList({
                     )}
 
                     {application.notes && (
-                      <div className="text-sm">
-                        <div className="text-muted-foreground">
-                          Ghi chú:
+                      <div className="text-sm border-l-2 border-blue-400 pl-3 py-2">
+                        <div className="text-muted-foreground font-medium flex items-center gap-1 mb-1">
+                          <MessageSquare className="h-3 w-3" />
+                          {application.status === "interview"
+                            ? "Thông tin PV:"
+                            : "Ghi chú:"}
                         </div>
-                        <div className="text-xs bg-muted/50 rounded p-2">
+                        <div className="text-xs bg-blue-50 rounded p-2 line-clamp-2">
                           {application.notes}
                         </div>
                       </div>
@@ -261,40 +344,43 @@ export function ApplicationsList({
                             variant="outline"
                             size="sm"
                             onClick={() =>
-                              onUpdateApplicationStatus(
+                              handleStatusChange(
                                 application.application_id,
-                                "interviewed"
+                                application.user_name,
+                                "interview"
                               )
                             }
-                            className="bg-transparent text-purple-600 border-purple-200 hover:bg-purple-50"
+                            className="bg-transparent text-purple-600 border-purple-200 "
                             title="Mời phỏng vấn"
                           >
-                            <Calendar className="h-4 w-4" />
+                            <Calendar className="h-4 w-4" /> Phỏng vấn
                           </Button>
                           <Button
                             variant="outline"
                             size="sm"
                             onClick={() =>
-                              onUpdateApplicationStatus(
+                              handleStatusChange(
                                 application.application_id,
+                                application.user_name,
                                 "rejected"
                               )
                             }
-                            className="bg-transparent text-red-600 border-red-200 hover:bg-red-50"
+                            className="bg-transparent text-red-600 border-red-200 "
                             title="Từ chối"
                           >
-                            <XCircle className="h-4 w-4" />
+                            <XCircle className="h-4 w-4" /> Từ chối
                           </Button>
                         </>
                       )}
-                      {application.status === "interviewed" && (
+                      {application.status === "interview" && (
                         <>
                           <Button
                             variant="outline"
                             size="sm"
                             onClick={() =>
-                              onUpdateApplicationStatus(
+                              handleStatusChange(
                                 application.application_id,
+                                application.user_name,
                                 "accepted"
                               )
                             }
@@ -307,15 +393,16 @@ export function ApplicationsList({
                             variant="outline"
                             size="sm"
                             onClick={() =>
-                              onUpdateApplicationStatus(
+                              handleStatusChange(
                                 application.application_id,
+                                application.user_name,
                                 "rejected"
                               )
                             }
                             className="bg-transparent text-red-600 border-red-200 hover:bg-red-50"
                             title="Từ chối"
                           >
-                            <XCircle className="h-4 w-4" />
+                            <XCircle className="h-4 w-4" /> Từ chối
                           </Button>
                         </>
                       )}
@@ -394,14 +481,26 @@ export function ApplicationsList({
                       >
                         {applicationStatusLabels[selectedApplication.status]}
                       </Badge>
-                      {selectedApplication.notes && (
-                        <div className="text-sm bg-muted/50 rounded p-3">
-                          <strong>Ghi chú:</strong> {selectedApplication.notes}
-                        </div>
-                      )}
                     </div>
                   </div>
                 </div>
+
+                {/* Notes Section */}
+                {selectedApplication.notes && (
+                  <div className="border-t pt-4">
+                    <h4 className="font-medium mb-3 flex items-center gap-2">
+                      <MessageSquare className="h-4 w-4" />
+                      {selectedApplication.status === "interview"
+                        ? "Thông tin phỏng vấn"
+                        : "Ghi chú đánh giá"}
+                    </h4>
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                      <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                        {selectedApplication.notes}
+                      </p>
+                    </div>
+                  </div>
+                )}
 
                 {/* Answers */}
                 <div>
@@ -464,9 +563,10 @@ export function ApplicationsList({
                     <>
                       <Button
                         onClick={() =>
-                          onUpdateApplicationStatus(
+                          handleStatusChange(
                             selectedApplication.application_id,
-                            "interviewed"
+                            selectedApplication.user_name,
+                            "interview"
                           )
                         }
                         className="bg-purple-600 hover:bg-purple-700"
@@ -476,8 +576,9 @@ export function ApplicationsList({
                       </Button>
                       <Button
                         onClick={() =>
-                          onUpdateApplicationStatus(
+                          handleStatusChange(
                             selectedApplication.application_id,
+                            selectedApplication.user_name,
                             "rejected"
                           )
                         }
@@ -488,12 +589,13 @@ export function ApplicationsList({
                       </Button>
                     </>
                   )}
-                  {selectedApplication.status === "interviewed" && (
+                  {selectedApplication.status === "interview" && (
                     <>
                       <Button
                         onClick={() =>
-                          onUpdateApplicationStatus(
+                          handleStatusChange(
                             selectedApplication.application_id,
+                            selectedApplication.user_name,
                             "accepted"
                           )
                         }
@@ -504,8 +606,9 @@ export function ApplicationsList({
                       </Button>
                       <Button
                         onClick={() =>
-                          onUpdateApplicationStatus(
+                          handleStatusChange(
                             selectedApplication.application_id,
+                            selectedApplication.user_name,
                             "rejected"
                           )
                         }
@@ -516,12 +619,25 @@ export function ApplicationsList({
                       </Button>
                     </>
                   )}
-                  <Button variant="outline" className="bg-transparent">
+                  <Button
+                    variant="outline"
+                    className="bg-transparent"
+                    onClick={() =>
+                      handleOpenNotesDialog(
+                        selectedApplication.application_id,
+                        selectedApplication.user_name,
+                        selectedApplication.status,
+                        selectedApplication.notes
+                      )
+                    }
+                  >
                     <MessageSquare className="h-4 w-4 mr-2" />
-                    Ghi chú
+                    {selectedApplication.notes
+                      ? "Chỉnh sửa ghi chú"
+                      : "Thêm ghi chú"}
                   </Button>
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
                     className="ml-auto"
                     onClick={() => setSelectedApplication(null)}
                   >
@@ -533,7 +649,156 @@ export function ApplicationsList({
           </Card>
         </div>
       )}
+
+      {/* Status Change Confirmation Dialog */}
+      <Dialog
+        open={!!statusChangeDialog}
+        onOpenChange={(open) => !open && handleCancelStatusChange()}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {statusChangeDialog?.newStatus === "interview" && "Mời phỏng vấn"}
+              {statusChangeDialog?.newStatus === "accepted" && "Chấp nhận đơn"}
+              {statusChangeDialog?.newStatus === "rejected" && "Từ chối đơn"}
+            </DialogTitle>
+            <DialogDescription>
+              Xác nhận thay đổi trạng thái đơn của{" "}
+              <strong>{statusChangeDialog?.applicationName}</strong>
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="notes" className="flex items-center gap-2">
+                <MessageSquare className="h-4 w-4" />
+                {statusChangeDialog?.newStatus === "interview" ? (
+                  <>
+                    Thông tin về cuộc phỏng vấn{" "}
+                    <span className="text-red-500">*</span>
+                  </>
+                ) : (
+                  "Ghi chú (tùy chọn)"
+                )}
+              </Label>
+              <Textarea
+                id="notes"
+                placeholder={
+                  statusChangeDialog?.newStatus === "interview"
+                    ? "Nhập thông tin về cuộc phỏng vấn (ngày giờ, địa điểm, link meeting, yêu cầu chuẩn bị...)..."
+                    : statusChangeDialog?.newStatus === "accepted"
+                    ? "Ghi chú về việc chấp nhận đơn..."
+                    : "Lý do từ chối hoặc ghi chú..."
+                }
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                rows={5}
+                required={statusChangeDialog?.newStatus === "interview"}
+                className={
+                  statusChangeDialog?.newStatus === "interview" && !notes.trim()
+                    ? "border-red-300 focus:border-red-500"
+                    : ""
+                }
+              />
+              {statusChangeDialog?.newStatus === "interview" &&
+                !notes.trim() && (
+                  <p className="text-sm text-red-500">
+                    Vui lòng nhập thông tin về cuộc phỏng vấn
+                  </p>
+                )}
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={handleCancelStatusChange}>
+              Hủy
+            </Button>
+            <Button
+              onClick={handleConfirmStatusChange}
+              disabled={
+                statusChangeDialog?.newStatus === "interview" && !notes.trim()
+              }
+              className={
+                statusChangeDialog?.newStatus === "interview"
+                  ? "bg-purple-600 hover:bg-purple-700"
+                  : statusChangeDialog?.newStatus === "accepted"
+                  ? "bg-green-600 hover:bg-green-700"
+                  : "bg-red-600 hover:bg-red-700"
+              }
+            >
+              {statusChangeDialog?.newStatus === "interview" &&
+                "Xác nhận mời phỏng vấn"}
+              {statusChangeDialog?.newStatus === "accepted" &&
+                "Xác nhận chấp nhận"}
+              {statusChangeDialog?.newStatus === "rejected" &&
+                "Xác nhận từ chối"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Notes-Only Dialog */}
+      <Dialog
+        open={!!notesDialog}
+        onOpenChange={(open) => !open && handleCancelNotesDialog()}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {notesDialog?.currentNotes ? "Chỉnh sửa ghi chú" : "Thêm ghi chú"}
+            </DialogTitle>
+            <DialogDescription>
+              {notesDialog?.currentStatus === "interview"
+                ? "Cập nhật thông tin phỏng vấn cho "
+                : "Thêm ghi chú đánh giá cho "}
+              <strong>{notesDialog?.applicationName}</strong>
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="notes-edit" className="flex items-center gap-2">
+                <MessageSquare className="h-4 w-4" />
+                {notesDialog?.currentStatus === "interview"
+                  ? "Thông tin về cuộc phỏng vấn"
+                  : "Ghi chú"}
+              </Label>
+              <Textarea
+                id="notes-edit"
+                placeholder={
+                  notesDialog?.currentStatus === "interview"
+                    ? "Nhập thông tin về cuộc phỏng vấn (ngày giờ, địa điểm, link meeting, yêu cầu chuẩn bị...)..."
+                    : notesDialog?.currentStatus === "accepted"
+                    ? "Ghi chú về việc chấp nhận đơn..."
+                    : notesDialog?.currentStatus === "rejected"
+                    ? "Lý do từ chối hoặc ghi chú..."
+                    : "Ghi chú đánh giá..."
+                }
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                rows={5}
+              />
+              <p className="text-xs text-muted-foreground">
+                {notes.trim()
+                  ? `${notes.trim().length} ký tự`
+                  : "Để trống để xóa ghi chú"}
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={handleCancelNotesDialog}>
+              Hủy
+            </Button>
+            <Button
+              onClick={handleSaveNotes}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              {notesDialog?.currentNotes ? "Cập nhật" : "Lưu ghi chú"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
-

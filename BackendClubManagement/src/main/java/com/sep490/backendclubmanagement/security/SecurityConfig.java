@@ -34,6 +34,7 @@ public class SecurityConfig {
     private final String[] PUBLIC_URL = {
 //            "/api/**",
             "/api/auth/google",
+            "/api/auth/refreshToken",
             "/api/v1/auth/**",
             "/api/v1/public/**",
             "/oauth2/**",

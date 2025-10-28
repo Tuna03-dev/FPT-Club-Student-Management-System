@@ -32,6 +32,7 @@ import {
   createRecruitment,
   updateRecruitment,
   changeRecruitmentStatus,
+  updateApplicationStatus,
   type RecruitmentCreateRequest,
 } from "@/service/RecruitmentService";
 import { toast } from "sonner";
@@ -47,7 +48,7 @@ import {
 } from "@/components/ui/dialog";
 
 type RecruitmentStatus = "draft" | "open" | "closed" | "cancelled";
-type ApplicationStatus = "under_review" | "accepted" | "rejected" | "interviewed";
+type ApplicationStatus = "under_review" | "accepted" | "rejected" | "interview";
 type QuestionType = "TEXT" | "MCQ" | "CHECKBOX" | "FILE";
 
 interface RecruitmentForm {
@@ -396,12 +397,67 @@ export function RecruitmentManagement() {
     }
   };
 
-  const handleUpdateApplicationStatus = (
+  const handleUpdateApplicationStatus = async (
     applicationId: string,
-    newStatus: ApplicationStatus
+    newStatus: ApplicationStatus,
+    notes?: string
   ) => {
-    // Logic to update application status
-    console.log("Updating application status:", applicationId, newStatus);
+    try {
+      // Convert status to API format
+      const apiStatus = newStatus.toUpperCase() as "UNDER_REVIEW" | "ACCEPTED" | "REJECTED" | "INTERVIEW";
+      
+      // Call API to update application status
+      const updatedApplication = await updateApplicationStatus(
+        parseInt(applicationId),
+        apiStatus,
+        notes
+      );
+
+      // Map response back to component format
+      const mappedStatus = updatedApplication.status.toLowerCase() as ApplicationStatus;
+
+      // Update local state
+      setApplications((prevApplications) =>
+        prevApplications.map((app) =>
+          app.application_id === applicationId
+            ? { 
+                ...app, 
+                status: mappedStatus, 
+                notes: updatedApplication.reviewNotes 
+              }
+            : app
+        )
+      );
+
+      // Update selected recruitment applications
+      if (selectedRecruitment) {
+        setSelectedRecruitment({
+          ...selectedRecruitment,
+          applications: selectedRecruitment.applications.map((app) =>
+            app.application_id === applicationId
+              ? { 
+                  ...app, 
+                  status: mappedStatus, 
+                  notes: updatedApplication.reviewNotes 
+                }
+              : app
+          ),
+        });
+      }
+
+      // Show success message
+      const statusText = {
+        under_review: "đang xem xét",
+        accepted: "đã chấp nhận",
+        rejected: "đã từ chối",
+        interview: "đã mời phỏng vấn",
+      }[mappedStatus];
+      
+      toast.success(`Đã cập nhật trạng thái đơn thành ${statusText}!`);
+    } catch (err: any) {
+      console.error("Error updating application status:", err);
+      toast.error(err.message || "Không thể cập nhật trạng thái đơn");
+    }
   };
 
   // Show status change confirmation dialog

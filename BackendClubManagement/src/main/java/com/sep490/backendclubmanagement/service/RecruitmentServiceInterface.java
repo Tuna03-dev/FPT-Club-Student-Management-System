@@ -21,6 +21,7 @@ public interface RecruitmentServiceInterface {
 
     // Application management
     PagedResponse<RecruitmentApplicationData> listApplications(Long recruitmentId, RecruitmentApplicationStatus status, Pageable pageable);
+    PagedResponse<RecruitmentApplicationData> listMyApplications(Long applicantId, RecruitmentApplicationStatus status, Pageable pageable);
     RecruitmentApplicationData submitApplication(Long applicantId, ApplicationSubmitRequest request) throws AppException;
     RecruitmentApplicationData getApplication(Long applicationId) throws AppException;
     RecruitmentApplicationData reviewApplication(ApplicationReviewRequest request) throws AppException;

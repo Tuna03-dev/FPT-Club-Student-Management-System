@@ -10,6 +10,7 @@ public interface RecruitmentApplicationRepository extends JpaRepository<Recruitm
     Page<RecruitmentApplication> findByRecruitment_Id(Long recruitmentId, Pageable pageable);
     Page<RecruitmentApplication> findByRecruitment_IdAndStatus(Long recruitmentId, RecruitmentApplicationStatus status, Pageable pageable);
     Page<RecruitmentApplication> findByApplicant_Id(Long applicantId, Pageable pageable);
+    Page<RecruitmentApplication> findByApplicant_IdAndStatus(Long applicantId, RecruitmentApplicationStatus status, Pageable pageable);
 }
 
 

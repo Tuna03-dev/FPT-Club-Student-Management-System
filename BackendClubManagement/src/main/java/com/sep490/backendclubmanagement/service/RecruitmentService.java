@@ -151,6 +151,15 @@ public class RecruitmentService implements RecruitmentServiceInterface {
     }
 
     @Override
+    public PagedResponse<RecruitmentApplicationData> listMyApplications(Long applicantId, RecruitmentApplicationStatus status, Pageable pageable) {
+        Page<RecruitmentApplication> page = (status == null)
+                ? applicationRepository.findByApplicant_Id(applicantId, pageable)
+                : applicationRepository.findByApplicant_IdAndStatus(applicantId, status, pageable);
+        Page<RecruitmentApplicationData> dataPage = page.map(recruitmentApplicationMapper::toDto);
+        return PagedResponse.of(dataPage);
+    }
+
+    @Override
     @Transactional
     public RecruitmentApplicationData submitApplication(Long applicantId, ApplicationSubmitRequest req) throws AppException {
         return submitApplication(applicantId, req, null);

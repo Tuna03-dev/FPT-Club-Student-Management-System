@@ -128,6 +128,25 @@ public class RecruitmentController {
         return ResponseEntity.ok(ApiResponse.success(data));
     }
 
+    // Get applications for current user
+    @GetMapping("/myApplications")
+    public ResponseEntity<ApiResponse<PagedResponse<RecruitmentApplicationData>>> getMyApplications(
+            Authentication authentication,
+            @RequestParam(required = false) RecruitmentApplicationStatus status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "submittedDate,desc") String sort
+    ) throws AppException {
+        // Get current user from authentication
+        String email = authentication.getName();
+        User currentUser = userService.findByEmail(email)
+                .orElseThrow(() -> new AppException(ErrorCode.UNAUTHORIZED));
+        
+        Pageable pageable = PageRequest.of(page, size, parseSort(sort));
+        PagedResponse<RecruitmentApplicationData> data = recruitmentService.listMyApplications(currentUser.getId(), status, pageable);
+        return ResponseEntity.ok(ApiResponse.success(data));
+    }
+
     private Sort parseSort(String sort) {
         String[] parts = sort.split(",");
         String prop = parts.length > 0 ? parts[0] : "createdAt";
