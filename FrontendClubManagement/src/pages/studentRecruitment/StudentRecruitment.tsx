@@ -2,8 +2,14 @@
 
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { getMyApplications } from "@/service/RecruitmentService";
-import type { RecruitmentApplicationData } from "@/service/RecruitmentService";
+import {
+  getMyApplications,
+  getRecruitmentById,
+} from "@/service/RecruitmentService";
+import type {
+  RecruitmentApplicationData,
+  RecruitmentData,
+} from "@/service/RecruitmentService";
 import {
   Card,
   CardContent,
@@ -33,6 +39,13 @@ import {
   PaginationPrevious,
   PaginationEllipsis,
 } from "@/components/ui/pagination";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Search,
   Calendar,
@@ -71,7 +84,7 @@ interface FormQuestion {
   questionText: string;
   questionType: "TEXT" | "MCQ" | "CHECKBOX";
   options?: string[];
-  required: boolean;
+  required: boolean; // Keep for mock data compatibility
   order: number;
 }
 
@@ -92,12 +105,19 @@ export function StudentRecruitment() {
   // Filter states for my applications
   const [myAppSearchQuery, setMyAppSearchQuery] = useState("");
   const [myAppStatusFilter, setMyAppStatusFilter] = useState<string>("all");
-  
+
   // Pagination states
   const [currentPage, setCurrentPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
   const pageSize = 10; // Number of items per page
+
+  // Application detail dialog
+  const [selectedApplicationDetail, setSelectedApplicationDetail] =
+    useState<RecruitmentApplicationData | null>(null);
+  const [recruitmentDetail, setRecruitmentDetail] =
+    useState<RecruitmentData | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
 
   // Mock data
   const recruitmentCampaigns: RecruitmentCampaign[] = [
@@ -223,14 +243,19 @@ export function StudentRecruitment() {
       try {
         setIsLoading(true);
         // Convert status filter for API call
-        const statusParam = myAppStatusFilter === "all" 
-          ? undefined 
-          : (myAppStatusFilter as "UNDER_REVIEW" | "ACCEPTED" | "REJECTED" | "INTERVIEW");
-        
-        const response = await getMyApplications({ 
-          page: currentPage, 
+        const statusParam =
+          myAppStatusFilter === "all"
+            ? undefined
+            : (myAppStatusFilter as
+                | "UNDER_REVIEW"
+                | "ACCEPTED"
+                | "REJECTED"
+                | "INTERVIEW");
+
+        const response = await getMyApplications({
+          page: currentPage,
           size: pageSize,
-          status: statusParam 
+          status: statusParam,
         });
         setMyApplications(response.content);
         setTotalPages(response.totalPages);
@@ -246,7 +271,7 @@ export function StudentRecruitment() {
       fetchMyApplications();
     }
   }, [activeView, myAppStatusFilter, currentPage]); // Re-fetch when status filter or page changes
-  
+
   // Reset to page 0 when filter changes
   useEffect(() => {
     setCurrentPage(0);
@@ -298,6 +323,29 @@ export function StudentRecruitment() {
     setActiveView("list");
     // Show success message
     alert("Đơn ứng tuyển đã được gửi thành công!");
+  };
+
+  const handleViewApplicationDetail = async (
+    application: RecruitmentApplicationData
+  ) => {
+    try {
+      setDetailLoading(true);
+      setSelectedApplicationDetail(application);
+
+      // Fetch recruitment details to get questions
+      const recruitment = await getRecruitmentById(application.recruitmentId);
+      setRecruitmentDetail(recruitment);
+    } catch (error) {
+      console.error("Failed to fetch application details:", error);
+      alert("Không thể tải thông tin chi tiết đơn ứng tuyển");
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  const handleCloseApplicationDetail = () => {
+    setSelectedApplicationDetail(null);
+    setRecruitmentDetail(null);
   };
 
   const getStatusColor = (status: string) => {
@@ -518,10 +566,9 @@ export function StudentRecruitment() {
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-bold">Tuyển dụng CLB</h1>
-            <p className="text-muted-foreground">
-              Khám phá và ứng tuyển vào các câu lạc bộ yêu thích
-            </p>
+            <h1 className="text-3xl font-bold">
+              Trạng thái đơn ứng tuyển của tôi
+            </h1>
           </div>
         </div>
 
@@ -667,14 +714,14 @@ export function StudentRecruitment() {
         {activeView === "status" && (
           <>
             <div className="space-y-6">
-              <div className="flex items-center justify-between">
+              {/* <div className="flex items-center justify-between">
                 <h2 className="text-2xl font-bold">
                   Trạng thái đơn ứng tuyển của tôi
                 </h2>
                 <Button variant="outline" onClick={() => setActiveView("list")}>
                   Xem danh sách tuyển dụng
                 </Button>
-              </div>
+              </div> */}
 
               {/* Search and Filter */}
               <div className="flex flex-col sm:flex-row gap-4">
@@ -723,18 +770,28 @@ export function StudentRecruitment() {
                               {filteredMyApplications.length}
                             </span>{" "}
                             kết quả tìm kiếm
-                            {totalElements > filteredMyApplications.length && 
-                              ` trong ${totalElements} đơn`
-                            }
+                            {totalElements > filteredMyApplications.length &&
+                              ` trong ${totalElements} đơn`}
                           </>
                         ) : (
                           <>
                             Hiển thị{" "}
                             <span className="font-semibold">
-                              {Math.min((currentPage * pageSize) + 1, totalElements)} - {Math.min((currentPage + 1) * pageSize, totalElements)}
+                              {Math.min(
+                                currentPage * pageSize + 1,
+                                totalElements
+                              )}{" "}
+                              -{" "}
+                              {Math.min(
+                                (currentPage + 1) * pageSize,
+                                totalElements
+                              )}
                             </span>{" "}
                             trong tổng số{" "}
-                            <span className="font-semibold">{totalElements}</span> đơn
+                            <span className="font-semibold">
+                              {totalElements}
+                            </span>{" "}
+                            đơn
                           </>
                         )}
                       </div>
@@ -879,8 +936,7 @@ export function StudentRecruitment() {
                                     </h4>
                                     <p className="text-sm text-yellow-700 mt-1">
                                       CLB sẽ phản hồi trong vòng 3-5 ngày làm
-                                      việc. Bạn sẽ nhận được thông báo qua
-                                      email.
+                                      việc.
                                     </p>
                                   </div>
                                 </div>
@@ -888,7 +944,13 @@ export function StudentRecruitment() {
                             )}
 
                             <div className="flex gap-2">
-                              <Button variant="outline" size="sm">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() =>
+                                  handleViewApplicationDetail(application)
+                                }
+                              >
                                 <FileText className="h-4 w-4 mr-2" />
                                 Xem đơn đã nộp
                               </Button>
@@ -905,114 +967,148 @@ export function StudentRecruitment() {
                   </div>
 
                   {/* Pagination */}
-                  {!myAppSearchQuery && totalPages > 1 && filteredMyApplications.length > 0 && (
-                    <div className="flex justify-center mt-6">
-                      <Pagination>
-                        <PaginationContent>
-                          <PaginationItem>
-                            <PaginationPrevious
-                              onClick={() => {
-                                if (currentPage > 0) {
-                                  setCurrentPage(currentPage - 1);
-                                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                  {!myAppSearchQuery &&
+                    totalPages > 1 &&
+                    filteredMyApplications.length > 0 && (
+                      <div className="flex justify-center mt-6">
+                        <Pagination>
+                          <PaginationContent>
+                            <PaginationItem>
+                              <PaginationPrevious
+                                onClick={() => {
+                                  if (currentPage > 0) {
+                                    setCurrentPage(currentPage - 1);
+                                    window.scrollTo({
+                                      top: 0,
+                                      behavior: "smooth",
+                                    });
+                                  }
+                                }}
+                                className={
+                                  currentPage === 0
+                                    ? "pointer-events-none opacity-50"
+                                    : "cursor-pointer"
                                 }
-                              }}
-                              className={currentPage === 0 ? "pointer-events-none opacity-50" : "cursor-pointer"}
-                            />
-                          </PaginationItem>
+                              />
+                            </PaginationItem>
 
-                          {/* First page */}
-                          {currentPage > 2 && (
-                            <>
-                              <PaginationItem>
-                                <PaginationLink
-                                  onClick={() => {
-                                    setCurrentPage(0);
-                                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                                  }}
-                                  className="cursor-pointer"
-                                >
-                                  1
-                                </PaginationLink>
-                              </PaginationItem>
-                              {currentPage > 3 && (
+                            {/* First page */}
+                            {currentPage > 2 && (
+                              <>
                                 <PaginationItem>
-                                  <PaginationEllipsis />
+                                  <PaginationLink
+                                    onClick={() => {
+                                      setCurrentPage(0);
+                                      window.scrollTo({
+                                        top: 0,
+                                        behavior: "smooth",
+                                      });
+                                    }}
+                                    className="cursor-pointer"
+                                  >
+                                    1
+                                  </PaginationLink>
                                 </PaginationItem>
-                              )}
-                            </>
-                          )}
+                                {currentPage > 3 && (
+                                  <PaginationItem>
+                                    <PaginationEllipsis />
+                                  </PaginationItem>
+                                )}
+                              </>
+                            )}
 
-                          {/* Pages around current page */}
-                          {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                            let pageNum;
-                            if (totalPages <= 5) {
-                              pageNum = i;
-                            } else if (currentPage <= 2) {
-                              pageNum = i;
-                            } else if (currentPage >= totalPages - 3) {
-                              pageNum = totalPages - 5 + i;
-                            } else {
-                              pageNum = currentPage - 2 + i;
-                            }
-
-                            if (pageNum < 0 || pageNum >= totalPages) return null;
-                            if (currentPage > 2 && pageNum === 0) return null;
-                            if (currentPage < totalPages - 3 && pageNum === totalPages - 1) return null;
-
-                            return (
-                              <PaginationItem key={pageNum}>
-                                <PaginationLink
-                                  onClick={() => {
-                                    setCurrentPage(pageNum);
-                                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                                  }}
-                                  isActive={currentPage === pageNum}
-                                  className="cursor-pointer"
-                                >
-                                  {pageNum + 1}
-                                </PaginationLink>
-                              </PaginationItem>
-                            );
-                          })}
-
-                          {/* Last page */}
-                          {currentPage < totalPages - 3 && (
-                            <>
-                              {currentPage < totalPages - 4 && (
-                                <PaginationItem>
-                                  <PaginationEllipsis />
-                                </PaginationItem>
-                              )}
-                              <PaginationItem>
-                                <PaginationLink
-                                  onClick={() => {
-                                    setCurrentPage(totalPages - 1);
-                                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                                  }}
-                                  className="cursor-pointer"
-                                >
-                                  {totalPages}
-                                </PaginationLink>
-                              </PaginationItem>
-                            </>
-                          )}
-
-                          <PaginationItem>
-                            <PaginationNext
-                              onClick={() => {
-                                if (currentPage < totalPages - 1) {
-                                  setCurrentPage(currentPage + 1);
-                                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                            {/* Pages around current page */}
+                            {Array.from(
+                              { length: Math.min(5, totalPages) },
+                              (_, i) => {
+                                let pageNum;
+                                if (totalPages <= 5) {
+                                  pageNum = i;
+                                } else if (currentPage <= 2) {
+                                  pageNum = i;
+                                } else if (currentPage >= totalPages - 3) {
+                                  pageNum = totalPages - 5 + i;
+                                } else {
+                                  pageNum = currentPage - 2 + i;
                                 }
-                              }}
-                              className={currentPage === totalPages - 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
-                            />
-                          </PaginationItem>
-                        </PaginationContent>
-                      </Pagination>
-                    </div>
-                  )}
+
+                                if (pageNum < 0 || pageNum >= totalPages)
+                                  return null;
+                                if (currentPage > 2 && pageNum === 0)
+                                  return null;
+                                if (
+                                  currentPage < totalPages - 3 &&
+                                  pageNum === totalPages - 1
+                                )
+                                  return null;
+
+                                return (
+                                  <PaginationItem key={pageNum}>
+                                    <PaginationLink
+                                      onClick={() => {
+                                        setCurrentPage(pageNum);
+                                        window.scrollTo({
+                                          top: 0,
+                                          behavior: "smooth",
+                                        });
+                                      }}
+                                      isActive={currentPage === pageNum}
+                                      className="cursor-pointer"
+                                    >
+                                      {pageNum + 1}
+                                    </PaginationLink>
+                                  </PaginationItem>
+                                );
+                              }
+                            )}
+
+                            {/* Last page */}
+                            {currentPage < totalPages - 3 && (
+                              <>
+                                {currentPage < totalPages - 4 && (
+                                  <PaginationItem>
+                                    <PaginationEllipsis />
+                                  </PaginationItem>
+                                )}
+                                <PaginationItem>
+                                  <PaginationLink
+                                    onClick={() => {
+                                      setCurrentPage(totalPages - 1);
+                                      window.scrollTo({
+                                        top: 0,
+                                        behavior: "smooth",
+                                      });
+                                    }}
+                                    className="cursor-pointer"
+                                  >
+                                    {totalPages}
+                                  </PaginationLink>
+                                </PaginationItem>
+                              </>
+                            )}
+
+                            <PaginationItem>
+                              <PaginationNext
+                                onClick={() => {
+                                  if (currentPage < totalPages - 1) {
+                                    setCurrentPage(currentPage + 1);
+                                    window.scrollTo({
+                                      top: 0,
+                                      behavior: "smooth",
+                                    });
+                                  }
+                                }}
+                                className={
+                                  currentPage === totalPages - 1
+                                    ? "pointer-events-none opacity-50"
+                                    : "cursor-pointer"
+                                }
+                              />
+                            </PaginationItem>
+                          </PaginationContent>
+                        </Pagination>
+                      </div>
+                    )}
 
                   {filteredMyApplications.length === 0 &&
                     myApplications.length > 0 && (
@@ -1060,6 +1156,249 @@ export function StudentRecruitment() {
           </>
         )}
       </div>
+
+      {/* Application Detail Dialog */}
+      <Dialog
+        open={!!selectedApplicationDetail}
+        onOpenChange={(open) => !open && handleCloseApplicationDetail()}
+      >
+        <DialogContent className="!max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              Chi tiết đơn ứng tuyển #{selectedApplicationDetail?.id}
+            </DialogTitle>
+            <DialogDescription>
+              Thông tin chi tiết về đơn ứng tuyển của bạn
+            </DialogDescription>
+          </DialogHeader>
+
+          {detailLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+                <p className="text-muted-foreground">Đang tải thông tin...</p>
+              </div>
+            </div>
+          ) : (
+            selectedApplicationDetail && (
+              <div className="space-y-6">
+                {/* Recruitment Info */}
+                {recruitmentDetail && (
+                  <div className="border rounded-lg p-4 bg-primary/5">
+                    <h4 className="font-medium mb-3 flex items-center gap-2">
+                      <FileText className="h-4 w-4" />
+                      Thông tin tuyển dụng
+                    </h4>
+                    <div className="space-y-2 text-sm">
+                      <div>
+                        <span className="text-muted-foreground">Tiêu đề: </span>
+                        <span className="font-medium">
+                          {recruitmentDetail.title}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Mô tả: </span>
+                        <span>{recruitmentDetail.description}</span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">
+                          Thời gian:{" "}
+                        </span>
+                        <span>
+                          {new Date(
+                            recruitmentDetail.startDate
+                          ).toLocaleDateString("vi-VN")}{" "}
+                          -{" "}
+                          {new Date(
+                            recruitmentDetail.endDate
+                          ).toLocaleDateString("vi-VN")}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Application Status */}
+                <div className="border rounded-lg p-4 bg-muted/30">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <h4 className="font-medium mb-3">
+                        Thông tin đơn ứng tuyển
+                      </h4>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">
+                            Trạng thái:
+                          </span>
+                          <Badge
+                            className={getStatusColor(
+                              selectedApplicationDetail.status
+                            )}
+                          >
+                            <div className="flex items-center space-x-1">
+                              {getStatusIcon(selectedApplicationDetail.status)}
+                              <span>
+                                {selectedApplicationDetail.status ===
+                                "UNDER_REVIEW"
+                                  ? "Đang xem xét"
+                                  : selectedApplicationDetail.status ===
+                                    "ACCEPTED"
+                                  ? "Đã duyệt"
+                                  : selectedApplicationDetail.status ===
+                                    "REJECTED"
+                                  ? "Từ chối"
+                                  : selectedApplicationDetail.status ===
+                                    "INTERVIEW"
+                                  ? "Chờ phỏng vấn"
+                                  : "Đang xét duyệt"}
+                              </span>
+                            </div>
+                          </Badge>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">
+                            Ngày nộp:
+                          </span>
+                          <span className="font-medium">
+                            {new Date(
+                              selectedApplicationDetail.submittedDate
+                            ).toLocaleString("vi-VN")}
+                          </span>
+                        </div>
+                        {selectedApplicationDetail.reviewedDate && (
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">
+                              Ngày xét duyệt:
+                            </span>
+                            <span className="font-medium">
+                              {new Date(
+                                selectedApplicationDetail.reviewedDate
+                              ).toLocaleString("vi-VN")}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div>
+                      <h4 className="font-medium mb-3">Thông tin ứng viên</h4>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Họ tên:</span>
+                          <span className="font-medium">
+                            {selectedApplicationDetail.userName}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Email:</span>
+                          <span className="font-medium">
+                            {selectedApplicationDetail.userEmail}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">MSSV:</span>
+                          <span className="font-medium">
+                            {selectedApplicationDetail.studentId}
+                          </span>
+                        </div>
+                        {selectedApplicationDetail.userPhone && (
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">SĐT:</span>
+                            <span className="font-medium">
+                              {selectedApplicationDetail.userPhone}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Review Notes */}
+                {selectedApplicationDetail.reviewNotes && (
+                  <div className="border rounded-lg p-4">
+                    <h4 className="font-medium mb-3 flex items-center gap-2">
+                      <MessageSquare className="h-4 w-4" />
+                      {selectedApplicationDetail.status === "INTERVIEW"
+                        ? "Thông tin phỏng vấn"
+                        : selectedApplicationDetail.status === "REJECTED"
+                        ? "Phản hồi từ CLB"
+                        : "Ghi chú từ CLB"}
+                    </h4>
+                    <div className="bg-muted/50 rounded p-3 text-sm whitespace-pre-wrap">
+                      {selectedApplicationDetail.reviewNotes}
+                    </div>
+                  </div>
+                )}
+
+                {/* Answers */}
+                <div>
+                  <h4 className="font-medium mb-3">Câu trả lời của bạn</h4>
+                  {selectedApplicationDetail.answers &&
+                  selectedApplicationDetail.answers.length > 0 ? (
+                    <div className="space-y-4">
+                      {/* Sort answers by questionId to maintain order */}
+                      {[...selectedApplicationDetail.answers]
+                        .sort((a, b) => a.questionId - b.questionId)
+                        .map((answer, index) => (
+                          <div
+                            key={answer.questionId}
+                            className="border rounded-lg p-4"
+                          >
+                            <h5 className="font-medium mb-2 flex items-start gap-2">
+                              <span className="bg-primary/10 text-primary rounded-full w-6 h-6 flex items-center justify-center text-sm flex-shrink-0">
+                                {index + 1}
+                              </span>
+                              <span>{answer.questionText}</span>
+                            </h5>
+                            <div className="ml-8 bg-muted/30 rounded p-3 mt-2">
+                              {answer.fileUrl ? (
+                                <a
+                                  href={answer.fileUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-blue-600 hover:underline flex items-center gap-2"
+                                >
+                                  <FileText className="h-4 w-4" />
+                                  Xem file đã tải lên
+                                </a>
+                              ) : answer.answerText ? (
+                                <p className="text-sm whitespace-pre-wrap">
+                                  {answer.answerText}
+                                </p>
+                              ) : (
+                                <p className="text-sm text-muted-foreground italic">
+                                  Chưa có câu trả lời
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 border rounded-lg bg-muted/30">
+                      <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-2" />
+                      <p className="text-muted-foreground">
+                        Không có câu trả lời nào được lưu
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Close Button */}
+                <div className="flex justify-end pt-6 border-t">
+                  <Button
+                    variant="outline"
+                    onClick={handleCloseApplicationDetail}
+                  >
+                    Đóng
+                  </Button>
+                </div>
+              </div>
+            )
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -13,5 +13,6 @@ public class RecruitmentQuestionRequest {
     public String questionType;
     @NotNull
     public Integer questionOrder;
+    public Integer isRequired; // 0 = not required, 1 = required
     public List<String> options; // optional for select-type questions
 }

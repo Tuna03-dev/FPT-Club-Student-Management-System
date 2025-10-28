@@ -138,24 +138,63 @@ export function ClubApplicationForm({
       return;
     }
 
-    // Validate required questions
-    const requiredQuestions = recruitment.questions || [];
+    // Validate required questions (only check questions with isRequired = 1)
+    const requiredQuestions = (recruitment.questions || []).filter(
+      (q) => q.isRequired === 1
+    );
 
-    const allAnswered = requiredQuestions.every((q) => {
+    for (const q of requiredQuestions) {
       const answer = formAnswers[q.id];
-      if (!answer) return false;
 
-      // For file type, check if fileUrl is provided
-      if (q.questionType === "FILE") {
-        return answer.fileUrl || answer.answerText;
+      // Check if answer exists and is not empty
+      if (!answer) {
+        alert(`Vui lòng trả lời câu hỏi bắt buộc: ${q.questionText}`);
+        return;
       }
 
-      return true;
-    });
+      // For file type, check if file is uploaded or link is provided
+      if (q.questionType === "FILE_UPLOAD") {
+        const hasFile = uploadedFiles[q.id];
+        const hasLink =
+          typeof answer === "object"
+            ? answer.fileUrl && answer.fileUrl.trim()
+            : answer && answer.trim();
 
-    if (!allAnswered) {
-      alert("Vui lòng trả lời đầy đủ tất cả các câu hỏi");
-      return;
+        if (!hasFile && !hasLink) {
+          alert(
+            `Vui lòng tải lên file hoặc cung cấp link cho câu hỏi: ${q.questionText}`
+          );
+          return;
+        }
+      }
+      // For text type, check if answer is not empty
+      else if (q.questionType === "TEXT") {
+        const answerText =
+          typeof answer === "string" ? answer : answer?.answerText || "";
+        if (!answerText.trim()) {
+          alert(`Vui lòng trả lời câu hỏi bắt buộc: ${q.questionText}`);
+          return;
+        }
+      }
+      // For MCQ and CHECKBOX, check if at least one option is selected
+      else if (
+        q.questionType === "MCQ" ||
+        q.questionType === "MULTIPLE_CHOICE"
+      ) {
+        const answerText = typeof answer === "string" ? answer : "";
+        if (!answerText.trim()) {
+          alert(`Vui lòng chọn một đáp án cho câu hỏi: ${q.questionText}`);
+          return;
+        }
+      } else if (q.questionType === "CHECKBOX") {
+        const answers = Array.isArray(answer) ? answer : [];
+        if (answers.length === 0) {
+          alert(
+            `Vui lòng chọn ít nhất một đáp án cho câu hỏi: ${q.questionText}`
+          );
+          return;
+        }
+      }
     }
 
     setIsSubmitting(true);
@@ -167,16 +206,20 @@ export function ClubApplicationForm({
 
       Object.entries(formAnswers).forEach(([questionId, answer]) => {
         const qId = Number(questionId);
-        
+
         // Check if this question has an uploaded file
         if (uploadedFiles[qId]) {
           filesByQuestionId.set(qId, uploadedFiles[qId]);
           answers.push({
             questionId: qId,
-            answerText: typeof answer === "object" ? answer.answerText || "" : "",
+            answerText:
+              typeof answer === "object" ? answer.answerText || "" : "",
             fileUrl: "", // Will be filled by backend after upload
           });
-        } else if (typeof answer === "object" && (answer.fileUrl || answer.answerText)) {
+        } else if (
+          typeof answer === "object" &&
+          (answer.fileUrl || answer.answerText)
+        ) {
           // File URL provided (Google Drive link, etc.)
           answers.push({
             questionId: qId,
@@ -187,7 +230,9 @@ export function ClubApplicationForm({
           // Handle other types (TEXT, MCQ, CHECKBOX)
           answers.push({
             questionId: qId,
-            answerText: Array.isArray(answer) ? answer.join(", ") : String(answer),
+            answerText: Array.isArray(answer)
+              ? answer.join(", ")
+              : String(answer),
           });
         }
       });
@@ -198,11 +243,39 @@ export function ClubApplicationForm({
         answers,
       };
 
-      await submitApplication(request, filesByQuestionId.size > 0 ? filesByQuestionId : undefined);
+      await submitApplication(
+        request,
+        filesByQuestionId.size > 0 ? filesByQuestionId : undefined
+      );
       setSubmitSuccess(true);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error submitting application:", err);
-      alert("Đã có lỗi xảy ra khi gửi đơn ứng tuyển. Vui lòng thử lại.");
+
+      // Check if it's an axios error with response
+      if (err.response?.data) {
+        const errorCode = err.response.data.code;
+        const errorMessage = err.response.data.message;
+        // Handle specific error: already a club member
+        if (errorCode === 3001) {
+          alert(
+            "❌ " +
+              (errorMessage ||
+                "Bạn đã là thành viên của câu lạc bộ này và không thể ứng tuyển lại.")
+          );
+          return;
+        }
+        // Handle other specific errors
+        alert(
+          "❌ " + (errorMessage || "Đã có lỗi xảy ra khi gửi đơn ứng tuyển.")
+        );
+
+        // Scroll to top to show error
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      } else {
+        alert("Đã có lỗi xảy ra khi gửi đơn ứng tuyển. Vui lòng thử lại.");
+
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -384,13 +457,18 @@ export function ClubApplicationForm({
                       <div className="flex items-start justify-between">
                         <Label className="text-base font-medium">
                           {index + 1}. {question.questionText}
+                          {question.isRequired === 1 && (
+                            <span className="text-red-500 ml-1">*</span>
+                          )}
                         </Label>
-                        <Badge
-                          variant="secondary"
-                          className="ml-2 bg-orange-100 text-orange-700 hover:bg-orange-200"
-                        >
-                          Bắt buộc
-                        </Badge>
+                        {question.isRequired === 1 && (
+                          <Badge
+                            variant="secondary"
+                            className="ml-2 bg-orange-100 text-orange-700 hover:bg-orange-200"
+                          >
+                            Bắt buộc
+                          </Badge>
+                        )}
                       </div>
 
                       {question.questionType === "TEXT" && (

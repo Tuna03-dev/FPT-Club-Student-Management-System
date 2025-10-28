@@ -51,34 +51,60 @@ public class RecruitmentController {
 
     @PostMapping("/clubs/{clubId}")
     public ResponseEntity<ApiResponse<RecruitmentData>> createRecruitment(
+            Authentication authentication,
             @PathVariable Long clubId,
             @RequestBody RecruitmentCreateRequest request
-    ) {
-        RecruitmentData data = recruitmentService.createRecruitment(clubId, request);
+    ) throws AppException {
+        // Get current user from authentication
+        String email = authentication.getName();
+        User currentUser = userService.findByEmail(email)
+                .orElseThrow(() -> new AppException(ErrorCode.UNAUTHORIZED));
+        
+        RecruitmentData data = recruitmentService.createRecruitment(currentUser.getId(), clubId, request);
         return ResponseEntity.ok(ApiResponse.success(data));
     }
 
     @PutMapping("/{id}")
     public ResponseEntity<ApiResponse<RecruitmentData>> updateRecruitment(
+            Authentication authentication,
             @PathVariable Long id,
             @RequestBody RecruitmentUpdateRequest request
     ) throws AppException {
-        RecruitmentData data = recruitmentService.updateRecruitment(id, request);
+        // Get current user from authentication
+        String email = authentication.getName();
+        User currentUser = userService.findByEmail(email)
+                .orElseThrow(() -> new AppException(ErrorCode.UNAUTHORIZED));
+        
+        RecruitmentData data = recruitmentService.updateRecruitment(currentUser.getId(), id, request);
         return ResponseEntity.ok(ApiResponse.success(data));
     }
 
     @PatchMapping("/{id}/status")
     public ResponseEntity<ApiResponse<Void>> changeStatus(
+            Authentication authentication,
             @PathVariable Long id,
             @RequestParam RecruitmentStatus status
     ) throws AppException {
-        recruitmentService.changeRecruitmentStatus(id, status);
+        // Get current user from authentication
+        String email = authentication.getName();
+        User currentUser = userService.findByEmail(email)
+                .orElseThrow(() -> new AppException(ErrorCode.UNAUTHORIZED));
+        
+        recruitmentService.changeRecruitmentStatus(currentUser.getId(), id, status);
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<ApiResponse<Void>> deleteRecruitment(@PathVariable Long id) {
-        recruitmentService.deleteRecruitment(id);
+    public ResponseEntity<ApiResponse<Void>> deleteRecruitment(
+            Authentication authentication,
+            @PathVariable Long id
+    ) throws AppException {
+        // Get current user from authentication
+        String email = authentication.getName();
+        User currentUser = userService.findByEmail(email)
+                .orElseThrow(() -> new AppException(ErrorCode.UNAUTHORIZED));
+        
+        recruitmentService.deleteRecruitment(currentUser.getId(), id);
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 
@@ -102,8 +128,16 @@ public class RecruitmentController {
 
     // Review application (specific path, must come before /{applicationId})
     @PostMapping("/applications/review")
-    public ResponseEntity<ApiResponse<RecruitmentApplicationData>> review(@RequestBody ApplicationReviewRequest request) throws AppException {
-        RecruitmentApplicationData data = recruitmentService.reviewApplication(request);
+    public ResponseEntity<ApiResponse<RecruitmentApplicationData>> review(
+            Authentication authentication,
+            @RequestBody ApplicationReviewRequest request
+    ) throws AppException {
+        // Get current user from authentication
+        String email = authentication.getName();
+        User currentUser = userService.findByEmail(email)
+                .orElseThrow(() -> new AppException(ErrorCode.UNAUTHORIZED));
+        
+        RecruitmentApplicationData data = recruitmentService.reviewApplication(currentUser.getId(), request);
         return ResponseEntity.ok(ApiResponse.success(data));
     }
 

@@ -49,6 +49,7 @@ public interface RecruitmentMapper {
                             .questionText(q.getQuestionText())
                             .questionType(q.getQuestionType())
                             .questionOrder(q.getQuestionOrder())
+                            .isRequired(q.getIsRequired())
                             .options(mapOptionsInternal(q.getOptions()))
                             .createdAt(q.getCreatedAt())
                             .updatedAt(q.getUpdatedAt())

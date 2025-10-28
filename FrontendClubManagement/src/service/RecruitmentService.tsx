@@ -17,6 +17,7 @@ export interface RecruitmentQuestionData {
   questionText: string;
   questionType: string;
   questionOrder: number;
+  isRequired?: number; // 0 = not required, 1 = required
   options?: string[];
   createdAt: string;
   updatedAt: string;
@@ -85,6 +86,7 @@ export interface RecruitmentQuestionRequest {
   questionText: string;
   questionType: string;
   questionOrder: number;
+  isRequired?: number; // 0 = not required, 1 = required
   options?: string[];
 }
 

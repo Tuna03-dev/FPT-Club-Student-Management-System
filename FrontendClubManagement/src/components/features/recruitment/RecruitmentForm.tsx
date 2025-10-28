@@ -357,6 +357,7 @@ export function RecruitmentForm({
         questionType:
           q.question_type === "FILE" ? "FILE_UPLOAD" : q.question_type,
         questionOrder: index + 1,
+        isRequired: q.required ? 1 : 0, // Convert boolean to integer
         options:
           q.question_type === "MCQ" || q.question_type === "CHECKBOX"
             ? (q.options || []).filter((opt) => opt.trim())

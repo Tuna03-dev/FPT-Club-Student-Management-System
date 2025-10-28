@@ -39,6 +39,7 @@ public class RecruitmentService implements RecruitmentServiceInterface {
     private final RecruitmentMapper recruitmentMapper;
     private final RecruitmentApplicationMapper recruitmentApplicationMapper;
     private final CloudinaryService cloudinaryService;
+    private final ClubMemberShipRepository clubMemberShipRepository;
 
     @Override
     public PagedResponse<RecruitmentData> listRecruitments(Long clubId, RecruitmentStatus status, Pageable pageable) {
@@ -74,7 +75,10 @@ public class RecruitmentService implements RecruitmentServiceInterface {
 
     @Override
     @Transactional
-    public RecruitmentData createRecruitment(Long clubId, RecruitmentCreateRequest req) {
+    public RecruitmentData createRecruitment(Long userId, Long clubId, RecruitmentCreateRequest req) throws AppException {
+        // Kiểm tra quyền: phải là CLUB_OFFICER và là thành viên của club
+        checkClubOfficerPermission(userId, clubId);
+        
         Recruitment r = recruitmentMapper.toEntity(req, clubId);
         r = recruitmentRepository.save(r);
         upsertQuestions(r, req.questions);
@@ -97,9 +101,12 @@ public class RecruitmentService implements RecruitmentServiceInterface {
 
     @Override
     @Transactional
-    public RecruitmentData updateRecruitment(Long id, RecruitmentUpdateRequest req) throws AppException {
+    public RecruitmentData updateRecruitment(Long userId, Long id, RecruitmentUpdateRequest req) throws AppException {
         Recruitment r = recruitmentRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.INTERNAL_SERVER_ERROR));
+        
+        // Kiểm tra quyền: phải là CLUB_OFFICER và là thành viên của club
+        checkClubOfficerPermission(userId, r.getClub().getId());
         
         // Check if recruitment is closed
         if (r.getStatus() == RecruitmentStatus.CLOSED) {
@@ -128,16 +135,26 @@ public class RecruitmentService implements RecruitmentServiceInterface {
 
     @Override
     @Transactional
-    public void changeRecruitmentStatus(Long id, RecruitmentStatus status) throws AppException {
+    public void changeRecruitmentStatus(Long userId, Long id, RecruitmentStatus status) throws AppException {
         Recruitment r = recruitmentRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.INTERNAL_SERVER_ERROR));
+        
+        // Kiểm tra quyền: phải là CLUB_OFFICER và là thành viên của club
+        checkClubOfficerPermission(userId, r.getClub().getId());
+        
         r.setStatus(status);
         recruitmentRepository.save(r);
     }
 
     @Override
     @Transactional
-    public void deleteRecruitment(Long id) {
+    public void deleteRecruitment(Long userId, Long id) throws AppException {
+        Recruitment r = recruitmentRepository.findById(id)
+                .orElseThrow(() -> new AppException(ErrorCode.INTERNAL_SERVER_ERROR));
+        
+        // Kiểm tra quyền: phải là CLUB_OFFICER và là thành viên của club
+        checkClubOfficerPermission(userId, r.getClub().getId());
+        
         recruitmentRepository.deleteById(id);
     }
 
@@ -179,6 +196,40 @@ public class RecruitmentService implements RecruitmentServiceInterface {
                 .orElseThrow(() -> new AppException(ErrorCode.INTERNAL_SERVER_ERROR));
         User applicant = userRepository.findById(applicantId)
                 .orElseThrow(() -> new AppException(ErrorCode.UNAUTHORIZED));
+
+        // Kiểm tra xem user đã là thành viên active của club chưa
+        Long clubId = recruitment.getClub().getId();
+        boolean isAlreadyMember = clubMemberShipRepository.existsByUserIdAndClubIdAndStatus(
+                applicantId, clubId, ClubMemberShipStatus.ACTIVE);
+        if (isAlreadyMember) {
+            throw new AppException(ErrorCode.ALREADY_CLUB_MEMBER);
+        }
+
+        // Validate required questions are answered
+        List<RecruitmentFormQuestion> questions = questionRepository.findByRecruitment_IdOrderByQuestionOrderAsc(recruitment.getId());
+        for (RecruitmentFormQuestion question : questions) {
+            if (question.getIsRequired() != null && question.getIsRequired() == 1) {
+                boolean isAnswered = req.answers.stream()
+                        .anyMatch(ans -> ans.questionId.equals(question.getId()) && 
+                                       (ans.answerText != null && !ans.answerText.trim().isEmpty() || 
+                                        ans.fileUrl != null && !ans.fileUrl.trim().isEmpty()));
+                
+                // Check if file is uploaded for this question
+                if (!isAnswered && allFiles != null) {
+                    String fileKey = "file_" + question.getId();
+                    if (allFiles.containsKey(fileKey)) {
+                        List<MultipartFile> files = allFiles.get(fileKey);
+                        if (files != null && !files.isEmpty() && files.get(0) != null && !files.get(0).isEmpty()) {
+                            isAnswered = true;
+                        }
+                    }
+                }
+                
+                if (!isAnswered) {
+                    throw new AppException(ErrorCode.INTERNAL_SERVER_ERROR);
+                }
+            }
+        }
 
         RecruitmentApplication app = RecruitmentApplication.builder()
                 .recruitment(recruitment)
@@ -258,9 +309,14 @@ public class RecruitmentService implements RecruitmentServiceInterface {
 
     @Override
     @Transactional
-    public RecruitmentApplicationData reviewApplication(ApplicationReviewRequest req) throws AppException {
+    public RecruitmentApplicationData reviewApplication(Long userId, ApplicationReviewRequest req) throws AppException {
         RecruitmentApplication app = applicationRepository.findById(req.applicationId)
                 .orElseThrow(() -> new AppException(ErrorCode.INTERNAL_SERVER_ERROR));
+        
+        // Kiểm tra quyền: phải là CLUB_OFFICER và là thành viên của club
+        Long clubId = app.getRecruitment().getClub().getId();
+        checkClubOfficerPermission(userId, clubId);
+        
         app.setStatus(req.status);
         app.setReviewNotes(req.reviewNotes);
         app.setReviewedDate(LocalDateTime.now());
@@ -303,6 +359,7 @@ public class RecruitmentService implements RecruitmentServiceInterface {
                 entity.setQuestionText(q.questionText);
                 entity.setQuestionType(q.questionType);
                 entity.setQuestionOrder(q.questionOrder);
+                entity.setIsRequired(q.isRequired);
                 entity = questionRepository.save(entity);
                 
                 // Delete old options and create new ones
@@ -314,6 +371,7 @@ public class RecruitmentService implements RecruitmentServiceInterface {
                         .questionText(q.questionText)
                         .questionType(q.questionType)
                         .questionOrder(q.questionOrder)
+                        .isRequired(q.isRequired)
                         .recruitment(recruitment)
                         .build();
                 entity = questionRepository.save(entity);
@@ -374,6 +432,27 @@ public class RecruitmentService implements RecruitmentServiceInterface {
                         .build();
                 teamOptionRepository.save(teamOption);
             }
+        }
+    }
+
+    /**
+     * Kiểm tra xem user có quyền quản lý recruitment của club không
+     * Yêu cầu: phải là thành viên ACTIVE của club VÀ có system role là CLUB_OFFICER
+     */
+    private void checkClubOfficerPermission(Long userId, Long clubId) throws AppException {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new AppException(ErrorCode.UNAUTHORIZED));
+        
+        // Kiểm tra system role
+        if (user.getSystemRole() == null || !"CLUB_OFFICER".equals(user.getSystemRole().getRoleName())) {
+            throw new AppException(ErrorCode.NOT_CLUB_OFFICER);
+        }
+        
+        // Kiểm tra membership trong club
+        boolean isClubMember = clubMemberShipRepository.existsByUserIdAndClubIdAndStatus(
+                userId, clubId, ClubMemberShipStatus.ACTIVE);
+        if (!isClubMember) {
+            throw new AppException(ErrorCode.INSUFFICIENT_PERMISSIONS);
         }
     }
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect, useCallback } from "react";
+import { useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -46,6 +47,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { ClubPermissionGuard } from "@/components/ClubPermissionGuard";
 
 type RecruitmentStatus = "draft" | "open" | "closed" | "cancelled";
 type ApplicationStatus = "under_review" | "accepted" | "rejected" | "interview";
@@ -110,6 +112,10 @@ const statusColors: Record<RecruitmentStatus, string> = {
 };
 
 export function RecruitmentManagement() {
+  const params = useParams();
+  const clubIdParam = params.clubId;
+  const clubId = clubIdParam ? Number(clubIdParam) : undefined;
+  
   const [activeTab, setActiveTab] = useState<
     "list" | "create" | "applications"
   >("list");
@@ -142,12 +148,10 @@ export function RecruitmentManagement() {
   } | null>(null);
   const [cancelFormDialog, setCancelFormDialog] = useState(false);
 
-  // Get current user and clubId
-  // const currentUser = authService.getCurrentUser();
-  const clubId = 1; // Use user ID as clubId, or default to 1
-
   // Function to fetch recruitments
   const fetchRecruitments = useCallback(async () => {
+    if (!clubId) return;
+    
     setLoading(true);
     setError(null);
     try {
@@ -188,7 +192,7 @@ export function RecruitmentManagement() {
             : q.questionType) as QuestionType,
           question_order: q.questionOrder,
           options: q.options,
-          required: true, // TODO: Get from API if available
+          required: q.isRequired === 1, // Map from API isRequired field
         })),
         teamOptionIds: r.teamOptionIds,
         applications: [], // Will be fetched separately when needed
@@ -325,7 +329,7 @@ export function RecruitmentManagement() {
             : q.questionType) as QuestionType,
           question_order: q.questionOrder,
           options: q.options,
-          required: true,
+          required: q.isRequired === 1, // Map from API isRequired field
         })),
         teamOptionIds: freshData.teamOptionIds, // Map team options
         applications: [],
@@ -373,6 +377,9 @@ export function RecruitmentManagement() {
         toast.success("Cập nhật đợt tuyển dụng thành công!");
       } else {
         // Create new recruitment
+        if (!clubId) {
+          throw new Error("Club ID không hợp lệ");
+        }
         await createRecruitment(clubId, requestData);
         toast.success("Tạo đợt tuyển dụng thành công!");
       }
@@ -536,19 +543,20 @@ export function RecruitmentManagement() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <div className="">
-        <div className="container mx-auto px-4 py-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-foreground">
-                Quản lý Tuyển dụng
-              </h1>
-              <p className="text-muted-foreground mt-1">
-                Tạo và quản lý các đợt tuyển thành viên mới
-              </p>
-            </div>
+    <ClubPermissionGuard clubId={clubId}>
+      <div className="min-h-screen bg-background">
+        {/* Header */}
+        <div className="">
+          <div className="container mx-auto px-4 py-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-3xl font-bold text-foreground">
+                  Quản lý Tuyển dụng
+                </h1>
+                <p className="text-muted-foreground mt-1">
+                  Tạo và quản lý các đợt tuyển thành viên mới
+                </p>
+              </div>
             <div className="flex gap-2">
               <Button
                 variant={activeTab === "list" ? "secondary" : "outline"}
@@ -1018,6 +1026,7 @@ export function RecruitmentManagement() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+      </div>
+    </ClubPermissionGuard>
   );
 }

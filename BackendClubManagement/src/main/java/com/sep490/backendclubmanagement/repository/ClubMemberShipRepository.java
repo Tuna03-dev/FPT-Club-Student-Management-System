@@ -72,4 +72,7 @@ public interface ClubMemberShipRepository extends JpaRepository<ClubMemberShip, 
             @Param("status") ClubMemberShipStatus status,
             @Param("searchTerm") String searchTerm
     );
+    
+    // Kiểm tra xem user đã là thành viên active của club chưa
+    boolean existsByUserIdAndClubIdAndStatus(Long userId, Long clubId, ClubMemberShipStatus status);
 }

@@ -33,6 +33,16 @@ import {
   type RecruitmentData,
 } from "@/service/RecruitmentService";
 import { ClubApplicationForm } from "./ClubApplication";
+import { useMyClubs } from "@/hooks/useMyClubs";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { AlertCircle } from "lucide-react";
 
 interface ClubDetailProps {
   clubId?: string;
@@ -81,7 +91,13 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
   const [recruitmentsLoaded, setRecruitmentsLoaded] = useState(false);
   const [loadingRecruitments, setLoadingRecruitments] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedRecruitmentId, setSelectedRecruitmentId] = useState<number | null>(null);
+  const [selectedRecruitmentId, setSelectedRecruitmentId] = useState<
+    number | null
+  >(null);
+  const [showMembershipWarning, setShowMembershipWarning] = useState(false);
+  
+  // Get user's clubs to check if already a member
+  const { data: myClubs } = useMyClubs();
 
   // Fetch club data only (isRecruiting is included in response)
   useEffect(() => {
@@ -213,6 +229,30 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
     return date.toLocaleDateString("vi-VN");
   };
 
+  // Format number helper (add comma separator)
+  const formatNumber = (num: number | undefined | null): string => {
+    if (num === undefined || num === null) return "0";
+    return num.toLocaleString("vi-VN");
+  };
+
+  // Check if user is already a member of this club
+  const isAlreadyMember = () => {
+    if (!myClubs || !clubId) return false;
+    return myClubs.some(myClub => myClub.clubId === Number(clubId));
+  };
+
+  // Handle recruitment application click
+  const handleApplyClick = (recruitmentId: number) => {
+    // Check if user is already a member
+    if (isAlreadyMember()) {
+      setShowMembershipWarning(true);
+      return;
+    }
+    
+    // User is not a member, proceed to application form
+    setSelectedRecruitmentId(recruitmentId);
+  };
+
   // Loading state
   if (loading) {
     return (
@@ -296,24 +336,36 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
               {/* Stats */}
               <div className="flex flex-wrap gap-6 mb-4">
                 <div className="flex items-center gap-2">
-                  <Users className="h-5 w-5 text-muted-foreground" />
+                  <div className="h-10 w-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                    <Users className="h-5 w-5 text-blue-600" />
+                  </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Thành viên</p>
-                    <p className="font-semibold">{club.totalMembers}</p>
+                    <p className="font-semibold text-lg">
+                      {formatNumber(club.totalMembers)}
+                    </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Calendar className="h-5 w-5 text-muted-foreground" />
+                  <div className="h-10 w-10 bg-green-100 rounded-lg flex items-center justify-center">
+                    <Calendar className="h-5 w-5 text-green-600" />
+                  </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Sự kiện</p>
-                    <p className="font-semibold">{club.totalEvents}</p>
+                    <p className="font-semibold text-lg">
+                      {formatNumber(club.totalEvents)}
+                    </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <MessageSquare className="h-5 w-5 text-muted-foreground" />
+                  <div className="h-10 w-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                    <MessageSquare className="h-5 w-5 text-purple-600" />
+                  </div>
                   <div>
-                    <p className="text-sm text-muted-foreground">Bài viết</p>
-                    <p className="font-semibold">{club.totalPosts}</p>
+                    <p className="text-sm text-muted-foreground">Tin tức</p>
+                    <p className="font-semibold text-lg">
+                      {formatNumber(club.totalPosts)}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -495,7 +547,9 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
             <TabsContent value="events" className="space-y-6">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-2xl font-bold">Sự kiện của câu lạc bộ</h2>
-                <Badge variant="secondary">{events.length} sự kiện</Badge>
+                <Badge variant="secondary">
+                  Tổng: {formatNumber(club.totalEvents)} sự kiện
+                </Badge>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -549,7 +603,9 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
             <TabsContent value="news" className="space-y-6">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-2xl font-bold">Tin tức của câu lạc bộ</h2>
-                <Badge variant="secondary">{news.length} tin tức</Badge>
+                <Badge variant="secondary">
+                  Tổng: {formatNumber(club.totalPosts)} tin tức
+                </Badge>
               </div>
 
               <div className="space-y-4">
@@ -688,9 +744,9 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
                               </div>
                             </div>
 
-                            <Button 
+                            <Button
                               className="w-full"
-                              onClick={() => setSelectedRecruitmentId(recruitment.id)}
+                              onClick={() => handleApplyClick(recruitment.id)}
                             >
                               Ứng tuyển ngay
                             </Button>
@@ -714,6 +770,40 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
           </Tabs>
         </div>
       </div>
+
+      {/* Membership Warning Dialog */}
+      <Dialog open={showMembershipWarning} onOpenChange={setShowMembershipWarning}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-orange-700">
+              <AlertCircle className="h-5 w-5" />
+              Không thể ứng tuyển
+            </DialogTitle>
+            <DialogDescription className="pt-4">
+              <div className="space-y-3">
+                <p className="text-foreground">
+                  Bạn đã là thành viên của <span className="font-semibold">{club?.clubName}</span> và không thể ứng tuyển lại.
+                </p>
+                <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                  <p className="text-sm text-orange-800">
+                    💡 <span className="font-medium">Gợi ý:</span> Nếu bạn muốn tham gia vào phòng ban khác hoặc thay đổi vai trò, vui lòng liên hệ với ban quản lý câu lạc bộ.
+                  </p>
+                </div>
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="sm:justify-start">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setShowMembershipWarning(false)}
+              className="w-full sm:w-auto"
+            >
+              Đã hiểu
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
