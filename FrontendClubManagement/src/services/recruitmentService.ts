@@ -304,3 +304,4 @@ export async function updateApplicationStatus(
   if (!res.data) throw new Error("Failed to update application status");
   return res.data;
 }
+

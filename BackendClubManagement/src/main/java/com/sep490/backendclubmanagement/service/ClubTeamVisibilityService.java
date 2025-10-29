@@ -24,6 +24,7 @@ public class ClubTeamVisibilityService {
     private final TeamRepository teamRepository;
     private final SemesterRepository semesterRepository;
     private final UserRepository userRepository;
+    private final ClubMemberShipRepository clubMemberShipRepository;
 
     public List<VisibleTeamDTO> getVisibleTeams(Long clubId, Long semesterIdNullable) {
         User currentUser = getCurrentUser();
@@ -122,6 +123,52 @@ public class ClubTeamVisibilityService {
                 memberCount,
                 members
         );
+    }
+
+    /**
+     * Lấy tất cả teams của một club nếu user là CLUB_PRESIDENT của kì hiện tại
+     * Chỉ trả về thông tin cơ bản của team, không bao gồm memberCount và myRoles
+     * @param clubId ID của club
+     * @return Danh sách teams với giá trị mặc định cho memberCount (0) và myRoles (empty list)
+     * @throws ResourceNotFoundException nếu user không phải CLUB_PRESIDENT
+     */
+    public List<VisibleTeamDTO> getAllTeamsForClubPresident(Long clubId) {
+        User currentUser = getCurrentUser();
+        
+        // Lấy semester hiện tại
+        Semester currentSemester = semesterRepository.findCurrentSemester()
+                .orElseThrow(() -> new ResourceNotFoundException("Current semester not found."));
+        Long semesterId = currentSemester.getId();
+        
+        // Kiểm tra user có phải CLUB_PRESIDENT của kì hiện tại không
+        boolean isPresident = clubMemberShipRepository.isClubPresidentInSemester(
+                currentUser.getId(), 
+                clubId,
+                semesterId
+        );
+        
+        if (!isPresident) {
+            throw new ResourceNotFoundException(
+                "User is not CLUB_PRESIDENT of this club in the current semester."
+            );
+        }
+        
+        // Lấy tất cả teams của club
+        List<Team> teams = teamRepository.findAllByClubId(clubId);
+        
+        // Build result với giá trị mặc định cho memberCount và myRoles
+        List<VisibleTeamDTO> result = new ArrayList<>();
+        for (Team t : teams) {
+            result.add(new VisibleTeamDTO(
+                    t.getId(),
+                    t.getTeamName(),
+                    t.getDescription(),
+                    0L,        // memberCount mặc định
+                    List.of()  // myRoles mặc định (empty list)
+            ));
+        }
+        
+        return result;
     }
 
     // ---------- helpers ----------

@@ -8,6 +8,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog,
   DialogContent,
@@ -31,9 +32,17 @@ import {
   XCircle,
   Eye,
   MessageSquare,
-  Loader2,
   Calendar,
 } from "lucide-react";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+  PaginationEllipsis,
+} from "@/components/ui/pagination";
 
 type ApplicationStatus = "under_review" | "accepted" | "rejected" | "interview";
 type QuestionType = "TEXT" | "MCQ" | "CHECKBOX" | "FILE";
@@ -78,6 +87,11 @@ interface ApplicationsListProps {
     newStatus: ApplicationStatus,
     notes?: string
   ) => void;
+  // Pagination props
+  currentPage?: number;
+  totalPages?: number;
+  totalElements?: number;
+  onPageChange?: (page: number) => void;
 }
 
 interface StatusChangeDialogData {
@@ -105,6 +119,10 @@ export function ApplicationsList({
   applications,
   applicationsLoading,
   onUpdateApplicationStatus,
+  currentPage = 0,
+  totalPages = 1,
+  totalElements = 0,
+  onPageChange,
 }: ApplicationsListProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [applicationStatusFilter, setApplicationStatusFilter] = useState<
@@ -249,11 +267,61 @@ export function ApplicationsList({
 
         {/* Applications Loading State */}
         {applicationsLoading && (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            <span className="ml-2 text-muted-foreground">
-              Đang tải đơn ứng tuyển...
-            </span>
+          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+            {[...Array(6)].map((_, index) => (
+              <Card key={index} className="hover:shadow-lg transition-shadow">
+                <CardHeader>
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-3">
+                      {/* Avatar skeleton */}
+                      <Skeleton className="h-10 w-10 rounded-full" />
+                      <div className="space-y-2">
+                        {/* User name */}
+                        <Skeleton className="h-4 w-28" />
+                        {/* Student ID */}
+                        <Skeleton className="h-3 w-20" />
+                      </div>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {/* Badge and date */}
+                    <div className="flex items-center justify-between">
+                      <Skeleton className="h-6 w-24 rounded-full" />
+                      <Skeleton className="h-3 w-20" />
+                    </div>
+
+                    {/* Email section */}
+                    <div className="text-sm space-y-1">
+                      <Skeleton className="h-3 w-12" />
+                      <Skeleton className="h-4 w-44" />
+                    </div>
+
+                    {/* Phone section */}
+                    <div className="text-sm space-y-1">
+                      <Skeleton className="h-3 w-10" />
+                      <Skeleton className="h-4 w-28" />
+                    </div>
+
+                    {/* Notes section (sometimes) */}
+                    {index % 2 === 0 && (
+                      <div className="border-l-2 border-blue-400 pl-3 py-2 space-y-2">
+                        <Skeleton className="h-3 w-24" />
+                        <Skeleton className="h-8 w-full rounded" />
+                      </div>
+                    )}
+
+                    {/* Action buttons */}
+                    <div className="flex gap-2 pt-2">
+                      <Skeleton className="h-9 w-16" />
+                      <Skeleton className="h-9 w-28" />
+                      <Skeleton className="h-9 w-20" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
           </div>
         )}
 
@@ -418,6 +486,177 @@ export function ApplicationsList({
             <p className="text-muted-foreground">
               Không tìm thấy đơn ứng tuyển nào
             </p>
+          </div>
+        )}
+
+        {/* Pagination for Applications */}
+        {!applicationsLoading && onPageChange && totalPages > 1 && (
+          <div className="space-y-4">
+            {/* Results info */}
+            <div className="flex items-center justify-between text-sm text-muted-foreground">
+              <div>
+                Hiển thị{" "}
+                <span className="font-semibold">
+                  {Math.min(
+                    currentPage * 10 + 1,
+                    totalElements
+                  )}{" "}
+                  -{" "}
+                  {Math.min(
+                    (currentPage + 1) * 10,
+                    totalElements
+                  )}
+                </span>{" "}
+                trong tổng số{" "}
+                <span className="font-semibold">
+                  {totalElements}
+                </span>{" "}
+                đơn ứng tuyển
+              </div>
+              <div>
+                Trang {currentPage + 1} / {totalPages}
+              </div>
+            </div>
+
+            {/* Pagination controls */}
+            <div className="flex justify-center">
+              <Pagination>
+                <PaginationContent>
+                  <PaginationItem>
+                    <PaginationPrevious
+                      onClick={() => {
+                        if (currentPage > 0) {
+                          onPageChange(currentPage - 1);
+                          window.scrollTo({
+                            top: 0,
+                            behavior: "smooth",
+                          });
+                        }
+                      }}
+                      className={
+                        currentPage === 0
+                          ? "pointer-events-none opacity-50"
+                          : "cursor-pointer"
+                      }
+                    />
+                  </PaginationItem>
+
+                  {/* First page */}
+                  {currentPage > 2 && (
+                    <>
+                      <PaginationItem>
+                        <PaginationLink
+                          onClick={() => {
+                            onPageChange(0);
+                            window.scrollTo({
+                              top: 0,
+                              behavior: "smooth",
+                            });
+                          }}
+                          className="cursor-pointer"
+                        >
+                          1
+                        </PaginationLink>
+                      </PaginationItem>
+                      {currentPage > 3 && (
+                        <PaginationItem>
+                          <PaginationEllipsis />
+                        </PaginationItem>
+                      )}
+                    </>
+                  )}
+
+                  {/* Pages around current page */}
+                  {Array.from(
+                    { length: Math.min(5, totalPages) },
+                    (_, i) => {
+                      let pageNum;
+                      if (totalPages <= 5) {
+                        pageNum = i;
+                      } else if (currentPage <= 2) {
+                        pageNum = i;
+                      } else if (currentPage >= totalPages - 3) {
+                        pageNum = totalPages - 5 + i;
+                      } else {
+                        pageNum = currentPage - 2 + i;
+                      }
+
+                      if (pageNum < 0 || pageNum >= totalPages)
+                        return null;
+                      if (currentPage > 2 && pageNum === 0)
+                        return null;
+                      if (
+                        currentPage < totalPages - 3 &&
+                        pageNum === totalPages - 1
+                      )
+                        return null;
+
+                      return (
+                        <PaginationItem key={pageNum}>
+                          <PaginationLink
+                            onClick={() => {
+                              onPageChange(pageNum);
+                              window.scrollTo({
+                                top: 0,
+                                behavior: "smooth",
+                              });
+                            }}
+                            isActive={currentPage === pageNum}
+                            className="cursor-pointer"
+                          >
+                            {pageNum + 1}
+                          </PaginationLink>
+                        </PaginationItem>
+                      );
+                    }
+                  )}
+
+                  {/* Last page */}
+                  {currentPage < totalPages - 3 && (
+                    <>
+                      {currentPage < totalPages - 4 && (
+                        <PaginationItem>
+                          <PaginationEllipsis />
+                        </PaginationItem>
+                      )}
+                      <PaginationItem>
+                        <PaginationLink
+                          onClick={() => {
+                            onPageChange(totalPages - 1);
+                            window.scrollTo({
+                              top: 0,
+                              behavior: "smooth",
+                            });
+                          }}
+                          className="cursor-pointer"
+                        >
+                          {totalPages}
+                        </PaginationLink>
+                      </PaginationItem>
+                    </>
+                  )}
+
+                  <PaginationItem>
+                    <PaginationNext
+                      onClick={() => {
+                        if (currentPage < totalPages - 1) {
+                          onPageChange(currentPage + 1);
+                          window.scrollTo({
+                            top: 0,
+                            behavior: "smooth",
+                          });
+                        }
+                      }}
+                      className={
+                        currentPage === totalPages - 1
+                          ? "pointer-events-none opacity-50"
+                          : "cursor-pointer"
+                      }
+                    />
+                  </PaginationItem>
+                </PaginationContent>
+              </Pagination>
+            </div>
           </div>
         )}
       </div>

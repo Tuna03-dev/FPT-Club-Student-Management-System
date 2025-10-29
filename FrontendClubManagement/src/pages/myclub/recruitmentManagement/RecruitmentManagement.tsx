@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
   SelectContent,
@@ -27,6 +28,15 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+  PaginationEllipsis,
+} from "@/components/ui/pagination";
+import {
   getRecruitmentsByClubId,
   getApplicationsByRecruitmentId,
   getRecruitmentById,
@@ -35,7 +45,7 @@ import {
   changeRecruitmentStatus,
   updateApplicationStatus,
   type RecruitmentCreateRequest,
-} from "@/service/RecruitmentService";
+} from "@/services/recruitmentService";
 import { toast } from "sonner";
 import { RecruitmentForm } from "@/components/features/recruitment/RecruitmentForm";
 import { ApplicationsList } from "@/components/features/recruitment/ApplicationsList";
@@ -134,10 +144,23 @@ export function RecruitmentManagement() {
   const [loading, setLoading] = useState(false);
   const [applicationsLoading, setApplicationsLoading] = useState(false);
   const [createLoading, setCreateLoading] = useState(false);
+  const [editLoading, setEditLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editingRecruitment, setEditingRecruitment] =
     useState<Recruitment | null>(null);
   const [changingStatusId, setChangingStatusId] = useState<string | null>(null);
+
+  // Pagination states for recruitments
+  const [recruitmentsPage, setRecruitmentsPage] = useState(0);
+  const [recruitmentsTotalPages, setRecruitmentsTotalPages] = useState(0);
+  const [recruitmentsTotalElements, setRecruitmentsTotalElements] = useState(0);
+  const recruitmentsPageSize = 10;
+
+  // Pagination states for applications
+  const [applicationsPage, setApplicationsPage] = useState(0);
+  const [applicationsTotalPages, setApplicationsTotalPages] = useState(0);
+  const [applicationsTotalElements, setApplicationsTotalElements] = useState(0);
+  const applicationsPageSize = 10;
 
   // Dialog states
   const [statusChangeDialog, setStatusChangeDialog] = useState<{
@@ -166,9 +189,13 @@ export function RecruitmentManagement() {
 
       const response = await getRecruitmentsByClubId(clubId, {
         status: apiStatus,
-        page: 0,
-        size: 100,
+        page: recruitmentsPage,
+        size: recruitmentsPageSize,
       });
+
+      // Update pagination states
+      setRecruitmentsTotalPages(response.totalPages);
+      setRecruitmentsTotalElements(response.totalElements);
 
       // Map API data to component format
       const mappedRecruitments: Recruitment[] = response.content.map((r) => ({
@@ -208,12 +235,17 @@ export function RecruitmentManagement() {
     } finally {
       setLoading(false);
     }
-  }, [clubId, statusFilter]);
+  }, [clubId, statusFilter, recruitmentsPage]);
 
   // Fetch recruitments from API on mount and when filters change
   useEffect(() => {
     fetchRecruitments();
   }, [fetchRecruitments]);
+
+  // Reset to page 0 when filter changes
+  useEffect(() => {
+    setRecruitmentsPage(0);
+  }, [statusFilter, searchQuery]);
 
   // Fetch applications when a recruitment is selected
   useEffect(() => {
@@ -228,10 +260,14 @@ export function RecruitmentManagement() {
         const response = await getApplicationsByRecruitmentId(
           parseInt(selectedRecruitment.recruitment_id),
           {
-            page: 0,
-            size: 100,
+            page: applicationsPage,
+            size: applicationsPageSize,
           }
         );
+
+        // Update pagination states
+        setApplicationsTotalPages(response.totalPages);
+        setApplicationsTotalElements(response.totalElements);
 
         // Map API data to component format
         const mappedApplications: RecruitmentApplication[] =
@@ -275,6 +311,11 @@ export function RecruitmentManagement() {
     };
 
     fetchApplications();
+  }, [selectedRecruitment?.recruitment_id, applicationsPage]);
+
+  // Reset applications page when recruitment changes
+  useEffect(() => {
+    setApplicationsPage(0);
   }, [selectedRecruitment?.recruitment_id]);
 
   const filteredRecruitments = useMemo(() => {
@@ -298,7 +339,8 @@ export function RecruitmentManagement() {
     }
 
     try {
-      setLoading(true);
+      setEditLoading(true);
+      setActiveTab("create"); // Switch to create tab immediately to show skeleton
 
       // Fetch fresh data from API to ensure we have the latest data
       const freshData = await getRecruitmentById(
@@ -342,12 +384,12 @@ export function RecruitmentManagement() {
 
       // Load recruitment data into form
       setEditingRecruitment(mappedRecruitment);
-      setActiveTab("create");
     } catch (err: any) {
       console.error("Error loading recruitment for edit:", err);
       toast.error("Không thể tải dữ liệu đợt tuyển dụng");
+      setActiveTab("list"); // Go back to list on error
     } finally {
-      setLoading(false);
+      setEditLoading(false);
     }
   };
 
@@ -358,6 +400,7 @@ export function RecruitmentManagement() {
 
   const confirmCancelForm = () => {
     setEditingRecruitment(null);
+    setEditLoading(false); // Reset edit loading state
     setActiveTab("list");
     setCancelFormDialog(false);
   };
@@ -575,6 +618,7 @@ export function RecruitmentManagement() {
                   variant={activeTab === "create" ? "secondary" : "outline"}
                   onClick={() => {
                     setEditingRecruitment(null);
+                    setEditLoading(false); // Reset edit loading state
                     setActiveTab("create");
                   }}
                   className="border-primary/30 hover:bg-primary hover:text-primary-foreground hover:border-primary shadow-sm hover:shadow-glow transition-all"
@@ -635,11 +679,52 @@ export function RecruitmentManagement() {
 
               {/* Loading State */}
               {loading && (
-                <div className="flex items-center justify-center py-12">
-                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                  <span className="ml-2 text-muted-foreground">
-                    Đang tải...
-                  </span>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {[...Array(4)].map((_, index) => (
+                    <Card key={index} className="hover:shadow-lg transition-shadow">
+                      <CardHeader>
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1 space-y-3">
+                            {/* Title */}
+                            <Skeleton className="h-5 w-3/4" />
+                            {/* Badges */}
+                            <div className="flex items-center gap-2">
+                              <Skeleton className="h-5 w-20 rounded-full" />
+                              {index === 1 && <Skeleton className="h-5 w-32 rounded-full" />}
+                            </div>
+                          </div>
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-4">
+                          {/* Description - 3 lines */}
+                          <div className="space-y-2">
+                            <Skeleton className="h-3 w-full" />
+                            <Skeleton className="h-3 w-full" />
+                            <Skeleton className="h-3 w-4/5" />
+                          </div>
+
+                          {/* Grid stats - 2x2 */}
+                          <div className="grid grid-cols-2 gap-4 text-sm">
+                            {[...Array(4)].map((_, i) => (
+                              <div key={i} className="space-y-1">
+                                <Skeleton className="h-3 w-20" />
+                                <Skeleton className="h-4 w-24" />
+                              </div>
+                            ))}
+                          </div>
+
+                          {/* Action buttons */}
+                          <div className="flex gap-2 flex-wrap">
+                            <Skeleton className="h-9 w-20" />
+                            <Skeleton className="h-9 w-24" />
+                            <Skeleton className="h-9 w-20" />
+                            <Skeleton className="h-9 w-20" />
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
                 </div>
               )}
 
@@ -861,6 +946,177 @@ export function RecruitmentManagement() {
                   </Button>
                 </div>
               )}
+
+              {/* Pagination for Recruitments */}
+              {!loading && !error && recruitmentsTotalPages > 1 && (
+                <div className="space-y-4">
+                  {/* Results info */}
+                  <div className="flex items-center justify-between text-sm text-muted-foreground">
+                    <div>
+                      Hiển thị{" "}
+                      <span className="font-semibold">
+                        {Math.min(
+                          recruitmentsPage * recruitmentsPageSize + 1,
+                          recruitmentsTotalElements
+                        )}{" "}
+                        -{" "}
+                        {Math.min(
+                          (recruitmentsPage + 1) * recruitmentsPageSize,
+                          recruitmentsTotalElements
+                        )}
+                      </span>{" "}
+                      trong tổng số{" "}
+                      <span className="font-semibold">
+                        {recruitmentsTotalElements}
+                      </span>{" "}
+                      đợt tuyển dụng
+                    </div>
+                    <div>
+                      Trang {recruitmentsPage + 1} / {recruitmentsTotalPages}
+                    </div>
+                  </div>
+
+                  {/* Pagination controls */}
+                  <div className="flex justify-center">
+                    <Pagination>
+                      <PaginationContent>
+                        <PaginationItem>
+                          <PaginationPrevious
+                            onClick={() => {
+                              if (recruitmentsPage > 0) {
+                                setRecruitmentsPage(recruitmentsPage - 1);
+                                window.scrollTo({
+                                  top: 0,
+                                  behavior: "smooth",
+                                });
+                              }
+                            }}
+                            className={
+                              recruitmentsPage === 0
+                                ? "pointer-events-none opacity-50"
+                                : "cursor-pointer"
+                            }
+                          />
+                        </PaginationItem>
+
+                        {/* First page */}
+                        {recruitmentsPage > 2 && (
+                          <>
+                            <PaginationItem>
+                              <PaginationLink
+                                onClick={() => {
+                                  setRecruitmentsPage(0);
+                                  window.scrollTo({
+                                    top: 0,
+                                    behavior: "smooth",
+                                  });
+                                }}
+                                className="cursor-pointer"
+                              >
+                                1
+                              </PaginationLink>
+                            </PaginationItem>
+                            {recruitmentsPage > 3 && (
+                              <PaginationItem>
+                                <PaginationEllipsis />
+                              </PaginationItem>
+                            )}
+                          </>
+                        )}
+
+                        {/* Pages around current page */}
+                        {Array.from(
+                          { length: Math.min(5, recruitmentsTotalPages) },
+                          (_, i) => {
+                            let pageNum;
+                            if (recruitmentsTotalPages <= 5) {
+                              pageNum = i;
+                            } else if (recruitmentsPage <= 2) {
+                              pageNum = i;
+                            } else if (recruitmentsPage >= recruitmentsTotalPages - 3) {
+                              pageNum = recruitmentsTotalPages - 5 + i;
+                            } else {
+                              pageNum = recruitmentsPage - 2 + i;
+                            }
+
+                            if (pageNum < 0 || pageNum >= recruitmentsTotalPages)
+                              return null;
+                            if (recruitmentsPage > 2 && pageNum === 0)
+                              return null;
+                            if (
+                              recruitmentsPage < recruitmentsTotalPages - 3 &&
+                              pageNum === recruitmentsTotalPages - 1
+                            )
+                              return null;
+
+                            return (
+                              <PaginationItem key={pageNum}>
+                                <PaginationLink
+                                  onClick={() => {
+                                    setRecruitmentsPage(pageNum);
+                                    window.scrollTo({
+                                      top: 0,
+                                      behavior: "smooth",
+                                    });
+                                  }}
+                                  isActive={recruitmentsPage === pageNum}
+                                  className="cursor-pointer"
+                                >
+                                  {pageNum + 1}
+                                </PaginationLink>
+                              </PaginationItem>
+                            );
+                          }
+                        )}
+
+                        {/* Last page */}
+                        {recruitmentsPage < recruitmentsTotalPages - 3 && (
+                          <>
+                            {recruitmentsPage < recruitmentsTotalPages - 4 && (
+                              <PaginationItem>
+                                <PaginationEllipsis />
+                              </PaginationItem>
+                            )}
+                            <PaginationItem>
+                              <PaginationLink
+                                onClick={() => {
+                                  setRecruitmentsPage(recruitmentsTotalPages - 1);
+                                  window.scrollTo({
+                                    top: 0,
+                                    behavior: "smooth",
+                                  });
+                                }}
+                                className="cursor-pointer"
+                              >
+                                {recruitmentsTotalPages}
+                              </PaginationLink>
+                            </PaginationItem>
+                          </>
+                        )}
+
+                        <PaginationItem>
+                          <PaginationNext
+                            onClick={() => {
+                              if (recruitmentsPage < recruitmentsTotalPages - 1) {
+                                setRecruitmentsPage(recruitmentsPage + 1);
+                                window.scrollTo({
+                                  top: 0,
+                                  behavior: "smooth",
+                                });
+                              }
+                            }}
+                            className={
+                              recruitmentsPage === recruitmentsTotalPages - 1
+                                ? "pointer-events-none opacity-50"
+                                : "cursor-pointer"
+                            }
+                          />
+                        </PaginationItem>
+                      </PaginationContent>
+                    </Pagination>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -872,6 +1128,7 @@ export function RecruitmentManagement() {
               onSave={handleSaveRecruitment}
               onCancel={handleCancelForm}
               createLoading={createLoading}
+              editLoading={editLoading}
             />
           )}
 
@@ -882,6 +1139,10 @@ export function RecruitmentManagement() {
               applications={applications}
               applicationsLoading={applicationsLoading}
               onUpdateApplicationStatus={handleUpdateApplicationStatus}
+              currentPage={applicationsPage}
+              totalPages={applicationsTotalPages}
+              totalElements={applicationsTotalElements}
+              onPageChange={(page) => setApplicationsPage(page)}
             />
           )}
         </div>

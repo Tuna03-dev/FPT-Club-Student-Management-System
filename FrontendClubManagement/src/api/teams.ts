@@ -27,3 +27,18 @@ export async function getTeamDetail(
     throw new Error(res.message || "Failed to fetch team detail");
   return res.data!;
 }
+
+/**
+ * Lấy tất cả teams của club cho CLUB_PRESIDENT của kì hiện tại
+ * API này chỉ dành cho CLUB_PRESIDENT
+ */
+export async function getAllTeamsForPresident(
+  clubId: number
+): Promise<VisibleTeamDTO[]> {
+  const res = await axiosClient.get<VisibleTeamDTO[]>(
+    `/management/clubs/${clubId}/teams/president`
+  );
+  if (res.code !== 200) 
+    throw new Error(res.message || "Failed to fetch teams for president");
+  return res.data ?? [];
+}

@@ -1,9 +1,10 @@
 import type { ReactNode } from "react";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, ShieldAlert, UserX, Loader2 } from "lucide-react";
+import { AlertTriangle, ShieldAlert, UserX } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useClubPermissions } from "@/hooks/useClubPermissions";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface ClubPermissionGuardProps {
   clubId: number | undefined;
@@ -21,15 +22,83 @@ export function ClubPermissionGuard({
   const { isClubPresident, isClubMember, hasPermission, loading, user } =
     useClubPermissions(clubId);
 
-  // Loading state
+  // Loading state - Show skeleton of the recruitment management page
   if (loading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="h-12 w-12 animate-spin mx-auto text-primary mb-4" />
-          <p className="text-muted-foreground">
-            Đang kiểm tra quyền truy cập...
-          </p>
+      <div className="min-h-screen bg-background">
+        {/* Header Skeleton */}
+        <div className="">
+          <div className="container mx-auto px-4 py-6">
+            <div className="flex items-center justify-between">
+              <div className="space-y-2">
+                <Skeleton className="h-9 w-56" />
+                <Skeleton className="h-4 w-72" />
+              </div>
+              <div className="flex gap-2">
+                <Skeleton className="h-10 w-32" />
+                <Skeleton className="h-10 w-32" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="container mx-auto px-4 py-8">
+          <div className="space-y-6">
+            {/* Search and Filters Skeleton */}
+            <div className="flex flex-col sm:flex-row gap-4">
+              <Skeleton className="h-10 flex-1" />
+              <Skeleton className="h-10 w-[180px]" />
+            </div>
+
+            {/* Recruitment Cards Skeleton */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {[...Array(4)].map((_, index) => (
+                <Card key={index} className="hover:shadow-lg transition-shadow">
+                  <CardHeader>
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1 space-y-3">
+                        {/* Title */}
+                        <Skeleton className="h-5 w-3/4" />
+                        {/* Badges */}
+                        <div className="flex items-center gap-2">
+                          <Skeleton className="h-5 w-20 rounded-full" />
+                          {index === 1 && <Skeleton className="h-5 w-32 rounded-full" />}
+                        </div>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      {/* Description - 3 lines */}
+                      <div className="space-y-2">
+                        <Skeleton className="h-3 w-full" />
+                        <Skeleton className="h-3 w-full" />
+                        <Skeleton className="h-3 w-4/5" />
+                      </div>
+
+                      {/* Grid stats - 2x2 */}
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        {[...Array(4)].map((_, i) => (
+                          <div key={i} className="space-y-1">
+                            <Skeleton className="h-3 w-20" />
+                            <Skeleton className="h-4 w-24" />
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Action buttons */}
+                      <div className="flex gap-2 flex-wrap">
+                        <Skeleton className="h-9 w-20" />
+                        <Skeleton className="h-9 w-24" />
+                        <Skeleton className="h-9 w-20" />
+                        <Skeleton className="h-9 w-20" />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     );

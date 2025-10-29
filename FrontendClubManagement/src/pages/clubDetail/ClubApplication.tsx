@@ -15,12 +15,12 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   ArrowLeft,
   Send,
   AlertCircle,
   CheckCircle,
-  Loader2,
   Upload,
   Calendar,
   Users,
@@ -30,8 +30,8 @@ import {
   submitApplication,
   type RecruitmentData,
   type ApplicationSubmitRequest,
-} from "@/service/RecruitmentService";
-import { getClubDetailById, type ClubDetailData } from "@/service/ClubService";
+} from "@/services/recruitmentService";
+import { getClubDetailById, type ClubDetailData } from "@/services/clubService";
 import type { VisibleTeamDTO } from "@/types/team";
 
 interface ClubApplicationFormProps {
@@ -279,12 +279,174 @@ export function ClubApplicationForm({
   // Loading state
   if (loading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="h-12 w-12 animate-spin mx-auto text-primary mb-4" />
-          <p className="text-muted-foreground">
-            Đang tải thông tin tuyển dụng...
-          </p>
+      <div className="min-h-screen bg-background">
+        <div className="container mx-auto px-4 py-8">
+          <div className="max-w-4xl mx-auto">
+            {/* Header Skeleton */}
+            <div className="flex items-center space-x-4 mb-8">
+              <Skeleton className="h-10 w-24 rounded" />
+              <div className="space-y-2">
+                <Skeleton className="h-8 w-48" />
+                <Skeleton className="h-4 w-32" />
+              </div>
+            </div>
+
+            {/* Club Info Card Skeleton */}
+            <Card className="mb-6">
+              <CardHeader>
+                <div className="flex items-start space-x-4">
+                  {/* Club logo */}
+                  <Skeleton className="w-20 h-20 rounded-lg flex-shrink-0" />
+                  <div className="flex-1 space-y-4">
+                    {/* Recruitment title */}
+                    <Skeleton className="h-6 w-3/4" />
+                    {/* Description - 2 lines */}
+                    <div className="space-y-2">
+                      <Skeleton className="h-4 w-full" />
+                      <Skeleton className="h-4 w-5/6" />
+                    </div>
+                    {/* Time and max applicants info */}
+                    <div className="flex flex-wrap gap-4">
+                      <div className="flex items-center gap-2">
+                        <Skeleton className="h-4 w-4 rounded" />
+                        <Skeleton className="h-4 w-36" />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Skeleton className="h-4 w-4 rounded" />
+                        <Skeleton className="h-4 w-28" />
+                      </div>
+                    </div>
+                    {/* Requirements section */}
+                    <div className="space-y-2">
+                      <Skeleton className="h-4 w-20" />
+                      <div className="space-y-1">
+                        <Skeleton className="h-3 w-full" />
+                        <Skeleton className="h-3 w-4/5" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </CardHeader>
+            </Card>
+
+            {/* Team Selection Skeleton */}
+            <Card className="mt-6">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <Skeleton className="h-6 w-32" />
+                  <Skeleton className="h-5 w-20 rounded-full" />
+                </div>
+                <Skeleton className="h-4 w-64 mt-2" />
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {[...Array(3)].map((_, index) => (
+                    <div 
+                      key={index} 
+                      className="flex items-start space-x-3 p-4 border rounded-lg hover:bg-accent/5"
+                    >
+                      <Skeleton className="h-5 w-5 rounded-full mt-1 flex-shrink-0" />
+                      <div className="flex-1 space-y-2">
+                        <Skeleton className="h-4 w-32" />
+                        <Skeleton className="h-3 w-48" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Form Questions Skeleton */}
+            <Card className="mt-6">
+              <CardHeader>
+                <Skeleton className="h-6 w-40" />
+                <Skeleton className="h-4 w-56 mt-2" />
+              </CardHeader>
+              <CardContent className="space-y-8">
+                {/* Different types of questions */}
+                {[...Array(4)].map((_, index) => (
+                  <div key={index} className="space-y-3">
+                    <div className="flex items-start justify-between">
+                      <Skeleton className="h-5 w-3/4" />
+                      {index < 2 && (
+                        <Skeleton className="h-5 w-20 rounded-full" />
+                      )}
+                    </div>
+                    {/* Text area for TEXT type */}
+                    {index === 0 && (
+                      <Skeleton className="h-32 w-full rounded-md" />
+                    )}
+                    {/* Radio options for MCQ type */}
+                    {index === 1 && (
+                      <div className="space-y-2">
+                        {[...Array(4)].map((_, i) => (
+                          <div key={i} className="flex items-center space-x-2">
+                            <Skeleton className="h-5 w-5 rounded-full" />
+                            <Skeleton className="h-4 w-32" />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {/* Checkboxes for CHECKBOX type */}
+                    {index === 2 && (
+                      <div className="space-y-2">
+                        {[...Array(3)].map((_, i) => (
+                          <div key={i} className="flex items-center space-x-2">
+                            <Skeleton className="h-5 w-5 rounded" />
+                            <Skeleton className="h-4 w-28" />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {/* File upload for FILE type */}
+                    {index === 3 && (
+                      <div className="space-y-4">
+                        <div className="border-2 border-dashed rounded-lg p-6 bg-gray-50">
+                          <div className="text-center space-y-3">
+                            <Skeleton className="h-10 w-10 mx-auto rounded" />
+                            <Skeleton className="h-4 w-32 mx-auto" />
+                            <Skeleton className="h-3 w-40 mx-auto" />
+                            <Skeleton className="h-10 w-32 mx-auto rounded" />
+                          </div>
+                        </div>
+                        <div className="relative">
+                          <div className="absolute inset-0 flex items-center">
+                            <Skeleton className="h-px w-full" />
+                          </div>
+                          <div className="relative flex justify-center">
+                            <Skeleton className="h-4 w-12" />
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <Skeleton className="h-4 w-48" />
+                          <Skeleton className="h-10 w-full rounded" />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+
+                {/* Info Box Skeleton */}
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-start gap-3">
+                  <Skeleton className="h-5 w-5 rounded flex-shrink-0" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-4 w-20" />
+                    <div className="space-y-1">
+                      <Skeleton className="h-3 w-full" />
+                      <Skeleton className="h-3 w-full" />
+                      <Skeleton className="h-3 w-2/3" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Submit Buttons Skeleton */}
+                <div className="flex gap-4 pt-6 border-t">
+                  <Skeleton className="h-11 flex-1 rounded" />
+                  <Skeleton className="h-11 w-24 rounded" />
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </div>
     );

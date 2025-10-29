@@ -25,13 +25,13 @@ import {
   Mail,
   Phone,
   Globe,
-  Loader2,
 } from "lucide-react";
-import { getClubDetailById, type ClubDetailData } from "@/service/ClubService";
+import { Skeleton } from "@/components/ui/skeleton";
+import { getClubDetailById, type ClubDetailData } from "@/services/clubService";
 import {
   getRecruitmentsByClubId,
   type RecruitmentData,
-} from "@/service/RecruitmentService";
+} from "@/services/recruitmentService";
 import { ClubApplicationForm } from "./ClubApplication";
 import { useMyClubs } from "@/hooks/useMyClubs";
 import {
@@ -256,12 +256,101 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
   // Loading state
   if (loading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="h-12 w-12 animate-spin mx-auto text-primary mb-4" />
-          <p className="text-muted-foreground">
-            Đang tải thông tin câu lạc bộ...
-          </p>
+      <div className="min-h-screen bg-background">
+        {/* Hero Banner Skeleton */}
+        <Skeleton className="h-64 md:h-80 w-full rounded-none" />
+
+        {/* Club Header Skeleton */}
+        <div className="relative -mt-20 px-4 md:px-8 pb-8">
+          <div className="max-w-6xl mx-auto">
+            <div className="flex flex-col md:flex-row gap-6 items-start md:items-end">
+              {/* Logo Skeleton */}
+              <Skeleton className="h-32 w-32 rounded-full border-4 border-background" />
+
+              {/* Club Info Skeleton */}
+              <div className="flex-1 space-y-4">
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3">
+                    <Skeleton className="h-9 w-64" />
+                    <Skeleton className="h-6 w-24 rounded-full" />
+                  </div>
+                  <Skeleton className="h-4 w-96" />
+                </div>
+
+                {/* Stats Skeleton */}
+                <div className="flex flex-wrap gap-6">
+                  {[...Array(3)].map((_, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <Skeleton className="h-10 w-10 rounded-lg" />
+                      <div className="space-y-1">
+                        <Skeleton className="h-3 w-16" />
+                        <Skeleton className="h-5 w-12" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Main Content Skeleton */}
+        <div className="px-4 md:px-8 py-8">
+          <div className="max-w-6xl mx-auto space-y-6">
+            {/* Tabs Skeleton */}
+            <div className="flex gap-2 border-b">
+              {[...Array(4)].map((_, i) => (
+                <Skeleton key={i} className="h-10 w-28" />
+              ))}
+            </div>
+
+            {/* Content Cards Skeleton */}
+            <div className="space-y-6">
+              {/* Description Card */}
+              <Card>
+                <CardHeader>
+                  <Skeleton className="h-6 w-48" />
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-3/4" />
+                  
+                  {/* President Info Skeleton */}
+                  <div className="mt-6 p-4 border rounded-lg">
+                    <Skeleton className="h-3 w-32 mb-3" />
+                    <div className="flex items-center gap-3">
+                      <Skeleton className="h-10 w-10 rounded-full" />
+                      <div className="space-y-2">
+                        <Skeleton className="h-4 w-32" />
+                        <Skeleton className="h-3 w-48" />
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Contact Card */}
+              <Card>
+                <CardHeader>
+                  <Skeleton className="h-6 w-40" />
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {[...Array(4)].map((_, i) => (
+                      <div key={i} className="flex items-center gap-3 p-3 rounded-lg border">
+                        <Skeleton className="h-10 w-10 rounded-lg" />
+                        <div className="flex-1 space-y-2">
+                          <Skeleton className="h-4 w-24" />
+                          <Skeleton className="h-3 w-32" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -659,11 +748,55 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
             <TabsContent value="recruitment" className="space-y-6">
               {/* Loading state for recruitments */}
               {loadingRecruitments ? (
-                <div className="flex flex-col items-center justify-center py-12">
-                  <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
-                  <p className="text-muted-foreground">
-                    Đang tải thông tin tuyển dụng...
-                  </p>
+                <div className="space-y-6">
+                  {/* Header Skeleton */}
+                  <div className="flex items-center justify-between">
+                    <Skeleton className="h-8 w-48" />
+                    <Skeleton className="h-6 w-24 rounded-full" />
+                  </div>
+
+                  {/* Recruitment Cards Skeleton */}
+                  <div className="space-y-4">
+                    {[...Array(3)].map((_, index) => (
+                      <Card key={index} className="hover:shadow-lg transition-shadow">
+                        <CardHeader>
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1 space-y-2">
+                              <div className="flex items-center gap-2">
+                                <Skeleton className="h-5 w-5 rounded" />
+                                <Skeleton className="h-6 w-64" />
+                              </div>
+                              <Skeleton className="h-4 w-96" />
+                            </div>
+                            <Skeleton className="h-6 w-20 rounded-full" />
+                          </div>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                          {/* Requirements */}
+                          <div className="space-y-2">
+                            <Skeleton className="h-4 w-20" />
+                            <div className="space-y-1">
+                              <Skeleton className="h-3 w-full" />
+                              <Skeleton className="h-3 w-5/6" />
+                            </div>
+                          </div>
+
+                          {/* Stats Grid */}
+                          <div className="grid grid-cols-3 gap-4 p-3 rounded-lg bg-accent/5">
+                            {[...Array(3)].map((_, i) => (
+                              <div key={i} className="space-y-1">
+                                <Skeleton className="h-3 w-16" />
+                                <Skeleton className="h-4 w-20" />
+                              </div>
+                            ))}
+                          </div>
+
+                          {/* Apply Button */}
+                          <Skeleton className="h-10 w-full rounded" />
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
                 </div>
               ) : (
                 <>
