@@ -144,21 +144,35 @@ public class RecruitmentController {
     // List applications for a recruitment
     @GetMapping("/{recruitmentId}/applications")
     public ResponseEntity<ApiResponse<PagedResponse<RecruitmentApplicationData>>> listApplications(
+            Authentication authentication,
             @PathVariable Long recruitmentId,
             @RequestParam(required = false) RecruitmentApplicationStatus status,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(defaultValue = "submittedDate,desc") String sort
-    ) {
+    ) throws AppException {
+        // Get current user from authentication
+        String email = authentication.getName();
+        User currentUser = userService.findByEmail(email)
+                .orElseThrow(() -> new AppException(ErrorCode.UNAUTHORIZED));
+        
         Pageable pageable = PageRequest.of(page, size, parseSort(sort));
-        PagedResponse<RecruitmentApplicationData> data = recruitmentService.listApplications(recruitmentId, status, pageable);
+        PagedResponse<RecruitmentApplicationData> data = recruitmentService.listApplications(currentUser.getId(), recruitmentId, status, pageable);
         return ResponseEntity.ok(ApiResponse.success(data));
     }
 
     // Get application by ID (path variable, should come after specific paths)
     @GetMapping("/applications/{applicationId}")
-    public ResponseEntity<ApiResponse<RecruitmentApplicationData>> getApplication(@PathVariable Long applicationId) throws AppException {
-        RecruitmentApplicationData data = recruitmentService.getApplication(applicationId);
+    public ResponseEntity<ApiResponse<RecruitmentApplicationData>> getApplication(
+            Authentication authentication,
+            @PathVariable Long applicationId
+    ) throws AppException {
+        // Get current user from authentication
+        String email = authentication.getName();
+        User currentUser = userService.findByEmail(email)
+                .orElseThrow(() -> new AppException(ErrorCode.UNAUTHORIZED));
+        
+        RecruitmentApplicationData data = recruitmentService.getApplication(currentUser.getId(), applicationId);
         return ResponseEntity.ok(ApiResponse.success(data));
     }
 
@@ -178,6 +192,21 @@ public class RecruitmentController {
         
         Pageable pageable = PageRequest.of(page, size, parseSort(sort));
         PagedResponse<RecruitmentApplicationData> data = recruitmentService.listMyApplications(currentUser.getId(), status, pageable);
+        return ResponseEntity.ok(ApiResponse.success(data));
+    }
+
+    // Get a specific application that the current user submitted
+    @GetMapping("/myApplications/{applicationId}")
+    public ResponseEntity<ApiResponse<RecruitmentApplicationData>> getMyApplication(
+            Authentication authentication,
+            @PathVariable Long applicationId
+    ) throws AppException {
+        // Get current user from authentication
+        String email = authentication.getName();
+        User currentUser = userService.findByEmail(email)
+                .orElseThrow(() -> new AppException(ErrorCode.UNAUTHORIZED));
+        
+        RecruitmentApplicationData data = recruitmentService.getMyApplication(currentUser.getId(), applicationId);
         return ResponseEntity.ok(ApiResponse.success(data));
     }
 

@@ -40,11 +40,11 @@ interface RecruitmentFormData {
   requirements?: string[];
   benefits?: string[];
   form_questions: EditableFormQuestion[];
-  teamOptionIds?: number[];
+  teamOptions?: Array<{ id: number; teamName: string; description?: string }>;
 }
 
 interface RecruitmentFormProps {
-  clubId: number;
+  clubId?: number;
   editingRecruitment: RecruitmentFormData | null;
   onSave: (data: RecruitmentCreateRequest, isEdit: boolean) => Promise<void>;
   onCancel: () => void;
@@ -105,7 +105,7 @@ export function RecruitmentForm({
   useEffect(() => {
     if (editingRecruitment) {
       console.log("Loading editing recruitment data:", editingRecruitment);
-      
+
       setNewRecruitment({
         title: editingRecruitment.title,
         description: editingRecruitment.description,
@@ -134,11 +134,17 @@ export function RecruitmentForm({
             ];
 
       setFormQuestions(questionsToLoad);
-      
+
       // Load team options immediately if available
-      if (editingRecruitment.teamOptionIds && editingRecruitment.teamOptionIds.length > 0) {
-        console.log("Setting team options from editing recruitment:", editingRecruitment.teamOptionIds);
-        setSelectedTeamIds(editingRecruitment.teamOptionIds);
+      if (
+        editingRecruitment.teamOptions &&
+        editingRecruitment.teamOptions.length > 0
+      ) {
+        console.log(
+          "Setting team options from editing recruitment:",
+          editingRecruitment.teamOptions
+        );
+        setSelectedTeamIds(editingRecruitment.teamOptions.map(t => t.id));
       } else {
         console.log("No team options in editing recruitment");
         setSelectedTeamIds([]);

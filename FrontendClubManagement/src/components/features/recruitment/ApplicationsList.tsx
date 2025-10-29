@@ -30,8 +30,6 @@ import {
   CheckCircle,
   XCircle,
   Eye,
-  BarChart3,
-  Download,
   MessageSquare,
   Loader2,
   Calendar,

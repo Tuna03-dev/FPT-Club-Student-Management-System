@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import {
   getMyApplications,
   getRecruitmentById,
+  getMyApplicationDetail,
 } from "@/service/RecruitmentService";
 import type {
   RecruitmentApplicationData,
@@ -330,7 +331,10 @@ export function StudentRecruitment() {
   ) => {
     try {
       setDetailLoading(true);
-      setSelectedApplicationDetail(application);
+
+      // Fetch full application details from the new API
+      const fullApplicationDetail = await getMyApplicationDetail(application.id);
+      setSelectedApplicationDetail(fullApplicationDetail);
 
       // Fetch recruitment details to get questions
       const recruitment = await getRecruitmentById(application.recruitmentId);

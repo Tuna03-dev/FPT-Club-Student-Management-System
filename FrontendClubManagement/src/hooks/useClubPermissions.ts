@@ -3,7 +3,7 @@ import { authService, type UserInfo } from "@/services/authService";
 import { useMyClubs } from "./useMyClubs";
 
 export interface ClubPermissions {
-  isClubOfficer: boolean;
+  isClubPresident: boolean;
   isClubMember: boolean;
   hasPermission: boolean;
   loading: boolean;
@@ -11,8 +11,10 @@ export interface ClubPermissions {
 }
 
 /**
- * Hook to check if user has permissions to manage club
- * Requires: CLUB_OFFICER system role AND active membership in the club
+ * Hook to check if user has permissions to manage club recruitment
+ * Requires: 
+ * - User must be an ACTIVE member of the club
+ * - User must have CLUB_PRESIDENT club role in the current semester
  */
 export function useClubPermissions(clubId: number | undefined): ClubPermissions {
   const [user, setUser] = useState<UserInfo | null>(null);
@@ -30,21 +32,24 @@ export function useClubPermissions(clubId: number | undefined): ClubPermissions 
     }
   }, [clubsLoading]);
 
-  // Check if user has CLUB_OFFICER system role
-  const isClubOfficer = user?.systemRole === "CLUB_OFFICER";
+  // Find the specific club
+  const userClub = clubId && myClubs ? myClubs.find((club) => club.clubId === clubId) : null;
 
   // Check if user is a member of this club
-  const isClubMember = !!(
-    clubId &&
-    myClubs &&
-    myClubs.some((club) => club.clubId === clubId)
+  const isClubMember = !!userClub;
+
+  // Check if user has CLUB_PRESIDENT role in this club
+  const isClubPresident = !!(
+    userClub &&
+    userClub.clubRoles &&
+    userClub.clubRoles.includes("CLUB_PRESIDENT")
   );
 
-  // User has permission if they are BOTH a club officer AND a member of this club
-  const hasPermission = isClubOfficer && isClubMember;
+  // User has permission if they have CLUB_PRESIDENT role in this club
+  const hasPermission = isClubPresident;
 
   return {
-    isClubOfficer,
+    isClubPresident,
     isClubMember,
     hasPermission,
     loading,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -22,6 +22,8 @@ import {
   CheckCircle,
   Loader2,
   Upload,
+  Calendar,
+  Users,
 } from "lucide-react";
 import {
   getRecruitmentById,
@@ -30,7 +32,6 @@ import {
   type ApplicationSubmitRequest,
 } from "@/service/RecruitmentService";
 import { getClubDetailById, type ClubDetailData } from "@/service/ClubService";
-import { getVisibleTeams } from "@/api/teams";
 import type { VisibleTeamDTO } from "@/types/team";
 
 interface ClubApplicationFormProps {
@@ -50,9 +51,23 @@ export function ClubApplicationForm({
   const [recruitment, setRecruitment] = useState<RecruitmentData | null>(null);
   const [club, setClub] = useState<ClubDetailData | null>(null);
   const [selectedTeamId, setSelectedTeamId] = useState<number | null>(null);
-  const [teams, setTeams] = useState<VisibleTeamDTO[]>([]);
-  const [loadingTeams, setLoadingTeams] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<Record<number, File>>({});
+
+  // Memoize teams to prevent order changes on re-render
+  const teams = useMemo<VisibleTeamDTO[]>(() => {
+    if (!recruitment?.teamOptions || recruitment.teamOptions.length === 0) {
+      return [];
+    }
+
+    // Map teamOptions to VisibleTeamDTO format, maintaining order from API
+    return recruitment.teamOptions.map((team) => ({
+      teamId: team.id,
+      teamName: team.teamName,
+      description: team.description || "",
+      memberCount: 0,
+      myRoles: [],
+    }));
+  }, [recruitment?.teamOptions]);
 
   // Fetch recruitment and club data
   useEffect(() => {
@@ -66,26 +81,6 @@ export function ClubApplicationForm({
 
         const clubData = await getClubDetailById(recruitmentData.clubId);
         setClub(clubData);
-
-        // Fetch teams if teamOptionIds is provided
-        if (
-          recruitmentData.teamOptionIds &&
-          recruitmentData.teamOptionIds.length > 0
-        ) {
-          setLoadingTeams(true);
-          try {
-            const allTeams = await getVisibleTeams(recruitmentData.clubId);
-            // Filter teams based on teamOptionIds
-            const availableTeams = allTeams.filter((team) =>
-              recruitmentData.teamOptionIds?.includes(team.teamId)
-            );
-            setTeams(availableTeams);
-          } catch (teamErr) {
-            console.error("Error fetching teams:", teamErr);
-          } finally {
-            setLoadingTeams(false);
-          }
-        }
       } catch (err) {
         console.error("Error fetching data:", err);
         setError("Không thể tải thông tin tuyển dụng");
@@ -374,6 +369,44 @@ export function ClubApplicationForm({
                   <CardDescription className="mt-2">
                     {recruitment.description}
                   </CardDescription>
+
+                  {/* Recruitment Info */}
+                  <div className="mt-4 flex flex-wrap gap-4">
+                    {/* Time Period */}
+                    <div className="flex items-center gap-2 text-sm">
+                      <Calendar className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-muted-foreground">
+                        {new Date(recruitment.startDate).toLocaleDateString(
+                          "vi-VN",
+                          {
+                            day: "2-digit",
+                            month: "2-digit",
+                            year: "numeric",
+                          }
+                        )}
+                        {" - "}
+                        {new Date(recruitment.endDate).toLocaleDateString(
+                          "vi-VN",
+                          {
+                            day: "2-digit",
+                            month: "2-digit",
+                            year: "numeric",
+                          }
+                        )}
+                      </span>
+                    </div>
+
+                    {/* Max Applicants */}
+                    {recruitment.maxApplicants && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <Users className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-muted-foreground">
+                          Số lượng: {recruitment.maxApplicants} người
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
                   {recruitment.requirements && (
                     <div className="mt-4">
                       <p className="text-sm font-medium mb-2">Yêu cầu:</p>
@@ -391,51 +424,53 @@ export function ClubApplicationForm({
           {teams.length > 0 && (
             <Card className="mt-6">
               <CardHeader>
-                <CardTitle>Chọn phòng ban</CardTitle>
+                <div className="flex items-center justify-between">
+                  <CardTitle>Chọn phòng ban</CardTitle>
+                  <Badge
+                    variant="secondary"
+                    className="bg-orange-100 text-orange-700 hover:bg-orange-200"
+                  >
+                    Bắt buộc
+                  </Badge>
+                </div>
                 <CardDescription>
                   Vui lòng chọn phòng ban bạn muốn ứng tuyển
                 </CardDescription>
               </CardHeader>
 
               <CardContent>
-                {loadingTeams ? (
-                  <div className="flex items-center justify-center py-4">
-                    <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                  </div>
-                ) : (
-                  <RadioGroup
-                    value={selectedTeamId?.toString() || ""}
-                    onValueChange={(value) => setSelectedTeamId(Number(value))}
-                    className="space-y-3"
-                  >
-                    {teams.map((team) => (
-                      <div
-                        key={team.teamId}
-                        className="flex items-start space-x-3 p-4 border rounded-lg hover:bg-accent/5 transition-colors cursor-pointer"
-                        onClick={() => setSelectedTeamId(team.teamId)}
-                      >
-                        <RadioGroupItem
-                          value={team.teamId.toString()}
-                          id={`team-${team.teamId}`}
-                          className="mt-1"
-                        />
-                        <div className="flex-1">
-                          <Label
-                            htmlFor={`team-${team.teamId}`}
-                            className="font-medium cursor-pointer"
-                          >
-                            {team.teamName}
-                          </Label>
-                          {team.description && (
-                            <p className="text-sm text-muted-foreground mt-1">
-                              {team.description}
-                            </p>
-                          )}
-                        </div>
+                <RadioGroup
+                  value={selectedTeamId?.toString() || ""}
+                  onValueChange={(value) => setSelectedTeamId(Number(value))}
+                  className="space-y-3"
+                >
+                  {teams.map((team) => (
+                    <div
+                      key={team.teamId}
+                      className="flex items-start space-x-3 p-4 border rounded-lg hover:bg-accent/5 transition-colors cursor-pointer"
+                      onClick={() => setSelectedTeamId(team.teamId)}
+                    >
+                      <RadioGroupItem
+                        value={team.teamId.toString()}
+                        id={`team-${team.teamId}`}
+                        className="mt-1"
+                      />
+                      <div className="flex-1">
+                        <Label
+                          htmlFor={`team-${team.teamId}`}
+                          className="font-medium cursor-pointer"
+                        >
+                          {team.teamName}
+                        </Label>
+                        {team.description && (
+                          <p className="text-sm text-muted-foreground mt-1">
+                            {team.description}
+                          </p>
+                        )}
                       </div>
-                    ))}
-                  </RadioGroup>
-                )}
+                    </div>
+                  ))}
+                </RadioGroup>
               </CardContent>
             </Card>
           )}
@@ -679,7 +714,9 @@ export function ClubApplicationForm({
                               htmlFor={`file-url-${question.id}`}
                               className="text-sm"
                             >
-                              Link file (Google Drive, Dropbox, v.v.)
+                              Link file (Google Drive, Dropbox, v.v.) nếu như
+                              file vượt quá dung lượng hoặc các định dạng file
+                              khác.
                             </Label>
                             <Input
                               id={`file-url-${question.id}`}
@@ -736,7 +773,7 @@ export function ClubApplicationForm({
                     <li>
                       Đơn ứng tuyển sẽ được xem xét trong vòng 3-5 ngày làm việc
                     </li>
-                    <li>Bạn sẽ nhận được thông báo qua email về kết quả</li>
+                    {/* <li>Bạn sẽ nhận được thông báo qua email về kết quả</li> */}
                   </ul>
                 </div>
               </div>

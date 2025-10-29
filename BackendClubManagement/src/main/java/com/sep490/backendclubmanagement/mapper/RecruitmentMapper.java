@@ -58,12 +58,16 @@ public interface RecruitmentMapper {
             builder.questions(questionData);
         }
         
-        // Map teamOptions - extract team IDs
+        // Map teamOptions - extract team information
         if (recruitment.getTeamOptions() != null && !recruitment.getTeamOptions().isEmpty()) {
-            List<Long> teamOptionIds = recruitment.getTeamOptions().stream()
-                    .map(teamOption -> teamOption.getTeam().getId())
+            List<com.sep490.backendclubmanagement.dto.response.TeamOptionData> teamOptions = recruitment.getTeamOptions().stream()
+                    .map(teamOption -> com.sep490.backendclubmanagement.dto.response.TeamOptionData.builder()
+                            .id(teamOption.getTeam().getId())
+                            .teamName(teamOption.getTeam().getTeamName())
+                            .description(teamOption.getTeam().getDescription())
+                            .build())
                     .collect(Collectors.toList());
-            builder.teamOptionIds(teamOptionIds);
+            builder.teamOptions(teamOptions);
         }
         
         return builder.build();

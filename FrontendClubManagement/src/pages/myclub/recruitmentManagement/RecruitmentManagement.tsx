@@ -91,7 +91,7 @@ interface Recruitment {
   requirements?: string[];
   benefits?: string[];
   form_questions: RecruitmentForm[];
-  teamOptionIds?: number[];
+  teamOptions?: Array<{ id: number; teamName: string; description?: string }>;
   applications: RecruitmentApplication[];
   created_at: string;
   updated_at: string;
@@ -115,7 +115,7 @@ export function RecruitmentManagement() {
   const params = useParams();
   const clubIdParam = params.clubId;
   const clubId = clubIdParam ? Number(clubIdParam) : undefined;
-  
+
   const [activeTab, setActiveTab] = useState<
     "list" | "create" | "applications"
   >("list");
@@ -151,7 +151,7 @@ export function RecruitmentManagement() {
   // Function to fetch recruitments
   const fetchRecruitments = useCallback(async () => {
     if (!clubId) return;
-    
+
     setLoading(true);
     setError(null);
     try {
@@ -194,7 +194,7 @@ export function RecruitmentManagement() {
           options: q.options,
           required: q.isRequired === 1, // Map from API isRequired field
         })),
-        teamOptionIds: r.teamOptionIds,
+        teamOptions: r.teamOptions,
         applications: [], // Will be fetched separately when needed
         created_at: r.createdAt,
         updated_at: r.updatedAt,
@@ -331,14 +331,14 @@ export function RecruitmentManagement() {
           options: q.options,
           required: q.isRequired === 1, // Map from API isRequired field
         })),
-        teamOptionIds: freshData.teamOptionIds, // Map team options
+        teamOptions: freshData.teamOptions, // Map team options
         applications: [],
         created_at: freshData.createdAt,
         updated_at: freshData.updatedAt,
       };
 
       console.log("Mapped recruitment for editing:", mappedRecruitment);
-      console.log("Team options from API:", freshData.teamOptionIds);
+      console.log("Team options from API:", freshData.teamOptions);
 
       // Load recruitment data into form
       setEditingRecruitment(mappedRecruitment);
@@ -411,8 +411,12 @@ export function RecruitmentManagement() {
   ) => {
     try {
       // Convert status to API format
-      const apiStatus = newStatus.toUpperCase() as "UNDER_REVIEW" | "ACCEPTED" | "REJECTED" | "INTERVIEW";
-      
+      const apiStatus = newStatus.toUpperCase() as
+        | "UNDER_REVIEW"
+        | "ACCEPTED"
+        | "REJECTED"
+        | "INTERVIEW";
+
       // Call API to update application status
       const updatedApplication = await updateApplicationStatus(
         parseInt(applicationId),
@@ -421,16 +425,17 @@ export function RecruitmentManagement() {
       );
 
       // Map response back to component format
-      const mappedStatus = updatedApplication.status.toLowerCase() as ApplicationStatus;
+      const mappedStatus =
+        updatedApplication.status.toLowerCase() as ApplicationStatus;
 
       // Update local state
       setApplications((prevApplications) =>
         prevApplications.map((app) =>
           app.application_id === applicationId
-            ? { 
-                ...app, 
-                status: mappedStatus, 
-                notes: updatedApplication.reviewNotes 
+            ? {
+                ...app,
+                status: mappedStatus,
+                notes: updatedApplication.reviewNotes,
               }
             : app
         )
@@ -442,10 +447,10 @@ export function RecruitmentManagement() {
           ...selectedRecruitment,
           applications: selectedRecruitment.applications.map((app) =>
             app.application_id === applicationId
-              ? { 
-                  ...app, 
-                  status: mappedStatus, 
-                  notes: updatedApplication.reviewNotes 
+              ? {
+                  ...app,
+                  status: mappedStatus,
+                  notes: updatedApplication.reviewNotes,
                 }
               : app
           ),
@@ -459,7 +464,7 @@ export function RecruitmentManagement() {
         rejected: "đã từ chối",
         interview: "đã mời phỏng vấn",
       }[mappedStatus];
-      
+
       toast.success(`Đã cập nhật trạng thái đơn thành ${statusText}!`);
     } catch (err: any) {
       console.error("Error updating application status:", err);
@@ -557,475 +562,481 @@ export function RecruitmentManagement() {
                   Tạo và quản lý các đợt tuyển thành viên mới
                 </p>
               </div>
-            <div className="flex gap-2">
-              <Button
-                variant={activeTab === "list" ? "secondary" : "outline"}
-                onClick={() => setActiveTab("list")}
-                className="border-primary/30 hover:bg-primary hover:text-primary-foreground hover:border-primary shadow-sm hover:shadow-glow transition-all"
-              >
-                <FileText className="h-4 w-4 mr-2" />
-                Danh sách
-              </Button>
-              <Button
-                variant={activeTab === "create" ? "secondary" : "outline"}
-                onClick={() => {
-                  setEditingRecruitment(null);
-                  setActiveTab("create");
-                }}
-                className="border-primary/30 hover:bg-primary hover:text-primary-foreground hover:border-primary shadow-sm hover:shadow-glow transition-all"
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Tạo mới
-              </Button>
-              {selectedRecruitment && (
+              <div className="flex gap-2">
                 <Button
-                  variant={
-                    activeTab === "applications" ? "secondary" : "outline"
-                  }
-                  onClick={() => setActiveTab("applications")}
-                  className="bg-transparent border-primary-foreground/20"
+                  variant={activeTab === "list" ? "secondary" : "outline"}
+                  onClick={() => setActiveTab("list")}
+                  className="border-primary/30 hover:bg-primary hover:text-primary-foreground hover:border-primary shadow-sm hover:shadow-glow transition-all"
                 >
-                  <Users className="h-4 w-4 mr-2" />
-                  Đơn ứng tuyển
+                  <FileText className="h-4 w-4 mr-2" />
+                  Danh sách
                 </Button>
-              )}
+                <Button
+                  variant={activeTab === "create" ? "secondary" : "outline"}
+                  onClick={() => {
+                    setEditingRecruitment(null);
+                    setActiveTab("create");
+                  }}
+                  className="border-primary/30 hover:bg-primary hover:text-primary-foreground hover:border-primary shadow-sm hover:shadow-glow transition-all"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Tạo mới
+                </Button>
+                {selectedRecruitment && (
+                  <Button
+                    variant={
+                      activeTab === "applications" ? "secondary" : "outline"
+                    }
+                    onClick={() => setActiveTab("applications")}
+                    className="bg-transparent border-primary-foreground/20"
+                  >
+                    <Users className="h-4 w-4 mr-2" />
+                    Đơn ứng tuyển
+                  </Button>
+                )}
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      <div className="container mx-auto px-4 py-8">
-        {/* Recruitment List Tab */}
-        {activeTab === "list" && (
-          <div className="space-y-6">
-            {/* Search and Filters */}
-            <div className="flex flex-col sm:flex-row gap-4">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-                <Input
-                  placeholder="Tìm kiếm đợt tuyển dụng..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-              <Select
-                value={statusFilter}
-                onValueChange={(value) =>
-                  setStatusFilter(value as RecruitmentStatus | "all")
-                }
-              >
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="Trạng thái" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tất cả trạng thái</SelectItem>
-                  <SelectItem value="draft">Bản nháp</SelectItem>
-                  <SelectItem value="open">Đang mở</SelectItem>
-                  <SelectItem value="closed">Đã đóng</SelectItem>
-                  <SelectItem value="cancelled">Đã hủy</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Loading State */}
-            {loading && (
-              <div className="flex items-center justify-center py-12">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                <span className="ml-2 text-muted-foreground">Đang tải...</span>
-              </div>
-            )}
-
-            {/* Error State */}
-            {error && !loading && (
-              <div className="text-center py-12">
-                <p className="text-red-500 mb-4">{error}</p>
-                <Button
-                  variant="outline"
-                  onClick={() => window.location.reload()}
+        <div className="container mx-auto px-4 py-8">
+          {/* Recruitment List Tab */}
+          {activeTab === "list" && (
+            <div className="space-y-6">
+              {/* Search and Filters */}
+              <div className="flex flex-col sm:flex-row gap-4">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                  <Input
+                    placeholder="Tìm kiếm đợt tuyển dụng..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+                <Select
+                  value={statusFilter}
+                  onValueChange={(value) =>
+                    setStatusFilter(value as RecruitmentStatus | "all")
+                  }
                 >
-                  Thử lại
-                </Button>
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Trạng thái" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tất cả trạng thái</SelectItem>
+                    <SelectItem value="draft">Bản nháp</SelectItem>
+                    <SelectItem value="open">Đang mở</SelectItem>
+                    <SelectItem value="closed">Đã đóng</SelectItem>
+                    <SelectItem value="cancelled">Đã hủy</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-            )}
 
-            {/* Recruitment Cards */}
-            {!loading && !error && (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {filteredRecruitments.map((recruitment) => (
-                  <Card
-                    key={recruitment.recruitment_id}
-                    className="hover:shadow-lg transition-shadow"
+              {/* Loading State */}
+              {loading && (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                  <span className="ml-2 text-muted-foreground">
+                    Đang tải...
+                  </span>
+                </div>
+              )}
+
+              {/* Error State */}
+              {error && !loading && (
+                <div className="text-center py-12">
+                  <p className="text-red-500 mb-4">{error}</p>
+                  <Button
+                    variant="outline"
+                    onClick={() => window.location.reload()}
                   >
-                    <CardHeader>
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <CardTitle className="text-lg mb-2">
-                            {recruitment.title}
-                          </CardTitle>
-                          <div className="flex items-center gap-2 mb-2">
-                            <Badge className={statusColors[recruitment.status]}>
-                              {statusLabels[recruitment.status]}
-                            </Badge>
-                            {recruitment.status === "closed" && (
+                    Thử lại
+                  </Button>
+                </div>
+              )}
+
+              {/* Recruitment Cards */}
+              {!loading && !error && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {filteredRecruitments.map((recruitment) => (
+                    <Card
+                      key={recruitment.recruitment_id}
+                      className="hover:shadow-lg transition-shadow"
+                    >
+                      <CardHeader>
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <CardTitle className="text-lg mb-2">
+                              {recruitment.title}
+                            </CardTitle>
+                            <div className="flex items-center gap-2 mb-2">
                               <Badge
-                                variant="outline"
-                                className="text-xs text-muted-foreground"
+                                className={statusColors[recruitment.status]}
                               >
-                                🔒 Không thể chỉnh sửa
+                                {statusLabels[recruitment.status]}
                               </Badge>
-                            )}
-                            {/* <Badge variant="outline" className="text-xs">
+                              {recruitment.status === "closed" && (
+                                <Badge
+                                  variant="outline"
+                                  className="text-xs text-muted-foreground"
+                                >
+                                  🔒 Không thể chỉnh sửa
+                                </Badge>
+                              )}
+                              {/* <Badge variant="outline" className="text-xs">
                               {recruitment.semester_name}
                             </Badge> */}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <p className="text-sm text-muted-foreground mb-4 line-clamp-3">
-                        {recruitment.description}
-                      </p>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-sm text-muted-foreground mb-4 line-clamp-3">
+                          {recruitment.description}
+                        </p>
 
-                      <div className="grid grid-cols-2 gap-4 mb-4 text-sm">
-                        <div>
-                          <span className="text-muted-foreground">
-                            Bắt đầu:
-                          </span>
-                          <div className="font-medium">
-                            {new Date(
-                              recruitment.start_date
-                            ).toLocaleDateString("vi-VN")}
+                        <div className="grid grid-cols-2 gap-4 mb-4 text-sm">
+                          <div>
+                            <span className="text-muted-foreground">
+                              Bắt đầu:
+                            </span>
+                            <div className="font-medium">
+                              {new Date(
+                                recruitment.start_date
+                              ).toLocaleDateString("vi-VN")}
+                            </div>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">
+                              Kết thúc:
+                            </span>
+                            <div className="font-medium">
+                              {new Date(
+                                recruitment.end_date
+                              ).toLocaleDateString("vi-VN")}
+                            </div>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">
+                              Đơn ứng tuyển:
+                            </span>
+                            <div className="font-medium">
+                              {recruitment.applications.length}
+                              {recruitment.max_applications &&
+                                ` / ${recruitment.max_applications}`}
+                            </div>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">
+                              Đã duyệt:
+                            </span>
+                            <div className="font-medium text-green-600">
+                              {
+                                recruitment.applications.filter(
+                                  (app) => app.status === "accepted"
+                                ).length
+                              }
+                            </div>
                           </div>
                         </div>
-                        <div>
-                          <span className="text-muted-foreground">
-                            Kết thúc:
-                          </span>
-                          <div className="font-medium">
-                            {new Date(recruitment.end_date).toLocaleDateString(
-                              "vi-VN"
-                            )}
-                          </div>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">
-                            Đơn ứng tuyển:
-                          </span>
-                          <div className="font-medium">
-                            {recruitment.applications.length}
-                            {recruitment.max_applications &&
-                              ` / ${recruitment.max_applications}`}
-                          </div>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">
-                            Đã duyệt:
-                          </span>
-                          <div className="font-medium text-green-600">
-                            {
-                              recruitment.applications.filter(
-                                (app) => app.status === "accepted"
-                              ).length
-                            }
-                          </div>
-                        </div>
-                      </div>
 
-                      <div className="flex gap-2 flex-wrap">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setSelectedRecruitment(recruitment);
-                            setActiveTab("applications");
-                          }}
-                          className="bg-transparent"
-                        >
-                          <Eye className="h-4 w-4 mr-2" />
-                          Xem đơn
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="bg-transparent"
-                          onClick={() => handleEditRecruitment(recruitment)}
-                          disabled={recruitment.status === "closed"}
-                          title={
-                            recruitment.status === "closed"
-                              ? "Không thể chỉnh sửa đợt tuyển dụng đã đóng"
-                              : "Chỉnh sửa đợt tuyển dụng"
-                          }
-                        >
-                          <Edit className="h-4 w-4 mr-2" />
-                          Chỉnh sửa
-                        </Button>
-                        {recruitment.status === "draft" && (
+                        <div className="flex gap-2 flex-wrap">
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() =>
-                              showStatusChangeDialog(
-                                recruitment.recruitment_id,
-                                "OPEN",
-                                recruitment.title
-                              )
-                            }
-                            disabled={
-                              changingStatusId === recruitment.recruitment_id
-                            }
-                            className="bg-transparent text-green-600 border-green-200 hover:bg-green-50 hover:text-green-700"
+                            onClick={() => {
+                              setSelectedRecruitment(recruitment);
+                              setActiveTab("applications");
+                            }}
+                            className="bg-transparent"
                           >
-                            {changingStatusId === recruitment.recruitment_id ? (
-                              <>
-                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                Đang xử lý...
-                              </>
-                            ) : (
-                              <>
-                                <Unlock className="h-4 w-4 mr-2" />
-                                Mở đơn
-                              </>
-                            )}
+                            <Eye className="h-4 w-4 mr-2" />
+                            Xem đơn
                           </Button>
-                        )}
-                        {recruitment.status === "open" && (
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() =>
-                              showStatusChangeDialog(
-                                recruitment.recruitment_id,
-                                "CLOSED",
-                                recruitment.title
-                              )
+                            className="bg-transparent"
+                            onClick={() => handleEditRecruitment(recruitment)}
+                            disabled={recruitment.status === "closed"}
+                            title={
+                              recruitment.status === "closed"
+                                ? "Không thể chỉnh sửa đợt tuyển dụng đã đóng"
+                                : "Chỉnh sửa đợt tuyển dụng"
                             }
-                            disabled={
-                              changingStatusId === recruitment.recruitment_id
-                            }
-                            className="bg-transparent text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
                           >
-                            {changingStatusId === recruitment.recruitment_id ? (
-                              <>
-                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                Đang xử lý...
-                              </>
-                            ) : (
-                              <>
-                                <Lock className="h-4 w-4 mr-2" />
-                                Đóng đơn
-                              </>
-                            )}
+                            <Edit className="h-4 w-4 mr-2" />
+                            Chỉnh sửa
                           </Button>
-                        )}
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="bg-transparent"
-                          disabled={recruitment.status === "closed"}
-                        >
-                          <Share2 className="h-4 w-4 mr-2" />
-                          Chia sẻ
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
+                          {recruitment.status === "draft" && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                showStatusChangeDialog(
+                                  recruitment.recruitment_id,
+                                  "OPEN",
+                                  recruitment.title
+                                )
+                              }
+                              disabled={
+                                changingStatusId === recruitment.recruitment_id
+                              }
+                              className="bg-transparent text-green-600 border-green-200 hover:bg-green-50 hover:text-green-700"
+                            >
+                              {changingStatusId ===
+                              recruitment.recruitment_id ? (
+                                <>
+                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                  Đang xử lý...
+                                </>
+                              ) : (
+                                <>
+                                  <Unlock className="h-4 w-4 mr-2" />
+                                  Mở đơn
+                                </>
+                              )}
+                            </Button>
+                          )}
+                          {recruitment.status === "open" && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                showStatusChangeDialog(
+                                  recruitment.recruitment_id,
+                                  "CLOSED",
+                                  recruitment.title
+                                )
+                              }
+                              disabled={
+                                changingStatusId === recruitment.recruitment_id
+                              }
+                              className="bg-transparent text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
+                            >
+                              {changingStatusId ===
+                              recruitment.recruitment_id ? (
+                                <>
+                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                  Đang xử lý...
+                                </>
+                              ) : (
+                                <>
+                                  <Lock className="h-4 w-4 mr-2" />
+                                  Đóng đơn
+                                </>
+                              )}
+                            </Button>
+                          )}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="bg-transparent"
+                            disabled={recruitment.status === "closed"}
+                          >
+                            <Share2 className="h-4 w-4 mr-2" />
+                            Chia sẻ
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
 
-            {!loading && !error && filteredRecruitments.length === 0 && (
-              <div className="text-center py-12">
-                <FileText className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
-                <p className="text-muted-foreground">
-                  Không tìm thấy đợt tuyển dụng nào
-                </p>
-                <Button
-                  variant="outline"
-                  className="mt-4 bg-transparent"
-                  onClick={() => setActiveTab("create")}
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Tạo đợt tuyển dụng mới
-                </Button>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Create/Edit Recruitment Tab */}
-        {activeTab === "create" && (
-          <RecruitmentForm
-            clubId={clubId}
-            editingRecruitment={editingRecruitment}
-            onSave={handleSaveRecruitment}
-            onCancel={handleCancelForm}
-            createLoading={createLoading}
-          />
-        )}
-
-        {/* Applications Tab */}
-        {activeTab === "applications" && selectedRecruitment && (
-          <ApplicationsList
-            selectedRecruitment={selectedRecruitment}
-            applications={applications}
-            applicationsLoading={applicationsLoading}
-            onUpdateApplicationStatus={handleUpdateApplicationStatus}
-          />
-        )}
-      </div>
-
-      {/* Status Change Confirmation Dialog */}
-      <Dialog
-        open={statusChangeDialog?.open || false}
-        onOpenChange={(open) => !open && setStatusChangeDialog(null)}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <div className="flex items-center gap-3">
-              <div
-                className={`p-3 rounded-full ${
-                  statusChangeDialog?.newStatus === "OPEN"
-                    ? "bg-green-100"
-                    : "bg-red-100"
-                }`}
-              >
-                <AlertTriangle
-                  className={`h-6 w-6 ${
-                    statusChangeDialog?.newStatus === "OPEN"
-                      ? "text-green-600"
-                      : "text-red-600"
-                  }`}
-                />
-              </div>
-              <div>
-                <DialogTitle>
-                  {statusChangeDialog?.newStatus === "OPEN"
-                    ? "Xác nhận mở đơn tuyển dụng"
-                    : "Xác nhận đóng đơn tuyển dụng"}
-                </DialogTitle>
-              </div>
+              {!loading && !error && filteredRecruitments.length === 0 && (
+                <div className="text-center py-12">
+                  <FileText className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
+                  <p className="text-muted-foreground">
+                    Không tìm thấy đợt tuyển dụng nào
+                  </p>
+                  <Button
+                    variant="outline"
+                    className="mt-4 bg-transparent"
+                    onClick={() => setActiveTab("create")}
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Tạo đợt tuyển dụng mới
+                  </Button>
+                </div>
+              )}
             </div>
-          </DialogHeader>
-          <DialogDescription className="py-4">
-            <div className="space-y-3">
-              <p className="text-base">
-                {statusChangeDialog?.newStatus === "OPEN" ? (
+          )}
+
+          {/* Create/Edit Recruitment Tab */}
+          {activeTab === "create" && (
+            <RecruitmentForm
+              clubId={clubId}
+              editingRecruitment={editingRecruitment}
+              onSave={handleSaveRecruitment}
+              onCancel={handleCancelForm}
+              createLoading={createLoading}
+            />
+          )}
+
+          {/* Applications Tab */}
+          {activeTab === "applications" && selectedRecruitment && (
+            <ApplicationsList
+              selectedRecruitment={selectedRecruitment}
+              applications={applications}
+              applicationsLoading={applicationsLoading}
+              onUpdateApplicationStatus={handleUpdateApplicationStatus}
+            />
+          )}
+        </div>
+
+        {/* Status Change Confirmation Dialog */}
+        <Dialog
+          open={statusChangeDialog?.open || false}
+          onOpenChange={(open) => !open && setStatusChangeDialog(null)}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <div className="flex items-center gap-3">
+                <div
+                  className={`p-3 rounded-full ${
+                    statusChangeDialog?.newStatus === "OPEN"
+                      ? "bg-green-100"
+                      : "bg-red-100"
+                  }`}
+                >
+                  <AlertTriangle
+                    className={`h-6 w-6 ${
+                      statusChangeDialog?.newStatus === "OPEN"
+                        ? "text-green-600"
+                        : "text-red-600"
+                    }`}
+                  />
+                </div>
+                <div>
+                  <DialogTitle>
+                    {statusChangeDialog?.newStatus === "OPEN"
+                      ? "Xác nhận mở đơn tuyển dụng"
+                      : "Xác nhận đóng đơn tuyển dụng"}
+                  </DialogTitle>
+                </div>
+              </div>
+            </DialogHeader>
+            <DialogDescription className="py-4">
+              <div className="space-y-3">
+                <p className="text-base">
+                  {statusChangeDialog?.newStatus === "OPEN" ? (
+                    <>
+                      Bạn có chắc chắn muốn{" "}
+                      <strong className="text-green-600">mở đơn</strong> cho đợt
+                      tuyển dụng:
+                    </>
+                  ) : (
+                    <>
+                      Bạn có chắc chắn muốn{" "}
+                      <strong className="text-red-600">đóng đơn</strong> cho đợt
+                      tuyển dụng:
+                    </>
+                  )}
+                </p>
+                <div className="bg-muted p-3 rounded-lg">
+                  <p className="font-medium text-foreground">
+                    "{statusChangeDialog?.title}"
+                  </p>
+                </div>
+                {statusChangeDialog?.newStatus === "OPEN" && (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                    <p className="text-sm text-green-800">
+                      ✓ Sinh viên sẽ có thể nộp đơn ứng tuyển sau khi mở
+                    </p>
+                  </div>
+                )}
+                {statusChangeDialog?.newStatus === "CLOSED" && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                    <p className="text-sm text-red-800">
+                      ⚠️ Sau khi đóng, đợt tuyển dụng sẽ không thể chỉnh sửa và
+                      sinh viên không thể nộp đơn nữa
+                    </p>
+                  </div>
+                )}
+              </div>
+            </DialogDescription>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setStatusChangeDialog(null)}
+                disabled={changingStatusId !== null}
+              >
+                Hủy
+              </Button>
+              <Button
+                onClick={confirmStatusChange}
+                disabled={changingStatusId !== null}
+                className={
+                  statusChangeDialog?.newStatus === "OPEN"
+                    ? "bg-green-600 hover:bg-green-700"
+                    : "bg-red-600 hover:bg-red-700"
+                }
+              >
+                {changingStatusId ? (
                   <>
-                    Bạn có chắc chắn muốn{" "}
-                    <strong className="text-green-600">mở đơn</strong> cho đợt
-                    tuyển dụng:
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Đang xử lý...
                   </>
                 ) : (
                   <>
-                    Bạn có chắc chắn muốn{" "}
-                    <strong className="text-red-600">đóng đơn</strong> cho đợt
-                    tuyển dụng:
+                    {statusChangeDialog?.newStatus === "OPEN"
+                      ? "Mở đơn"
+                      : "Đóng đơn"}
                   </>
                 )}
-              </p>
-              <div className="bg-muted p-3 rounded-lg">
-                <p className="font-medium text-foreground">
-                  "{statusChangeDialog?.title}"
-                </p>
-              </div>
-              {statusChangeDialog?.newStatus === "OPEN" && (
-                <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-                  <p className="text-sm text-green-800">
-                    ✓ Sinh viên sẽ có thể nộp đơn ứng tuyển sau khi mở
-                  </p>
-                </div>
-              )}
-              {statusChangeDialog?.newStatus === "CLOSED" && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-                  <p className="text-sm text-red-800">
-                    ⚠️ Sau khi đóng, đợt tuyển dụng sẽ không thể chỉnh sửa và
-                    sinh viên không thể nộp đơn nữa
-                  </p>
-                </div>
-              )}
-            </div>
-          </DialogDescription>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setStatusChangeDialog(null)}
-              disabled={changingStatusId !== null}
-            >
-              Hủy
-            </Button>
-            <Button
-              onClick={confirmStatusChange}
-              disabled={changingStatusId !== null}
-              className={
-                statusChangeDialog?.newStatus === "OPEN"
-                  ? "bg-green-600 hover:bg-green-700"
-                  : "bg-red-600 hover:bg-red-700"
-              }
-            >
-              {changingStatusId ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Đang xử lý...
-                </>
-              ) : (
-                <>
-                  {statusChangeDialog?.newStatus === "OPEN"
-                    ? "Mở đơn"
-                    : "Đóng đơn"}
-                </>
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
-      {/* Cancel Form Confirmation Dialog */}
-      <Dialog open={cancelFormDialog} onOpenChange={setCancelFormDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <div className="flex items-center gap-3">
-              <div className="p-3 rounded-full bg-amber-100">
-                <AlertTriangle className="h-6 w-6 text-amber-600" />
+        {/* Cancel Form Confirmation Dialog */}
+        <Dialog open={cancelFormDialog} onOpenChange={setCancelFormDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <div className="flex items-center gap-3">
+                <div className="p-3 rounded-full bg-amber-100">
+                  <AlertTriangle className="h-6 w-6 text-amber-600" />
+                </div>
+                <div>
+                  <DialogTitle>Xác nhận hủy thao tác</DialogTitle>
+                </div>
               </div>
-              <div>
-                <DialogTitle>Xác nhận hủy thao tác</DialogTitle>
-              </div>
-            </div>
-          </DialogHeader>
-          <DialogDescription className="py-4">
-            <div className="space-y-3">
-              <p className="text-base">
-                Bạn có chắc chắn muốn hủy{" "}
-                {editingRecruitment ? "chỉnh sửa" : "tạo mới"} đợt tuyển dụng?
-              </p>
-              {editingRecruitment && (
-                <div className="bg-muted p-3 rounded-lg">
-                  <p className="font-medium text-foreground">
-                    "{editingRecruitment.title}"
+            </DialogHeader>
+            <DialogDescription className="py-4">
+              <div className="space-y-3">
+                <p className="text-base">
+                  Bạn có chắc chắn muốn hủy{" "}
+                  {editingRecruitment ? "chỉnh sửa" : "tạo mới"} đợt tuyển dụng?
+                </p>
+                {editingRecruitment && (
+                  <div className="bg-muted p-3 rounded-lg">
+                    <p className="font-medium text-foreground">
+                      "{editingRecruitment.title}"
+                    </p>
+                  </div>
+                )}
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                  <p className="text-sm text-amber-800">
+                    ⚠️ Các thay đổi chưa lưu sẽ bị mất
                   </p>
                 </div>
-              )}
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-                <p className="text-sm text-amber-800">
-                  ⚠️ Các thay đổi chưa lưu sẽ bị mất
-                </p>
               </div>
-            </div>
-          </DialogDescription>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setCancelFormDialog(false)}
-            >
-              Tiếp tục chỉnh sửa
-            </Button>
-            <Button variant="destructive" onClick={confirmCancelForm}>
-              Hủy bỏ
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            </DialogDescription>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setCancelFormDialog(false)}
+              >
+                Tiếp tục chỉnh sửa
+              </Button>
+              <Button variant="destructive" onClick={confirmCancelForm}>
+                Hủy bỏ
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </ClubPermissionGuard>
   );

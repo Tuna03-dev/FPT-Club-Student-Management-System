@@ -3,7 +3,7 @@ import type { ApiResponse } from "@/types/api";
 import type { VisibleTeamDTO, MyTeamDetailDTO } from "@/types/team";
 
 export async function getVisibleTeams(
-  clubId: number,
+  clubId?: number,
   semesterId?: number
 ): Promise<VisibleTeamDTO[]> {
   const res = await axiosClient.get<VisibleTeamDTO[]>(
@@ -23,6 +23,7 @@ export async function getTeamDetail(
     `/management/clubs/${clubId}/team/${teamId}`, // BE của bạn là `/team/:teamId`
     { params: { semesterId } }
   );
-  if (res.code !== 200) throw new Error(res.message || "Failed to fetch team detail");
+  if (res.code !== 200)
+    throw new Error(res.message || "Failed to fetch team detail");
   return res.data!;
 }

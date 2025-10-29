@@ -20,9 +20,10 @@ public interface RecruitmentServiceInterface {
     void deleteRecruitment(Long userId, Long id) throws AppException;
 
     // Application management
-    PagedResponse<RecruitmentApplicationData> listApplications(Long recruitmentId, RecruitmentApplicationStatus status, Pageable pageable);
+    PagedResponse<RecruitmentApplicationData> listApplications(Long userId, Long recruitmentId, RecruitmentApplicationStatus status, Pageable pageable) throws AppException;
     PagedResponse<RecruitmentApplicationData> listMyApplications(Long applicantId, RecruitmentApplicationStatus status, Pageable pageable);
     RecruitmentApplicationData submitApplication(Long applicantId, ApplicationSubmitRequest request) throws AppException;
-    RecruitmentApplicationData getApplication(Long applicationId) throws AppException;
+    RecruitmentApplicationData getApplication(Long userId, Long applicationId) throws AppException;
+    RecruitmentApplicationData getMyApplication(Long applicantId, Long applicationId) throws AppException;
     RecruitmentApplicationData reviewApplication(Long userId, ApplicationReviewRequest request) throws AppException;
 }

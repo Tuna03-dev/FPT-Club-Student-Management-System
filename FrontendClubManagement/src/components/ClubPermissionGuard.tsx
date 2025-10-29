@@ -1,4 +1,4 @@
-import { ReactNode } from "react";
+import type { ReactNode } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, ShieldAlert, UserX, Loader2 } from "lucide-react";
@@ -11,14 +11,14 @@ interface ClubPermissionGuardProps {
 }
 
 /**
- * Component to protect routes that require CLUB_OFFICER role and club membership
+ * Component to protect routes that require CLUB_PRESIDENT role
  */
 export function ClubPermissionGuard({
   clubId,
   children,
 }: ClubPermissionGuardProps) {
   const navigate = useNavigate();
-  const { isClubOfficer, isClubMember, hasPermission, loading, user } =
+  const { isClubPresident, isClubMember, hasPermission, loading, user } =
     useClubPermissions(clubId);
 
   // Loading state
@@ -27,7 +27,9 @@ export function ClubPermissionGuard({
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
           <Loader2 className="h-12 w-12 animate-spin mx-auto text-primary mb-4" />
-          <p className="text-muted-foreground">Đang kiểm tra quyền truy cập...</p>
+          <p className="text-muted-foreground">
+            Đang kiểm tra quyền truy cập...
+          </p>
         </div>
       </div>
     );
@@ -81,26 +83,7 @@ export function ClubPermissionGuard({
 
             {/* Show specific reason */}
             <div className="space-y-3 mb-6">
-              {!isClubOfficer && (
-                <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
-                  <div className="flex items-start gap-3">
-                    <AlertTriangle className="h-5 w-5 text-orange-600 mt-0.5 flex-shrink-0" />
-                    <div>
-                      <h4 className="font-medium text-orange-800 mb-1">
-                        Không có vai trò Cán bộ CLB
-                      </h4>
-                      <p className="text-sm text-orange-700">
-                        Bạn cần có vai trò <strong>CLUB_OFFICER</strong> (Cán bộ câu lạc bộ) trong hệ thống để truy cập trang này.
-                      </p>
-                      <p className="text-sm text-orange-600 mt-2">
-                        Vai trò hiện tại của bạn: <strong>{user.systemRole || "Không có"}</strong>
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {isClubOfficer && !isClubMember && (
+              {!isClubMember && (
                 <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
                   <div className="flex items-start gap-3">
                     <AlertTriangle className="h-5 w-5 text-orange-600 mt-0.5 flex-shrink-0" />
@@ -109,7 +92,24 @@ export function ClubPermissionGuard({
                         Không phải thành viên của câu lạc bộ
                       </h4>
                       <p className="text-sm text-orange-700">
-                        Mặc dù bạn có vai trò Cán bộ CLB, nhưng bạn chưa phải là thành viên của câu lạc bộ này.
+                        Bạn không phải là thành viên của câu lạc bộ này.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {isClubMember && !isClubPresident && (
+                <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                  <div className="flex items-start gap-3">
+                    <AlertTriangle className="h-5 w-5 text-orange-600 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <h4 className="font-medium text-orange-800 mb-1">
+                        Không có vai trò Chủ tịch CLB
+                      </h4>
+                      <p className="text-sm text-orange-700">
+                        Bạn cần có vai trò <strong>CLUB_PRESIDENT</strong> (Chủ tịch
+                        câu lạc bộ) trong câu lạc bộ này để quản lý tuyển dụng.
                       </p>
                     </div>
                   </div>
@@ -129,11 +129,16 @@ export function ClubPermissionGuard({
                       Để truy cập trang quản lý tuyển dụng, bạn cần:
                     </p>
                     <ul className="text-sm text-blue-700 mt-2 space-y-1 list-disc list-inside">
-                      <li>Có vai trò <strong>CLUB_OFFICER</strong> trong hệ thống</li>
-                      <li>Là thành viên đang hoạt động của câu lạc bộ</li>
+                      <li>
+                        Là thành viên đang hoạt động của câu lạc bộ
+                      </li>
+                      <li>
+                        Có vai trò <strong>CLUB_PRESIDENT</strong> (Chủ tịch CLB) trong câu lạc bộ
+                      </li>
                     </ul>
                     <p className="text-sm text-blue-600 mt-3">
-                      Vui lòng liên hệ với quản trị viên hệ thống hoặc chủ tịch câu lạc bộ để được cấp quyền.
+                      Vui lòng liên hệ với quản trị viên hệ thống hoặc chủ tịch
+                      câu lạc bộ để được cấp quyền.
                     </p>
                   </div>
                 </div>
@@ -142,15 +147,10 @@ export function ClubPermissionGuard({
 
             {/* Actions */}
             <div className="flex gap-3 justify-center">
-              <Button
-                variant="outline"
-                onClick={() => navigate(-1)}
-              >
+              <Button variant="outline" onClick={() => navigate(-1)}>
                 Quay lại
               </Button>
-              <Button onClick={() => navigate("/")}>
-                Về trang chủ
-              </Button>
+              <Button onClick={() => navigate("/")}>Về trang chủ</Button>
             </div>
           </CardContent>
         </Card>
@@ -161,4 +161,3 @@ export function ClubPermissionGuard({
   // User has permission, render children
   return <>{children}</>;
 }
-

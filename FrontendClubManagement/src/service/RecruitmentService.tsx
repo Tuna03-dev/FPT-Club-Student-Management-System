@@ -23,6 +23,12 @@ export interface RecruitmentQuestionData {
   updatedAt: string;
 }
 
+export interface TeamOptionData {
+  id: number;
+  teamName: string;
+  description?: string;
+}
+
 export interface RecruitmentData {
   id: number;
   title: string;
@@ -34,7 +40,7 @@ export interface RecruitmentData {
   requirements?: string;
   clubId: number;
   questions?: RecruitmentQuestionData[];
-  teamOptionIds?: number[]; // Danh sách ID của các team cho phép sinh viên lựa chọn
+  teamOptions?: TeamOptionData[]; // Danh sách team options cho phép sinh viên lựa chọn
   createdAt: string;
   updatedAt: string;
 }
@@ -256,6 +262,18 @@ export async function getMyApplications(
   );
 
   if (!res.data) throw new Error("Empty response");
+  return res.data;
+}
+
+// Get my application detail (for current user)
+export async function getMyApplicationDetail(
+  applicationId: number
+): Promise<RecruitmentApplicationData> {
+  const res = await axiosClient.get<RecruitmentApplicationData>(
+    `/recruitments/myApplications/${applicationId}`
+  );
+
+  if (!res.data) throw new Error("Application not found");
   return res.data;
 }
 
