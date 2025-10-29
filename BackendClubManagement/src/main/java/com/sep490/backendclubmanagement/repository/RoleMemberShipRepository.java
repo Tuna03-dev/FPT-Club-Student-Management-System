@@ -154,3 +154,4 @@ public interface RoleMemberShipRepository extends JpaRepository<RoleMemberShip, 
                              @Param("teamId") Long teamId,
                              @Param("semesterId") Long semesterId);
 }
+
