@@ -3,6 +3,7 @@ package com.sep490.backendclubmanagement.service;
 import com.sep490.backendclubmanagement.dto.request.CreateEventRequest;
 import com.sep490.backendclubmanagement.dto.request.EventApprovalRequest;
 import com.sep490.backendclubmanagement.dto.response.EventData;
+import com.sep490.backendclubmanagement.dto.response.PendingRequestDto;
 import com.sep490.backendclubmanagement.entity.*;
 import com.sep490.backendclubmanagement.exception.ForbiddenException;
 import com.sep490.backendclubmanagement.exception.NotFoundException;
@@ -33,14 +34,12 @@ public class EventManagementService {
     private final EventMediaRepository eventMediaRepository;
     private final CloudinaryService cloudinaryService;
 
-    /**
-     * Tạo event với phân quyền đầy đủ
-     */
+
     @Transactional
     public EventData createEvent(CreateEventRequest request, Long userId) {
-        // 1. Lấy thông tin user, club, event type
+        // 1. Lấy thông tin user, role, event type
         User user = getUserById(userId);
-        Club club = getClubById(request.getClubId());
+        boolean isStaff = roleService.isStaff(userId);
         EventType eventType = getEventTypeById(request.getEventTypeId());
 
         // 2. Kiểm tra quyền tạo event
@@ -49,12 +48,20 @@ public class EventManagementService {
         }
 
         // 3. Xác định role của user và loại event
-        boolean isStaff = roleService.isStaff(userId);
-        boolean isClubPresident = roleService.isClubPresident(userId, request.getClubId());
-        boolean isClubOfficer = roleService.isClubOfficer(userId, request.getClubId());
+        boolean isClubPresident = request.getClubId() != null && roleService.isClubPresident(userId, request.getClubId());
+        boolean isClubOfficer = request.getClubId() != null && roleService.isClubOfficer(userId, request.getClubId());
         boolean isMeeting = eventType != null && "MEETING".equalsIgnoreCase(eventType.getTypeName());
         
-        // 4. Tạo event
+        // 4. Xác định club: STAFF tạo sự kiện thì không thuộc CLB nào (club = null)
+        Club club = null;
+        if (!isStaff) {
+            if (request.getClubId() == null) {
+                throw new NotFoundException("Club ID is required for non-staff creators");
+            }
+            club = getClubById(request.getClubId());
+        }
+
+        // 5. Tạo event
         Event event = Event.builder()
                 .title(request.getTitle())
                 .description(request.getDescription())
@@ -63,17 +70,17 @@ public class EventManagementService {
                 .endTime(request.getEndTime())
                 .club(club)
                 .eventType(eventType)
-                .isDraft(false) // Mặc định là false, sẽ thay đổi tùy workflow
+                .isDraft(false)
                 .build();
         
         Event savedEvent = eventRepository.save(event);
         
-        // 5. Upload và lưu ảnh nếu có
+        // 6. Upload và lưu ảnh nếu có
         if (request.getMediaFiles() != null && !request.getMediaFiles().isEmpty()) {
             uploadAndSaveEventMedia(savedEvent, request.getMediaFiles());
         }
         
-        // 6. Xử lý theo workflow
+        // 7. Xử lý theo workflow
         if (isStaff || isMeeting) {
             // STAFF hoặc MEETING: Tạo trực tiếp (không cần approval)
             log.info("Event created directly (STAFF or MEETING)");
@@ -116,33 +123,26 @@ public class EventManagementService {
         throw new ForbiddenException("Role không được hỗ trợ cho việc tạo sự kiện này.");
     }
     
-    /**
-     * Lấy user theo ID
-     */
+
     private User getUserById(Long userId) {
         return userRepository.findById(userId)
                 .orElseThrow(() -> new NotFoundException("User not found with ID: " + userId));
     }
 
-    /**
-     * Lấy club theo ID
-     */
+
     private Club getClubById(Long clubId) {
         return clubRepository.findById(clubId)
                 .orElseThrow(() -> new NotFoundException("Club not found with ID: " + clubId));
     }
 
-    /**
-     * Lấy event type theo ID
-     */
+
     private EventType getEventTypeById(Long eventTypeId) {
+        if (eventTypeId == null) return null;
         return eventTypeRepository.findById(eventTypeId)
-                .orElseThrow(() -> new NotFoundException("Event Type not found with ID: " + eventTypeId));
+                .orElseThrow(() -> new NotFoundException("Event type not found with ID: " + eventTypeId));
     }
     
-    /**
-     * Upload và lưu media cho event
-     */
+
     private void uploadAndSaveEventMedia(Event event, List<MultipartFile> mediaFiles) {
         if (mediaFiles == null || mediaFiles.isEmpty()) {
             return;
@@ -181,9 +181,7 @@ public class EventManagementService {
         }
     }
     
-    /**
-     * CLUB_PRESIDENT duyệt event của CLUB_OFFICER
-     */
+
     @Transactional
     public void approveEventByClub(EventApprovalRequest request, Long userId) {
         RequestEvent requestEvent = requestEventRepository.findByIdWithEventAndClub(request.getRequestEventId())
@@ -209,9 +207,7 @@ public class EventManagementService {
         requestEventRepository.save(requestEvent);
     }
     
-    /**
-     * STAFF duyệt event
-     */
+
     @Transactional
     public void approveEventByStaff(EventApprovalRequest request, Long userId) {
         RequestEvent requestEvent = requestEventRepository.findByIdWithEventAndClub(request.getRequestEventId())
@@ -241,18 +237,74 @@ public class EventManagementService {
         requestEventRepository.save(requestEvent);
     }
     
-    /**
-     * Lấy danh sách request chờ duyệt
-     */
-    public List<RequestEvent> getPendingRequests(Long userId) {
+    public List<PendingRequestDto> getPendingRequests(Long userId) {
         if (roleService.isStaff(userId)) {
             // STAFF thấy tất cả các request PENDING_UNIVERSITY
-            return requestEventRepository.findByStatus(RequestStatus.PENDING_UNIVERSITY);
+            List<RequestEvent> list = requestEventRepository.findAllByStatusWithAll(RequestStatus.PENDING_UNIVERSITY);
+            return mapToPendingDtos(list);
         }
-        
-        // CLUB_PRESIDENT thấy các request PENDING_CLUB của club mình
-        // TODO: Lấy danh sách club mà user là president
-        // Tạm thời trả về empty list vì cần implement logic lấy clubs
+        if (roleService.isClubPresident(userId)) {
+            List<Club> clubs = roleService.getClubsWhereUserIsPresident(userId);
+            if (clubs.isEmpty()) return List.of();
+            List<RequestEvent> result = new ArrayList<>();
+            for (Club club : clubs) {
+                result.addAll(requestEventRepository.findAllByStatusAndClubIdWithAll(RequestStatus.PENDING_CLUB, club.getId()));
+            }
+            return mapToPendingDtos(result);
+        }
+
         return List.of();
+    }
+
+    private List<PendingRequestDto> mapToPendingDtos(List<RequestEvent> requestEvents) {
+        List<PendingRequestDto> dtos = new ArrayList<>();
+        for (RequestEvent re : requestEvents) {
+            Event e = re.getEvent();
+            Club c = (e != null ? e.getClub() : null);
+            User u = re.getCreatedBy();
+
+            PendingRequestDto.EventSummaryDto eventDto = null;
+            if (e != null) {
+                eventDto = PendingRequestDto.EventSummaryDto.builder()
+                        .id(e.getId())
+                        .title(e.getTitle())
+                        .startTime(e.getStartTime())
+                        .endTime(e.getEndTime())
+                        .location(e.getLocation())
+                        .eventTypeName(e.getEventType() != null ? e.getEventType().getTypeName() : null)
+                        .isDraft(Boolean.TRUE.equals(e.getIsDraft()))
+                        .build();
+            }
+
+            PendingRequestDto.ClubMiniDto clubDto = null;
+            if (c != null) {
+                clubDto = PendingRequestDto.ClubMiniDto.builder()
+                        .id(c.getId())
+                        .name(c.getClubName())
+                        .build();
+            }
+
+            PendingRequestDto.UserMiniDto userDto = null;
+            if (u != null) {
+                userDto = PendingRequestDto.UserMiniDto.builder()
+                        .id(u.getId())
+                        .fullName(u.getFullName())
+                        .build();
+            }
+
+           PendingRequestDto dto = PendingRequestDto.builder()
+                    .requestEventId(re.getId())
+                    .requestTitle(re.getRequestTitle())
+                    .status(re.getStatus())
+                    .responseMessage(re.getResponseMessage())
+                    .description(re.getDescription())
+                    .requestDate(re.getRequestDate())
+                    .event(eventDto)
+                    .club(clubDto)
+                    .createdBy(userDto)
+                    .build();
+            dtos.add(dto);
+        }
+        return dtos;
     }
 }

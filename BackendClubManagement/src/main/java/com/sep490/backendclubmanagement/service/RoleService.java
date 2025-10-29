@@ -2,6 +2,7 @@ package com.sep490.backendclubmanagement.service;
 
 import com.sep490.backendclubmanagement.entity.Club;
 import com.sep490.backendclubmanagement.repository.RoleMemberShipRepository;
+import com.sep490.backendclubmanagement.repository.ClubRepository;
 import com.sep490.backendclubmanagement.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -16,6 +17,7 @@ public class RoleService {
     
     private final RoleMemberShipRepository roleMemberShipRepository;
     private final UserRepository userRepository;
+    private final ClubRepository clubRepository;
 
     /**
      * Lấy system role của user
@@ -41,6 +43,14 @@ public class RoleService {
         String systemRole = getUserSystemRole(userId);
         return "CLUB_PRESIDENT".equals(systemRole);
     }
+
+        /**
+         * Kiểm tra user có phải CLUB_PRESIDENT không (không phụ thuộc club)
+         */
+        public boolean isClubPresident(Long userId) {
+            String systemRole = getUserSystemRole(userId);
+            return "CLUB_PRESIDENT".equals(systemRole);
+        }
     
     /**
      * Kiểm tra user có phải CLUB_OFFICER không (dựa vào system role)
@@ -73,10 +83,11 @@ public class RoleService {
      * TODO: Implement logic này dựa vào SystemRole
      */
     public List<Club> getClubsWhereUserIsPresident(Long userId) {
-        // Với system role, CLUB_PRESIDENT có thể tạo event cho bất kỳ club nào
-        // hoặc cần implement logic khác tùy business requirement
-        log.warn("getClubsWhereUserIsPresident not fully implemented. Returning empty list.");
-        return List.of();
+        List<Long> clubIds = roleMemberShipRepository.findPresidentClubIdsByUserId(userId);
+        if (clubIds == null || clubIds.isEmpty()) {
+            return List.of();
+        }
+        return clubRepository.findAllById(clubIds);
     }
 }
 

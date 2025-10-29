@@ -38,7 +38,7 @@ public class Event extends BaseEntity {
     private Boolean isDraft = true;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "club_id", nullable = false)
+    @JoinColumn(name = "club_id", nullable = true)
     private Club club;
 
     @ManyToOne(fetch = FetchType.LAZY)

@@ -89,3 +89,84 @@ export function computeEventStatus(nowIso: string, startIso: string, endIso: str
   return "ongoing";
 }
 
+export interface CreateEventPayload {
+  title: string;
+  description?: string;
+  location?: string;
+  startTime: string; // e.g. 2025-11-05T09:00
+  endTime: string;
+  eventTypeId?: number;
+  clubId?: number; // omit for staff
+  images?: File[];
+}
+
+export async function createEvent(payload: CreateEventPayload): Promise<EventData> {
+  const form = new FormData();
+  form.append("title", payload.title);
+  if (payload.description) form.append("description", payload.description);
+  if (payload.location) form.append("location", payload.location);
+  form.append("startTime", payload.startTime);
+  form.append("endTime", payload.endTime);
+  if (payload.eventTypeId != null) form.append("eventTypeId", String(payload.eventTypeId));
+  // Only append clubId if provided (non-staff). Staff should omit clubId so event has no club.
+  if (payload.clubId != null) form.append("clubId", String(payload.clubId));
+  (payload.images ?? []).forEach((file) => form.append("mediaFiles", file));
+
+  const res = await axiosClient.post<EventData>("/events/create", form, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  if (!res.data) throw new Error("Create event failed");
+  return res.data;
+}
+
+// ===== Pending Requests =====
+export interface PendingRequestDto {
+  requestEventId: number;
+  requestTitle: string;
+  status: string; // RequestStatus enum name
+  responseMessage?: string;
+  description?: string;
+  requestDate: string; // ISO
+  event: {
+    id: number;
+    title: string;
+    startTime: string;
+    endTime: string;
+    location?: string;
+    eventTypeName?: string;
+    isDraft: boolean;
+  } | null;
+  club: { id: number; name: string } | null;
+  createdBy: { id: number; fullName: string } | null;
+}
+
+export async function getPendingRequests(): Promise<PendingRequestDto[]> {
+  const res = await axiosClient.get<PendingRequestDto[]>("/events/pending-requests");
+  return res.data ?? [];
+}
+
+// ===== Approvals =====
+export async function approveByClub(
+  requestEventId: number,
+  approve: boolean,
+  responseMessage?: string
+): Promise<void> {
+  await axiosClient.post<void>("/events/approve/club", {
+    requestEventId,
+    status: approve ? "APPROVED_CLUB" : "REJECTED_CLUB",
+    responseMessage,
+  });
+}
+
+export async function approveByUniversity(
+  requestEventId: number,
+  approve: boolean,
+  responseMessage?: string
+): Promise<void> {
+  await axiosClient.post<void>("/events/approve/university", {
+    requestEventId,
+    status: approve ? "APPROVED_UNIVERSITY" : "REJECTED_UNIVERSITY",
+    responseMessage,
+  });
+}
+

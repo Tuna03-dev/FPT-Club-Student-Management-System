@@ -24,7 +24,7 @@ public class CreateEventRequest {
     @NotNull(message = "End time is required")
     private LocalDateTime endTime;
     
-    @NotNull(message = "Club ID is required")
+    // Optional: STAFF can create events without a club
     private Long clubId;
     
     private Long eventTypeId;

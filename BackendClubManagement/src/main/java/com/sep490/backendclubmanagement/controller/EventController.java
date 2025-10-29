@@ -4,16 +4,14 @@ import com.sep490.backendclubmanagement.dto.ApiResponse;
 import com.sep490.backendclubmanagement.dto.request.CreateEventRequest;
 import com.sep490.backendclubmanagement.dto.request.EventApprovalRequest;
 import com.sep490.backendclubmanagement.dto.request.EventRequest;
-import com.sep490.backendclubmanagement.dto.response.ClubDto;
-import com.sep490.backendclubmanagement.dto.response.EventData;
-import com.sep490.backendclubmanagement.dto.response.EventResponse;
-import com.sep490.backendclubmanagement.dto.response.EventTypesDto;
+import com.sep490.backendclubmanagement.dto.response.*;
 import com.sep490.backendclubmanagement.entity.RequestEvent;
 import com.sep490.backendclubmanagement.service.EventManagementService;
 import com.sep490.backendclubmanagement.service.EventService;
 import com.sep490.backendclubmanagement.util.SecurityUtils;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -55,8 +53,8 @@ public class EventController {
     /**
      * Tạo event mới (với phân quyền)
      */
-    @PostMapping("/create")
-    public ApiResponse<EventData> createEvent(@Valid @RequestBody CreateEventRequest request) {
+    @PostMapping(value = "/create", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ApiResponse<EventData> createEvent(@Valid @ModelAttribute CreateEventRequest request) {
         Long userId = SecurityUtils.getCurrentUserId();
         return ApiResponse.success(eventManagementService.createEvent(request, userId));
     }
@@ -85,7 +83,7 @@ public class EventController {
      * Lấy danh sách request chờ duyệt
      */
     @GetMapping("/pending-requests")
-    public ApiResponse<List<RequestEvent>> getPendingRequests() {
+    public ApiResponse<List<PendingRequestDto>> getPendingRequests() {
         Long userId = SecurityUtils.getCurrentUserId();
         return ApiResponse.success(eventManagementService.getPendingRequests(userId));
     }

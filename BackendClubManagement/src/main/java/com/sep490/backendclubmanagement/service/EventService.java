@@ -114,7 +114,7 @@ public class EventService {
                 .map(event -> {
                     EventData dto = eventMapper.toDto(event);
                     dto.setMediaUrls(eventMediaRepository.findMediaUrlsByEventId(event.getId()));
-                    dto.setClubId(event.getClub().getId());
+                    dto.setClubId(event.getClub() != null ? event.getClub().getId() : null);
                     return dto;
                 })
                 .toList();

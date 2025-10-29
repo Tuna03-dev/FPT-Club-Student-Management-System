@@ -5,7 +5,10 @@ import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { EventDetailModal } from "./event-detail-modal"
-import { type EventData, getEventsByClubId } from "@/service/EventService"
+import { type EventData, getEventsByClubId, createEvent, getAllEventTypes, getPendingRequests, type PendingRequestDto, approveByClub, approveByUniversity } from "@/service/EventService"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { CreateEventForm } from "./create-event-form"
+import { authService } from "@/services/authService"
 
 interface Event {
   id: string
@@ -17,6 +20,15 @@ interface Event {
   attendees: number
   status: "upcoming" | "ongoing" | "completed"
   images: string[]
+}
+interface EventFormValues {
+  title: string
+  description: string
+  location: string
+  startTime: string
+  endTime: string
+  eventType: string
+  eventImages: File[]
 }
 
 
@@ -30,6 +42,10 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
   const [events, setEvents] = useState<Event[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [openCreate, setOpenCreate] = useState(false)
+  const [eventTypes, setEventTypes] = useState<Array<{ id: string; name: string }>>([])
+  const [pendingRequests, setPendingRequests] = useState<PendingRequestDto[] | null>(null)
+  const [loadingPending, setLoadingPending] = useState(false)
 
   // Fetch events from API
   useEffect(() => {
@@ -63,6 +79,31 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
 
     fetchEvents()
   }, [clubId])
+
+  // Load event types for create form
+  useEffect(() => {
+    (async () => {
+      try {
+        const types = await getAllEventTypes()
+        setEventTypes(types.map(t => ({ id: String(t.id), name: t.typeName })))
+      } catch (e) {
+        console.error("Error fetching event types:", e)
+      }
+    })()
+  }, [])
+
+  // Load pending requests for STAFF or CLUB_PRESIDENT
+  useEffect(() => {
+    const user = authService.getCurrentUser()
+    if (!user) return
+    const isReviewer = ["STAFF", "CLUB_PRESIDENT"].includes(user.systemRole)
+    if (!isReviewer) return
+    setLoadingPending(true)
+    getPendingRequests()
+      .then((list) => setPendingRequests(list))
+      .catch(() => setPendingRequests([]))
+      .finally(() => setLoadingPending(false))
+  }, [])
 
   // Determine event status based on dates
   const determineEventStatus = (startDate: Date, endDate: Date): "upcoming" | "ongoing" | "completed" => {
@@ -110,6 +151,27 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
         return "bg-red-500 text-white"
       default:
         return "bg-muted text-foreground"
+    }
+  }
+
+  const getRequestStatusInfo = (status: string): { label: string; className: string } => {
+    switch (status) {
+      case "PENDING_CLUB":
+        return { label: "Chờ duyệt CLB", className: "bg-yellow-100 text-yellow-800" };
+      case "APPROVED_CLUB":
+        return { label: "Đã duyệt CLB", className: "bg-green-100 text-green-700" };
+      case "REJECTED_CLUB":
+        return { label: "Từ chối CLB", className: "bg-red-100 text-red-700" };
+      case "PENDING_UNIVERSITY":
+        return { label: "Chờ duyệt Nhà trường", className: "bg-yellow-100 text-yellow-800" };
+      case "APPROVED_UNIVERSITY":
+        return { label: "Đã duyệt Nhà trường", className: "bg-green-100 text-green-700" };
+      case "REJECTED_UNIVERSITY":
+        return { label: "Từ chối Nhà trường", className: "bg-red-100 text-red-700" };
+      case "DRAFT":
+        return { label: "Nháp", className: "bg-gray-100 text-gray-700" };
+      default:
+        return { label: status, className: "bg-muted text-foreground" };
     }
   }
 
@@ -183,6 +245,14 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
                 >
                   <ChevronRight className="w-4 h-4" />
                 </Button>
+                {(() => {
+                  const user = authService.getCurrentUser()
+                  const canCreate = !!user && ["STAFF", "CLUB_PRESIDENT", "CLUB_OFFICER"].includes(user.systemRole)
+                  if (!canCreate) return null
+                  return (
+                    <Button onClick={() => setOpenCreate(true)}>+ Tạo sự kiện mới</Button>
+                  )
+                })()}
               </div>
             </div>
 
@@ -268,8 +338,160 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
             
             
           </Card>
+          {/* Pending requests card (STAFF/CLUB_PRESIDENT) */}
+          {(() => {
+            const user = authService.getCurrentUser()
+            const canReview = !!user && ["STAFF", "CLUB_PRESIDENT"].includes(user.systemRole)
+            if (!canReview) return null
+            const items = pendingRequests ?? []
+            return (
+              <Card className="p-6 shadow-lg mt-6 border-amber-300">
+                <div className="flex items-center gap-2 mb-4">
+                  <span className="inline-block w-3 h-3 rounded-full bg-yellow-400" />
+                  <h3 className="text-lg font-bold text-foreground">Chờ duyệt{items.length != null ? ` (${items.length})` : ""}</h3>
+                </div>
+                {loadingPending ? (
+                  <div className="text-sm text-muted-foreground">Đang tải danh sách...</div>
+                ) : items.length === 0 ? (
+                  <div className="text-sm text-muted-foreground">Không có yêu cầu nào</div>
+                ) : (
+                  <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
+                    {items.map((req) => {
+                      const user = authService.getCurrentUser()
+                      const roleUpper = user?.systemRole ? String(user.systemRole).trim().toUpperCase() : undefined
+                      const reqStatusUpper = req.status ? String(req.status).trim().toUpperCase() : undefined
+                      const isPresidentActionable = roleUpper === "CLUB_PRESIDENT" && reqStatusUpper === "PENDING_CLUB"
+                      const isStaffActionable = roleUpper === "STAFF" && reqStatusUpper === "PENDING_UNIVERSITY"
+                      const showActions = isPresidentActionable || isStaffActionable
+                      // Debug: check console to verify values
+                      console.log("Debug approve buttons:", { userRole: roleUpper, reqStatus: req.status, reqStatusUpper, isStaffActionable, showActions })
+                      return (
+                      <div key={req.requestEventId} className="rounded-md border bg-amber-50 px-4 py-3">
+                        <div className="font-semibold text-foreground">{req.requestTitle}</div>
+                        <div className="text-xs text-muted-foreground">Tạo bởi: {req.createdBy?.fullName ?? "N/A"}</div>
+                        {(() => {
+                          const info = getRequestStatusInfo(req.status)
+                          return (
+                            <div className="text-xs text-muted-foreground mt-1 mb-3">
+                              <span className={`inline-block rounded px-2 py-0.5 mr-2 ${info.className}`}>{info.label}</span>
+                              {req.event ? (
+                                <>
+                                  <span>
+                                    {new Date(req.event.startTime).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}
+                                    {" - "}
+                                    {new Date(req.event.endTime).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}
+                                  </span>
+                                  {req.event.location ? (<div className="mt-1">📍 {req.event.location}</div>) : null}
+                                </>
+                              ) : null}
+                            </div>
+                          )
+                        })()}
+                        {showActions && (
+                          <div className="flex gap-3">
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              className="bg-emerald-50 text-emerald-600 hover:bg-emerald-100"
+                              onClick={async () => {
+                                const userNow = authService.getCurrentUser()
+                                if (!userNow) return
+                                try {
+                                  if (userNow.systemRole === "STAFF") {
+                                    await approveByUniversity(req.requestEventId, true)
+                                    // STAFF: hoàn tất quy trình, loại khỏi danh sách
+                                    setPendingRequests((prev) => (prev ?? []).filter(x => x.requestEventId !== req.requestEventId))
+                                  } else if (userNow.systemRole === "CLUB_PRESIDENT") {
+                                    await approveByClub(req.requestEventId, true)
+                                    // PRESIDENT: chuyển trạng thái sang PENDING_UNIVERSITY, giữ item
+                                    setPendingRequests((prev) => (prev ?? []).map(x => x.requestEventId === req.requestEventId ? { ...x, status: "PENDING_UNIVERSITY" } : x))
+                                  }
+                                } catch (e) {
+                                  console.error("Approve failed", e)
+                                }
+                              }}
+                            >
+                              ✓ Duyệt
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              className="bg-rose-50 text-rose-600 hover:bg-rose-100"
+                              onClick={async () => {
+                                const userNow = authService.getCurrentUser()
+                                if (!userNow) return
+                                try {
+                                  if (userNow.systemRole === "STAFF") {
+                                    await approveByUniversity(req.requestEventId, false)
+                                    setPendingRequests((prev) => (prev ?? []).filter(x => x.requestEventId !== req.requestEventId))
+                                  } else if (userNow.systemRole === "CLUB_PRESIDENT") {
+                                    await approveByClub(req.requestEventId, false)
+                                    // PRESIDENT từ chối: cập nhật status và ẩn nút
+                                    setPendingRequests((prev) => (prev ?? []).map(x => x.requestEventId === req.requestEventId ? { ...x, status: "REJECTED_CLUB" } : x))
+                                  }
+                                } catch (e) {
+                                  console.error("Reject failed", e)
+                                }
+                              }}
+                            >
+                              ✗ Từ chối
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </Card>
+            )
+          })()}
+          
         </div>
       </div>
+
+      {/* Create Event Dialog */}
+      <Dialog open={openCreate} onOpenChange={setOpenCreate}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Tạo sự kiện</DialogTitle>
+          </DialogHeader>
+          <CreateEventForm
+            eventTypes={eventTypes}
+            onSubmit={async (data: EventFormValues) => {
+              const user = authService.getCurrentUser()
+              if (!user) throw new Error("Bạn chưa đăng nhập")
+              const isStaff = user.systemRole === "STAFF"
+              const created = await createEvent({
+                title: data.title,
+                description: data.description,
+                location: data.location,
+                startTime: data.startTime,
+                endTime: data.endTime,
+                eventTypeId: data.eventType ? Number(data.eventType) : undefined,
+                clubId: isStaff ? undefined : clubId,
+                images: data.eventImages as File[],
+              })
+              // Update calendar view with new event
+              setEvents(prev => ([
+                ...prev,
+                {
+                  id: created.id.toString(),
+                  title: created.title,
+                  description: created.description,
+                  startDate: new Date(created.startTime),
+                  endDate: new Date(created.endTime),
+                  location: created.location,
+                  attendees: 0,
+                  status: determineEventStatus(new Date(created.startTime), new Date(created.endTime)),
+                  images: created.mediaUrls || [],
+                }
+              ]))
+            }}
+            onSuccess={() => setOpenCreate(false)}
+          />
+        </DialogContent>
+      </Dialog>
 
       {selectedEvent && <EventDetailModal event={selectedEvent} onClose={() => setSelectedEvent(null)} />}
     </>
