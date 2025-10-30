@@ -4,11 +4,11 @@ import com.sep490.backendclubmanagement.dto.response.CurrentTermResponse;
 import com.sep490.backendclubmanagement.dto.response.MemberHistoryResponse;
 import com.sep490.backendclubmanagement.dto.response.MemberResponse;
 import com.sep490.backendclubmanagement.dto.response.PageResponse;
-import com.sep490.backendclubmanagement.entity.ClubMemberShip;
-import com.sep490.backendclubmanagement.entity.ClubMemberShipStatus;
-import com.sep490.backendclubmanagement.entity.RoleMemberShip;
-import com.sep490.backendclubmanagement.entity.Semester;
-import com.sep490.backendclubmanagement.entity.User;
+import com.sep490.backendclubmanagement.entity.*;
+import com.sep490.backendclubmanagement.exception.AppException;
+import com.sep490.backendclubmanagement.exception.ErrorCode;
+import com.sep490.backendclubmanagement.repository.ClubRoleRepository;
+import com.sep490.backendclubmanagement.repository.RoleMemberShipRepository;
 import com.sep490.backendclubmanagement.repository.ClubMemberShipRepository;
 import com.sep490.backendclubmanagement.repository.SemesterRepository;
 import lombok.RequiredArgsConstructor;
@@ -28,7 +28,9 @@ public class MemberServiceImpl implements MemberService{
 
     private final ClubMemberShipRepository clubMemberShipRepository;
     private final SemesterRepository semesterRepository;
-
+    private final RoleMemberShipRepository roleMemberShipRepository;
+    private final ClubRoleRepository clubRoleRepository;
+    private final UserService userService;
 
 
     @Override
@@ -62,7 +64,7 @@ public class MemberServiceImpl implements MemberService{
 
         List<ClubMemberShip> filteredMembers = allMembers.stream()
                 .filter(cms -> {
-                    // 1️⃣ Filter theo kỳ học (semester)
+
                     if (semester != null) {
                         boolean joinedBeforeSemesterEnd = cms.getJoinDate().isBefore(semester.getEndDate())
                                 || cms.getJoinDate().isEqual(semester.getEndDate());
@@ -72,15 +74,15 @@ public class MemberServiceImpl implements MemberService{
                                 || cms.getEndDate().isEqual(semester.getStartDate());
 
                         if (!joinedBeforeSemesterEnd || !notLeftBeforeSemesterStart) {
-                            return false; // Member không thuộc kỳ học này
+                            return false;
                         }
                     }
 
-                    // 2️⃣ Filter theo role hoặc isActive
+
                     if (roleId != null || isActive != null) {
                         List<RoleMemberShip> relevantRoleMemberships = cms.getRoleMemberships().stream()
                                 .filter(rm -> {
-                                    // Nếu có filter theo kỳ, chỉ lấy role thuộc kỳ đó
+
                                     if (semester != null && rm.getSemester() != null
                                             && !rm.getSemester().getId().equals(semester.getId())) {
                                         return false;
@@ -89,13 +91,11 @@ public class MemberServiceImpl implements MemberService{
                                 })
                                 .toList();
 
-                        // 🧩 Nếu isActive = false → chỉ cần kiểm tra không có role active trong kỳ
-                        // → Bỏ qua filter roleId vì member không còn role nào đang active
+
                         if (Boolean.FALSE.equals(isActive)) {
                             return relevantRoleMemberships.isEmpty();
                         }
 
-                        // ✅ Nếu isActive = true → phải có ít nhất 1 role active, có thể thêm filter roleId
                         if (Boolean.TRUE.equals(isActive)) {
                             return relevantRoleMemberships.stream()
                                     .anyMatch(rm -> Boolean.TRUE.equals(rm.getIsActive()) &&
@@ -215,6 +215,148 @@ public class MemberServiceImpl implements MemberService{
                 .hasNext(pageable.getPageNumber() < totalPages - 1)
                 .hasPrevious(pageable.getPageNumber() > 0)
                 .build();
+    }
+
+    @Override
+    public void updateMemberRole(Long clubId, Long userId, Long roleId, Long semesterId, Long currentUserId) throws AppException {
+        ClubMemberShip cms = clubMemberShipRepository.findByClubIdAndUserId(clubId, userId);
+        if (cms == null || cms.getStatus() == ClubMemberShipStatus.LEFT) {
+            throw new AppException(ErrorCode.MEMBER_NOT_FOUND);
+        }
+        Semester semester = resolveSemester(semesterId);
+        ClubRole clubRole = clubRoleRepository.findById(roleId)
+                .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_FOUND));
+        
+        Long curentUserLogin = userService.getCurrentUserId();
+        if (curentUserLogin == null) {
+            throw new AppException(ErrorCode.UNAUTHORIZED);
+        }
+
+        if (!curentUserLogin.equals(currentUserId)) {
+            throw new AppException(ErrorCode.UNAUTHORIZED);
+        }
+
+        Integer currentUserRoleLevel = getUserRoleLevel(currentUserId, clubId, semesterId);
+        validateRoleAssignmentPermission(currentUserRoleLevel, clubRole.getRoleLevel());
+
+
+        List<RoleMemberShip> rms = roleMemberShipRepository.findByClubMemberShipIdAndSemesterId(cms.getId(), semester.getId());
+        RoleMemberShip target = rms.stream().findFirst().orElse(null);
+        
+        if (target == null) {
+            // Create new record if none exists for this semester
+            target = new RoleMemberShip();
+            target.setClubMemberShip(cms);
+            target.setSemester(semester);
+        }
+        // Update existing record with new role (no duplicate creation)
+        target.setClubRole(clubRole);
+        target.setIsActive(true);
+        roleMemberShipRepository.save(target);
+    }
+
+    @Override
+    public void updateMemberTeam(Long clubId, Long userId, Long teamId, Long semesterId) throws AppException {
+        ClubMemberShip cms = clubMemberShipRepository.findByClubIdAndUserId(clubId, userId);
+        if (cms == null || cms.getStatus() == ClubMemberShipStatus.LEFT) {
+            throw new AppException(ErrorCode.MEMBER_NOT_FOUND);
+        }
+        Semester semester = resolveSemester(semesterId);
+
+        // Find existing role membership for this semester - should be only one per member per semester
+        List<RoleMemberShip> rms = roleMemberShipRepository.findByClubMemberShipIdAndSemesterId(cms.getId(), semester.getId());
+        RoleMemberShip target = rms.stream().findFirst().orElse(null);
+        
+        if (target == null) {
+            // Create new record if none exists for this semester
+            target = new RoleMemberShip();
+            target.setClubMemberShip(cms);
+            target.setSemester(semester);
+        }
+        // Update existing record with new team (no duplicate creation)
+        Team teamRef = new Team();
+        teamRef.setId(teamId);
+        target.setTeam(teamRef);
+        roleMemberShipRepository.save(target);
+    }
+
+    @Override
+    public void updateMemberActiveStatus(Long clubId, Long userId, boolean isActive, Long semesterId) {
+        ClubMemberShip cms = clubMemberShipRepository.findByClubIdAndUserId(clubId, userId);
+        if (cms == null || cms.getStatus() == ClubMemberShipStatus.LEFT) {
+            throw new IllegalStateException("Member not found or already left club");
+        }
+        Semester semester = resolveSemester(semesterId);
+        List<RoleMemberShip> rms = roleMemberShipRepository.findByClubMemberShipIdAndSemesterId(cms.getId(), semester.getId());
+
+        if (isActive) {
+            // Activate: ensure there is at least ONE role membership record in this semester
+            RoleMemberShip target = rms.stream().findFirst().orElse(null);
+            if (target == null) {
+                target = new RoleMemberShip();
+                target.setClubMemberShip(cms);
+                target.setSemester(semester);
+            }
+            target.setIsActive(true);
+            roleMemberShipRepository.save(target);
+        } else {
+            // Pause: per business rule, inactive means NO role membership record in that semester
+            for (RoleMemberShip rm : rms) {
+                roleMemberShipRepository.delete(rm);
+            }
+        }
+    }
+
+    @Override
+    public void removeMemberFromClub(Long clubId, Long userId, String reason) {
+        ClubMemberShip cms = clubMemberShipRepository.findByClubIdAndUserId(clubId, userId);
+        if (cms == null) {
+            throw new IllegalStateException("Member not found");
+        }
+        cms.setStatus(ClubMemberShipStatus.LEFT);
+        cms.setEndDate(java.time.LocalDate.now());
+        clubMemberShipRepository.save(cms);
+    }
+
+    private Semester resolveSemester(Long semesterId) {
+        if (semesterId != null) {
+            return semesterRepository.findById(semesterId)
+                    .orElseThrow(() -> new IllegalArgumentException("Semester not found"));
+        }
+        return semesterRepository.findAll().stream()
+                .filter(Semester::getIsCurrent)
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException("No current semester configured"));
+    }
+
+
+
+
+    private Integer getUserRoleLevel(Long userId, Long clubId, Long semesterId) {
+        ClubMemberShip cms = clubMemberShipRepository.findByClubIdAndUserId(clubId, userId);
+        if (cms == null) {
+            return 999; // No membership = lowest priority
+        }
+        
+        Semester semester = resolveSemester(semesterId);
+        List<RoleMemberShip> rms = roleMemberShipRepository.findByClubMemberShipIdAndSemesterId(cms.getId(), semester.getId());
+        
+        return rms.stream()
+                .filter(rm -> rm.getClubRole() != null && Boolean.TRUE.equals(rm.getIsActive()))
+                .map(rm -> rm.getClubRole().getRoleLevel())
+                .min(Integer::compareTo)
+                .orElse(999); // No active role = lowest priority
+    }
+
+
+    private void validateRoleAssignmentPermission(Integer currentUserRoleLevel, Integer targetRoleLevel) throws AppException {
+        if (currentUserRoleLevel == null || targetRoleLevel == null) {
+            throw new AppException(ErrorCode.INSUFFICIENT_PERMISSION);
+        }
+
+        if (currentUserRoleLevel >= targetRoleLevel) {
+            throw new AppException(ErrorCode.INSUFFICIENT_PERMISSION);
+        }
     }
 
     private Integer getRoleLevelForSorting(ClubMemberShip clubMemberShip, Long effectiveSemesterId, Long roleId, Boolean isActive) {

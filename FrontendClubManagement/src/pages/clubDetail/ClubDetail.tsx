@@ -32,6 +32,7 @@ import {
   getRecruitmentsByClubId,
   type RecruitmentData,
 } from "@/service/RecruitmentService";
+import { ClubApplicationForm } from "./ClubApplication";
 
 interface ClubDetailProps {
   clubId?: string;
@@ -80,6 +81,7 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
   const [recruitmentsLoaded, setRecruitmentsLoaded] = useState(false);
   const [loadingRecruitments, setLoadingRecruitments] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedRecruitmentId, setSelectedRecruitmentId] = useState<number | null>(null);
 
   // Fetch club data only (isRecruiting is included in response)
   useEffect(() => {
@@ -238,6 +240,16 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
           </CardContent>
         </Card>
       </div>
+    );
+  }
+
+  // Show application form if a recruitment is selected
+  if (selectedRecruitmentId) {
+    return (
+      <ClubApplicationForm
+        recruitmentId={selectedRecruitmentId}
+        onBack={() => setSelectedRecruitmentId(null)}
+      />
     );
   }
 
@@ -676,7 +688,12 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
                               </div>
                             </div>
 
-                            <Button className="w-full">Ứng tuyển ngay</Button>
+                            <Button 
+                              className="w-full"
+                              onClick={() => setSelectedRecruitmentId(recruitment.id)}
+                            >
+                              Ứng tuyển ngay
+                            </Button>
                           </CardContent>
                         </Card>
                       ))}

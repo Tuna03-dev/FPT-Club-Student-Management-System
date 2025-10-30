@@ -2,10 +2,15 @@ package com.sep490.backendclubmanagement.service;
 
 import com.sep490.backendclubmanagement.entity.SystemRole;
 import com.sep490.backendclubmanagement.entity.User;
+import com.sep490.backendclubmanagement.exception.AppException;
+import com.sep490.backendclubmanagement.exception.ErrorCode;
 import com.sep490.backendclubmanagement.repository.SystemRoleRepository;
 import com.sep490.backendclubmanagement.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,6 +24,52 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final SystemRoleRepository systemRoleRepository;
+
+
+    public Long getCurrentUserId() throws AppException {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+
+        if (authentication == null || !authentication.isAuthenticated()) {
+            throw new AppException(ErrorCode.UNAUTHORIZED);
+        }
+        Object principal = authentication.getPrincipal();
+        log.info("Current principal: {}", principal);
+        if (principal instanceof String && "anonymousUser".equals(principal)) {
+            throw new AppException(ErrorCode.UNAUTHENTICATED);
+        }
+
+        if (principal instanceof UserDetails userDetails) {
+            String email = userDetails.getUsername();
+            return userRepository.findByEmail(email)
+                    .map(User::getId)
+                    .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+        }
+
+        if (principal instanceof String email) {
+            return userRepository.findByEmail(email)
+                    .map(User::getId)
+                    .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+        }
+
+        throw new RuntimeException("Cannot extract current user info");
+    }
+
+    public String getCurrentUserEmail() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated()) {
+            throw new RuntimeException("User not authenticated");
+        }
+
+        Object principal = authentication.getPrincipal();
+        if (principal instanceof UserDetails userDetails) {
+            return userDetails.getUsername();
+        }
+        if (principal instanceof String email && !"anonymousUser".equals(email)) {
+            return email;
+        }
+
+        throw new RuntimeException("Cannot extract current user email");
+    }
 
     /**
      * Find user by email

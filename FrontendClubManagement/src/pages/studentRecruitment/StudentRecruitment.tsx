@@ -69,7 +69,7 @@ interface Application {
   recruitmentId: string;
   userId: string;
   answers: Record<string, any>;
-  status: "PENDING" | "APPROVED" | "REJECTED";
+  status: "UNDER_REVIEW" | "ACCEPTED" | "REJECTED" | "INTERVIEWED";
   submittedAt: string;
   reviewedAt?: string;
   reviewNote?: string;
@@ -216,7 +216,7 @@ export function StudentRecruitment() {
         "3": ["Workshop", "Dự án nhóm"],
         "4": "Tôi là sinh viên năm 2, đam mê công nghệ và muốn trở thành developer giỏi",
       },
-      status: "APPROVED",
+      status: "ACCEPTED",
       submittedAt: "2024-01-18T10:30:00Z",
       reviewedAt: "2024-01-20T14:15:00Z",
       reviewNote: "Ứng viên có tiềm năng tốt, phù hợp với CLB",
@@ -231,7 +231,7 @@ export function StudentRecruitment() {
         "1": "Tôi có ý tưởng startup và muốn học cách phát triển business",
         "2": "Có kinh nghiệm làm dự án nhóm và thuyết trình",
       },
-      status: "PENDING",
+      status: "UNDER_REVIEW",
       submittedAt: "2024-01-22T16:45:00Z",
     },
     {
@@ -279,12 +279,14 @@ export function StudentRecruitment() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "APPROVED":
+      case "UNDER_REVIEW":
+        return "bg-yellow-100 text-yellow-800";
+      case "ACCEPTED":
         return "bg-green-100 text-green-800";
       case "REJECTED":
         return "bg-red-100 text-red-800";
-      case "PENDING":
-        return "bg-yellow-100 text-yellow-800";
+      case "INTERVIEWED":
+        return "bg-purple-100 text-purple-800";
       default:
         return "bg-gray-100 text-gray-800";
     }
@@ -292,12 +294,14 @@ export function StudentRecruitment() {
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case "APPROVED":
+      case "UNDER_REVIEW":
+        return <AlertCircle className="h-4 w-4" />;
+      case "ACCEPTED":
         return <CheckCircle className="h-4 w-4" />;
       case "REJECTED":
         return <XCircle className="h-4 w-4" />;
-      case "PENDING":
-        return <AlertCircle className="h-4 w-4" />;
+      case "INTERVIEWED":
+        return <MessageSquare className="h-4 w-4" />;
       default:
         return <Clock className="h-4 w-4" />;
     }
@@ -679,10 +683,14 @@ export function StudentRecruitment() {
                           <div className="flex items-center space-x-1">
                             {getStatusIcon(application.status)}
                             <span>
-                              {application.status === "APPROVED"
+                              {application.status === "UNDER_REVIEW"
+                                ? "Đang xem xét"
+                                : application.status === "ACCEPTED"
                                 ? "Đã duyệt"
                                 : application.status === "REJECTED"
                                 ? "Từ chối"
+                                : application.status === "INTERVIEWED"
+                                ? "Đã phỏng vấn"
                                 : "Đang xét duyệt"}
                             </span>
                           </div>
@@ -691,7 +699,7 @@ export function StudentRecruitment() {
                     </CardHeader>
 
                     <CardContent className="space-y-4">
-                      {application.status === "APPROVED" && (
+                      {application.status === "ACCEPTED" && (
                         <div className="bg-green-50 border border-green-200 rounded-lg p-4">
                           <div className="flex items-start space-x-3">
                             <CheckCircle className="h-5 w-5 text-green-600 mt-0.5" />
@@ -724,6 +732,37 @@ export function StudentRecruitment() {
                         </div>
                       )}
 
+                      {application.status === "INTERVIEWED" && (
+                        <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                          <div className="flex items-start space-x-3">
+                            <MessageSquare className="h-5 w-5 text-purple-600 mt-0.5" />
+                            <div className="flex-1">
+                              <h4 className="font-medium text-purple-800">
+                                Bạn đã được mời phỏng vấn
+                              </h4>
+                              {application.interviewDate && (
+                                <p className="text-sm text-purple-700 mt-1">
+                                  <Calendar className="h-4 w-4 inline mr-1" />
+                                  Lịch phỏng vấn:{" "}
+                                  {new Date(
+                                    application.interviewDate
+                                  ).toLocaleString("vi-VN")}
+                                </p>
+                              )}
+                              <p className="text-sm text-purple-700 mt-1">
+                                Vui lòng chuẩn bị và tham gia đúng giờ. Chúc bạn may mắn!
+                              </p>
+                              {application.reviewNote && (
+                                <p className="text-sm text-purple-700 mt-2">
+                                  <MessageSquare className="h-4 w-4 inline mr-1" />
+                                  Ghi chú: {application.reviewNote}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
                       {application.status === "REJECTED" && (
                         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
                           <div className="flex items-start space-x-3">
@@ -743,7 +782,7 @@ export function StudentRecruitment() {
                         </div>
                       )}
 
-                      {application.status === "PENDING" && (
+                      {application.status === "UNDER_REVIEW" && (
                         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
                           <div className="flex items-start space-x-3">
                             <AlertCircle className="h-5 w-5 text-yellow-600 mt-0.5" />

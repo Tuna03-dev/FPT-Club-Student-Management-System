@@ -24,5 +24,4 @@ public interface RecruitmentServiceInterface {
     RecruitmentApplicationData submitApplication(Long applicantId, ApplicationSubmitRequest request) throws AppException;
     RecruitmentApplicationData getApplication(Long applicationId) throws AppException;
     RecruitmentApplicationData reviewApplication(ApplicationReviewRequest request) throws AppException;
-    void withdrawApplication(Long applicationId);
 }

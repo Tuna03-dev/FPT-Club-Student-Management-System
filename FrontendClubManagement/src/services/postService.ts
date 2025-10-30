@@ -53,6 +53,7 @@ export interface CreatePostRequest {
   teamId?: number;
   clubWide: boolean;
   withinClub?: boolean;
+  status?: string; // "DRAFT" | "PUBLISHED"
 }
 
 export interface UpdatePostRequest {
@@ -129,19 +130,23 @@ export const postService = {
     files?: File[]
   ): Promise<ApiResponse<PostWithRelationsData>> {
     const formData = new FormData();
-    formData.append("request", JSON.stringify(request));
     
+    // Create a Blob for the JSON request with correct content-type
+    const requestBlob = new Blob([JSON.stringify(request)], {
+      type: "application/json",
+    });
+    formData.append("request", requestBlob, "request.json");
+    
+    // Append files
     if (files && files.length > 0) {
       files.forEach(file => {
         formData.append("files", file);
       });
     }
 
-    return axiosClient.post("/posts/create/with-media", formData, {
-      headers: {
-        "Content-Type": "multipart/form-data",
-      },
-    });
+    // Note: Don't set Content-Type header explicitly when using FormData
+    // Axios will set it automatically with the correct boundary
+    return axiosClient.post("/posts/create/with-media", formData);
   },
 
   // Update post
@@ -151,19 +156,22 @@ export const postService = {
     files?: File[]
   ): Promise<ApiResponse<PostWithRelationsData>> {
     const formData = new FormData();
-    formData.append("request", JSON.stringify(request));
     
+    // Create a Blob for the JSON request with correct content-type
+    const requestBlob = new Blob([JSON.stringify(request)], {
+      type: "application/json",
+    });
+    formData.append("request", requestBlob, "request.json");
+    
+    // Append files
     if (files && files.length > 0) {
       files.forEach(file => {
         formData.append("files", file);
       });
     }
 
-    return axiosClient.put(`/posts/update/${postId}`, formData, {
-      headers: {
-        "Content-Type": "multipart/form-data",
-      },
-    });
+    // Don't set Content-Type header - Axios handles it
+    return axiosClient.put(`/posts/update/${postId}`, formData);
   },
 
   // Delete post
