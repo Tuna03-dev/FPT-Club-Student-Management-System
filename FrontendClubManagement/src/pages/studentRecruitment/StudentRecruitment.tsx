@@ -335,7 +335,9 @@ export function StudentRecruitment() {
       setDetailLoading(true);
 
       // Fetch full application details from the new API
-      const fullApplicationDetail = await getMyApplicationDetail(application.id);
+      const fullApplicationDetail = await getMyApplicationDetail(
+        application.id
+      );
       setSelectedApplicationDetail(fullApplicationDetail);
 
       // Fetch recruitment details to get questions
@@ -608,7 +610,10 @@ export function StudentRecruitment() {
             {listLoading ? (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {[...Array(4)].map((_, index) => (
-                  <Card key={index} className="hover:shadow-lg transition-shadow">
+                  <Card
+                    key={index}
+                    className="hover:shadow-lg transition-shadow"
+                  >
                     <CardHeader>
                       <div className="flex items-start space-x-4">
                         {/* Club logo skeleton */}
@@ -670,113 +675,115 @@ export function StudentRecruitment() {
             ) : (
               /* Recruitment List */
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {filteredCampaigns.map((campaign) => (
-                <Card
-                  key={campaign.id}
-                  className="hover:shadow-lg transition-shadow"
-                >
-                  <CardHeader>
-                    <div className="flex items-start space-x-4">
-                      <img
-                        src={campaign.clubImage || "/placeholder.svg"}
-                        alt={campaign.clubName}
-                        className="w-16 h-16 rounded-lg object-cover"
-                      />
-                      <div className="flex-1">
-                        <div className="flex items-start justify-between">
-                          <div>
-                            <CardTitle className="text-lg">
-                              {campaign.title}
-                            </CardTitle>
-                            <p className="text-sm text-muted-foreground font-medium">
-                              {campaign.clubName}
-                            </p>
-                          </div>
-                          <Badge
-                            variant={
-                              campaign.status === "OPEN"
-                                ? "default"
-                                : "secondary"
-                            }
-                            className={
-                              campaign.status === "OPEN"
-                                ? "bg-green-100 text-green-800"
+                {filteredCampaigns.map((campaign) => (
+                  <Card
+                    key={campaign.id}
+                    className="hover:shadow-lg transition-shadow"
+                  >
+                    <CardHeader>
+                      <div className="flex items-start space-x-4">
+                        <img
+                          src={campaign.clubImage || "/placeholder.svg"}
+                          alt={campaign.clubName}
+                          className="w-16 h-16 rounded-lg object-cover"
+                        />
+                        <div className="flex-1">
+                          <div className="flex items-start justify-between">
+                            <div>
+                              <CardTitle className="text-lg">
+                                {campaign.title}
+                              </CardTitle>
+                              <p className="text-sm text-muted-foreground font-medium">
+                                {campaign.clubName}
+                              </p>
+                            </div>
+                            <Badge
+                              variant={
+                                campaign.status === "OPEN"
+                                  ? "default"
+                                  : "secondary"
+                              }
+                              className={
+                                campaign.status === "OPEN"
+                                  ? "bg-green-100 text-green-800"
+                                  : campaign.status === "CLOSED"
+                                  ? "bg-red-100 text-red-800"
+                                  : "bg-blue-100 text-blue-800"
+                              }
+                            >
+                              {campaign.status === "OPEN"
+                                ? "Đang mở"
                                 : campaign.status === "CLOSED"
-                                ? "bg-red-100 text-red-800"
-                                : "bg-blue-100 text-blue-800"
-                            }
-                          >
-                            {campaign.status === "OPEN"
-                              ? "Đang mở"
-                              : campaign.status === "CLOSED"
-                              ? "Đã đóng"
-                              : "Sắp mở"}
-                          </Badge>
+                                ? "Đã đóng"
+                                : "Sắp mở"}
+                            </Badge>
+                          </div>
+                          <CardDescription className="mt-2">
+                            {campaign.description}
+                          </CardDescription>
                         </div>
-                        <CardDescription className="mt-2">
-                          {campaign.description}
-                        </CardDescription>
                       </div>
-                    </div>
-                  </CardHeader>
+                    </CardHeader>
 
-                  <CardContent className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div className="flex items-center text-muted-foreground">
-                        <Calendar className="h-4 w-4 mr-2" />
-                        <span>
-                          {new Date(campaign.startDate).toLocaleDateString(
-                            "vi-VN"
-                          )}{" "}
-                          -{" "}
-                          {new Date(campaign.endDate).toLocaleDateString(
-                            "vi-VN"
-                          )}
-                        </span>
+                    <CardContent className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div className="flex items-center text-muted-foreground">
+                          <Calendar className="h-4 w-4 mr-2" />
+                          <span>
+                            {new Date(campaign.startDate).toLocaleDateString(
+                              "vi-VN"
+                            )}{" "}
+                            -{" "}
+                            {new Date(campaign.endDate).toLocaleDateString(
+                              "vi-VN"
+                            )}
+                          </span>
+                        </div>
+                        <div className="flex items-center text-muted-foreground">
+                          <Users className="h-4 w-4 mr-2" />
+                          <span>
+                            {campaign.applicationsCount}/
+                            {campaign.maxApplications || "∞"} đơn
+                          </span>
+                        </div>
                       </div>
-                      <div className="flex items-center text-muted-foreground">
-                        <Users className="h-4 w-4 mr-2" />
-                        <span>
-                          {campaign.applicationsCount}/
-                          {campaign.maxApplications || "∞"} đơn
-                        </span>
+
+                      <div className="space-y-2">
+                        <p className="text-sm font-medium">Yêu cầu:</p>
+                        <ul className="text-sm text-muted-foreground space-y-1">
+                          {campaign.requirements.map((req, index) => (
+                            <li key={index} className="flex items-start">
+                              <span className="w-1 h-1 bg-muted-foreground rounded-full mt-2 mr-2 flex-shrink-0"></span>
+                              {req}
+                            </li>
+                          ))}
+                        </ul>
                       </div>
-                    </div>
 
-                    <div className="space-y-2">
-                      <p className="text-sm font-medium">Yêu cầu:</p>
-                      <ul className="text-sm text-muted-foreground space-y-1">
-                        {campaign.requirements.map((req, index) => (
-                          <li key={index} className="flex items-start">
-                            <span className="w-1 h-1 bg-muted-foreground rounded-full mt-2 mr-2 flex-shrink-0"></span>
-                            {req}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-
-                    <div className="flex gap-2 pt-2">
-                      {campaign.status === "OPEN" ? (
-                        <Button
-                          onClick={() => handleApply(campaign.id)}
-                          className="flex-1"
-                        >
-                          <Send className="h-4 w-4 mr-2" />
-                          Ứng tuyển ngay
+                      <div className="flex gap-2 pt-2">
+                        {campaign.status === "OPEN" ? (
+                          <Button
+                            onClick={() => handleApply(campaign.id)}
+                            className="flex-1"
+                          >
+                            <Send className="h-4 w-4 mr-2" />
+                            Ứng tuyển ngay
+                          </Button>
+                        ) : (
+                          <Button disabled className="flex-1">
+                            {campaign.status === "CLOSED"
+                              ? "Đã đóng"
+                              : "Chưa mở"}
+                          </Button>
+                        )}
+                        <Button variant="outline" size="sm">
+                          <Eye className="h-4 w-4 mr-2" />
+                          Chi tiết
                         </Button>
-                      ) : (
-                        <Button disabled className="flex-1">
-                          {campaign.status === "CLOSED" ? "Đã đóng" : "Chưa mở"}
-                        </Button>
-                      )}
-                      <Button variant="outline" size="sm">
-                        <Eye className="h-4 w-4 mr-2" />
-                        Chi tiết
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
               </div>
             )}
           </>
@@ -844,12 +851,17 @@ export function StudentRecruitment() {
                       </CardHeader>
                       <CardContent className="space-y-4">
                         {/* Status info box - varies by status */}
-                        <div className={`border rounded-lg p-4 ${
-                          index % 4 === 0 ? 'bg-green-50 border-green-200' : 
-                          index % 4 === 1 ? 'bg-purple-50 border-purple-200' :
-                          index % 4 === 2 ? 'bg-red-50 border-red-200' :
-                          'bg-yellow-50 border-yellow-200'
-                        }`}>
+                        <div
+                          className={`border rounded-lg p-4 ${
+                            index % 4 === 0
+                              ? "bg-green-50 border-green-200"
+                              : index % 4 === 1
+                              ? "bg-purple-50 border-purple-200"
+                              : index % 4 === 2
+                              ? "bg-red-50 border-red-200"
+                              : "bg-yellow-50 border-yellow-200"
+                          }`}
+                        >
                           <div className="flex items-start space-x-3">
                             <Skeleton className="h-5 w-5 rounded-full flex-shrink-0" />
                             <div className="flex-1 space-y-2">
@@ -1072,11 +1084,11 @@ export function StudentRecruitment() {
                                 <FileText className="h-4 w-4 mr-2" />
                                 Xem đơn đã nộp
                               </Button>
-                              {application.status === "REJECTED" && (
+                              {/* {application.status === "REJECTED" && (
                                 <Button variant="outline" size="sm">
                                   Ứng tuyển lại
                                 </Button>
-                              )}
+                              )} */}
                             </div>
                           </CardContent>
                         </Card>

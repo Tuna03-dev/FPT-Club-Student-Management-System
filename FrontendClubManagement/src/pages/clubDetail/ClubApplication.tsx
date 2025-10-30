@@ -33,6 +33,14 @@ import {
 } from "@/services/recruitmentService";
 import { getClubDetailById, type ClubDetailData } from "@/services/clubService";
 import type { VisibleTeamDTO } from "@/types/team";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 interface ClubApplicationFormProps {
   recruitmentId: number;
@@ -52,6 +60,8 @@ export function ClubApplicationForm({
   const [club, setClub] = useState<ClubDetailData | null>(null);
   const [selectedTeamId, setSelectedTeamId] = useState<number | null>(null);
   const [uploadedFiles, setUploadedFiles] = useState<Record<number, File>>({});
+  const [showAlreadyAppliedDialog, setShowAlreadyAppliedDialog] = useState(false);
+  const [alreadyAppliedMessage, setAlreadyAppliedMessage] = useState<string | null>(null);
 
   // Memoize teams to prevent order changes on re-render
   const teams = useMemo<VisibleTeamDTO[]>(() => {
@@ -257,6 +267,14 @@ export function ClubApplicationForm({
               (errorMessage ||
                 "Bạn đã là thành viên của câu lạc bộ này và không thể ứng tuyển lại.")
           );
+          return;
+        }
+        // Handle specific error: already applied for this recruitment round (ví dụ code 3002)
+        if (errorCode === 3002) {
+          setAlreadyAppliedMessage(
+            errorMessage || "Bạn đã nộp đơn ứng tuyển cho đợt này. Không thể nộp lại."
+          );
+          setShowAlreadyAppliedDialog(true);
           return;
         }
         // Handle other specific errors
@@ -501,6 +519,38 @@ export function ClubApplicationForm({
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Dialog show when user already applied for this recruitment round */}
+      <Dialog open={showAlreadyAppliedDialog} onOpenChange={setShowAlreadyAppliedDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <AlertCircle className="h-5 w-5" /> Đã nộp đơn ứng tuyển
+            </DialogTitle>
+            <DialogDescription className="pt-4">
+              <div className="space-y-3">
+                <p className="text-foreground">
+                  {alreadyAppliedMessage || "Bạn đã nộp đơn ứng tuyển cho đợt này. Không thể nộp lại."}
+                </p>
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                  <p className="text-sm text-red-800">
+                    Vui lòng đợi kết quả xét tuyển trước khi nộp lại hoặc liên hệ ban quản lý câu lạc bộ nếu cần hỗ trợ.
+                  </p>
+                </div>
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="sm:justify-start">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setShowAlreadyAppliedDialog(false)}
+              className="w-full sm:w-auto"
+            >
+              Đã hiểu
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-4xl mx-auto">
           {/* Header */}
@@ -559,13 +609,8 @@ export function ClubApplicationForm({
                     </div>
 
                     {/* Max Applicants */}
-                    {recruitment.maxApplicants && (
-                      <div className="flex items-center gap-2 text-sm">
-                        <Users className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-muted-foreground">
-                          Số lượng: {recruitment.maxApplicants} người
-                        </span>
-                      </div>
+                    {false && (
+                      <div />
                     )}
                   </div>
 

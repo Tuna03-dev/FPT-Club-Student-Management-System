@@ -98,7 +98,6 @@ interface Recruitment {
   start_date: string;
   end_date: string;
   status: RecruitmentStatus;
-  max_applications?: number;
   requirements?: string[];
   benefits?: string[];
   form_questions: RecruitmentForm[];
@@ -165,10 +164,13 @@ export function RecruitmentManagement() {
   const [applicationsTotalPages, setApplicationsTotalPages] = useState(0);
   const [applicationsTotalElements, setApplicationsTotalElements] = useState(0);
   const applicationsPageSize = 10;
-  
+
   // Search and filter states for applications
   const [applicationsSearchQuery, setApplicationsSearchQuery] = useState("");
-  const debouncedApplicationsSearchQuery = useDebounce(applicationsSearchQuery, 300);
+  const debouncedApplicationsSearchQuery = useDebounce(
+    applicationsSearchQuery,
+    300
+  );
   const [applicationsStatusFilter, setApplicationsStatusFilter] = useState<
     ApplicationStatus | "all"
   >("all");
@@ -225,7 +227,6 @@ export function RecruitmentManagement() {
         start_date: r.startDate,
         end_date: r.endDate,
         status: r.status.toLowerCase() as RecruitmentStatus,
-        max_applications: r.maxApplicants,
         requirements: r.requirements ? r.requirements.split("\n") : [],
         benefits: [], // TODO: Get from API if available
         form_questions: (r.questions || []).map((q) => ({
@@ -284,7 +285,7 @@ export function RecruitmentManagement() {
                 | "REJECTED"
                 | "INTERVIEW")
             : undefined;
-        
+
         const response = await getApplicationsByRecruitmentId(
           parseInt(selectedRecruitment.recruitment_id),
           {
@@ -384,7 +385,6 @@ export function RecruitmentManagement() {
         start_date: freshData.startDate,
         end_date: freshData.endDate,
         status: freshData.status.toLowerCase() as RecruitmentStatus,
-        max_applications: freshData.maxApplicants,
         requirements: freshData.requirements
           ? freshData.requirements.split("\n")
           : [],
@@ -882,8 +882,6 @@ export function RecruitmentManagement() {
                             </span>
                             <div className="font-medium">
                               {recruitment.totalApplications ?? 0}
-                              {recruitment.max_applications &&
-                                ` / ${recruitment.max_applications}`}
                             </div>
                           </div>
                           <div>
@@ -907,7 +905,7 @@ export function RecruitmentManagement() {
                             className="bg-transparent"
                           >
                             <Eye className="h-4 w-4 mr-2" />
-                            Xem đơn
+                            Các đơn ứng tuyển
                           </Button>
                           <Button
                             variant="outline"
@@ -989,6 +987,15 @@ export function RecruitmentManagement() {
                             size="sm"
                             className="bg-transparent"
                             disabled={recruitment.status === "closed"}
+                            onClick={async () => {
+                              try {
+                                const shareUrl = `${window.location.origin}/clubDetail/${recruitment.club_id}?tab=recruitment#recruitment-${recruitment.recruitment_id}`;
+                                await navigator.clipboard.writeText(shareUrl);
+                                toast.success("Đã sao chép đường dẫn chia sẻ");
+                              } catch (e) {
+                                toast.error("Không thể sao chép đường dẫn");
+                              }
+                            }}
                           >
                             <Share2 className="h-4 w-4 mr-2" />
                             Chia sẻ
@@ -1295,7 +1302,8 @@ export function RecruitmentManagement() {
                     </div>
                     <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
                       <p className="text-sm text-amber-800">
-                        ⚠️ Tất cả các đợt tuyển dụng khác đang mở sẽ tự động chuyển sang trạng thái "Đã đóng"
+                        ⚠️ Tất cả các đợt tuyển dụng khác đang mở sẽ tự động
+                        chuyển sang trạng thái "Đã đóng"
                       </p>
                     </div>
                   </>
@@ -1404,7 +1412,9 @@ export function RecruitmentManagement() {
                 </div>
                 <div>
                   <DialogTitle>
-                    Xác nhận {saveWithOpenStatusDialog?.isEdit ? "cập nhật" : "tạo"} đợt tuyển dụng
+                    Xác nhận{" "}
+                    {saveWithOpenStatusDialog?.isEdit ? "cập nhật" : "tạo"} đợt
+                    tuyển dụng
                   </DialogTitle>
                 </div>
               </div>
@@ -1434,12 +1444,15 @@ export function RecruitmentManagement() {
                     ⚠️ Lưu ý quan trọng:
                   </p>
                   <p className="text-sm text-amber-800 mt-2">
-                    Tất cả các đợt tuyển dụng khác đang ở trạng thái "Đang mở" sẽ tự động chuyển sang trạng thái "Đã đóng" để đảm bảo chỉ có một đợt tuyển dụng mở tại một thời điểm.
+                    Tất cả các đợt tuyển dụng khác đang ở trạng thái "Đang mở"
+                    sẽ tự động chuyển sang trạng thái "Đã đóng" để đảm bảo chỉ
+                    có một đợt tuyển dụng mở tại một thời điểm.
                   </p>
                 </div>
                 <div className="bg-green-50 border border-green-200 rounded-lg p-3">
                   <p className="text-sm text-green-800">
-                    ✓ Sinh viên sẽ có thể nộp đơn ứng tuyển cho đợt tuyển dụng này
+                    ✓ Sinh viên sẽ có thể nộp đơn ứng tuyển cho đợt tuyển dụng
+                    này
                   </p>
                 </div>
               </div>
@@ -1464,7 +1477,8 @@ export function RecruitmentManagement() {
                   </>
                 ) : (
                   <>
-                    Xác nhận {saveWithOpenStatusDialog?.isEdit ? "cập nhật" : "tạo"}
+                    Xác nhận{" "}
+                    {saveWithOpenStatusDialog?.isEdit ? "cập nhật" : "tạo"}
                   </>
                 )}
               </Button>
