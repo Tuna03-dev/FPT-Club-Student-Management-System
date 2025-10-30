@@ -24,15 +24,19 @@ public class ClubWallet extends BaseEntity {
     private Club club;
 
     @Column(name = "balance", nullable = false, precision = 15, scale = 2)
+    @Builder.Default
     private BigDecimal balance = BigDecimal.ZERO;
 
     @Column(name = "total_income", precision = 15, scale = 2)
+    @Builder.Default
     private BigDecimal totalIncome = BigDecimal.ZERO;
 
     @Column(name = "total_outcome", precision = 15, scale = 2)
+    @Builder.Default
     private BigDecimal totalOutcome = BigDecimal.ZERO;
 
     @Column(name = "currency", length = 10)
+    @Builder.Default
     private String currency = "VND";
 
     @Column(name = "payOs_client_id", length = 100)

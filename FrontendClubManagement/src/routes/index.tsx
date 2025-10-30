@@ -18,6 +18,7 @@ import MyClubRedirect from "@/pages/myclub/MyClubRedirect";
 import ClubSelect from "@/pages/myclub/ClubSelect";
 import TeamDetailPage from "@/pages/myclub/teams/TeamDetail";
 import { RecruitmentManagement } from "@/pages/myclub/recruitmentManagement/RecruitmentManagement";
+import Finance from "@/pages/myclub/finance/Finance";
 import { StudentRecruitment } from "@/pages/studentRecruitment/StudentRecruitment";
 import { ClubDetail } from "@/pages/clubDetail/ClubDetail";
 
@@ -104,6 +105,7 @@ export const router = createBrowserRouter([
       { path: "members", element: <MemberList /> },
       { path: "events", element: <EventList /> },
       { path: "recruitments", element: <RecruitmentManagement /> },
+      { path: "finance", element: <Finance /> },
       { path: "notifications", element: <Notifications /> },
       { path: "settings", element: <Settings /> },
       { path: "teams/:teamId", element: <TeamDetailPage /> },

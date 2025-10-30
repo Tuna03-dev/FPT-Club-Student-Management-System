@@ -11,6 +11,7 @@ import {
   FileText,
   Clock,
   Briefcase,
+  DollarSign,
 } from "lucide-react";
 import { NavLink, Outlet, useParams, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -47,6 +48,7 @@ const managementItems = [
   { key: "manage_members", url: "/members", icon: Users, label: "Quản lý thành viên" },
   { key: "manage_events", url: "/events", icon: Calendar, label: "Quản lý sự kiện" },
   { key: "manage_recruitments", url: "/recruitments", icon: Briefcase, label: "Quản lý tuyển thành viên" },
+  { key: "manage_finance", url: "/finance", icon: DollarSign, label: "Quản lý tài chính" },
   { key: "pending_requests", url: "/pending-requests", icon: Clock, label: "Yêu cầu chờ duyệt" },
 ];
 
@@ -56,6 +58,7 @@ const managementColors: Record<string, string> = {
   manage_members: "bg-gradient-to-br from-blue-500 to-blue-600",
   manage_events: "bg-gradient-to-br from-green-500 to-green-600",
   manage_recruitments: "bg-gradient-to-br from-red-500 to-red-600",
+  manage_finance: "bg-gradient-to-br from-emerald-500 to-emerald-600",
   pending_requests: "bg-gradient-to-br from-orange-500 to-orange-600",
 };
 
