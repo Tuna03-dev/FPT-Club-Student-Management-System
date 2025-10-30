@@ -32,8 +32,18 @@ public class ClubManagementService {
         Semester currentSemester = semesterRepository.findCurrentSemester()
                 .orElseThrow(() -> new ResourceNotFoundException("Current semester not found."));
 
-        return clubMembershipRepository
+        List<MyClubDTO> clubs = clubMembershipRepository
                 .findClubsByUserIdAndSemesterId(currentUser.getId(), currentSemester.getId());
+        
+        // Enrich với club roles cho mỗi club
+        for (MyClubDTO club : clubs) {
+            List<String> roles = roleMembershipRepository.findClubRolesByUserAndClub(
+                currentUser.getId(), club.getClubId(), currentSemester.getId()
+            );
+            club.setClubRoles(roles);
+        }
+        
+        return clubs;
     }
 
     public ClubDetailDTO getClubManagementDetail(Long clubId) {

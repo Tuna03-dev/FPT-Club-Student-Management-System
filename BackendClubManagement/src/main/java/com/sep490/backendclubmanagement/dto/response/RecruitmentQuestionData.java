@@ -11,6 +11,7 @@ public class RecruitmentQuestionData {
     private String questionText;
     private String questionType;
     private Integer questionOrder;
+    private Integer isRequired;
     private List<String> options;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

@@ -44,6 +44,27 @@ public interface ClubRepository extends JpaRepository<Club, Long> {
             "WHERE c.id = :id")
     Optional<Club> findByIdWithDetails(@Param("id") Long id);
 
+    // 🔹 Count total members for a club
+    @Query("SELECT COUNT(DISTINCT cm.id) FROM ClubMemberShip cm WHERE cm.club.id = :clubId")
+    Long countMembersByClubId(@Param("clubId") Long clubId);
+
+    // 🔹 Count total events for a club
+    @Query("SELECT COUNT(e.id) FROM Event e WHERE e.club.id = :clubId")
+    Long countEventsByClubId(@Param("clubId") Long clubId);
+
+    // 🔹 Count total news for a club
+    @Query("SELECT COUNT(n.id) FROM News n WHERE n.club.id = :clubId")
+    Long countNewsByClubId(@Param("clubId") Long clubId);
+
+    // 🔹 Check if club has active recruitment
+    @Query("SELECT CASE WHEN COUNT(r) > 0 THEN true ELSE false END " +
+            "FROM Recruitment r " +
+            "WHERE r.club.id = :clubId " +
+            "AND r.status = 'OPEN' " +
+            "AND r.startDate <= CURRENT_TIMESTAMP " +
+            "AND r.endDate >= CURRENT_TIMESTAMP")
+    Boolean hasActiveRecruitment(@Param("clubId") Long clubId);
+
     // 🔹 Tìm ID của các CLB có nhiều event nhất
     @Query("""
         SELECT c.id

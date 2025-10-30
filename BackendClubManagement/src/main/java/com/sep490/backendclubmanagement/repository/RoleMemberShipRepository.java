@@ -153,5 +153,20 @@ public interface RoleMemberShipRepository extends JpaRepository<RoleMemberShip, 
     List<String> findMyRoles(@Param("userId") Long userId,
                              @Param("teamId") Long teamId,
                              @Param("semesterId") Long semesterId);
+    
+    // ---- Lấy danh sách club roles (roleCode) của user trong một club
+    @Query("""
+        SELECT DISTINCT cr.roleCode
+        FROM RoleMemberShip rm
+        JOIN rm.clubRole cr
+        JOIN rm.clubMemberShip cm
+        WHERE cm.user.id = :userId
+          AND cm.club.id = :clubId
+          AND (:semesterId IS NULL OR rm.semester.id = :semesterId)
+          AND COALESCE(rm.isActive, TRUE) = TRUE
+    """)
+    List<String> findClubRolesByUserAndClub(@Param("userId") Long userId,
+                                            @Param("clubId") Long clubId,
+                                            @Param("semesterId") Long semesterId);
 }
 
