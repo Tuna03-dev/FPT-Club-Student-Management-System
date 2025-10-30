@@ -1,5 +1,4 @@
 import { axiosClient } from "./axiosClient";
-import type { ApiResponse } from "@/types/api";
 import type { VisibleTeamDTO, MyTeamDetailDTO } from "@/types/team";
 
 export async function getVisibleTeams(
@@ -38,7 +37,7 @@ export async function getAllTeamsForPresident(
   const res = await axiosClient.get<VisibleTeamDTO[]>(
     `/management/clubs/${clubId}/teams/president`
   );
-  if (res.code !== 200) 
+  if (res.code !== 200)
     throw new Error(res.message || "Failed to fetch teams for president");
   return res.data ?? [];
 }

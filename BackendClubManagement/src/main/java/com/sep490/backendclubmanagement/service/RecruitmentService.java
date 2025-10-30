@@ -37,7 +37,7 @@ public class RecruitmentService implements RecruitmentServiceInterface {
     private final RecruitmentApplicationMapper recruitmentApplicationMapper;
     private final CloudinaryService cloudinaryService;
     private final ClubMemberShipRepository clubMemberShipRepository;
-    private final RoleMembershipRepository roleMembershipRepository;
+    private final RoleMemberShipRepository roleMembershipRepository;
     private final SemesterRepository semesterRepository;
 
     @Override
