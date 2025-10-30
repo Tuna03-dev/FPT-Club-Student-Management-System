@@ -149,6 +149,13 @@ export function ApplicationsList({
     currentNotes?: string;
   } | null>(null);
 
+  // TRƯỚC: gọi onUpdateApplicationStatus(..., notes.trim() || undefined)
+  // SAU (với trường phỏng vấn): gộp trường thành notesText
+  const [interviewDatetime, setInterviewDatetime] = useState("");
+  const [interviewLocation, setInterviewLocation] = useState("");
+  const [interviewLink, setInterviewLink] = useState("");
+  const [interviewNote, setInterviewNote] = useState("");
+
   const handleStatusChange = (
     applicationId: string,
     applicationName: string,
@@ -156,20 +163,38 @@ export function ApplicationsList({
   ) => {
     setStatusChangeDialog({ applicationId, applicationName, newStatus });
     setNotes("");
+    if (newStatus === "interview") {
+      setInterviewDatetime("");
+      setInterviewLocation("");
+      setInterviewLink("");
+      setInterviewNote("");
+    }
   };
 
   const handleConfirmStatusChange = () => {
     if (!statusChangeDialog) return;
 
-    // Validate: notes are required for interview status
-    if (statusChangeDialog.newStatus === "interview" && !notes.trim()) {
-      return; // Don't proceed if notes are empty for interview
+    // Kiểm tra riêng cho mode phỏng vấn
+    if (statusChangeDialog.newStatus === "interview") {
+      if (!interviewDatetime.trim() || !interviewLocation.trim()) {
+        return; // Không gửi nếu thiếu
+      }
     }
+
+    const notesText =
+      statusChangeDialog?.newStatus === "interview"
+        ? (
+            (interviewDatetime ? `Ngày giờ: ${interviewDatetime}\n` : "") +
+            (interviewLocation ? `Địa điểm: ${interviewLocation}\n` : "") +
+            (interviewLink ? `Link: ${interviewLink}\n` : "") +
+            (interviewNote ? `Yêu cầu chuẩn bị: ${interviewNote}` : "")
+          ).trim()
+        : notes.trim() || undefined;
 
     onUpdateApplicationStatus(
       statusChangeDialog.applicationId,
       statusChangeDialog.newStatus,
-      notes.trim() || undefined
+      notesText
     );
 
     setStatusChangeDialog(null);
@@ -179,6 +204,10 @@ export function ApplicationsList({
   const handleCancelStatusChange = () => {
     setStatusChangeDialog(null);
     setNotes("");
+    setInterviewDatetime("");
+    setInterviewLocation("");
+    setInterviewLink("");
+    setInterviewNote("");
   };
 
   const handleOpenNotesDialog = (
@@ -899,44 +928,63 @@ export function ApplicationsList({
           </DialogHeader>
 
           <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="notes" className="flex items-center gap-2">
-                <MessageSquare className="h-4 w-4" />
-                {statusChangeDialog?.newStatus === "interview" ? (
-                  <>
-                    Thông tin về cuộc phỏng vấn{" "}
-                    <span className="text-red-500">*</span>
-                  </>
-                ) : (
-                  "Ghi chú (tùy chọn)"
+            {statusChangeDialog?.newStatus === "interview" ? (
+              <div className="space-y-2">
+                <div>
+                  <Label htmlFor="interviewDatetime">Ngày giờ phỏng vấn <span className="text-red-500">*</span></Label>
+                  <Input
+                    id="interviewDatetime"
+                    type="datetime-local"
+                    value={interviewDatetime}
+                    onChange={(e) => setInterviewDatetime(e.target.value)}
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="interviewLocation">Địa điểm <span className="text-red-500">*</span></Label>
+                  <Input
+                    id="interviewLocation"
+                    placeholder="Nhập địa điểm (offline/online)"
+                    value={interviewLocation}
+                    onChange={(e) => setInterviewLocation(e.target.value)}
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="interviewLink">Link meeting (nếu có)</Label>
+                  <Input
+                    id="interviewLink"
+                    placeholder="Ví dụ: https://meet.google.com/..."
+                    value={interviewLink}
+                    onChange={(e) => setInterviewLink(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="interviewNote">Yêu cầu chuẩn bị (nếu có)</Label>
+                  <Textarea
+                    id="interviewNote"
+                    placeholder="Ví dụ: chuẩn bị CV, bài test..."
+                    value={interviewNote}
+                    onChange={(e) => setInterviewNote(e.target.value)}
+                    rows={3}
+                  />
+                </div>
+                {/* Hiển thị lỗi nếu thiếu bắt buộc */}
+                {(!interviewDatetime.trim() || !interviewLocation.trim()) && (
+                  <p className="text-sm text-red-500">Vui lòng nhập đủ ngày giờ và địa điểm phỏng vấn</p>
                 )}
-              </Label>
-              <Textarea
-                id="notes"
-                placeholder={
-                  statusChangeDialog?.newStatus === "interview"
-                    ? "Nhập thông tin về cuộc phỏng vấn (ngày giờ, địa điểm, link meeting, yêu cầu chuẩn bị...)..."
-                    : statusChangeDialog?.newStatus === "accepted"
-                    ? "Ghi chú về việc chấp nhận đơn..."
-                    : "Lý do từ chối hoặc ghi chú..."
-                }
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                rows={5}
-                required={statusChangeDialog?.newStatus === "interview"}
-                className={
-                  statusChangeDialog?.newStatus === "interview" && !notes.trim()
-                    ? "border-red-300 focus:border-red-500"
-                    : ""
-                }
-              />
-              {statusChangeDialog?.newStatus === "interview" &&
-                !notes.trim() && (
-                  <p className="text-sm text-red-500">
-                    Vui lòng nhập thông tin về cuộc phỏng vấn
-                  </p>
-                )}
-            </div>
+              </div>
+            ) : (
+              <div className='space-y-2'>
+                <Label htmlFor="notes">Ghi chú (tùy chọn)</Label>
+                <Textarea
+                  id="notes"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  rows={5}
+                />
+              </div>
+            )}
           </div>
 
           <DialogFooter>
@@ -946,7 +994,8 @@ export function ApplicationsList({
             <Button
               onClick={handleConfirmStatusChange}
               disabled={
-                statusChangeDialog?.newStatus === "interview" && !notes.trim()
+                statusChangeDialog?.newStatus === "interview" &&
+                (!interviewDatetime.trim() || !interviewLocation.trim())
               }
               className={
                 statusChangeDialog?.newStatus === "interview"
