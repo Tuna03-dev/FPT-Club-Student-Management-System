@@ -92,6 +92,11 @@ interface ApplicationsListProps {
   totalPages?: number;
   totalElements?: number;
   onPageChange?: (page: number) => void;
+  // Search and filter props
+  searchQuery?: string;
+  onSearchChange?: (query: string) => void;
+  statusFilter?: ApplicationStatus | "all";
+  onStatusFilterChange?: (status: ApplicationStatus | "all") => void;
 }
 
 interface StatusChangeDialogData {
@@ -123,11 +128,11 @@ export function ApplicationsList({
   totalPages = 1,
   totalElements = 0,
   onPageChange,
+  searchQuery = "",
+  onSearchChange,
+  statusFilter = "all",
+  onStatusFilterChange,
 }: ApplicationsListProps) {
-  const [searchQuery, setSearchQuery] = useState("");
-  const [applicationStatusFilter, setApplicationStatusFilter] = useState<
-    ApplicationStatus | "all"
-  >("all");
   const [selectedApplication, setSelectedApplication] =
     useState<RecruitmentApplication | null>(null);
 
@@ -209,18 +214,6 @@ export function ApplicationsList({
     setNotes("");
   };
 
-  const filteredApplications = useMemo(() => {
-    return applications.filter((app) => {
-      const matchesSearch =
-        app.user_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        app.user_email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        app.student_id.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesStatus =
-        applicationStatusFilter === "all" ||
-        app.status === applicationStatusFilter;
-      return matchesSearch && matchesStatus;
-    });
-  }, [applications, searchQuery, applicationStatusFilter]);
 
   return (
     <>
@@ -230,7 +223,7 @@ export function ApplicationsList({
           <div>
             <h2 className="text-2xl font-bold">{selectedRecruitment.title}</h2>
             <p className="text-muted-foreground">
-              {selectedRecruitment.applications.length} đơn ứng tuyển
+              {totalElements} đơn ứng tuyển
             </p>
           </div>
         </div>
@@ -242,14 +235,14 @@ export function ApplicationsList({
             <Input
               placeholder="Tìm kiếm ứng viên..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => onSearchChange?.(e.target.value)}
               className="pl-10"
             />
           </div>
           <Select
-            value={applicationStatusFilter}
+            value={statusFilter}
             onValueChange={(value) =>
-              setApplicationStatusFilter(value as ApplicationStatus | "all")
+              onStatusFilterChange?.(value as ApplicationStatus | "all")
             }
           >
             <SelectTrigger className="w-[180px]">
@@ -328,7 +321,7 @@ export function ApplicationsList({
         {/* Applications List */}
         {!applicationsLoading && (
           <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-            {filteredApplications.map((application) => (
+            {applications.map((application) => (
               <Card
                 key={application.application_id}
                 className="hover:shadow-lg transition-shadow"
@@ -480,7 +473,7 @@ export function ApplicationsList({
           </div>
         )}
 
-        {!applicationsLoading && filteredApplications.length === 0 && (
+        {!applicationsLoading && applications.length === 0 && (
           <div className="text-center py-12">
             <Users className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
             <p className="text-muted-foreground">

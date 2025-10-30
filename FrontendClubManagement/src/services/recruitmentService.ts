@@ -41,6 +41,8 @@ export interface RecruitmentData {
   clubId: number;
   questions?: RecruitmentQuestionData[];
   teamOptions?: TeamOptionData[]; // Danh sách team options cho phép sinh viên lựa chọn
+  totalApplications?: number; // Tổng số đơn ứng tuyển đã nộp
+  acceptedApplications?: number; // Số đơn đã được chấp nhận
   createdAt: string;
   updatedAt: string;
 }
@@ -75,6 +77,7 @@ export interface ApplicationAnswerData {
 
 export interface RecruitmentFilterRequest {
   status?: "DRAFT" | "OPEN" | "CLOSED" | "CANCELLED";
+  keyword?: string;
   page?: number;
   size?: number;
   sort?: string;
@@ -82,6 +85,7 @@ export interface RecruitmentFilterRequest {
 
 export interface ApplicationFilterRequest {
   status?: "UNDER_REVIEW" | "ACCEPTED" | "REJECTED" | "INTERVIEW";
+  keyword?: string;
   page?: number;
   size?: number;
   sort?: string;
@@ -113,10 +117,11 @@ export async function getRecruitmentsByClubId(
   clubId: number,
   params: RecruitmentFilterRequest = {}
 ): Promise<PagedResponse<RecruitmentData>> {
-  const { status, page = 0, size = 10, sort = "startDate,desc" } = params;
+  const { status, keyword, page = 0, size = 10, sort = "startDate,desc" } = params;
 
   const queryParams = new URLSearchParams();
   if (status) queryParams.append("status", status);
+  if (keyword && keyword.trim()) queryParams.append("keyword", keyword.trim());
   queryParams.append("page", page.toString());
   queryParams.append("size", size.toString());
   queryParams.append("sort", sort);
@@ -141,10 +146,11 @@ export async function getApplicationsByRecruitmentId(
   recruitmentId: number,
   params: ApplicationFilterRequest = {}
 ): Promise<PagedResponse<RecruitmentApplicationData>> {
-  const { status, page = 0, size = 10, sort = "submittedDate,desc" } = params;
+  const { status, keyword, page = 0, size = 10, sort = "submittedDate,desc" } = params;
 
   const queryParams = new URLSearchParams();
   if (status) queryParams.append("status", status);
+  if (keyword && keyword.trim()) queryParams.append("keyword", keyword.trim());
   queryParams.append("page", page.toString());
   queryParams.append("size", size.toString());
   queryParams.append("sort", sort);

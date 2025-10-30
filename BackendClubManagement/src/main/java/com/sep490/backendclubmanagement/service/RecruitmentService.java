@@ -42,9 +42,25 @@ public class RecruitmentService implements RecruitmentServiceInterface {
 
     @Override
     public PagedResponse<RecruitmentData> listRecruitments(Long clubId, RecruitmentStatus status, Pageable pageable) {
-        Page<Recruitment> page = (status == null)
-                ? recruitmentRepository.findByClub_Id(clubId, pageable)
-                : recruitmentRepository.findByClub_IdAndStatus(clubId, status, pageable);
+        return listRecruitments(clubId, status, null, pageable);
+    }
+    
+    public PagedResponse<RecruitmentData> listRecruitments(Long clubId, RecruitmentStatus status, String keyword, Pageable pageable) {
+        Page<Recruitment> page;
+        
+        // If keyword is provided, use search query
+        if (keyword != null && !keyword.trim().isEmpty()) {
+            String trimmedKeyword = keyword.trim();
+            page = (status == null)
+                    ? recruitmentRepository.searchByClubIdAndKeyword(clubId, trimmedKeyword, pageable)
+                    : recruitmentRepository.searchByClubIdAndStatusAndKeyword(clubId, status, trimmedKeyword, pageable);
+        } else {
+            // Otherwise use normal query
+            page = (status == null)
+                    ? recruitmentRepository.findByClub_Id(clubId, pageable)
+                    : recruitmentRepository.findByClub_IdAndStatus(clubId, status, pageable);
+        }
+        
         Page<RecruitmentData> dataPage = page.map(recruitmentMapper::toDto);
         return PagedResponse.of(dataPage);
     }
@@ -80,6 +96,12 @@ public class RecruitmentService implements RecruitmentServiceInterface {
         
         Recruitment r = recruitmentMapper.toEntity(req, clubId);
         r = recruitmentRepository.save(r);
+        
+        // Nếu recruitment mới có status là OPEN, đóng tất cả các recruitment OPEN khác của club
+        if (r.getStatus() == RecruitmentStatus.OPEN) {
+            closeOtherOpenRecruitments(clubId, r.getId());
+        }
+        
         upsertQuestions(r, req.questions);
         upsertTeamOptions(r, req.teamOptionIds);
         
@@ -113,6 +135,12 @@ public class RecruitmentService implements RecruitmentServiceInterface {
         }
         
         recruitmentMapper.updateEntity(r, req);
+        
+        // Nếu recruitment được cập nhật thành OPEN, đóng tất cả các recruitment OPEN khác của club
+        if (r.getStatus() == RecruitmentStatus.OPEN) {
+            closeOtherOpenRecruitments(r.getClub().getId(), r.getId());
+        }
+        
         recruitmentRepository.save(r);
         upsertQuestions(r, req.questions);
         upsertTeamOptions(r, req.teamOptionIds);
@@ -141,6 +169,11 @@ public class RecruitmentService implements RecruitmentServiceInterface {
         // Kiểm tra quyền: phải là CLUB_PRESIDENT và là thành viên của club
         checkClubPresidentPermission(userId, r.getClub().getId());
         
+        // Nếu status mới là OPEN, đóng tất cả các recruitment OPEN khác của club
+        if (status == RecruitmentStatus.OPEN) {
+            closeOtherOpenRecruitments(r.getClub().getId(), r.getId());
+        }
+        
         r.setStatus(status);
         recruitmentRepository.save(r);
     }
@@ -159,16 +192,32 @@ public class RecruitmentService implements RecruitmentServiceInterface {
 
     @Override
     public PagedResponse<RecruitmentApplicationData> listApplications(Long userId, Long recruitmentId, RecruitmentApplicationStatus status, Pageable pageable) throws AppException {
+        return listApplications(userId, recruitmentId, status, null, pageable);
+    }
+    
+    public PagedResponse<RecruitmentApplicationData> listApplications(Long userId, Long recruitmentId, RecruitmentApplicationStatus status, String keyword, Pageable pageable) throws AppException {
         // Lấy recruitment để xác định clubId
         Recruitment recruitment = recruitmentRepository.findById(recruitmentId)
                 .orElseThrow(() -> new AppException(ErrorCode.INTERNAL_SERVER_ERROR));
         
-        // Kiểm tra quyền: phải là CLUB_OFFICER và là thành viên của club
+        // Kiểm tra quyền: phải là CLUB_PRESIDENT và là thành viên của club
         checkClubPresidentPermission(userId, recruitment.getClub().getId());
         
-        Page<RecruitmentApplication> page = (status == null)
-                ? applicationRepository.findByRecruitment_Id(recruitmentId, pageable)
-                : applicationRepository.findByRecruitment_IdAndStatus(recruitmentId, status, pageable);
+        Page<RecruitmentApplication> page;
+        
+        // If keyword is provided, use search query
+        if (keyword != null && !keyword.trim().isEmpty()) {
+            String trimmedKeyword = keyword.trim();
+            page = (status == null)
+                    ? applicationRepository.searchByRecruitmentIdAndKeyword(recruitmentId, trimmedKeyword, pageable)
+                    : applicationRepository.searchByRecruitmentIdAndStatusAndKeyword(recruitmentId, status, trimmedKeyword, pageable);
+        } else {
+            // Otherwise use normal query
+            page = (status == null)
+                    ? applicationRepository.findByRecruitment_Id(recruitmentId, pageable)
+                    : applicationRepository.findByRecruitment_IdAndStatus(recruitmentId, status, pageable);
+        }
+        
         Page<RecruitmentApplicationData> dataPage = page.map(recruitmentApplicationMapper::toDto);
         return PagedResponse.of(dataPage);
     }
@@ -524,6 +573,21 @@ public class RecruitmentService implements RecruitmentServiceInterface {
                         .build();
                 teamOptionRepository.save(teamOption);
             }
+        }
+    }
+
+    /**
+     * Đóng tất cả các recruitment có status OPEN khác của club (trừ recruitment hiện tại)
+     * để đảm bảo chỉ có một recruitment OPEN tại một thời điểm
+     */
+    private void closeOtherOpenRecruitments(Long clubId, Long currentRecruitmentId) {
+        List<Recruitment> openRecruitments = recruitmentRepository.findByClub_IdAndStatusAndIdNot(
+                clubId, RecruitmentStatus.OPEN, currentRecruitmentId
+        );
+        
+        for (Recruitment recruitment : openRecruitments) {
+            recruitment.setStatus(RecruitmentStatus.CLOSED);
+            recruitmentRepository.save(recruitment);
         }
     }
 

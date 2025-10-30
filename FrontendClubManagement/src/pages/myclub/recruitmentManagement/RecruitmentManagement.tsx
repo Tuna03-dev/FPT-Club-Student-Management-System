@@ -58,6 +58,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ClubPermissionGuard } from "@/components/ClubPermissionGuard";
+import { useDebounce } from "@/hooks/useDebounce";
 
 type RecruitmentStatus = "draft" | "open" | "closed" | "cancelled";
 type ApplicationStatus = "under_review" | "accepted" | "rejected" | "interview";
@@ -103,6 +104,8 @@ interface Recruitment {
   form_questions: RecruitmentForm[];
   teamOptions?: Array<{ id: number; teamName: string; description?: string }>;
   applications: RecruitmentApplication[];
+  totalApplications?: number; // Tổng số đơn ứng tuyển đã nộp từ API
+  acceptedApplications?: number; // Số đơn đã được chấp nhận từ API
   created_at: string;
   updated_at: string;
 }
@@ -132,6 +135,7 @@ export function RecruitmentManagement() {
   const [selectedRecruitment, setSelectedRecruitment] =
     useState<Recruitment | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const debouncedSearchQuery = useDebounce(searchQuery, 300);
   const [statusFilter, setStatusFilter] = useState<RecruitmentStatus | "all">(
     "all"
   );
@@ -161,6 +165,13 @@ export function RecruitmentManagement() {
   const [applicationsTotalPages, setApplicationsTotalPages] = useState(0);
   const [applicationsTotalElements, setApplicationsTotalElements] = useState(0);
   const applicationsPageSize = 10;
+  
+  // Search and filter states for applications
+  const [applicationsSearchQuery, setApplicationsSearchQuery] = useState("");
+  const debouncedApplicationsSearchQuery = useDebounce(applicationsSearchQuery, 300);
+  const [applicationsStatusFilter, setApplicationsStatusFilter] = useState<
+    ApplicationStatus | "all"
+  >("all");
 
   // Dialog states
   const [statusChangeDialog, setStatusChangeDialog] = useState<{
@@ -170,6 +181,11 @@ export function RecruitmentManagement() {
     title: string;
   } | null>(null);
   const [cancelFormDialog, setCancelFormDialog] = useState(false);
+  const [saveWithOpenStatusDialog, setSaveWithOpenStatusDialog] = useState<{
+    open: boolean;
+    requestData: RecruitmentCreateRequest;
+    isEdit: boolean;
+  } | null>(null);
 
   // Function to fetch recruitments
   const fetchRecruitments = useCallback(async () => {
@@ -189,6 +205,7 @@ export function RecruitmentManagement() {
 
       const response = await getRecruitmentsByClubId(clubId, {
         status: apiStatus,
+        keyword: debouncedSearchQuery || undefined,
         page: recruitmentsPage,
         size: recruitmentsPageSize,
       });
@@ -223,6 +240,8 @@ export function RecruitmentManagement() {
         })),
         teamOptions: r.teamOptions,
         applications: [], // Will be fetched separately when needed
+        totalApplications: r.totalApplications || 0,
+        acceptedApplications: r.acceptedApplications || 0,
         created_at: r.createdAt,
         updated_at: r.updatedAt,
       }));
@@ -235,17 +254,17 @@ export function RecruitmentManagement() {
     } finally {
       setLoading(false);
     }
-  }, [clubId, statusFilter, recruitmentsPage]);
+  }, [clubId, statusFilter, debouncedSearchQuery, recruitmentsPage]);
 
   // Fetch recruitments from API on mount and when filters change
   useEffect(() => {
     fetchRecruitments();
   }, [fetchRecruitments]);
 
-  // Reset to page 0 when filter changes
+  // Reset to page 0 when filter or debounced search query changes
   useEffect(() => {
     setRecruitmentsPage(0);
-  }, [statusFilter, searchQuery]);
+  }, [statusFilter, debouncedSearchQuery]);
 
   // Fetch applications when a recruitment is selected
   useEffect(() => {
@@ -257,9 +276,20 @@ export function RecruitmentManagement() {
 
       setApplicationsLoading(true);
       try {
+        const apiStatus =
+          applicationsStatusFilter !== "all"
+            ? (applicationsStatusFilter.toUpperCase() as
+                | "UNDER_REVIEW"
+                | "ACCEPTED"
+                | "REJECTED"
+                | "INTERVIEW")
+            : undefined;
+        
         const response = await getApplicationsByRecruitmentId(
           parseInt(selectedRecruitment.recruitment_id),
           {
+            status: apiStatus,
+            keyword: debouncedApplicationsSearchQuery || undefined,
             page: applicationsPage,
             size: applicationsPageSize,
           }
@@ -311,25 +341,21 @@ export function RecruitmentManagement() {
     };
 
     fetchApplications();
-  }, [selectedRecruitment?.recruitment_id, applicationsPage]);
+  }, [
+    selectedRecruitment?.recruitment_id,
+    applicationsPage,
+    debouncedApplicationsSearchQuery,
+    applicationsStatusFilter,
+  ]);
 
-  // Reset applications page when recruitment changes
+  // Reset applications page when recruitment, debounced search, or filter changes
   useEffect(() => {
     setApplicationsPage(0);
-  }, [selectedRecruitment?.recruitment_id]);
-
-  const filteredRecruitments = useMemo(() => {
-    return recruitments.filter((recruitment) => {
-      const matchesSearch =
-        recruitment.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        recruitment.description
-          .toLowerCase()
-          .includes(searchQuery.toLowerCase());
-      const matchesStatus =
-        statusFilter === "all" || recruitment.status === statusFilter;
-      return matchesSearch && matchesStatus;
-    });
-  }, [recruitments, searchQuery, statusFilter]);
+  }, [
+    selectedRecruitment?.recruitment_id,
+    debouncedApplicationsSearchQuery,
+    applicationsStatusFilter,
+  ]);
 
   const handleEditRecruitment = async (recruitment: Recruitment) => {
     // Check if recruitment is closed
@@ -375,6 +401,8 @@ export function RecruitmentManagement() {
         })),
         teamOptions: freshData.teamOptions, // Map team options
         applications: [],
+        totalApplications: freshData.totalApplications || 0,
+        acceptedApplications: freshData.acceptedApplications || 0,
         created_at: freshData.createdAt,
         updated_at: freshData.updatedAt,
       };
@@ -406,6 +434,25 @@ export function RecruitmentManagement() {
   };
 
   const handleSaveRecruitment = async (
+    requestData: RecruitmentCreateRequest,
+    isEdit: boolean
+  ) => {
+    // Nếu status là OPEN, hiển thị dialog xác nhận
+    if (requestData.status === "OPEN") {
+      setSaveWithOpenStatusDialog({
+        open: true,
+        requestData,
+        isEdit,
+      });
+      return;
+    }
+
+    // Nếu không phải OPEN, tiến hành save trực tiếp
+    await performSaveRecruitment(requestData, isEdit);
+  };
+
+  // Hàm thực hiện save recruitment (sau khi đã xác nhận hoặc không cần xác nhận)
+  const performSaveRecruitment = async (
     requestData: RecruitmentCreateRequest,
     isEdit: boolean
   ) => {
@@ -590,13 +637,24 @@ export function RecruitmentManagement() {
     );
   };
 
+  // Confirm save with OPEN status
+  const confirmSaveWithOpenStatus = async () => {
+    if (!saveWithOpenStatusDialog) return;
+
+    setSaveWithOpenStatusDialog(null);
+    await performSaveRecruitment(
+      saveWithOpenStatusDialog.requestData,
+      saveWithOpenStatusDialog.isEdit
+    );
+  };
+
   return (
     <ClubPermissionGuard clubId={clubId}>
       <div className="min-h-screen bg-background">
         {/* Header */}
         <div className="">
           <div className="container mx-auto px-4 py-6">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
               <div>
                 <h1 className="text-3xl font-bold text-foreground">
                   Quản lý Tuyển dụng
@@ -605,39 +663,50 @@ export function RecruitmentManagement() {
                   Tạo và quản lý các đợt tuyển thành viên mới
                 </p>
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-2 w-full md:w-auto">
                 <Button
-                  variant={activeTab === "list" ? "secondary" : "outline"}
+                  variant={activeTab === "list" ? "default" : "outline"}
                   onClick={() => setActiveTab("list")}
-                  className="border-primary/30 hover:bg-primary hover:text-primary-foreground hover:border-primary shadow-sm hover:shadow-glow transition-all"
+                  className={`
+                    transition-all duration-300 ease-in-out flex-1 md:flex-none
+                    ${
+                      activeTab === "list"
+                        ? "bg-primary text-primary-foreground shadow-md scale-105 border-primary ring-2 ring-primary/30"
+                        : "border-primary/30"
+                    }
+                  `}
                 >
                   <FileText className="h-4 w-4 mr-2" />
                   Danh sách
                 </Button>
                 <Button
-                  variant={activeTab === "create" ? "secondary" : "outline"}
+                  variant={activeTab === "create" ? "default" : "outline"}
                   onClick={() => {
                     setEditingRecruitment(null);
                     setEditLoading(false); // Reset edit loading state
                     setActiveTab("create");
                   }}
-                  className="border-primary/30 hover:bg-primary hover:text-primary-foreground hover:border-primary shadow-sm hover:shadow-glow transition-all"
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Tạo mới
-                </Button>
-                {selectedRecruitment && (
-                  <Button
-                    variant={
-                      activeTab === "applications" ? "secondary" : "outline"
+                  className={`
+                    transition-all duration-300 ease-in-out flex-1 md:flex-none
+                    ${
+                      activeTab === "create"
+                        ? "bg-primary text-primary-foreground shadow-md scale-105 border-primary ring-2 ring-primary/30"
+                        : "border-primary/30 "
                     }
-                    onClick={() => setActiveTab("applications")}
-                    className="bg-transparent border-primary-foreground/20"
-                  >
-                    <Users className="h-4 w-4 mr-2" />
-                    Đơn ứng tuyển
-                  </Button>
-                )}
+                  `}
+                >
+                  {activeTab === "create" && editingRecruitment ? (
+                    <>
+                      <Edit className="h-4 w-4 mr-2" />
+                      Chỉnh sửa
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Tạo mới
+                    </>
+                  )}
+                </Button>
               </div>
             </div>
           </div>
@@ -681,7 +750,10 @@ export function RecruitmentManagement() {
               {loading && (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   {[...Array(4)].map((_, index) => (
-                    <Card key={index} className="hover:shadow-lg transition-shadow">
+                    <Card
+                      key={index}
+                      className="hover:shadow-lg transition-shadow"
+                    >
                       <CardHeader>
                         <div className="flex items-start justify-between">
                           <div className="flex-1 space-y-3">
@@ -690,7 +762,9 @@ export function RecruitmentManagement() {
                             {/* Badges */}
                             <div className="flex items-center gap-2">
                               <Skeleton className="h-5 w-20 rounded-full" />
-                              {index === 1 && <Skeleton className="h-5 w-32 rounded-full" />}
+                              {index === 1 && (
+                                <Skeleton className="h-5 w-32 rounded-full" />
+                              )}
                             </div>
                           </div>
                         </div>
@@ -744,7 +818,7 @@ export function RecruitmentManagement() {
               {/* Recruitment Cards */}
               {!loading && !error && (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {filteredRecruitments.map((recruitment) => (
+                  {recruitments.map((recruitment) => (
                     <Card
                       key={recruitment.recruitment_id}
                       className="hover:shadow-lg transition-shadow"
@@ -807,7 +881,7 @@ export function RecruitmentManagement() {
                               Đơn ứng tuyển:
                             </span>
                             <div className="font-medium">
-                              {recruitment.applications.length}
+                              {recruitment.totalApplications ?? 0}
                               {recruitment.max_applications &&
                                 ` / ${recruitment.max_applications}`}
                             </div>
@@ -817,11 +891,7 @@ export function RecruitmentManagement() {
                               Đã duyệt:
                             </span>
                             <div className="font-medium text-green-600">
-                              {
-                                recruitment.applications.filter(
-                                  (app) => app.status === "accepted"
-                                ).length
-                              }
+                              {recruitment.acceptedApplications ?? 0}
                             </div>
                           </div>
                         </div>
@@ -930,7 +1000,7 @@ export function RecruitmentManagement() {
                 </div>
               )}
 
-              {!loading && !error && filteredRecruitments.length === 0 && (
+              {!loading && !error && recruitments.length === 0 && (
                 <div className="text-center py-12">
                   <FileText className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
                   <p className="text-muted-foreground">
@@ -1033,13 +1103,19 @@ export function RecruitmentManagement() {
                               pageNum = i;
                             } else if (recruitmentsPage <= 2) {
                               pageNum = i;
-                            } else if (recruitmentsPage >= recruitmentsTotalPages - 3) {
+                            } else if (
+                              recruitmentsPage >=
+                              recruitmentsTotalPages - 3
+                            ) {
                               pageNum = recruitmentsTotalPages - 5 + i;
                             } else {
                               pageNum = recruitmentsPage - 2 + i;
                             }
 
-                            if (pageNum < 0 || pageNum >= recruitmentsTotalPages)
+                            if (
+                              pageNum < 0 ||
+                              pageNum >= recruitmentsTotalPages
+                            )
                               return null;
                             if (recruitmentsPage > 2 && pageNum === 0)
                               return null;
@@ -1080,7 +1156,9 @@ export function RecruitmentManagement() {
                             <PaginationItem>
                               <PaginationLink
                                 onClick={() => {
-                                  setRecruitmentsPage(recruitmentsTotalPages - 1);
+                                  setRecruitmentsPage(
+                                    recruitmentsTotalPages - 1
+                                  );
                                   window.scrollTo({
                                     top: 0,
                                     behavior: "smooth",
@@ -1097,7 +1175,10 @@ export function RecruitmentManagement() {
                         <PaginationItem>
                           <PaginationNext
                             onClick={() => {
-                              if (recruitmentsPage < recruitmentsTotalPages - 1) {
+                              if (
+                                recruitmentsPage <
+                                recruitmentsTotalPages - 1
+                              ) {
                                 setRecruitmentsPage(recruitmentsPage + 1);
                                 window.scrollTo({
                                   top: 0,
@@ -1143,6 +1224,10 @@ export function RecruitmentManagement() {
               totalPages={applicationsTotalPages}
               totalElements={applicationsTotalElements}
               onPageChange={(page) => setApplicationsPage(page)}
+              searchQuery={applicationsSearchQuery}
+              onSearchChange={setApplicationsSearchQuery}
+              statusFilter={applicationsStatusFilter}
+              onStatusFilterChange={setApplicationsStatusFilter}
             />
           )}
         </div>
@@ -1202,11 +1287,18 @@ export function RecruitmentManagement() {
                   </p>
                 </div>
                 {statusChangeDialog?.newStatus === "OPEN" && (
-                  <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-                    <p className="text-sm text-green-800">
-                      ✓ Sinh viên sẽ có thể nộp đơn ứng tuyển sau khi mở
-                    </p>
-                  </div>
+                  <>
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                      <p className="text-sm text-green-800">
+                        ✓ Sinh viên sẽ có thể nộp đơn ứng tuyển sau khi mở
+                      </p>
+                    </div>
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                      <p className="text-sm text-amber-800">
+                        ⚠️ Tất cả các đợt tuyển dụng khác đang mở sẽ tự động chuyển sang trạng thái "Đã đóng"
+                      </p>
+                    </div>
+                  </>
                 )}
                 {statusChangeDialog?.newStatus === "CLOSED" && (
                   <div className="bg-red-50 border border-red-200 rounded-lg p-3">
@@ -1294,6 +1386,87 @@ export function RecruitmentManagement() {
               </Button>
               <Button variant="destructive" onClick={confirmCancelForm}>
                 Hủy bỏ
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Save with OPEN Status Confirmation Dialog */}
+        <Dialog
+          open={saveWithOpenStatusDialog?.open || false}
+          onOpenChange={(open) => !open && setSaveWithOpenStatusDialog(null)}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <div className="flex items-center gap-3">
+                <div className="p-3 rounded-full bg-green-100">
+                  <AlertTriangle className="h-6 w-6 text-green-600" />
+                </div>
+                <div>
+                  <DialogTitle>
+                    Xác nhận {saveWithOpenStatusDialog?.isEdit ? "cập nhật" : "tạo"} đợt tuyển dụng
+                  </DialogTitle>
+                </div>
+              </div>
+            </DialogHeader>
+            <DialogDescription className="py-4">
+              <div className="space-y-3">
+                <p className="text-base">
+                  {saveWithOpenStatusDialog?.isEdit ? (
+                    <>
+                      Bạn đang cập nhật đợt tuyển dụng với trạng thái{" "}
+                      <strong className="text-green-600">"Đang mở"</strong>
+                    </>
+                  ) : (
+                    <>
+                      Bạn đang tạo đợt tuyển dụng mới với trạng thái{" "}
+                      <strong className="text-green-600">"Đang mở"</strong>
+                    </>
+                  )}
+                </p>
+                <div className="bg-muted p-3 rounded-lg">
+                  <p className="font-medium text-foreground">
+                    "{saveWithOpenStatusDialog?.requestData.title}"
+                  </p>
+                </div>
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                  <p className="text-sm text-amber-800 font-medium">
+                    ⚠️ Lưu ý quan trọng:
+                  </p>
+                  <p className="text-sm text-amber-800 mt-2">
+                    Tất cả các đợt tuyển dụng khác đang ở trạng thái "Đang mở" sẽ tự động chuyển sang trạng thái "Đã đóng" để đảm bảo chỉ có một đợt tuyển dụng mở tại một thời điểm.
+                  </p>
+                </div>
+                <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                  <p className="text-sm text-green-800">
+                    ✓ Sinh viên sẽ có thể nộp đơn ứng tuyển cho đợt tuyển dụng này
+                  </p>
+                </div>
+              </div>
+            </DialogDescription>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setSaveWithOpenStatusDialog(null)}
+                disabled={createLoading}
+              >
+                Hủy
+              </Button>
+              <Button
+                onClick={confirmSaveWithOpenStatus}
+                disabled={createLoading}
+                className="bg-green-600 hover:bg-green-700"
+              >
+                {createLoading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Đang xử lý...
+                  </>
+                ) : (
+                  <>
+                    Xác nhận {saveWithOpenStatusDialog?.isEdit ? "cập nhật" : "tạo"}
+                  </>
+                )}
               </Button>
             </DialogFooter>
           </DialogContent>

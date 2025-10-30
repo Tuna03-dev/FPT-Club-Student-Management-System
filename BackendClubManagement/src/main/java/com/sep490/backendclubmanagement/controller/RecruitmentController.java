@@ -34,12 +34,13 @@ public class RecruitmentController {
     public ResponseEntity<ApiResponse<PagedResponse<RecruitmentData>>> listRecruitments(
             @PathVariable Long clubId,
             @RequestParam(required = false) RecruitmentStatus status,
+            @RequestParam(required = false) String keyword,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(defaultValue = "startDate,desc") String sort
     ) {
         Pageable pageable = PageRequest.of(page, size, parseSort(sort));
-        PagedResponse<RecruitmentData> data = recruitmentService.listRecruitments(clubId, status, pageable);
+        PagedResponse<RecruitmentData> data = recruitmentService.listRecruitments(clubId, status, keyword, pageable);
         return ResponseEntity.ok(ApiResponse.success(data));
     }
 
@@ -147,6 +148,7 @@ public class RecruitmentController {
             Authentication authentication,
             @PathVariable Long recruitmentId,
             @RequestParam(required = false) RecruitmentApplicationStatus status,
+            @RequestParam(required = false) String keyword,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(defaultValue = "submittedDate,desc") String sort
@@ -157,7 +159,7 @@ public class RecruitmentController {
                 .orElseThrow(() -> new AppException(ErrorCode.UNAUTHORIZED));
         
         Pageable pageable = PageRequest.of(page, size, parseSort(sort));
-        PagedResponse<RecruitmentApplicationData> data = recruitmentService.listApplications(currentUser.getId(), recruitmentId, status, pageable);
+        PagedResponse<RecruitmentApplicationData> data = recruitmentService.listApplications(currentUser.getId(), recruitmentId, status, keyword, pageable);
         return ResponseEntity.ok(ApiResponse.success(data));
     }
 

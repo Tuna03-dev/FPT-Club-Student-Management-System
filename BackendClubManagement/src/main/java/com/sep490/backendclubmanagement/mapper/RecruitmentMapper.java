@@ -23,6 +23,16 @@ public interface RecruitmentMapper {
             return null;
         }
         
+        // Calculate application statistics
+        int totalApplications = 0;
+        int acceptedApplications = 0;
+        if (recruitment.getApplications() != null) {
+            totalApplications = recruitment.getApplications().size();
+            acceptedApplications = (int) recruitment.getApplications().stream()
+                    .filter(app -> app.getStatus() == RecruitmentApplicationStatus.ACCEPTED)
+                    .count();
+        }
+        
         RecruitmentData.RecruitmentDataBuilder builder = RecruitmentData.builder()
                 .id(recruitment.getId())
                 .title(recruitment.getTitle())
@@ -33,6 +43,8 @@ public interface RecruitmentMapper {
                 .status(recruitment.getStatus())
                 .requirements(recruitment.getRequirements())
                 .clubId(recruitment.getClub() != null ? recruitment.getClub().getId() : null)
+                .totalApplications(totalApplications)
+                .acceptedApplications(acceptedApplications)
                 .createdAt(recruitment.getCreatedAt())
                 .updatedAt(recruitment.getUpdatedAt());
         

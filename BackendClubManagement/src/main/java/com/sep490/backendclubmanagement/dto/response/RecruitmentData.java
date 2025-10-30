@@ -19,6 +19,8 @@ public class RecruitmentData {
     private Long clubId;
     private List<RecruitmentQuestionData> questions;
     private List<TeamOptionData> teamOptions; // Danh sách team options cho phép sinh viên lựa chọn
+    private Integer totalApplications; // Tổng số đơn ứng tuyển đã nộp
+    private Integer acceptedApplications; // Số đơn đã được chấp nhận
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }
