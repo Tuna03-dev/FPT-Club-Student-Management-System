@@ -55,6 +55,10 @@ public class RoleService {
     /**
      * Kiểm tra user có phải CLUB_OFFICER không (dựa vào system role)
      */
+    public boolean isClubOfficer(Long userId) {
+        String systemRole = getUserSystemRole(userId);
+        return "CLUB_OFFICER".equals(systemRole);
+    }
     public boolean isClubOfficer(Long userId, Long clubId) {
         String systemRole = getUserSystemRole(userId);
         return "CLUB_OFFICER".equals(systemRole);

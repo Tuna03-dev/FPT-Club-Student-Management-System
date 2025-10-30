@@ -55,5 +55,17 @@ public interface RequestEventRepository extends JpaRepository<RequestEvent, Long
            "WHERE re.status = :status AND e.club.id = :clubId")
     List<RequestEvent> findAllByStatusAndClubIdWithAll(@Param("status") RequestStatus status,
                                                        @Param("clubId") Long clubId);
+
+
+    @Query("SELECT re.event.id FROM RequestEvent re WHERE re.createdBy.id = :userId AND re.status IN :statuses")
+    List<Long> findEventIdsOfDraftByUser(@Param("userId") Long userId, @Param("statuses") List<RequestStatus> statuses);
+
+    @Query("SELECT re FROM RequestEvent re WHERE re.createdBy.id = :userId AND re.status IN :statuses")
+    List<RequestEvent> findByCreatedByIdAndStatusIn(@Param("userId") Long userId, @Param("statuses") List<RequestStatus> statuses);
+
+    @Query("SELECT re FROM RequestEvent re JOIN FETCH re.event e WHERE e.id = :eventId AND re.createdBy.id = :userId AND re.status IN :statuses")
+    Optional<RequestEvent> findByEventIdAndCreatorWithEventAndStatusIn(@Param("eventId") Long eventId,
+                                                                       @Param("userId") Long userId,
+                                                                       @Param("statuses") List<RequestStatus> statuses);
 }
 

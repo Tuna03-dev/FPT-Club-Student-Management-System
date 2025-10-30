@@ -114,9 +114,41 @@ export async function createEvent(payload: CreateEventPayload): Promise<EventDat
 
   const res = await axiosClient.post<EventData>("/events/create", form, {
     headers: { "Content-Type": "multipart/form-data" },
+    timeout: 60000, // increase timeout for large image uploads
   });
   if (!res.data) throw new Error("Create event failed");
   return res.data;
+}
+
+export interface UpdateEventPayload {
+  title?: string;
+  description?: string;
+  location?: string;
+  startTime?: string; // ISO string or datetime-local to be parsed backend
+  endTime?: string;
+  eventTypeId?: number;
+  images?: File[]; // append
+}
+
+export async function updateEvent(eventId: number, payload: UpdateEventPayload): Promise<EventData> {
+  const form = new FormData();
+  if (payload.title != null) form.append("title", payload.title);
+  if (payload.description != null) form.append("description", payload.description);
+  if (payload.location != null) form.append("location", payload.location);
+  if (payload.startTime != null) form.append("startTime", payload.startTime);
+  if (payload.endTime != null) form.append("endTime", payload.endTime);
+  if (payload.eventTypeId != null) form.append("eventTypeId", String(payload.eventTypeId));
+  (payload.images ?? []).forEach((file) => form.append("mediaFiles", file));
+  const res = await axiosClient.put<EventData>(`/events/${eventId}`, form, {
+    headers: { "Content-Type": "multipart/form-data" },
+    timeout: 60000, // increase timeout for large image uploads
+  });
+  if (!res.data) throw new Error("Update event failed");
+  return res.data;
+}
+
+export async function deleteEvent(eventId: number): Promise<void> {
+  await axiosClient.delete(`/events/${eventId}`);
 }
 
 // ===== Pending Requests =====
@@ -168,5 +200,15 @@ export async function approveByUniversity(
     status: approve ? "APPROVED_UNIVERSITY" : "REJECTED_UNIVERSITY",
     responseMessage,
   });
+}
+
+export interface MyDraftEventDto {
+  event: EventData;
+  requestStatus: string; // RequestStatus enum name
+}
+
+export async function getMyDraftEvents(): Promise<MyDraftEventDto[]> {
+  const res = await axiosClient.get<MyDraftEventDto[]>("/events/my-draft-events");
+  return res.data ?? [];
 }
 

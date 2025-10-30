@@ -4,6 +4,7 @@ import com.sep490.backendclubmanagement.dto.ApiResponse;
 import com.sep490.backendclubmanagement.dto.request.CreateEventRequest;
 import com.sep490.backendclubmanagement.dto.request.EventApprovalRequest;
 import com.sep490.backendclubmanagement.dto.request.EventRequest;
+import com.sep490.backendclubmanagement.dto.request.UpdateEventRequest;
 import com.sep490.backendclubmanagement.dto.response.*;
 import com.sep490.backendclubmanagement.entity.RequestEvent;
 import com.sep490.backendclubmanagement.service.EventManagementService;
@@ -86,5 +87,34 @@ public class EventController {
     public ApiResponse<List<PendingRequestDto>> getPendingRequests() {
         Long userId = SecurityUtils.getCurrentUserId();
         return ApiResponse.success(eventManagementService.getPendingRequests(userId));
+    }
+
+    /**
+     * Lấy các event và trạng thái request chờ duyệt mà user hiện tại tạo
+     */
+    @GetMapping("/my-draft-events")
+    public ApiResponse<List<MyDraftEventDto>> getMyDraftEvents() {
+        Long userId = SecurityUtils.getCurrentUserId();
+        return ApiResponse.success(eventManagementService.getMyDraftEvents(userId));
+    }
+
+    /**
+     * Cập nhật sự kiện nháp do user hiện tại tạo (theo role/status)
+     */
+    @PutMapping(value = "/{eventId}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ApiResponse<EventData> updateMyDraftEvent(@PathVariable Long eventId,
+                                                     @ModelAttribute UpdateEventRequest request) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        return ApiResponse.success(eventManagementService.updateMyDraftEvent(eventId, request, userId));
+    }
+
+    /**
+     * Xóa sự kiện nháp do user hiện tại tạo (theo role/status)
+     */
+    @DeleteMapping("/{eventId}")
+    public ApiResponse<Void> deleteMyDraftEvent(@PathVariable Long eventId) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        eventManagementService.deleteMyDraftEvent(eventId, userId);
+        return ApiResponse.success();
     }
 }

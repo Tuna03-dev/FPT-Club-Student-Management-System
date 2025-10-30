@@ -5,7 +5,7 @@ import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { EventDetailModal } from "./event-detail-modal"
-import { type EventData, getEventsByClubId, createEvent, getAllEventTypes, getPendingRequests, type PendingRequestDto, approveByClub, approveByUniversity } from "@/service/EventService"
+import { type EventData, getEventsByClubId, createEvent, getAllEventTypes, getPendingRequests, type PendingRequestDto, approveByClub, approveByUniversity, getMyDraftEvents, type MyDraftEventDto } from "@/service/EventService"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { CreateEventForm } from "./create-event-form"
 import { authService } from "@/services/authService"
@@ -20,6 +20,8 @@ interface Event {
   attendees: number
   status: "upcoming" | "ongoing" | "completed"
   images: string[]
+  isMyDraft?: boolean
+  requestStatus?: string
 }
 interface EventFormValues {
   title: string
@@ -68,7 +70,39 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
           images: event.mediaUrls || []
         }))
         
-        setEvents(mappedEvents)
+        let all: Event[] = mappedEvents
+
+        // If user is CLUB_PRESIDENT or CLUB_OFFICER, also fetch my draft events and merge
+        const user = authService.getCurrentUser()
+        const roleUpper = user?.systemRole ? String(user.systemRole).trim().toUpperCase() : undefined
+        if (roleUpper === "CLUB_PRESIDENT" || roleUpper === "CLUB_OFFICER") {
+          try {
+            const drafts = await getMyDraftEvents()
+            const mappedDrafts: Event[] = (drafts ?? []).map((d: MyDraftEventDto) => ({
+              id: d.event.id.toString(),
+              title: d.event.title,
+              description: d.event.description,
+              startDate: new Date(d.event.startTime),
+              endDate: new Date(d.event.endTime),
+              location: d.event.location,
+              attendees: 0,
+              status: determineEventStatus(new Date(d.event.startTime), new Date(d.event.endTime)),
+              images: d.event.mediaUrls || [],
+              isMyDraft: true,
+              requestStatus: d.requestStatus,
+            }))
+            // Merge by id, prefer draft flag if same id appears
+            const byId = new Map<string, Event>()
+            for (const e of [...all, ...mappedDrafts]) {
+              byId.set(e.id, { ...(byId.get(e.id) ?? {} as Event), ...e })
+            }
+            all = Array.from(byId.values())
+          } catch (e) {
+            console.warn("Failed to fetch my draft events", e)
+          }
+        }
+
+        setEvents(all)
       } catch (err) {
         console.error('Error fetching events:', err)
         setError('Không thể tải danh sách sự kiện')
@@ -294,7 +328,7 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
                           {events.map((event) => (
                             <div
                               key={event.id}
-                              className={`text-xs px-2 py-1 rounded font-medium truncate cursor-pointer hover:opacity-80 flex-shrink-0 ${getStatusColor(event.status)}`}
+                              className={`text-xs px-2 py-1 rounded font-medium truncate cursor-pointer hover:opacity-80 flex-shrink-0 ${event.isMyDraft ? "bg-gray-400 text-white" : getStatusColor(event.status)}`}
                               title={`${event.title} - ${event.location} - ${event.startDate.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}`}
                               onClick={(e) => {
                                 e.stopPropagation()
@@ -493,7 +527,19 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
         </DialogContent>
       </Dialog>
 
-      {selectedEvent && <EventDetailModal event={selectedEvent} onClose={() => setSelectedEvent(null)} />}
+      {selectedEvent && (
+        <EventDetailModal
+          event={selectedEvent}
+          onClose={() => setSelectedEvent(null)}
+          onUpdated={(upd: Event) => {
+            setEvents(prev => prev.map(e => e.id === upd.id ? { ...e, ...upd } : e))
+            setSelectedEvent(upd)
+          }}
+          onDeleted={(id) => {
+            setEvents(prev => prev.filter(e => e.id !== id))
+          }}
+        />
+      )}
     </>
   )
 }

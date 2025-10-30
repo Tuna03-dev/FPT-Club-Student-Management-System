@@ -4,6 +4,10 @@ import { useState } from "react"
 import { ChevronLeft, ChevronRight, X, Calendar, MapPin } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { UpdateEventForm, type UpdateEventFormData } from "./update-event-form"
+import { updateEvent, deleteEvent, getEventById } from "@/service/EventService"
+import React from "react"
 
 interface EventDetailModalProps {
   event: {
@@ -16,19 +20,42 @@ interface EventDetailModalProps {
     attendees: number
     status: "upcoming" | "ongoing" | "completed"
     images: string[]
+    isMyDraft?: boolean
+    requestStatus?: string
   }
   onClose: () => void
+  onUpdated?: (updated: { id: string; title: string; description: string; startDate: Date; endDate: Date; location: string; attendees: number; status: "upcoming" | "ongoing" | "completed"; images: string[]; isMyDraft?: boolean; requestStatus?: string }) => void
+  onDeleted?: (id: string) => void
 }
 
-export function EventDetailModal({ event, onClose }: EventDetailModalProps) {
+export function EventDetailModal({ event, onClose, onUpdated, onDeleted }: EventDetailModalProps) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
+  const [openUpdate, setOpenUpdate] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [images, setImages] = useState<string[]>(event.images ?? [])
+
+  // If draft event has no images loaded, fetch full event details to get mediaUrls
+  React.useEffect(() => {
+    let cancelled = false
+    if ((event.isMyDraft || true) && (!images || images.length === 0)) {
+      getEventById(Number(event.id))
+        .then((full) => {
+          if (!cancelled) {
+            setImages(full.mediaUrls ?? [])
+          }
+        })
+        .catch(() => {})
+    }
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [event.id])
 
   const handlePrevImage = () => {
-    setCurrentImageIndex((prev) => (prev === 0 ? event.images.length - 1 : prev - 1))
+    setCurrentImageIndex((prev) => (prev === 0 ? images.length - 1 : prev - 1))
   }
 
   const handleNextImage = () => {
-    setCurrentImageIndex((prev) => (prev === event.images.length - 1 ? 0 : prev + 1))
+    setCurrentImageIndex((prev) => (prev === images.length - 1 ? 0 : prev + 1))
   }
 
   const getStatusColor = (status: string) => {
@@ -69,17 +96,17 @@ export function EventDetailModal({ event, onClose }: EventDetailModalProps) {
 
         <div className="p-6 space-y-6 overflow-y-auto">
           {/* Image Carousel */}
-          {event.images.length > 0 && (
+          {images.length > 0 && (
             <div className="space-y-4">
               <div className="relative bg-muted rounded-lg overflow-hidden aspect-video">
                 <img
-                  src={event.images[currentImageIndex] || "/placeholder.svg"}
+                  src={images[currentImageIndex] || "/placeholder.svg"}
                   alt={`${event.title} - ảnh ${currentImageIndex + 1}`}
                   className="w-full h-full object-cover"
                 />
 
                 {/* Navigation buttons */}
-                {event.images.length > 1 && (
+                {images.length > 1 && (
                   <>
                     <button
                       onClick={handlePrevImage}
@@ -101,7 +128,7 @@ export function EventDetailModal({ event, onClose }: EventDetailModalProps) {
 
               {/* Image counter only - no thumbnails */}
               <div className="text-sm text-muted-foreground text-center">
-                Ảnh {currentImageIndex + 1} / {event.images.length}
+                Ảnh {currentImageIndex + 1} / {images.length}
               </div>
             </div>
           )}
@@ -113,6 +140,11 @@ export function EventDetailModal({ event, onClose }: EventDetailModalProps) {
             >
               {getStatusLabel(event.status)}
             </div>
+            {event.isMyDraft && event.requestStatus && (
+              <div className="inline-block ml-2 px-3 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 align-middle">
+                {event.requestStatus === 'PENDING_CLUB' ? 'Chờ duyệt CLB' : event.requestStatus === 'PENDING_UNIVERSITY' ? 'Chờ duyệt Nhà trường' : event.requestStatus}
+              </div>
+            )}
             <h2 className="text-3xl font-bold text-foreground mb-2">{event.title}</h2>
             <p className="text-base text-muted-foreground">{event.description}</p>
           </div>
@@ -141,12 +173,91 @@ export function EventDetailModal({ event, onClose }: EventDetailModalProps) {
 
           </div>
 
-          {/* Register button */}
-          <Button className="w-full bg-primary hover:bg-primary/90 text-primary-foreground py-6 text-base">
-            Đăng ký tham gia
-          </Button>
+          {/* Actions */}
+          {event.isMyDraft ? (
+            <div className="flex gap-3">
+              <Button
+                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-6 text-base"
+                onClick={() => setOpenUpdate(true)}
+              >
+                Cập nhật
+              </Button>
+              <Button
+                className="flex-1 bg-rose-600 hover:bg-rose-700 text-white py-6 text-base"
+                disabled={isDeleting}
+                onClick={async () => {
+                  try {
+                    setIsDeleting(true)
+                    await deleteEvent(Number(event.id))
+                    onDeleted?.(event.id)
+                    onClose()
+                  } finally {
+                    setIsDeleting(false)
+                  }
+                }}
+              >
+                {isDeleting ? "Đang xóa..." : "Xóa"}
+              </Button>
+            </div>
+          ) : (
+            <Button className="w-full bg-primary hover:bg-primary/90 text-primary-foreground py-6 text-base">
+              Đăng ký tham gia
+            </Button>
+          )}
         </div>
       </Card>
+      {/* Update Modal */}
+      <Dialog open={openUpdate} onOpenChange={setOpenUpdate}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Cập nhật sự kiện</DialogTitle>
+          </DialogHeader>
+          <UpdateEventForm
+            initial={{
+              title: event.title,
+              description: event.description,
+              location: event.location,
+              startTime: new Date(event.startDate).toISOString().slice(0,16),
+              endTime: new Date(event.endDate).toISOString().slice(0,16),
+              // eventTypeId không có sẵn trong event, để trống nghĩa là không đổi
+            }}
+            onSubmit={async (data: UpdateEventFormData) => {
+              const payload = {
+                title: data.title && data.title.trim() !== "" ? data.title : undefined,
+                description: data.description && data.description.trim() !== "" ? data.description : undefined,
+                location: data.location && data.location.trim() !== "" ? data.location : undefined,
+                startTime: data.startTime && data.startTime !== "" ? data.startTime : undefined,
+                endTime: data.endTime && data.endTime !== "" ? data.endTime : undefined,
+                eventTypeId: data.eventTypeId ? Number(data.eventTypeId) : undefined,
+                images: data.eventImages ?? [],
+              }
+              const updated = await updateEvent(Number(event.id), payload)
+              // Map back to local event shape
+              onUpdated?.({
+                id: String(updated.id),
+                title: updated.title,
+                description: updated.description,
+                startDate: new Date(updated.startTime),
+                endDate: new Date(updated.endTime),
+                location: updated.location,
+                attendees: event.attendees,
+                status: (() => {
+                  const now = new Date()
+                  const s = new Date(updated.startTime)
+                  const e = new Date(updated.endTime)
+                  if (now < s) return "upcoming"
+                  if (now >= s && now <= e) return "ongoing"
+                  return "completed"
+                })(),
+                images: updated.mediaUrls || [],
+                isMyDraft: event.isMyDraft,
+                requestStatus: event.requestStatus,
+              })
+            }}
+            onSuccess={() => setOpenUpdate(false)}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
