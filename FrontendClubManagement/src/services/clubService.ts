@@ -19,6 +19,13 @@ export interface ClubRoleDTO {
   systemRoleName: string;
 }
 
+export interface TeamDTO {
+  id: number;
+  teamName: string;
+  description: string;
+  linkGroupChat: string;
+}
+
 export interface ClubPresidentData {
   fullName: string;
   email: string;
@@ -88,6 +95,11 @@ export const clubService = {
   async getRoles(clubId: number): Promise<ApiResponse<ClubRoleDTO[]>> {
     const url = `/clubs/${clubId}/roles`;
     return axiosClient.get<ClubRoleDTO[]>(url);
+  },
+
+  async getTeams(clubId: number): Promise<ApiResponse<TeamDTO[]>> {
+    const url = `/clubs/${clubId}/teams`;
+    return axiosClient.get<TeamDTO[]>(url);
   },
 };
 

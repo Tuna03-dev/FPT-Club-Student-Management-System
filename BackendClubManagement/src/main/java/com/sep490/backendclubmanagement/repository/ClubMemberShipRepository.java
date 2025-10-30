@@ -72,13 +72,13 @@ public interface ClubMemberShipRepository extends JpaRepository<ClubMemberShip, 
             @Param("status") ClubMemberShipStatus status,
             @Param("searchTerm") String searchTerm
     );
-    
+
     // Kiểm tra xem user đã là thành viên active của club chưa
     boolean existsByUserIdAndClubIdAndStatus(Long userId, Long clubId, ClubMemberShipStatus status);
-    
+
     // Tìm membership của user trong club với status cụ thể
     java.util.Optional<ClubMemberShip> findByUserIdAndClubIdAndStatus(Long userId, Long clubId, ClubMemberShipStatus status);
-    
+
     // Kiểm tra xem user có phải là CLUB_PRESIDENT của club trong semester hiện tại không
     @Query("""
         SELECT CASE WHEN COUNT(cm) > 0 THEN true ELSE false END
@@ -92,7 +92,14 @@ public interface ClubMemberShipRepository extends JpaRepository<ClubMemberShip, 
           AND rm.isActive = true
           AND rm.semester.id = :semesterId
         """)
-    boolean isClubPresidentInSemester(@Param("userId") Long userId, 
+    boolean isClubPresidentInSemester(@Param("userId") Long userId,
                                       @Param("clubId") Long clubId,
                                       @Param("semesterId") Long semesterId);
+
+    @Query("""
+    SELECT cms FROM ClubMemberShip cms
+    WHERE cms.club.id = :clubId AND cms.user.id = :userId
+    """)
+    ClubMemberShip findByClubIdAndUserId(@Param("clubId") Long clubId, @Param("userId") Long userId);
+
 }

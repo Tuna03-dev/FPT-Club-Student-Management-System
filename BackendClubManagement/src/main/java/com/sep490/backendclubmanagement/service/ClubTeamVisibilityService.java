@@ -20,7 +20,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class ClubTeamVisibilityService {
 
-    private final RoleMembershipRepository roleMembershipRepository;
+    private final RoleMemberShipRepository roleMembershipRepository;
     private final TeamRepository teamRepository;
     private final SemesterRepository semesterRepository;
     private final UserRepository userRepository;

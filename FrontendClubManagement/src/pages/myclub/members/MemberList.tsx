@@ -53,7 +53,9 @@ import {
   clubService,
   type SemesterDTO,
   type ClubRoleDTO,
+  type TeamDTO,
 } from "@/services/clubService";
+import { authService } from "@/services/authService";
 import { type PageResponse } from "@/types";
 
 import { toast } from "sonner";
@@ -142,6 +144,7 @@ const Members = () => {
   const [error, setError] = useState<string | null>(null);
   const [semesters, setSemesters] = useState<SemesterDTO[]>([]);
   const [clubRoles, setClubRoles] = useState<ClubRoleDTO[]>([]);
+  const [teams, setTeams] = useState<TeamDTO[]>([]);
   const [initialLoad, setInitialLoad] = useState(true);
 
   const clubId = 1; // TODO: replace with real club id from context/route
@@ -152,9 +155,11 @@ const Members = () => {
   const [isAssignTeamOpen, setIsAssignTeamOpen] = useState(false);
   const [selectedTeam, setSelectedTeam] = useState<string>("");
   const [activeTab, setActiveTab] = useState<"current" | "left">("current");
-  
+
   // Left members state
-  const [leftMembersPage, setLeftMembersPage] = useState<MembersPage | null>(null);
+  const [leftMembersPage, setLeftMembersPage] = useState<MembersPage | null>(
+    null
+  );
   const [leftMembersLoading, setLeftMembersLoading] = useState(false);
   const [leftMembersError, setLeftMembersError] = useState<string | null>(null);
   const [leftMembersSearchQuery, setLeftMembersSearchQuery] = useState("");
@@ -204,13 +209,14 @@ const Members = () => {
     setSelectedStatus(status);
   }, [searchParams]);
 
-  // Initial load: Fetch semesters and roles only once
+  // Initial load: Fetch semesters, roles, and teams only once
   useEffect(() => {
     const loadInitialData = async () => {
       try {
-        const [semestersRes, rolesRes] = await Promise.all([
+        const [semestersRes, rolesRes, teamsRes] = await Promise.all([
           clubService.getSemesters(clubId),
           clubService.getRoles(clubId),
+          clubService.getTeams(clubId),
         ]);
 
         if (semestersRes.code === 200 && semestersRes.data) {
@@ -233,6 +239,10 @@ const Members = () => {
 
         if (rolesRes.code === 200 && rolesRes.data) {
           setClubRoles(rolesRes.data);
+        }
+
+        if (teamsRes.code === 200 && teamsRes.data) {
+          setTeams(teamsRes.data);
         }
       } catch (e: unknown) {
         console.error("Error fetching initial data:", e);
@@ -301,7 +311,8 @@ const Members = () => {
       if (res.code === 200 && res.data) {
         setLeftMembersPage(res.data);
       } else {
-        const message = res.message || "Không thể tải danh sách thành viên đã rời";
+        const message =
+          res.message || "Không thể tải danh sách thành viên đã rời";
         setLeftMembersError(message);
         toast.error(message);
       }
@@ -378,40 +389,64 @@ const Members = () => {
     );
   };
 
-  const handleSaveRole = () => {
-    if (!selectedMemberRole) {
+  const handleSaveRole = async () => {
+    if (!selectedMemberRole || !selectedMember) {
       toast.error("Vui lòng chọn vai trò");
       return;
     }
 
-    // TODO: Call API to update role; for now update local state view
-    if (selectedMember) {
-      // Update the member's role in the current view
+    try {
+      const roleId = parseInt(selectedMemberRole);
+      const currentUser = authService.getCurrentUser();
+      if (!currentUser || !currentUser.id) {
+        toast.error("Không xác định người dùng hiện tại");
+        return;
+      }
+      const currentUserId = currentUser.id;
+      await memberService.changeRole(
+        clubId,
+        selectedMember.userId,
+        roleId,
+        currentUserId
+      );
       toast.success("Cập nhật vai trò thành công");
       setIsEditRoleOpen(false);
       // Refresh the member list
       loadMembers();
+    } catch (err) {
+      console.error(err);
+      toast.error("Cập nhật vai trò thất bại");
     }
   };
 
-  const handleChangeStatus = () => {
+  const handleChangeStatus = async () => {
     if (!selectedMember) return;
 
-    const newStatus = selectedMember.currentTerm?.isActive
-      ? "INACTIVE"
-      : "ACTIVE";
+    const willBeActive = !(selectedMember.currentTerm?.isActive === true);
     const confirm = window.confirm(
-      `Bạn có chắc muốn chuyển trạng thái sang ${newStatus}?`
+      `Bạn có chắc muốn ${
+        willBeActive ? "kích hoạt" : "tạm ngưng"
+      } thành viên này?`
     );
     if (!confirm) return;
 
-    // TODO: Call API to change status
-    toast.success("Cập nhật trạng thái thành công");
-    setIsChangeStatusOpen(false);
-    loadMembers();
+    try {
+      await memberService.changeStatus(
+        clubId,
+        selectedMember.userId,
+        willBeActive,
+        { semesterId: selectedTerm ? parseInt(selectedTerm) : undefined }
+      );
+      toast.success("Cập nhật trạng thái thành công");
+      setIsChangeStatusOpen(false);
+      loadMembers();
+    } catch (err) {
+      console.error(err);
+      toast.error("Cập nhật trạng thái thất bại");
+    }
   };
 
-  const handleRemoveMember = () => {
+  const handleRemoveMember = async () => {
     if (!selectedMember) return;
 
     const confirm = window.confirm(
@@ -419,23 +454,34 @@ const Members = () => {
     );
     if (!confirm) return;
 
-    // TODO: Call API to remove member
-    toast.success("Đã đánh dấu thành viên rời CLB");
-    setIsRemoveOpen(false);
-    setSelectedMember(null);
-    loadMembers();
+    try {
+      await memberService.removeMember(clubId, selectedMember.userId);
+      toast.success("Đã đánh dấu thành viên rời CLB");
+      setIsRemoveOpen(false);
+      setSelectedMember(null);
+      loadMembers();
+    } catch (err) {
+      console.error(err);
+      toast.error("Xóa thành viên thất bại");
+    }
   };
 
-  const handleAssignTeam = () => {
-    if (!selectedTeam) {
+  const handleAssignTeam = async () => {
+    if (!selectedTeam || !selectedMember) {
       toast.error("Vui lòng chọn ban");
       return;
     }
 
-    // TODO: Call API to assign team
-    toast.success("Phân ban thành công");
-    setIsAssignTeamOpen(false);
-    loadMembers();
+    try {
+      const teamId = parseInt(selectedTeam);
+      await memberService.assignTeam(clubId, selectedMember.userId, teamId);
+      toast.success("Phân ban thành công");
+      setIsAssignTeamOpen(false);
+      loadMembers();
+    } catch (err) {
+      console.error(err);
+      toast.error("Phân ban thất bại");
+    }
   };
 
   return (
@@ -565,9 +611,6 @@ const Members = () => {
                         <SelectItem key={role.id} value={role.id.toString()}>
                           <div className="flex items-center gap-2">
                             <span>{role.roleName}</span>
-                            <Badge variant="outline" className="text-xs">
-                              Level {role.roleLevel}
-                            </Badge>
                           </div>
                         </SelectItem>
                       ))}
@@ -731,6 +774,7 @@ const Members = () => {
                                   {getDisplayRoleInfo(member)?.roleName}
                                 </Badge>
                               )}
+
                               <Badge
                                 className={getStatusColor(
                                   statusToLabel(member.currentTerm?.isActive)
@@ -738,6 +782,15 @@ const Members = () => {
                               >
                                 {statusToLabel(member.currentTerm?.isActive)}
                               </Badge>
+                              {/* Team Badge */}
+                              {member.currentTerm?.teamName && (
+                                <Badge
+                                  variant="outline"
+                                  className="border-orange-500/30 text-orange-600"
+                                >
+                                  {member.currentTerm.teamName}
+                                </Badge>
+                              )}
                             </div>
 
                             <div className="flex items-center gap-4 text-sm text-muted-foreground flex-wrap">
@@ -898,7 +951,7 @@ const Members = () => {
                       className="pl-10 border-red-500/20 focus:border-red-500"
                     />
                   </div>
-                  
+
                   <div className="flex items-center gap-2">
                     <Button
                       variant="outline"
@@ -958,7 +1011,7 @@ const Members = () => {
                   ))}
                 </>
               )}
-              
+
               {leftMembersError && (
                 <Card className="border-destructive/20 bg-card/80 backdrop-blur-sm p-6">
                   <CardContent>
@@ -970,10 +1023,13 @@ const Members = () => {
                         Thử lại hoặc đặt lại bộ lọc để xem kết quả khác.
                       </div>
                       <div className="flex items-center gap-2">
-                        <Button onClick={() => loadLeftMembers()} variant="outline">
+                        <Button
+                          onClick={() => loadLeftMembers()}
+                          variant="outline"
+                        >
                           Thử lại
                         </Button>
-                        <Button 
+                        <Button
                           onClick={() => {
                             setLeftMembersSearchQuery("");
                             setLeftMembersPageNum(0);
@@ -986,24 +1042,26 @@ const Members = () => {
                   </CardContent>
                 </Card>
               )}
-              
-              {!leftMembersLoading && !leftMembersError && filteredLeftMembers.length === 0 && (
-                <Card className="border-red-500/20 bg-card/80 backdrop-blur-sm p-6">
-                  <CardContent>
-                    <div className="flex flex-col items-center gap-4">
-                      <div className="text-center">
-                        <div className="text-lg font-semibold text-muted-foreground">
-                          Chưa có thành viên nào rời CLB
-                        </div>
-                        <div className="text-sm text-muted-foreground">
-                          Danh sách thành viên đã rời sẽ hiển thị ở đây
+
+              {!leftMembersLoading &&
+                !leftMembersError &&
+                filteredLeftMembers.length === 0 && (
+                  <Card className="border-red-500/20 bg-card/80 backdrop-blur-sm p-6">
+                    <CardContent>
+                      <div className="flex flex-col items-center gap-4">
+                        <div className="text-center">
+                          <div className="text-lg font-semibold text-muted-foreground">
+                            Chưa có thành viên nào rời CLB
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            Danh sách thành viên đã rời sẽ hiển thị ở đây
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-              
+                    </CardContent>
+                  </Card>
+                )}
+
               {!leftMembersLoading &&
                 !leftMembersError &&
                 filteredLeftMembers.map((member) => (
@@ -1044,8 +1102,14 @@ const Members = () => {
                                 Đã rời CLB
                               </Badge>
                               {member.endDate && (
-                                <Badge variant="outline" className="text-muted-foreground">
-                                  Rời ngày: {new Date(member.endDate).toLocaleDateString('vi-VN')}
+                                <Badge
+                                  variant="outline"
+                                  className="text-muted-foreground"
+                                >
+                                  Rời ngày:{" "}
+                                  {new Date(member.endDate).toLocaleDateString(
+                                    "vi-VN"
+                                  )}
                                 </Badge>
                               )}
                             </div>
@@ -1076,7 +1140,9 @@ const Members = () => {
                           <div className="hidden sm:block text-center p-3 rounded-xl bg-secondary/50 border border-border min-w-[90px]">
                             <div className="text-sm font-medium flex items-center justify-center gap-1">
                               <Calendar className="h-3 w-3" />
-                              {new Date(member.joinDate).toLocaleDateString('vi-VN')}
+                              {new Date(member.joinDate).toLocaleDateString(
+                                "vi-VN"
+                              )}
                             </div>
                             <div className="text-xs text-muted-foreground">
                               Tham gia
@@ -1109,7 +1175,9 @@ const Members = () => {
               <div className="flex items-center gap-4">
                 <div className="text-sm text-muted-foreground">
                   Trang{" "}
-                  <span className="font-semibold text-red-500">{leftMembersPageNum + 1}</span>{" "}
+                  <span className="font-semibold text-red-500">
+                    {leftMembersPageNum + 1}
+                  </span>{" "}
                   /{" "}
                   <span className="font-medium">
                     {leftMembersPage?.totalPages ?? 1}
@@ -1129,7 +1197,9 @@ const Members = () => {
                     <PaginationItem>
                       <PaginationPrevious
                         size="default"
-                        onClick={() => setLeftMembersPageNum((prev) => Math.max(0, prev - 1))}
+                        onClick={() =>
+                          setLeftMembersPageNum((prev) => Math.max(0, prev - 1))
+                        }
                         className={
                           leftMembersPageNum === 0
                             ? "pointer-events-none opacity-50"
@@ -1145,7 +1215,8 @@ const Members = () => {
                       if (
                         pageNum === 0 ||
                         pageNum === leftMembersPage.totalPages - 1 ||
-                        (pageNum >= leftMembersPageNum - 1 && pageNum <= leftMembersPageNum + 1)
+                        (pageNum >= leftMembersPageNum - 1 &&
+                          pageNum <= leftMembersPageNum + 1)
                       ) {
                         return (
                           <PaginationItem key={pageNum}>
@@ -1159,7 +1230,10 @@ const Members = () => {
                             </PaginationLink>
                           </PaginationItem>
                         );
-                      } else if (pageNum === leftMembersPageNum - 2 || pageNum === leftMembersPageNum + 2) {
+                      } else if (
+                        pageNum === leftMembersPageNum - 2 ||
+                        pageNum === leftMembersPageNum + 2
+                      ) {
                         return (
                           <PaginationItem key={pageNum}>
                             <PaginationEllipsis />
@@ -1215,12 +1289,9 @@ const Members = () => {
                   </SelectTrigger>
                   <SelectContent>
                     {clubRoles.map((role) => (
-                      <SelectItem key={role.id} value={role.roleName}>
+                      <SelectItem key={role.id} value={role.id.toString()}>
                         <div className="flex items-center gap-2">
                           <span className="font-medium">{role.roleName}</span>
-                          <Badge variant="outline" className="text-xs">
-                            Level {role.roleLevel}
-                          </Badge>
                         </div>
                       </SelectItem>
                     ))}
@@ -1231,8 +1302,9 @@ const Members = () => {
                 <div className="p-3 rounded-lg bg-secondary/30 border border-border">
                   <p className="text-sm text-muted-foreground">
                     {
-                      clubRoles.find((r) => r.roleName === selectedMemberRole)
-                        ?.description
+                      clubRoles.find(
+                        (r) => r.id.toString() === selectedMemberRole
+                      )?.description
                     }
                   </p>
                 </div>
@@ -1345,14 +1417,11 @@ const Members = () => {
                     <SelectValue placeholder="Chọn ban" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Ban chủ nhiệm">Ban chủ nhiệm</SelectItem>
-                    <SelectItem value="Ban truyền thông">
-                      Ban truyền thông
-                    </SelectItem>
-                    <SelectItem value="Ban sự kiện">Ban sự kiện</SelectItem>
-                    <SelectItem value="Ban học thuật">Ban học thuật</SelectItem>
-                    <SelectItem value="Ban kỹ thuật">Ban kỹ thuật</SelectItem>
-                    <SelectItem value="Ban đối ngoại">Ban đối ngoại</SelectItem>
+                    {teams.map((team) => (
+                      <SelectItem key={team.id} value={team.id.toString()}>
+                        {team.teamName}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -1380,7 +1449,13 @@ const Members = () => {
       <MemberDetailDialog
         member={selectedMember}
         isOpen={!!selectedMember}
-        onClose={() => setSelectedMember(null)}
+        onClose={() => {
+          setSelectedMember(null);
+        }}
+        clubId={clubId}
+        roles={clubRoles}
+        teams={teams}
+        onUpdated={() => loadMembers()}
       />
     </div>
   );

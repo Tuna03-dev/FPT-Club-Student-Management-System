@@ -21,7 +21,7 @@ public class ClubManagementService {
     private final ClubMemberShipRepository clubMembershipRepository;
     private final SemesterRepository semesterRepository;
     private final TeamRepository teamRepository;
-    private final RoleMembershipRepository roleMembershipRepository;
+    private final RoleMemberShipRepository roleMembershipRepository;
     private final PostRepository postRepository;
     private final NewsRepository newsRepository;
     private final ClubRepository clubRepository;

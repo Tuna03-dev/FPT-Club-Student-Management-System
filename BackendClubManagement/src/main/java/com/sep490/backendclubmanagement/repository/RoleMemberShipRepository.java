@@ -1,5 +1,6 @@
 package com.sep490.backendclubmanagement.repository;
 
+
 import com.sep490.backendclubmanagement.dto.response.TeamMemberDTO;
 import com.sep490.backendclubmanagement.entity.RoleMemberShip;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -8,33 +9,20 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 @Repository
-public interface RoleMembershipRepository extends JpaRepository<RoleMemberShip, Long> {
-
-    // ---- API cũ: load member của 1 team theo semester
-    @Query("""
-    SELECT new com.sep490.backendclubmanagement.dto.response.TeamMemberDTO(
-        u.id,
-        u.fullName,
-        u.avatarUrl,
-        COALESCE(cr.roleName, 'Thành viên'),
-        u.email,
-        u.studentCode
-    )
-    FROM RoleMemberShip rm
-    JOIN rm.clubMemberShip cms
-    JOIN cms.user u
-    LEFT JOIN rm.clubRole cr
-    WHERE rm.team.id = :teamId
-      AND (:semesterId IS NULL OR rm.semester.id = :semesterId)
-      AND COALESCE(rm.isActive, TRUE) = TRUE
-""")
-    List<TeamMemberDTO> findMembersByTeamIdAndSemesterId(@Param("teamId") Long teamId,
-                                                         @Param("semesterId") Long semesterId);
+public interface RoleMemberShipRepository extends JpaRepository<RoleMemberShip, Long> {
 
 
-    // ---- RBAC: user có phải admin cấp CLB (CHỈ CLUB_PRESIDENT) ?
+    List<RoleMemberShip> findByClubMemberShipId(Long clubMemberShipId);
+    
+    List<RoleMemberShip> findByClubMemberShipIdAndSemesterId(Long clubMemberShipId, Long semesterId);
+    
+    Optional<RoleMemberShip> findByClubMemberShipIdAndSemesterIdAndIsActive(Long clubMemberShipId, Long semesterId, Boolean isActive);
+    
+    List<RoleMemberShip> findByClubMemberShipIdAndIsActive(Long clubMemberShipId, Boolean isActive);
+
     @Query("""
     SELECT CASE WHEN EXISTS (
         SELECT 1
@@ -59,6 +47,25 @@ public interface RoleMembershipRepository extends JpaRepository<RoleMemberShip, 
                         @Param("semesterId") Long semesterId);
 
 
+    @Query("""
+    SELECT new com.sep490.backendclubmanagement.dto.response.TeamMemberDTO(
+        u.id,
+        u.fullName,
+        u.avatarUrl,
+        COALESCE(cr.roleName, 'Thành viên'),
+        u.email,
+        u.studentCode
+    )
+    FROM RoleMemberShip rm
+    JOIN rm.clubMemberShip cms
+    JOIN cms.user u
+    LEFT JOIN rm.clubRole cr
+    WHERE rm.team.id = :teamId
+      AND (:semesterId IS NULL OR rm.semester.id = :semesterId)
+      AND COALESCE(rm.isActive, TRUE) = TRUE
+""")
+    List<TeamMemberDTO> findMembersByTeamIdAndSemesterId(@Param("teamId") Long teamId,
+                                                         @Param("semesterId") Long semesterId);
 
 
     // ---- RBAC: các team user đang tham gia (khi KHÔNG phải CLUB_PRESIDENT)
@@ -162,3 +169,4 @@ public interface RoleMembershipRepository extends JpaRepository<RoleMemberShip, 
                                             @Param("clubId") Long clubId,
                                             @Param("semesterId") Long semesterId);
 }
+
