@@ -28,34 +28,15 @@ public interface NewsRepository extends JpaRepository<News, Long> {
     // Lấy tin spotlight mới nhất
     Optional<News> findTopByIsSpotlightTrueOrderByCreatedAtDesc();
 
-    // Dành cho phần quản trị: lọc/tìm kiếm tin tức (native)
-    @Query(
-            value = """
-            SELECT DISTINCT n.*
-            FROM news n
-            LEFT JOIN clubs c ON n.club_id = c.id
-            LEFT JOIN news_media nm ON nm.news_id = n.id
-            WHERE
-                (:#{#request.keyword} IS NULL
-                    OR n.title   LIKE CONCAT('%', :#{#request.keyword}, '%')
-                    OR n.content LIKE CONCAT('%', :#{#request.keyword}, '%'))
-            AND (:#{#request.clubId} IS NULL OR n.club_id = :#{#request.clubId})
-            ORDER BY n.created_at DESC
-        """,
-            countQuery = """
-            SELECT COUNT(DISTINCT n.id)
-            FROM news n
-            LEFT JOIN clubs c ON n.club_id = c.id
-            LEFT JOIN news_media nm ON nm.news_id = n.id
-            WHERE
-                (:#{#request.keyword} IS NULL
-                    OR n.title   LIKE CONCAT('%', :#{#request.keyword}, '%')
-                    OR n.content LIKE CONCAT('%', :#{#request.keyword}, '%'))
-            AND (:#{#request.clubId} IS NULL OR n.club_id = :#{#request.clubId})
-        """,
-            nativeQuery = true
-    )
-    Page<News> getAllNewsByFilter(@Param("request") NewsRequest request, Pageable pageable);
+    @Query(value = """
+                                     SELECT DISTINCT e.*
+                                         FROM news e
+                                         LEFT JOIN clubs c ON e.club_id = c.id
+                                         WHERE\s
+                                             (:#{#request.clubId} IS NULL OR e.club_id = :#{#request.clubId})
+                                            AND e.is_draft = false
+          """, nativeQuery = true,countProjection = "e.id")
+    Page<News> getAllNewsByFilter(NewsRequest request, Pageable pageable);
 
     // Activity theo tác giả (JPQL) — phục vụ ClubManagementService
     @Query("SELECT new com.sep490.backendclubmanagement.dto.response.ActivityDTO(" +

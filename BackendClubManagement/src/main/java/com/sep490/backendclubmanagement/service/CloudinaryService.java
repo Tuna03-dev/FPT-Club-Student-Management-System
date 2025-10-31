@@ -37,6 +37,27 @@ public class CloudinaryService {
             throw new RuntimeException("Cloudinary upload fail: " + e.getMessage(), e);
         }
     }
+    
+    public UploadResult uploadImage(MultipartFile file, String folder) {
+        try {
+            var result = cloudinary.uploader().upload(
+                    file.getBytes(),
+                    ObjectUtils.asMap(
+                            "folder", folder,
+                            "resource_type", "image",
+                            "overwrite", false
+                    )
+            );
+            return new UploadResult(
+                    (String) result.get("secure_url"),
+                    (String) result.get("public_id"),
+                    (String) result.get("format"),
+                    ((Number) result.get("bytes")).longValue()
+            );
+        } catch (Exception e) {
+            throw new RuntimeException("Cloudinary upload fail: " + e.getMessage(), e);
+        }
+    }
 
     /**
      * Upload file (PDF, DOC, DOCX, etc.) to Cloudinary
