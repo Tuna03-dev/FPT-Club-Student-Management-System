@@ -4,7 +4,7 @@ spring:
   servlet:
     multipart:
       max-file-size: 20MB
-      max-request-size: 40MB
+      max-request-size: 256MB
   # Redis Cloud Configuration
   data:
     redis:
