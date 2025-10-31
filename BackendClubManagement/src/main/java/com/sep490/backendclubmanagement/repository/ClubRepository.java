@@ -22,7 +22,7 @@ public interface ClubRepository extends JpaRepository<Club, Long> {
             c.id, c.clubName, c.logoUrl, c.description
         )
         FROM Club c
-        WHERE c.isFeatured = true
+        WHERE c.isFeatured = true   
     """)
     List<FeaturedClubDTO> findFeaturedClubs();
     Optional<Club> findByClubCode(String clubCode);
@@ -43,6 +43,27 @@ public interface ClubRepository extends JpaRepository<Club, Long> {
             "LEFT JOIN FETCH c.recruitments " +
             "WHERE c.id = :id")
     Optional<Club> findByIdWithDetails(@Param("id") Long id);
+
+    // 🔹 Count total members for a club
+    @Query("SELECT COUNT(DISTINCT cm.id) FROM ClubMemberShip cm WHERE cm.club.id = :clubId")
+    Long countMembersByClubId(@Param("clubId") Long clubId);
+
+    // 🔹 Count total events for a club
+    @Query("SELECT COUNT(e.id) FROM Event e WHERE e.club.id = :clubId")
+    Long countEventsByClubId(@Param("clubId") Long clubId);
+
+    // 🔹 Count total news for a club
+    @Query("SELECT COUNT(n.id) FROM News n WHERE n.club.id = :clubId")
+    Long countNewsByClubId(@Param("clubId") Long clubId);
+
+    // 🔹 Check if club has active recruitment
+    @Query("SELECT CASE WHEN COUNT(r) > 0 THEN true ELSE false END " +
+            "FROM Recruitment r " +
+            "WHERE r.club.id = :clubId " +
+            "AND r.status = 'OPEN' " +
+            "AND r.startDate <= CURRENT_TIMESTAMP " +
+            "AND r.endDate >= CURRENT_TIMESTAMP")
+    Boolean hasActiveRecruitment(@Param("clubId") Long clubId);
 
     // 🔹 Tìm ID của các CLB có nhiều event nhất
     @Query("""

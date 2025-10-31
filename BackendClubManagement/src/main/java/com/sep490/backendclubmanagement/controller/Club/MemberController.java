@@ -1,9 +1,14 @@
 package com.sep490.backendclubmanagement.controller.Club;
 
 import com.sep490.backendclubmanagement.dto.ApiResponse;
+import com.sep490.backendclubmanagement.dto.request.RemoveMemberRequest;
+import com.sep490.backendclubmanagement.dto.request.UpdateMemberRoleRequest;
+import com.sep490.backendclubmanagement.dto.request.UpdateMemberStatusRequest;
+import com.sep490.backendclubmanagement.dto.request.UpdateMemberTeamRequest;
 import com.sep490.backendclubmanagement.dto.response.MemberResponse;
 import com.sep490.backendclubmanagement.dto.response.PageResponse;
 import com.sep490.backendclubmanagement.entity.ClubMemberShipStatus;
+import com.sep490.backendclubmanagement.exception.AppException;
 import com.sep490.backendclubmanagement.service.MemberService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
@@ -60,5 +65,46 @@ public class MemberController {
                 clubId, searchTerm, pageable);
 
         return ApiResponse.success(result);
+    }
+
+    // Update member role
+    @PutMapping("/{clubId}/members/{userId}/role")
+    public ApiResponse<String> updateMemberRole(
+            @PathVariable Long clubId,
+            @PathVariable Long userId,
+            @RequestBody UpdateMemberRoleRequest request,
+            @RequestParam Long currentUserId) throws AppException {
+        memberService.updateMemberRole(clubId, userId, request.getRoleId(), request.getSemesterId(), currentUserId);
+        return ApiResponse.success("Role updated successfully");
+    }
+
+    // Update member team
+    @PutMapping("/{clubId}/members/{userId}/team")
+    public ApiResponse<String> updateMemberTeam(
+            @PathVariable Long clubId,
+            @PathVariable Long userId,
+            @RequestBody UpdateMemberTeamRequest request) throws AppException {
+        memberService.updateMemberTeam(clubId, userId, request.getTeamId(), request.getSemesterId());
+        return ApiResponse.success("Team updated successfully");
+    }
+
+    // Update member status (active/inactive)
+    @PutMapping("/{clubId}/members/{userId}/status")
+    public ApiResponse<String> updateMemberStatus(
+            @PathVariable Long clubId,
+            @PathVariable Long userId,
+            @RequestBody UpdateMemberStatusRequest request) {
+        memberService.updateMemberActiveStatus(clubId, userId, request.getIsActive(), request.getSemesterId());
+        return ApiResponse.success("Status updated successfully");
+    }
+
+    // Remove member from club
+    @DeleteMapping("/{clubId}/members/{userId}")
+    public ApiResponse<String> removeMember(
+            @PathVariable Long clubId,
+            @PathVariable Long userId,
+            @RequestBody(required = false) RemoveMemberRequest request) {
+        memberService.removeMemberFromClub(clubId, userId, request != null ? request.getReason() : null);
+        return ApiResponse.success("Member removed successfully");
     }
 }

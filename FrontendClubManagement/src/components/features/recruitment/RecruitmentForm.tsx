@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
   SelectContent,
@@ -12,17 +13,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import {
-  Plus,
-  XCircle,
-  Trash2,
-  Send,
-  Loader2,
-} from "lucide-react";
-import {
-  type RecruitmentCreateRequest,
-} from "@/service/RecruitmentService";
+import { Plus, XCircle, Trash2, Send, Loader2 } from "lucide-react";
+import { type RecruitmentCreateRequest } from "@/services/recruitmentService";
+import { getAllTeamsForPresident } from "@/api/teams";
+import type { VisibleTeamDTO } from "@/types/team";
 import { toast } from "sonner";
+import { Checkbox } from "@/components/ui/checkbox";
 
 type QuestionType = "TEXT" | "MCQ" | "CHECKBOX" | "FILE";
 
@@ -45,20 +41,25 @@ interface RecruitmentFormData {
   requirements?: string[];
   benefits?: string[];
   form_questions: EditableFormQuestion[];
+  teamOptions?: Array<{ id: number; teamName: string; description?: string }>;
 }
 
 interface RecruitmentFormProps {
+  clubId?: number;
   editingRecruitment: RecruitmentFormData | null;
   onSave: (data: RecruitmentCreateRequest, isEdit: boolean) => Promise<void>;
   onCancel: () => void;
   createLoading: boolean;
+  editLoading?: boolean;
 }
 
 export function RecruitmentForm({
+  clubId,
   editingRecruitment,
   onSave,
   onCancel,
   createLoading,
+  editLoading = false,
 }: RecruitmentFormProps) {
   // Form states for creating recruitment
   const [newRecruitment, setNewRecruitment] = useState({
@@ -78,24 +79,38 @@ export function RecruitmentForm({
       question_order: 1,
       required: true,
     },
-    {
-      question_text: "Bạn muốn tham gia phòng ban nào?",
-      question_type: "MCQ",
-      question_order: 2,
-      options: [
-        "Ban Chuyên môn",
-        "Ban Truyền thông",
-        "Ban Tổ chức",
-        "Ban Nội vụ",
-        "Ban Đối ngoại",
-      ],
-      required: true,
-    },
   ]);
 
-  // Load data when editing
+  // Teams state
+  const [availableTeams, setAvailableTeams] = useState<VisibleTeamDTO[]>([]);
+  const [selectedTeamIds, setSelectedTeamIds] = useState<number[]>([]);
+  const [loadingTeams, setLoadingTeams] = useState(false);
+
+  // Load teams when component mounts
+  useEffect(() => {
+    const fetchTeams = async () => {
+      if (!clubId) return;
+
+      try {
+        setLoadingTeams(true);
+        const teams = await getAllTeamsForPresident(clubId);
+        setAvailableTeams(teams);
+      } catch (error: any) {
+        console.error("Error loading teams:", error);
+        toast.error(error.message || "Không thể tải danh sách phòng ban");
+      } finally {
+        setLoadingTeams(false);
+      }
+    };
+
+    fetchTeams();
+  }, [clubId]);
+
+  // Load data when editing - This effect handles form data loading
   useEffect(() => {
     if (editingRecruitment) {
+      console.log("Loading editing recruitment data:", editingRecruitment);
+
       setNewRecruitment({
         title: editingRecruitment.title,
         description: editingRecruitment.description,
@@ -121,60 +136,51 @@ export function RecruitmentForm({
                 question_order: 1,
                 required: true,
               },
-              {
-                question_text: "Bạn muốn tham gia phòng ban nào?",
-                question_type: "MCQ" as QuestionType,
-                question_order: 2,
-                options: [
-                  "Ban Chuyên môn",
-                  "Ban Truyền thông",
-                  "Ban Tổ chức",
-                  "Ban Nội vụ",
-                  "Ban Đối ngoại",
-                ],
-                required: true,
-              },
             ];
 
       setFormQuestions(questionsToLoad);
-    } else {
-      // Reset to default for new recruitment
-      resetForm();
+
+      // Load team options immediately if available
+      if (
+        editingRecruitment.teamOptions &&
+        editingRecruitment.teamOptions.length > 0
+      ) {
+        console.log(
+          "Setting team options from editing recruitment:",
+          editingRecruitment.teamOptions
+        );
+        setSelectedTeamIds(editingRecruitment.teamOptions.map((t) => t.id));
+      } else {
+        console.log("No team options in editing recruitment");
+        setSelectedTeamIds([]);
+      }
     }
   }, [editingRecruitment]);
 
-  const resetForm = () => {
-    setNewRecruitment({
-      title: "",
-      description: "",
-      start_date: "",
-      end_date: "",
-      max_applications: "",
-      requirements: [""],
-      benefits: [""],
-    });
-    setFormQuestions([
-      {
-        question_text: "Tại sao bạn muốn tham gia câu lạc bộ?",
-        question_type: "TEXT",
-        question_order: 1,
-        required: true,
-      },
-      {
-        question_text: "Bạn muốn tham gia phòng ban nào?",
-        question_type: "MCQ",
-        question_order: 2,
-        options: [
-          "Ban Chuyên môn",
-          "Ban Truyền thông",
-          "Ban Tổ chức",
-          "Ban Nội vụ",
-          "Ban Đối ngoại",
-        ],
-        required: true,
-      },
-    ]);
-  };
+  // Reset form when explicitly cancelled or switching to create mode
+  useEffect(() => {
+    if (!editingRecruitment) {
+      console.log("No editing recruitment, resetting form");
+      setNewRecruitment({
+        title: "",
+        description: "",
+        start_date: "",
+        end_date: "",
+        max_applications: "",
+        requirements: [""],
+        benefits: [""],
+      });
+      setFormQuestions([
+        {
+          question_text: "Tại sao bạn muốn tham gia câu lạc bộ?",
+          question_type: "TEXT",
+          question_order: 1,
+          required: true,
+        },
+      ]);
+      setSelectedTeamIds([]);
+    }
+  }, [editingRecruitment]);
 
   const addRequirement = () => {
     setNewRecruitment((prev) => ({
@@ -183,12 +189,12 @@ export function RecruitmentForm({
     }));
   };
 
-  const addBenefit = () => {
-    setNewRecruitment((prev) => ({
-      ...prev,
-      benefits: [...prev.benefits, ""],
-    }));
-  };
+  // const addBenefit = () => {
+  //   setNewRecruitment((prev) => ({
+  //     ...prev,
+  //     benefits: [...prev.benefits, ""],
+  //   }));
+  // };
 
   const addQuestion = () => {
     setFormQuestions((prev) => [
@@ -294,6 +300,12 @@ export function RecruitmentForm({
       return false;
     }
 
+    // Validate team selection
+    if (availableTeams.length > 0 && selectedTeamIds.length === 0) {
+      toast.error("Vui lòng chọn ít nhất một phòng ban cho đợt tuyển dụng");
+      return false;
+    }
+
     // Validate questions
     for (let i = 0; i < formQuestions.length; i++) {
       const q = formQuestions[i];
@@ -332,7 +344,9 @@ export function RecruitmentForm({
   };
 
   // Build request data
-  const buildRequestData = (status: "DRAFT" | "OPEN"): RecruitmentCreateRequest => {
+  const buildRequestData = (
+    status: "DRAFT" | "OPEN"
+  ): RecruitmentCreateRequest => {
     const startDate = new Date(newRecruitment.start_date).toISOString();
     const endDate = new Date(newRecruitment.end_date).toISOString();
 
@@ -354,11 +368,13 @@ export function RecruitmentForm({
         questionType:
           q.question_type === "FILE" ? "FILE_UPLOAD" : q.question_type,
         questionOrder: index + 1,
+        isRequired: q.required ? 1 : 0, // Convert boolean to integer
         options:
           q.question_type === "MCQ" || q.question_type === "CHECKBOX"
             ? (q.options || []).filter((opt) => opt.trim())
             : undefined,
       })),
+      teamOptionIds: selectedTeamIds,
     };
   };
 
@@ -375,6 +391,124 @@ export function RecruitmentForm({
     const requestData = buildRequestData("OPEN");
     await onSave(requestData, !!editingRecruitment);
   };
+
+  // Show skeleton when loading edit data
+  if (editLoading) {
+    return (
+      <div className="max-w-4xl mx-auto space-y-8">
+        {/* Header Skeleton */}
+        <div className="flex items-center justify-between">
+          <div className="space-y-2">
+            <Skeleton className="h-8 w-64" />
+            <Skeleton className="h-4 w-80" />
+          </div>
+          <Skeleton className="h-10 w-32" />
+        </div>
+
+        {/* Basic Info Card Skeleton */}
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-6 w-48" />
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-40" />
+              <Skeleton className="h-10 w-full" />
+            </div>
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-20" />
+              <Skeleton className="h-24 w-full" />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {[...Array(3)].map((_, i) => (
+                <div key={i} className="space-y-2">
+                  <Skeleton className="h-4 w-24" />
+                  <Skeleton className="h-10 w-full" />
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Requirements Card Skeleton */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <Skeleton className="h-6 w-24" />
+              <Skeleton className="h-9 w-32" />
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="flex gap-2">
+                <Skeleton className="h-10 flex-1" />
+                <Skeleton className="h-10 w-10" />
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+
+        {/* Team Selection Card Skeleton */}
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-6 w-40" />
+            <Skeleton className="h-4 w-full mt-2" />
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="flex items-center space-x-3 border rounded-lg p-3">
+                  <Skeleton className="h-5 w-5 rounded" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-4 w-32" />
+                    <Skeleton className="h-3 w-48" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Form Questions Card Skeleton */}
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-6 w-56" />
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="border rounded-lg p-4 space-y-4">
+                <div className="flex items-center justify-between">
+                  <Skeleton className="h-5 w-24" />
+                  <Skeleton className="h-9 w-10" />
+                </div>
+                <Skeleton className="h-10 w-full" />
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Skeleton className="h-4 w-24" />
+                    <Skeleton className="h-10 w-full" />
+                  </div>
+                  <div className="flex items-center space-x-2 pt-6">
+                    <Skeleton className="h-4 w-4 rounded" />
+                    <Skeleton className="h-4 w-20" />
+                  </div>
+                </div>
+              </div>
+            ))}
+            <div className="flex justify-center pt-4">
+              <Skeleton className="h-10 w-32" />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Action Buttons Skeleton */}
+        <div className="flex gap-4 justify-end">
+          <Skeleton className="h-10 w-20" />
+          <Skeleton className="h-10 w-32" />
+          <Skeleton className="h-10 w-40" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-4xl mx-auto space-y-8">
@@ -540,6 +674,99 @@ export function RecruitmentForm({
         </CardContent>
       </Card>
 
+      {/* Team Selection */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            Lựa chọn phòng ban
+          </CardTitle>
+          <p className="text-sm text-muted-foreground mt-2">
+            Chọn các phòng ban mà sinh viên có thể lựa chọn khi nộp đơn ứng
+            tuyển. Sinh viên sẽ phải chọn một trong các phòng ban này khi nộp
+            đơn. Nếu sinh viên được chấp nhận sẽ được xếp vào phòng ban đã chọn.
+          </p>
+        </CardHeader>
+        <CardContent>
+          {loadingTeams ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {[...Array(4)].map((_, index) => (
+                <div
+                  key={index}
+                  className="flex items-center space-x-3 border rounded-lg p-3"
+                >
+                  <Skeleton className="h-5 w-5 rounded" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-4 w-32" />
+                    <Skeleton className="h-3 w-48" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : availableTeams.length === 0 ? (
+            <div className="text-center py-8 border-2 border-dashed border-red-200 rounded-lg bg-red-50">
+              <p className="text-red-600 font-medium">
+                ⚠️ Chưa có phòng ban nào trong câu lạc bộ.
+              </p>
+              <p className="text-sm mt-2 text-red-500">
+                Vui lòng tạo phòng ban trước khi thiết lập tuyển dụng.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {availableTeams.map((team) => (
+                <div
+                  key={team.teamId}
+                  className="flex items-center space-x-3 border rounded-lg p-3 hover:bg-accent/50 transition-colors"
+                >
+                  <Checkbox
+                    id={`team-${team.teamId}`}
+                    checked={selectedTeamIds.includes(team.teamId)}
+                    onCheckedChange={(checked) => {
+                      if (checked) {
+                        setSelectedTeamIds((prev) => [...prev, team.teamId]);
+                      } else {
+                        setSelectedTeamIds((prev) =>
+                          prev.filter((id) => id !== team.teamId)
+                        );
+                      }
+                    }}
+                  />
+                  <Label
+                    htmlFor={`team-${team.teamId}`}
+                    className="flex-1 cursor-pointer"
+                  >
+                    <div className="font-medium">{team.teamName}</div>
+                    {team.description && (
+                      <div className="text-xs text-muted-foreground line-clamp-1">
+                        {team.description}
+                      </div>
+                    )}
+                  </Label>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {availableTeams.length > 0 && (
+            <div className="mt-4 pt-4 border-t">
+              {selectedTeamIds.length > 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  ✓ Đã chọn{" "}
+                  <span className="font-semibold text-primary">
+                    {selectedTeamIds.length}
+                  </span>{" "}
+                  phòng ban
+                </p>
+              ) : (
+                <p className="text-sm text-red-500">
+                  ⚠️ Vui lòng chọn ít nhất một phòng ban
+                </p>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Form Questions */}
       <Card>
         <CardHeader>
@@ -670,14 +897,17 @@ export function RecruitmentForm({
 
               {question.question_type === "FILE" && (
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
-                  <p className="font-medium mb-1">📎 Lưu ý về câu hỏi tải file:</p>
+                  <p className="font-medium mb-1">
+                    📎 Lưu ý về câu hỏi tải file:
+                  </p>
                   <ul className="list-disc list-inside space-y-1 text-xs">
-                    <li>Ứng viên sẽ có thể tải lên file (PDF, Word, ảnh, v.v.)</li>
                     <li>
-                      Nên chỉ định rõ loại file và kích thước tối đa trong câu
-                      hỏi
+                      Ứng viên sẽ có thể tải lên file (PDF, Word, tối đa 10MB.)
                     </li>
-                    <li>Ví dụ: "Tải lên CV của bạn (PDF, tối đa 5MB)"</li>
+                    <li>
+                      Ứng viên có thể gửi link (Drive,..) nếu như vượt quá dung
+                      lượng hoặc định dạng khác.
+                    </li>
                   </ul>
                 </div>
               )}
@@ -714,11 +944,14 @@ export function RecruitmentForm({
           variant="outline"
           className="bg-transparent"
           onClick={handleSaveDraft}
-          disabled={createLoading}
+          disabled={createLoading || availableTeams.length === 0}
         >
           Lưu bản nháp
         </Button>
-        <Button onClick={handlePublish} disabled={createLoading}>
+        <Button
+          onClick={handlePublish}
+          disabled={createLoading || availableTeams.length === 0}
+        >
           {createLoading ? (
             <>
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -732,7 +965,12 @@ export function RecruitmentForm({
           )}
         </Button>
       </div>
+
+      {availableTeams.length === 0 && !loadingTeams && (
+        <div className="text-center text-sm text-red-500 mt-2">
+          💡 Cần có ít nhất một phòng ban để tạo đợt tuyển dụng
+        </div>
+      )}
     </div>
   );
 }
-

@@ -101,8 +101,8 @@ export const memberService = {
     const url = `/clubs/${clubId}/members/left?${query.toString()}`;
     return axiosClient.get<PageResponse<MemberResponseDTO>>(url);
   },
-  async changeRole(clubId: number, userId: number, roleId: number) {
-    const url = `/clubs/${clubId}/members/${userId}/role`;
+  async changeRole(clubId: number, userId: number, roleId: number, currentUserId: number) {
+    const url = `/clubs/${clubId}/members/${userId}/role?currentUserId=${currentUserId}`;
     return axiosClient.put(url, { roleId });
   },
 
@@ -111,10 +111,17 @@ export const memberService = {
     return axiosClient.put(url, { teamId });
   },
 
-  async changeStatus(clubId: number, userId: number, status: string) {
-    // status could be ACTIVE, INACTIVE, LEFT
+  async changeStatus(
+    clubId: number,
+    userId: number,
+    isActive: boolean,
+    options?: { semesterId?: number }
+  ) {
     const url = `/clubs/${clubId}/members/${userId}/status`;
-    return axiosClient.put(url, { status });
+    return axiosClient.put(url, {
+      isActive,
+      semesterId: options?.semesterId,
+    });
   },
 
   async removeMember(clubId: number, userId: number) {

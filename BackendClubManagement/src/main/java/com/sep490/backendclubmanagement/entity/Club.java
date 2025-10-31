@@ -78,6 +78,9 @@ public class Club extends BaseEntity {
     private Set<Event> events;
 
     @OneToMany(mappedBy = "club", cascade = CascadeType.ALL)
+    private Set<News> news;
+
+    @OneToMany(mappedBy = "club", cascade = CascadeType.ALL)
     private Set<ClubRole> clubRoles;
 
     @OneToOne(mappedBy = "club", cascade = CascadeType.ALL)

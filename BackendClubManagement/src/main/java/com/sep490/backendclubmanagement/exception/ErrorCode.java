@@ -8,9 +8,18 @@ public enum ErrorCode {
     INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, 500, "Internal server error"),
     VALIDATION_ERROR(HttpStatus.BAD_REQUEST, 1000, "Validation failed"),
     UNAUTHORIZED(HttpStatus.FORBIDDEN, 403, "User is not allowed to access"),
-    ACCESS_DENIED(HttpStatus.FORBIDDEN, 403, "Access denied"),
+    INSUFFICIENT_PERMISSION(HttpStatus.FORBIDDEN, 403, "Insufficient permission"),
+    FORBIDDEN(HttpStatus.FORBIDDEN, 403, "User is not allowed to access"),
     CLUB_NOT_FOUND(HttpStatus.NOT_FOUND, 2000, "Club not found"),
-    NOT_FOUND(HttpStatus.NOT_FOUND,404, "Resource not found");
+    NOT_FOUND(HttpStatus.NOT_FOUND,404, "Resource not found"),
+    ROLE_NOT_FOUND(HttpStatus.NOT_FOUND, 2001, "Role not found"),
+    MEMBER_NOT_FOUND(HttpStatus.NOT_FOUND, 2002, "Member not found"),
+    USER_NOT_FOUND(HttpStatus.NOT_FOUND, 2003, "User not found"),
+    UNAUTHENTICATED(HttpStatus.UNAUTHORIZED, 401, "User is not authenticated"),
+    RECRUITMENT_CLOSED(HttpStatus.BAD_REQUEST, 3000, "Không thể chỉnh sửa đợt tuyển dụng đã đóng"),
+    ALREADY_CLUB_MEMBER(HttpStatus.BAD_REQUEST, 3001, "Bạn đã là thành viên của câu lạc bộ này"),
+    INSUFFICIENT_PERMISSIONS(HttpStatus.FORBIDDEN, 4001, "Bạn không có quyền thực hiện thao tác này"),
+    NOT_CLUB_OFFICER(HttpStatus.FORBIDDEN, 4002, "Chỉ cán bộ câu lạc bộ mới có quyền thực hiện thao tác này");
 
     private final HttpStatus httpStatus;
     private final int code;
