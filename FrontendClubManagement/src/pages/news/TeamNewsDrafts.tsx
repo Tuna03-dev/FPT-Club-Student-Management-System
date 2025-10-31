@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { draftsApi } from "@/api/newsDrafts";
-import type { NewsData, PageResp, RequestStatus } from "@/types/news";
+import type { NewsData, PageResp } from "@/types/news";
 import { useTeamLeadGuard } from "@/hooks/useTeamLeadGuard";
 
 function fmt(dt?: string | null) { if (!dt) return "-"; const d = new Date(dt); return isNaN(d.getTime()) ? dt : `${d.toLocaleDateString()} ${d.toLocaleTimeString()}`; }

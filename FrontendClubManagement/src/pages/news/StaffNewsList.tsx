@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { requestsApi } from "@/api/newsRequests";
 import { draftsApi } from "@/api/newsDrafts";
@@ -66,8 +66,7 @@ export default function StaffNewsList() {
   // --- Drafts state ---
   const [drafts, setDrafts] = useState<PageResp<NewsData> | null>(null);
   const [loadingDrafts, setLoadingDrafts] = useState(false);
-  const draftsCount = drafts?.content?.length ?? 0;
-  const draftsTotal = drafts?.totalElements ?? draftsCount;
+  
 
   // ----------- Loaders -----------
   const loadRequests = async () => {

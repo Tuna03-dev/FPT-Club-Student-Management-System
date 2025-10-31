@@ -1,5 +1,3 @@
-"use client";
-
 import { useMemo, useState, useEffect } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useTeamDetail } from "@/hooks/useTeamDetail";
@@ -54,14 +52,7 @@ function rolePriority(roleName?: string) {
   if (tone === "member") return 2;
   return 3;
 }
-function InfoRow({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
-  return (
-    <div className="flex items-center gap-2 text-sm">
-      {icon}
-      <span>{children}</span>
-    </div>
-  );
-}
+
 function MemberListRow({
   fullName,
   roleName,
@@ -247,10 +238,7 @@ export default function TeamDetailPage() {
     () => members.find((m) => roleToneFrom(m.roleName) === "leader"),
     [members]
   );
-  const deputy = useMemo(
-    () => members.find((m) => roleToneFrom(m.roleName) === "deputy"),
-    [members]
-  );
+ 
 
   const filteredMembers = useMemo(() => {
     const q = search.trim().toLowerCase();
