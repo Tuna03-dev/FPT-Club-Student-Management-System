@@ -75,7 +75,7 @@ public class GlobalExceptionHandler {
 
         return ResponseEntity
                 .status(403)
-                .body(ApiResponse.error(ErrorCode.ACCESS_DENIED, ex.getMessage(), null));
+                .body(ApiResponse.error(ErrorCode.FORBIDDEN, ex.getMessage(), null));
     }
 
 
