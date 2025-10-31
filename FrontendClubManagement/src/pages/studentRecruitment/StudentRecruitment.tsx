@@ -1,7 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import {
+  getMyApplications,
+  getRecruitmentById,
+  getMyApplicationDetail,
+} from "@/services/recruitmentService";
+import type {
+  RecruitmentApplicationData,
+  RecruitmentData,
+} from "@/services/recruitmentService";
 import {
   Card,
   CardContent,
@@ -12,6 +21,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
   SelectContent,
@@ -22,6 +32,22 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+  PaginationEllipsis,
+} from "@/components/ui/pagination";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Search,
   Calendar,
@@ -60,21 +86,8 @@ interface FormQuestion {
   questionText: string;
   questionType: "TEXT" | "MCQ" | "CHECKBOX";
   options?: string[];
-  required: boolean;
+  required: boolean; // Keep for mock data compatibility
   order: number;
-}
-
-interface Application {
-  id: string;
-  recruitmentId: string;
-  userId: string;
-  answers: Record<string, any>;
-  status: "UNDER_REVIEW" | "ACCEPTED" | "REJECTED" | "INTERVIEWED";
-  submittedAt: string;
-  reviewedAt?: string;
-  reviewNote?: string;
-  interviewDate?: string;
-  score?: number;
 }
 
 export function StudentRecruitment() {
@@ -86,6 +99,28 @@ export function StudentRecruitment() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [formAnswers, setFormAnswers] = useState<Record<string, any>>({});
+  const [myApplications, setMyApplications] = useState<
+    RecruitmentApplicationData[]
+  >([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [listLoading, setListLoading] = useState(false);
+
+  // Filter states for my applications
+  const [myAppSearchQuery, setMyAppSearchQuery] = useState("");
+  const [myAppStatusFilter, setMyAppStatusFilter] = useState<string>("all");
+
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [totalElements, setTotalElements] = useState(0);
+  const pageSize = 10; // Number of items per page
+
+  // Application detail dialog
+  const [selectedApplicationDetail, setSelectedApplicationDetail] =
+    useState<RecruitmentApplicationData | null>(null);
+  const [recruitmentDetail, setRecruitmentDetail] =
+    useState<RecruitmentData | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
 
   // Mock data
   const recruitmentCampaigns: RecruitmentCampaign[] = [
@@ -205,48 +240,64 @@ export function StudentRecruitment() {
     },
   ];
 
-  const myApplications: Application[] = [
-    {
-      id: "1",
-      recruitmentId: "1",
-      userId: "user1",
-      answers: {
-        "1": "Tôi muốn học hỏi và phát triển kỹ năng lập trình cùng các bạn có cùng đam mê",
-        "2": "JavaScript",
-        "3": ["Workshop", "Dự án nhóm"],
-        "4": "Tôi là sinh viên năm 2, đam mê công nghệ và muốn trở thành developer giỏi",
-      },
-      status: "ACCEPTED",
-      submittedAt: "2024-01-18T10:30:00Z",
-      reviewedAt: "2024-01-20T14:15:00Z",
-      reviewNote: "Ứng viên có tiềm năng tốt, phù hợp với CLB",
-      interviewDate: "2024-01-25T09:00:00Z",
-      score: 85,
-    },
-    {
-      id: "2",
-      recruitmentId: "2",
-      userId: "user1",
-      answers: {
-        "1": "Tôi có ý tưởng startup và muốn học cách phát triển business",
-        "2": "Có kinh nghiệm làm dự án nhóm và thuyết trình",
-      },
-      status: "UNDER_REVIEW",
-      submittedAt: "2024-01-22T16:45:00Z",
-    },
-    {
-      id: "3",
-      recruitmentId: "3",
-      userId: "user1",
-      answers: {
-        "1": "Tôi yêu thích chụp ảnh và muốn học kỹ thuật chuyên nghiệp",
-      },
-      status: "REJECTED",
-      submittedAt: "2024-01-12T11:20:00Z",
-      reviewedAt: "2024-01-15T09:30:00Z",
-      reviewNote: "Đã đủ số lượng thành viên cho kỳ này. Hãy thử lại kỳ sau!",
-    },
-  ];
+  // Load my applications from API
+  useEffect(() => {
+    const fetchMyApplications = async () => {
+      try {
+        setIsLoading(true);
+        // Convert status filter for API call
+        const statusParam =
+          myAppStatusFilter === "all"
+            ? undefined
+            : (myAppStatusFilter as
+                | "UNDER_REVIEW"
+                | "ACCEPTED"
+                | "REJECTED"
+                | "INTERVIEW");
+
+        const response = await getMyApplications({
+          page: currentPage,
+          size: pageSize,
+          status: statusParam,
+        });
+        setMyApplications(response.content);
+        setTotalPages(response.totalPages);
+        setTotalElements(response.totalElements);
+      } catch (error) {
+        console.error("Failed to fetch my applications:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    if (activeView === "status") {
+      fetchMyApplications();
+    }
+  }, [activeView, myAppStatusFilter, currentPage]); // Re-fetch when status filter or page changes
+
+  // Reset to page 0 when filter changes
+  useEffect(() => {
+    setCurrentPage(0);
+  }, [myAppStatusFilter]);
+
+  // Filter my applications by search query (client-side)
+  const filteredMyApplications = myApplications.filter((application) => {
+    // Filter by search query (search in application ID, user name, email)
+    const matchesSearch =
+      myAppSearchQuery === "" ||
+      application.id.toString().includes(myAppSearchQuery) ||
+      application.userName
+        .toLowerCase()
+        .includes(myAppSearchQuery.toLowerCase()) ||
+      application.userEmail
+        .toLowerCase()
+        .includes(myAppSearchQuery.toLowerCase()) ||
+      application.studentId
+        .toLowerCase()
+        .includes(myAppSearchQuery.toLowerCase());
+
+    return matchesSearch;
+  });
 
   const filteredCampaigns = recruitmentCampaigns.filter((campaign) => {
     const matchesSearch =
@@ -277,6 +328,32 @@ export function StudentRecruitment() {
     alert("Đơn ứng tuyển đã được gửi thành công!");
   };
 
+  const handleViewApplicationDetail = async (
+    application: RecruitmentApplicationData
+  ) => {
+    try {
+      setDetailLoading(true);
+
+      // Fetch full application details from the new API
+      const fullApplicationDetail = await getMyApplicationDetail(application.id);
+      setSelectedApplicationDetail(fullApplicationDetail);
+
+      // Fetch recruitment details to get questions
+      const recruitment = await getRecruitmentById(application.recruitmentId);
+      setRecruitmentDetail(recruitment);
+    } catch (error) {
+      console.error("Failed to fetch application details:", error);
+      alert("Không thể tải thông tin chi tiết đơn ứng tuyển");
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  const handleCloseApplicationDetail = () => {
+    setSelectedApplicationDetail(null);
+    setRecruitmentDetail(null);
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case "UNDER_REVIEW":
@@ -285,7 +362,7 @@ export function StudentRecruitment() {
         return "bg-green-100 text-green-800";
       case "REJECTED":
         return "bg-red-100 text-red-800";
-      case "INTERVIEWED":
+      case "INTERVIEW":
         return "bg-purple-100 text-purple-800";
       default:
         return "bg-gray-100 text-gray-800";
@@ -300,7 +377,7 @@ export function StudentRecruitment() {
         return <CheckCircle className="h-4 w-4" />;
       case "REJECTED":
         return <XCircle className="h-4 w-4" />;
-      case "INTERVIEWED":
+      case "INTERVIEW":
         return <MessageSquare className="h-4 w-4" />;
       default:
         return <Clock className="h-4 w-4" />;
@@ -495,10 +572,9 @@ export function StudentRecruitment() {
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-bold">Tuyển dụng CLB</h1>
-            <p className="text-muted-foreground">
-              Khám phá và ứng tuyển vào các câu lạc bộ yêu thích
-            </p>
+            <h1 className="text-3xl font-bold">
+              Trạng thái đơn ứng tuyển của tôi
+            </h1>
           </div>
         </div>
 
@@ -528,8 +604,72 @@ export function StudentRecruitment() {
               </Select>
             </div>
 
-            {/* Recruitment List */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Loading Skeleton for List */}
+            {listLoading ? (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {[...Array(4)].map((_, index) => (
+                  <Card key={index} className="hover:shadow-lg transition-shadow">
+                    <CardHeader>
+                      <div className="flex items-start space-x-4">
+                        {/* Club logo skeleton */}
+                        <Skeleton className="w-16 h-16 rounded-lg flex-shrink-0" />
+                        <div className="flex-1">
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1 space-y-2">
+                              {/* Title */}
+                              <Skeleton className="h-5 w-3/4" />
+                              {/* Club name */}
+                              <Skeleton className="h-4 w-1/2" />
+                            </div>
+                            {/* Status badge */}
+                            <Skeleton className="h-6 w-20 rounded-full ml-2" />
+                          </div>
+                          {/* Description */}
+                          <div className="mt-2 space-y-1">
+                            <Skeleton className="h-3 w-full" />
+                            <Skeleton className="h-3 w-5/6" />
+                          </div>
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      {/* Date and applicants info */}
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div className="flex items-center gap-2">
+                          <Skeleton className="h-4 w-4 rounded" />
+                          <Skeleton className="h-4 w-32" />
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Skeleton className="h-4 w-4 rounded" />
+                          <Skeleton className="h-4 w-24" />
+                        </div>
+                      </div>
+
+                      {/* Requirements */}
+                      <div className="space-y-2">
+                        <Skeleton className="h-4 w-16" />
+                        <div className="space-y-1">
+                          {[...Array(3)].map((_, i) => (
+                            <div key={i} className="flex items-start gap-2">
+                              <Skeleton className="h-1 w-1 rounded-full mt-2" />
+                              <Skeleton className="h-3 flex-1" />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Action buttons */}
+                      <div className="flex gap-2 pt-2">
+                        <Skeleton className="h-10 flex-1 rounded" />
+                        <Skeleton className="h-10 w-24 rounded" />
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            ) : (
+              /* Recruitment List */
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {filteredCampaigns.map((campaign) => (
                 <Card
                   key={campaign.id}
@@ -637,204 +777,840 @@ export function StudentRecruitment() {
                   </CardContent>
                 </Card>
               ))}
-            </div>
+              </div>
+            )}
           </>
         )}
 
         {activeView === "status" && (
           <>
             <div className="space-y-6">
-              <h2 className="text-2xl font-bold">
-                Trạng thái đơn ứng tuyển của tôi
-              </h2>
+              {/* <div className="flex items-center justify-between">
+                <h2 className="text-2xl font-bold">
+                  Trạng thái đơn ứng tuyển của tôi
+                </h2>
+                <Button variant="outline" onClick={() => setActiveView("list")}>
+                  Xem danh sách tuyển dụng
+                </Button>
+              </div> */}
 
-              {myApplications.map((application) => {
-                const recruitment = recruitmentCampaigns.find(
-                  (r) => r.id === application.recruitmentId
-                );
-                if (!recruitment) return null;
+              {/* Search and Filter */}
+              <div className="flex flex-col sm:flex-row gap-4">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                  <Input
+                    placeholder="Tìm kiếm theo ID, tên, email, MSSV..."
+                    value={myAppSearchQuery}
+                    onChange={(e) => setMyAppSearchQuery(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+                <Select
+                  value={myAppStatusFilter}
+                  onValueChange={setMyAppStatusFilter}
+                >
+                  <SelectTrigger className="w-[200px]">
+                    <SelectValue placeholder="Lọc theo trạng thái" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tất cả trạng thái</SelectItem>
+                    <SelectItem value="UNDER_REVIEW">Đang xem xét</SelectItem>
+                    <SelectItem value="INTERVIEW">Chờ phỏng vấn</SelectItem>
+                    <SelectItem value="ACCEPTED">Đã duyệt</SelectItem>
+                    <SelectItem value="REJECTED">Từ chối</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
 
-                return (
-                  <Card key={application.id} className="overflow-hidden">
-                    <CardHeader>
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-start space-x-4">
-                          <img
-                            src={recruitment.clubImage || "/placeholder.svg"}
-                            alt={recruitment.clubName}
-                            className="w-12 h-12 rounded-lg object-cover"
-                          />
-                          <div>
-                            <CardTitle className="text-lg">
-                              {recruitment.title}
-                            </CardTitle>
-                            <p className="text-sm text-muted-foreground">
-                              {recruitment.clubName}
-                            </p>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              Nộp đơn:{" "}
-                              {new Date(
-                                application.submittedAt
-                              ).toLocaleDateString("vi-VN")}
-                            </p>
+              {isLoading ? (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {[...Array(4)].map((_, index) => (
+                    <Card key={index} className="overflow-hidden">
+                      <CardHeader>
+                        <div className="flex items-start justify-between">
+                          <div className="flex items-start space-x-4 flex-1">
+                            <div className="space-y-2 flex-1">
+                              {/* Application ID title */}
+                              <Skeleton className="h-5 w-40" />
+                              {/* User name */}
+                              <Skeleton className="h-4 w-32" />
+                              {/* Submitted date */}
+                              <Skeleton className="h-3 w-36" />
+                            </div>
                           </div>
+                          {/* Status badge */}
+                          <Skeleton className="h-6 w-28 rounded-full" />
                         </div>
-                        <Badge className={getStatusColor(application.status)}>
-                          <div className="flex items-center space-x-1">
-                            {getStatusIcon(application.status)}
-                            <span>
-                              {application.status === "UNDER_REVIEW"
-                                ? "Đang xem xét"
-                                : application.status === "ACCEPTED"
-                                ? "Đã duyệt"
-                                : application.status === "REJECTED"
-                                ? "Từ chối"
-                                : application.status === "INTERVIEWED"
-                                ? "Đã phỏng vấn"
-                                : "Đang xét duyệt"}
-                            </span>
-                          </div>
-                        </Badge>
-                      </div>
-                    </CardHeader>
-
-                    <CardContent className="space-y-4">
-                      {application.status === "ACCEPTED" && (
-                        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        {/* Status info box - varies by status */}
+                        <div className={`border rounded-lg p-4 ${
+                          index % 4 === 0 ? 'bg-green-50 border-green-200' : 
+                          index % 4 === 1 ? 'bg-purple-50 border-purple-200' :
+                          index % 4 === 2 ? 'bg-red-50 border-red-200' :
+                          'bg-yellow-50 border-yellow-200'
+                        }`}>
                           <div className="flex items-start space-x-3">
-                            <CheckCircle className="h-5 w-5 text-green-600 mt-0.5" />
-                            <div className="flex-1">
-                              <h4 className="font-medium text-green-800">
-                                Chúc mừng! Đơn của bạn đã được chấp nhận
-                              </h4>
-                              {application.interviewDate && (
-                                <p className="text-sm text-green-700 mt-1">
-                                  <Calendar className="h-4 w-4 inline mr-1" />
-                                  Lịch phỏng vấn:{" "}
-                                  {new Date(
-                                    application.interviewDate
-                                  ).toLocaleString("vi-VN")}
-                                </p>
-                              )}
-                              {application.score && (
-                                <p className="text-sm text-green-700 mt-1">
-                                  Điểm đánh giá: {application.score}/100
-                                </p>
-                              )}
-                              {application.reviewNote && (
-                                <p className="text-sm text-green-700 mt-2">
-                                  <MessageSquare className="h-4 w-4 inline mr-1" />
-                                  Ghi chú: {application.reviewNote}
-                                </p>
+                            <Skeleton className="h-5 w-5 rounded-full flex-shrink-0" />
+                            <div className="flex-1 space-y-2">
+                              <Skeleton className="h-4 w-3/4" />
+                              <Skeleton className="h-3 w-full" />
+                              {/* Notes section for some statuses */}
+                              {(index % 4 === 0 || index % 4 === 1) && (
+                                <div className="mt-3 space-y-2">
+                                  <Skeleton className="h-3 w-24" />
+                                  <Skeleton className="h-16 w-full rounded" />
+                                </div>
                               )}
                             </div>
                           </div>
                         </div>
-                      )}
 
-                      {application.status === "INTERVIEWED" && (
-                        <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
-                          <div className="flex items-start space-x-3">
-                            <MessageSquare className="h-5 w-5 text-purple-600 mt-0.5" />
-                            <div className="flex-1">
-                              <h4 className="font-medium text-purple-800">
-                                Bạn đã được mời phỏng vấn
-                              </h4>
-                              {application.interviewDate && (
-                                <p className="text-sm text-purple-700 mt-1">
-                                  <Calendar className="h-4 w-4 inline mr-1" />
-                                  Lịch phỏng vấn:{" "}
-                                  {new Date(
-                                    application.interviewDate
-                                  ).toLocaleString("vi-VN")}
-                                </p>
-                              )}
-                              <p className="text-sm text-purple-700 mt-1">
-                                Vui lòng chuẩn bị và tham gia đúng giờ. Chúc bạn may mắn!
-                              </p>
-                              {application.reviewNote && (
-                                <p className="text-sm text-purple-700 mt-2">
-                                  <MessageSquare className="h-4 w-4 inline mr-1" />
-                                  Ghi chú: {application.reviewNote}
-                                </p>
-                              )}
-                            </div>
-                          </div>
+                        {/* Action buttons */}
+                        <div className="flex gap-2">
+                          <Skeleton className="h-9 w-32" />
+                          {index % 4 === 2 && <Skeleton className="h-9 w-28" />}
                         </div>
-                      )}
-
-                      {application.status === "REJECTED" && (
-                        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                          <div className="flex items-start space-x-3">
-                            <XCircle className="h-5 w-5 text-red-600 mt-0.5" />
-                            <div className="flex-1">
-                              <h4 className="font-medium text-red-800">
-                                Đơn ứng tuyển chưa được chấp nhận
-                              </h4>
-                              {application.reviewNote && (
-                                <p className="text-sm text-red-700 mt-2">
-                                  <MessageSquare className="h-4 w-4 inline mr-1" />
-                                  Phản hồi: {application.reviewNote}
-                                </p>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              ) : (
+                <>
+                  {/* Results count and info */}
+                  {filteredMyApplications.length > 0 && (
+                    <div className="flex items-center justify-between text-sm text-muted-foreground">
+                      <div>
+                        {myAppSearchQuery ? (
+                          <>
+                            Tìm thấy{" "}
+                            <span className="font-semibold">
+                              {filteredMyApplications.length}
+                            </span>{" "}
+                            kết quả tìm kiếm
+                            {totalElements > filteredMyApplications.length &&
+                              ` trong ${totalElements} đơn`}
+                          </>
+                        ) : (
+                          <>
+                            Hiển thị{" "}
+                            <span className="font-semibold">
+                              {Math.min(
+                                currentPage * pageSize + 1,
+                                totalElements
+                              )}{" "}
+                              -{" "}
+                              {Math.min(
+                                (currentPage + 1) * pageSize,
+                                totalElements
                               )}
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      {application.status === "UNDER_REVIEW" && (
-                        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                          <div className="flex items-start space-x-3">
-                            <AlertCircle className="h-5 w-5 text-yellow-600 mt-0.5" />
-                            <div className="flex-1">
-                              <h4 className="font-medium text-yellow-800">
-                                Đơn đang được xét duyệt
-                              </h4>
-                              <p className="text-sm text-yellow-700 mt-1">
-                                CLB sẽ phản hồi trong vòng 3-5 ngày làm việc.
-                                Bạn sẽ nhận được thông báo qua email.
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      <div className="flex gap-2">
-                        <Button variant="outline" size="sm">
-                          <FileText className="h-4 w-4 mr-2" />
-                          Xem đơn đã nộp
-                        </Button>
-                        {application.status === "REJECTED" && (
-                          <Button variant="outline" size="sm">
-                            Ứng tuyển lại
-                          </Button>
+                            </span>{" "}
+                            trong tổng số{" "}
+                            <span className="font-semibold">
+                              {totalElements}
+                            </span>{" "}
+                            đơn
+                          </>
                         )}
                       </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
+                      {!myAppSearchQuery && totalPages > 1 && (
+                        <div>
+                          Trang {currentPage + 1} / {totalPages}
+                        </div>
+                      )}
+                    </div>
+                  )}
 
-              {myApplications.length === 0 && (
-                <Card>
-                  <CardContent className="text-center py-12">
-                    <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                    <h3 className="text-lg font-medium mb-2">
-                      Chưa có đơn ứng tuyển nào
-                    </h3>
-                    <p className="text-muted-foreground mb-4">
-                      Hãy khám phá và ứng tuyển vào các CLB yêu thích!
-                    </p>
-                    <Button onClick={() => setActiveView("list")}>
-                      Xem danh sách tuyển dụng
-                    </Button>
-                  </CardContent>
-                </Card>
+                  {/* Applications Grid - 2 columns */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {filteredMyApplications.map((application) => {
+                      // For now, we don't have recruitment data joined in the response
+                      // You may need to fetch recruitment details separately or modify backend to include it
+                      return (
+                        <Card key={application.id} className="overflow-hidden">
+                          <CardHeader>
+                            <div className="flex items-start justify-between">
+                              <div className="flex items-start space-x-4">
+                                <div>
+                                  <CardTitle className="text-lg">
+                                    Đơn ứng tuyển #{application.id}
+                                  </CardTitle>
+                                  <p className="text-sm text-muted-foreground">
+                                    {application.userName}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground mt-1">
+                                    Nộp đơn:{" "}
+                                    {new Date(
+                                      application.submittedDate
+                                    ).toLocaleDateString("vi-VN")}
+                                  </p>
+                                </div>
+                              </div>
+                              <Badge
+                                className={getStatusColor(application.status)}
+                              >
+                                <div className="flex items-center space-x-1">
+                                  {getStatusIcon(application.status)}
+                                  <span>
+                                    {application.status === "UNDER_REVIEW"
+                                      ? "Đang xem xét"
+                                      : application.status === "ACCEPTED"
+                                      ? "Đã duyệt"
+                                      : application.status === "REJECTED"
+                                      ? "Từ chối"
+                                      : application.status === "INTERVIEW"
+                                      ? "Chờ phỏng vấn"
+                                      : "Đang xét duyệt"}
+                                  </span>
+                                </div>
+                              </Badge>
+                            </div>
+                          </CardHeader>
+
+                          <CardContent className="space-y-4">
+                            {application.status === "ACCEPTED" && (
+                              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                                <div className="flex items-start space-x-3">
+                                  <CheckCircle className="h-5 w-5 text-green-600 mt-0.5" />
+                                  <div className="flex-1">
+                                    <h4 className="font-medium text-green-800">
+                                      Chúc mừng! Đơn của bạn đã được chấp nhận
+                                    </h4>
+                                    {application.reviewNotes && (
+                                      <div className="mt-3">
+                                        <div className="flex items-center gap-1 text-sm font-medium text-green-800 mb-1">
+                                          <MessageSquare className="h-4 w-4" />
+                                          <span>Ghi chú:</span>
+                                        </div>
+                                        <div className="text-sm text-green-700 whitespace-pre-wrap bg-green-100 rounded p-2 border border-green-200">
+                                          {application.reviewNotes}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
+                            {application.status === "INTERVIEW" && (
+                              <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                                <div className="flex items-start space-x-3">
+                                  <MessageSquare className="h-5 w-5 text-purple-600 mt-0.5" />
+                                  <div className="flex-1">
+                                    <h4 className="font-medium text-purple-800">
+                                      Bạn đã được mời phỏng vấn
+                                    </h4>
+                                    <p className="text-sm text-purple-700 mt-1">
+                                      Vui lòng chuẩn bị và tham gia đúng giờ.
+                                      Chúc bạn may mắn!
+                                    </p>
+                                    {application.reviewNotes && (
+                                      <div className="mt-3">
+                                        <div className="flex items-center gap-1 text-sm font-medium text-purple-800 mb-1">
+                                          <MessageSquare className="h-4 w-4" />
+                                          <span>Thông tin phỏng vấn:</span>
+                                        </div>
+                                        <div className="text-sm text-purple-700 whitespace-pre-wrap bg-purple-100 rounded p-2 border border-purple-200">
+                                          {application.reviewNotes}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
+                            {application.status === "REJECTED" && (
+                              <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                                <div className="flex items-start space-x-3">
+                                  <XCircle className="h-5 w-5 text-red-600 mt-0.5" />
+                                  <div className="flex-1">
+                                    <h4 className="font-medium text-red-800">
+                                      Đơn ứng tuyển chưa được chấp nhận
+                                    </h4>
+                                    {application.reviewNotes && (
+                                      <div className="mt-3">
+                                        <div className="flex items-center gap-1 text-sm font-medium text-red-800 mb-1">
+                                          <MessageSquare className="h-4 w-4" />
+                                          <span>Phản hồi:</span>
+                                        </div>
+                                        <div className="text-sm text-red-700 whitespace-pre-wrap bg-red-100 rounded p-2 border border-red-200">
+                                          {application.reviewNotes}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
+                            {application.status === "UNDER_REVIEW" && (
+                              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                                <div className="flex items-start space-x-3">
+                                  <AlertCircle className="h-5 w-5 text-yellow-600 mt-0.5" />
+                                  <div className="flex-1">
+                                    <h4 className="font-medium text-yellow-800">
+                                      Đơn đang được xét duyệt
+                                    </h4>
+                                    <p className="text-sm text-yellow-700 mt-1">
+                                      CLB sẽ phản hồi trong vòng 3-5 ngày làm
+                                      việc.
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
+                            <div className="flex gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() =>
+                                  handleViewApplicationDetail(application)
+                                }
+                              >
+                                <FileText className="h-4 w-4 mr-2" />
+                                Xem đơn đã nộp
+                              </Button>
+                              {application.status === "REJECTED" && (
+                                <Button variant="outline" size="sm">
+                                  Ứng tuyển lại
+                                </Button>
+                              )}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
+                  </div>
+
+                  {/* Pagination */}
+                  {!myAppSearchQuery &&
+                    totalPages > 1 &&
+                    filteredMyApplications.length > 0 && (
+                      <div className="flex justify-center mt-6">
+                        <Pagination>
+                          <PaginationContent>
+                            <PaginationItem>
+                              <PaginationPrevious
+                                onClick={() => {
+                                  if (currentPage > 0) {
+                                    setCurrentPage(currentPage - 1);
+                                    window.scrollTo({
+                                      top: 0,
+                                      behavior: "smooth",
+                                    });
+                                  }
+                                }}
+                                className={
+                                  currentPage === 0
+                                    ? "pointer-events-none opacity-50"
+                                    : "cursor-pointer"
+                                }
+                              />
+                            </PaginationItem>
+
+                            {/* First page */}
+                            {currentPage > 2 && (
+                              <>
+                                <PaginationItem>
+                                  <PaginationLink
+                                    onClick={() => {
+                                      setCurrentPage(0);
+                                      window.scrollTo({
+                                        top: 0,
+                                        behavior: "smooth",
+                                      });
+                                    }}
+                                    className="cursor-pointer"
+                                  >
+                                    1
+                                  </PaginationLink>
+                                </PaginationItem>
+                                {currentPage > 3 && (
+                                  <PaginationItem>
+                                    <PaginationEllipsis />
+                                  </PaginationItem>
+                                )}
+                              </>
+                            )}
+
+                            {/* Pages around current page */}
+                            {Array.from(
+                              { length: Math.min(5, totalPages) },
+                              (_, i) => {
+                                let pageNum;
+                                if (totalPages <= 5) {
+                                  pageNum = i;
+                                } else if (currentPage <= 2) {
+                                  pageNum = i;
+                                } else if (currentPage >= totalPages - 3) {
+                                  pageNum = totalPages - 5 + i;
+                                } else {
+                                  pageNum = currentPage - 2 + i;
+                                }
+
+                                if (pageNum < 0 || pageNum >= totalPages)
+                                  return null;
+                                if (currentPage > 2 && pageNum === 0)
+                                  return null;
+                                if (
+                                  currentPage < totalPages - 3 &&
+                                  pageNum === totalPages - 1
+                                )
+                                  return null;
+
+                                return (
+                                  <PaginationItem key={pageNum}>
+                                    <PaginationLink
+                                      onClick={() => {
+                                        setCurrentPage(pageNum);
+                                        window.scrollTo({
+                                          top: 0,
+                                          behavior: "smooth",
+                                        });
+                                      }}
+                                      isActive={currentPage === pageNum}
+                                      className="cursor-pointer"
+                                    >
+                                      {pageNum + 1}
+                                    </PaginationLink>
+                                  </PaginationItem>
+                                );
+                              }
+                            )}
+
+                            {/* Last page */}
+                            {currentPage < totalPages - 3 && (
+                              <>
+                                {currentPage < totalPages - 4 && (
+                                  <PaginationItem>
+                                    <PaginationEllipsis />
+                                  </PaginationItem>
+                                )}
+                                <PaginationItem>
+                                  <PaginationLink
+                                    onClick={() => {
+                                      setCurrentPage(totalPages - 1);
+                                      window.scrollTo({
+                                        top: 0,
+                                        behavior: "smooth",
+                                      });
+                                    }}
+                                    className="cursor-pointer"
+                                  >
+                                    {totalPages}
+                                  </PaginationLink>
+                                </PaginationItem>
+                              </>
+                            )}
+
+                            <PaginationItem>
+                              <PaginationNext
+                                onClick={() => {
+                                  if (currentPage < totalPages - 1) {
+                                    setCurrentPage(currentPage + 1);
+                                    window.scrollTo({
+                                      top: 0,
+                                      behavior: "smooth",
+                                    });
+                                  }
+                                }}
+                                className={
+                                  currentPage === totalPages - 1
+                                    ? "pointer-events-none opacity-50"
+                                    : "cursor-pointer"
+                                }
+                              />
+                            </PaginationItem>
+                          </PaginationContent>
+                        </Pagination>
+                      </div>
+                    )}
+
+                  {filteredMyApplications.length === 0 &&
+                    myApplications.length > 0 && (
+                      <Card>
+                        <CardContent className="text-center py-12">
+                          <Search className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                          <h3 className="text-lg font-medium mb-2">
+                            Không tìm thấy kết quả phù hợp
+                          </h3>
+                          <p className="text-muted-foreground mb-4">
+                            Thử điều chỉnh bộ lọc hoặc từ khóa tìm kiếm
+                          </p>
+                          <Button
+                            variant="outline"
+                            onClick={() => {
+                              setMyAppSearchQuery("");
+                              setMyAppStatusFilter("all");
+                            }}
+                          >
+                            Xóa bộ lọc
+                          </Button>
+                        </CardContent>
+                      </Card>
+                    )}
+
+                  {myApplications.length === 0 && (
+                    <Card>
+                      <CardContent className="text-center py-12">
+                        <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                        <h3 className="text-lg font-medium mb-2">
+                          Chưa có đơn ứng tuyển nào
+                        </h3>
+                        <p className="text-muted-foreground mb-4">
+                          Hãy khám phá và ứng tuyển vào các CLB yêu thích!
+                        </p>
+                        <Button onClick={() => setActiveView("list")}>
+                          Xem danh sách tuyển dụng
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  )}
+                </>
               )}
             </div>
           </>
         )}
       </div>
+
+      {/* Application Detail Dialog */}
+      <Dialog
+        open={!!selectedApplicationDetail}
+        onOpenChange={(open) => !open && handleCloseApplicationDetail()}
+      >
+        <DialogContent className="!max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              Chi tiết đơn ứng tuyển #{selectedApplicationDetail?.id}
+            </DialogTitle>
+            <DialogDescription>
+              Thông tin chi tiết về đơn ứng tuyển của bạn
+            </DialogDescription>
+          </DialogHeader>
+
+          {detailLoading ? (
+            <div className="space-y-6">
+              {/* Recruitment Info Skeleton */}
+              <div className="border rounded-lg p-4 bg-primary/5">
+                <div className="flex items-center gap-2 mb-3">
+                  <Skeleton className="h-4 w-4 rounded" />
+                  <Skeleton className="h-4 w-36" />
+                </div>
+                <div className="space-y-2">
+                  <div className="flex gap-2">
+                    <Skeleton className="h-3 w-16" />
+                    <Skeleton className="h-3 w-48" />
+                  </div>
+                  <div className="flex gap-2">
+                    <Skeleton className="h-3 w-16" />
+                    <Skeleton className="h-3 w-64" />
+                  </div>
+                  <div className="flex gap-2">
+                    <Skeleton className="h-3 w-20" />
+                    <Skeleton className="h-3 w-40" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Application Status Skeleton */}
+              <div className="border rounded-lg p-4 bg-muted/30">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Left column - Application info */}
+                  <div className="space-y-3">
+                    <Skeleton className="h-5 w-40" />
+                    <div className="space-y-2">
+                      <div className="flex justify-between">
+                        <Skeleton className="h-4 w-20" />
+                        <Skeleton className="h-6 w-24 rounded-full" />
+                      </div>
+                      <div className="flex justify-between">
+                        <Skeleton className="h-4 w-20" />
+                        <Skeleton className="h-4 w-32" />
+                      </div>
+                      <div className="flex justify-between">
+                        <Skeleton className="h-4 w-24" />
+                        <Skeleton className="h-4 w-32" />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right column - Applicant info */}
+                  <div className="space-y-3">
+                    <Skeleton className="h-5 w-36" />
+                    <div className="space-y-2">
+                      <div className="flex justify-between">
+                        <Skeleton className="h-4 w-16" />
+                        <Skeleton className="h-4 w-32" />
+                      </div>
+                      <div className="flex justify-between">
+                        <Skeleton className="h-4 w-16" />
+                        <Skeleton className="h-4 w-40" />
+                      </div>
+                      <div className="flex justify-between">
+                        <Skeleton className="h-4 w-16" />
+                        <Skeleton className="h-4 w-24" />
+                      </div>
+                      <div className="flex justify-between">
+                        <Skeleton className="h-4 w-16" />
+                        <Skeleton className="h-4 w-28" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Review Notes Skeleton (optional) */}
+              <div className="border rounded-lg p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <Skeleton className="h-4 w-4 rounded" />
+                  <Skeleton className="h-4 w-32" />
+                </div>
+                <Skeleton className="h-20 w-full rounded" />
+              </div>
+
+              {/* Answers Skeleton */}
+              <div className="space-y-4">
+                <Skeleton className="h-5 w-36" />
+                {[...Array(3)].map((_, index) => (
+                  <div key={index} className="border rounded-lg p-4 space-y-3">
+                    <div className="flex items-start gap-2">
+                      <Skeleton className="h-6 w-6 rounded-full flex-shrink-0" />
+                      <Skeleton className="h-5 w-3/4" />
+                    </div>
+                    <div className="ml-8">
+                      <Skeleton className="h-20 w-full rounded" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Close button */}
+              <div className="flex justify-end pt-6 border-t">
+                <Skeleton className="h-10 w-20" />
+              </div>
+            </div>
+          ) : (
+            selectedApplicationDetail && (
+              <div className="space-y-6">
+                {/* Recruitment Info */}
+                {recruitmentDetail && (
+                  <div className="border rounded-lg p-4 bg-primary/5">
+                    <h4 className="font-medium mb-3 flex items-center gap-2">
+                      <FileText className="h-4 w-4" />
+                      Thông tin tuyển dụng
+                    </h4>
+                    <div className="space-y-2 text-sm">
+                      <div>
+                        <span className="text-muted-foreground">Tiêu đề: </span>
+                        <span className="font-medium">
+                          {recruitmentDetail.title}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Mô tả: </span>
+                        <span>{recruitmentDetail.description}</span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">
+                          Thời gian:{" "}
+                        </span>
+                        <span>
+                          {new Date(
+                            recruitmentDetail.startDate
+                          ).toLocaleDateString("vi-VN")}{" "}
+                          -{" "}
+                          {new Date(
+                            recruitmentDetail.endDate
+                          ).toLocaleDateString("vi-VN")}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Application Status */}
+                <div className="border rounded-lg p-4 bg-muted/30">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <h4 className="font-medium mb-3">
+                        Thông tin đơn ứng tuyển
+                      </h4>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">
+                            Trạng thái:
+                          </span>
+                          <Badge
+                            className={getStatusColor(
+                              selectedApplicationDetail.status
+                            )}
+                          >
+                            <div className="flex items-center space-x-1">
+                              {getStatusIcon(selectedApplicationDetail.status)}
+                              <span>
+                                {selectedApplicationDetail.status ===
+                                "UNDER_REVIEW"
+                                  ? "Đang xem xét"
+                                  : selectedApplicationDetail.status ===
+                                    "ACCEPTED"
+                                  ? "Đã duyệt"
+                                  : selectedApplicationDetail.status ===
+                                    "REJECTED"
+                                  ? "Từ chối"
+                                  : selectedApplicationDetail.status ===
+                                    "INTERVIEW"
+                                  ? "Chờ phỏng vấn"
+                                  : "Đang xét duyệt"}
+                              </span>
+                            </div>
+                          </Badge>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">
+                            Ngày nộp:
+                          </span>
+                          <span className="font-medium">
+                            {new Date(
+                              selectedApplicationDetail.submittedDate
+                            ).toLocaleString("vi-VN")}
+                          </span>
+                        </div>
+                        {selectedApplicationDetail.reviewedDate && (
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">
+                              Ngày xét duyệt:
+                            </span>
+                            <span className="font-medium">
+                              {new Date(
+                                selectedApplicationDetail.reviewedDate
+                              ).toLocaleString("vi-VN")}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div>
+                      <h4 className="font-medium mb-3">Thông tin ứng viên</h4>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Họ tên:</span>
+                          <span className="font-medium">
+                            {selectedApplicationDetail.userName}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Email:</span>
+                          <span className="font-medium">
+                            {selectedApplicationDetail.userEmail}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">MSSV:</span>
+                          <span className="font-medium">
+                            {selectedApplicationDetail.studentId}
+                          </span>
+                        </div>
+                        {selectedApplicationDetail.userPhone && (
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">SĐT:</span>
+                            <span className="font-medium">
+                              {selectedApplicationDetail.userPhone}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Review Notes */}
+                {selectedApplicationDetail.reviewNotes && (
+                  <div className="border rounded-lg p-4">
+                    <h4 className="font-medium mb-3 flex items-center gap-2">
+                      <MessageSquare className="h-4 w-4" />
+                      {selectedApplicationDetail.status === "INTERVIEW"
+                        ? "Thông tin phỏng vấn"
+                        : selectedApplicationDetail.status === "REJECTED"
+                        ? "Phản hồi từ CLB"
+                        : "Ghi chú từ CLB"}
+                    </h4>
+                    <div className="bg-muted/50 rounded p-3 text-sm whitespace-pre-wrap">
+                      {selectedApplicationDetail.reviewNotes}
+                    </div>
+                  </div>
+                )}
+
+                {/* Answers */}
+                <div>
+                  <h4 className="font-medium mb-3">Câu trả lời của bạn</h4>
+                  {selectedApplicationDetail.answers &&
+                  selectedApplicationDetail.answers.length > 0 ? (
+                    <div className="space-y-4">
+                      {/* Sort answers by questionId to maintain order */}
+                      {[...selectedApplicationDetail.answers]
+                        .sort((a, b) => a.questionId - b.questionId)
+                        .map((answer, index) => (
+                          <div
+                            key={answer.questionId}
+                            className="border rounded-lg p-4"
+                          >
+                            <h5 className="font-medium mb-2 flex items-start gap-2">
+                              <span className="bg-primary/10 text-primary rounded-full w-6 h-6 flex items-center justify-center text-sm flex-shrink-0">
+                                {index + 1}
+                              </span>
+                              <span>{answer.questionText}</span>
+                            </h5>
+                            <div className="ml-8 bg-muted/30 rounded p-3 mt-2">
+                              {answer.fileUrl ? (
+                                <a
+                                  href={answer.fileUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-blue-600 hover:underline flex items-center gap-2"
+                                >
+                                  <FileText className="h-4 w-4" />
+                                  Xem file đã tải lên
+                                </a>
+                              ) : answer.answerText ? (
+                                <p className="text-sm whitespace-pre-wrap">
+                                  {answer.answerText}
+                                </p>
+                              ) : (
+                                <p className="text-sm text-muted-foreground italic">
+                                  Chưa có câu trả lời
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 border rounded-lg bg-muted/30">
+                      <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-2" />
+                      <p className="text-muted-foreground">
+                        Không có câu trả lời nào được lưu
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Close Button */}
+                <div className="flex justify-end pt-6 border-t">
+                  <Button
+                    variant="outline"
+                    onClick={handleCloseApplicationDetail}
+                  >
+                    Đóng
+                  </Button>
+                </div>
+              </div>
+            )
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

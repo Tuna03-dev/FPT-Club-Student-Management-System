@@ -23,6 +23,16 @@ public interface RecruitmentMapper {
             return null;
         }
         
+        // Calculate application statistics
+        int totalApplications = 0;
+        int acceptedApplications = 0;
+        if (recruitment.getApplications() != null) {
+            totalApplications = recruitment.getApplications().size();
+            acceptedApplications = (int) recruitment.getApplications().stream()
+                    .filter(app -> app.getStatus() == RecruitmentApplicationStatus.ACCEPTED)
+                    .count();
+        }
+        
         RecruitmentData.RecruitmentDataBuilder builder = RecruitmentData.builder()
                 .id(recruitment.getId())
                 .title(recruitment.getTitle())
@@ -33,6 +43,8 @@ public interface RecruitmentMapper {
                 .status(recruitment.getStatus())
                 .requirements(recruitment.getRequirements())
                 .clubId(recruitment.getClub() != null ? recruitment.getClub().getId() : null)
+                .totalApplications(totalApplications)
+                .acceptedApplications(acceptedApplications)
                 .createdAt(recruitment.getCreatedAt())
                 .updatedAt(recruitment.getUpdatedAt());
         
@@ -49,6 +61,7 @@ public interface RecruitmentMapper {
                             .questionText(q.getQuestionText())
                             .questionType(q.getQuestionType())
                             .questionOrder(q.getQuestionOrder())
+                            .isRequired(q.getIsRequired())
                             .options(mapOptionsInternal(q.getOptions()))
                             .createdAt(q.getCreatedAt())
                             .updatedAt(q.getUpdatedAt())
@@ -57,12 +70,16 @@ public interface RecruitmentMapper {
             builder.questions(questionData);
         }
         
-        // Map teamOptions - extract team IDs
+        // Map teamOptions - extract team information
         if (recruitment.getTeamOptions() != null && !recruitment.getTeamOptions().isEmpty()) {
-            List<Long> teamOptionIds = recruitment.getTeamOptions().stream()
-                    .map(teamOption -> teamOption.getTeam().getId())
+            List<com.sep490.backendclubmanagement.dto.response.TeamOptionData> teamOptions = recruitment.getTeamOptions().stream()
+                    .map(teamOption -> com.sep490.backendclubmanagement.dto.response.TeamOptionData.builder()
+                            .id(teamOption.getTeam().getId())
+                            .teamName(teamOption.getTeam().getTeamName())
+                            .description(teamOption.getTeam().getDescription())
+                            .build())
                     .collect(Collectors.toList());
-            builder.teamOptionIds(teamOptionIds);
+            builder.teamOptions(teamOptions);
         }
         
         return builder.build();

@@ -774,6 +774,7 @@ const Members = () => {
                                   {getDisplayRoleInfo(member)?.roleName}
                                 </Badge>
                               )}
+
                               <Badge
                                 className={getStatusColor(
                                   statusToLabel(member.currentTerm?.isActive)
@@ -781,6 +782,15 @@ const Members = () => {
                               >
                                 {statusToLabel(member.currentTerm?.isActive)}
                               </Badge>
+                              {/* Team Badge */}
+                              {member.currentTerm?.teamName && (
+                                <Badge
+                                  variant="outline"
+                                  className="border-orange-500/30 text-orange-600"
+                                >
+                                  {member.currentTerm.teamName}
+                                </Badge>
+                              )}
                             </div>
 
                             <div className="flex items-center gap-4 text-sm text-muted-foreground flex-wrap">
@@ -1439,10 +1449,13 @@ const Members = () => {
       <MemberDetailDialog
         member={selectedMember}
         isOpen={!!selectedMember}
-        onClose={() => setSelectedMember(null)}
+        onClose={() => {
+          setSelectedMember(null);
+        }}
         clubId={clubId}
         roles={clubRoles}
         teams={teams}
+        onUpdated={() => loadMembers()}
       />
     </div>
   );

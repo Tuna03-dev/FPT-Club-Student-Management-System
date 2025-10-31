@@ -1,11 +1,5 @@
 import { axiosClient } from "./axiosClient";
-
-export interface MyClubDTO {
-  clubId: number;
-  clubName: string;
-  logoUrl?: string;
-  // roleNames?: string[];
-}
+import type { MyClubDTO } from "@/types/dto/MyClubDTO";
 
 export interface ClubDetailDTO {
   clubId: number;

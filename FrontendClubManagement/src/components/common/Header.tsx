@@ -54,9 +54,12 @@ const Header: React.FC = () => {
           </nav>
 
           <div className="flex items-center gap-4">
-            <button className="hidden sm:inline-block bg-transparent border border-orange-500 text-orange-500 px-4 py-2 rounded-md font-medium hover:bg-orange-50">
+            <Link 
+              to="/login"
+              className="hidden sm:inline-block bg-transparent border border-orange-500 text-orange-500 px-4 py-2 rounded-md font-medium hover:bg-orange-50 text-center"
+            >
               Đăng nhập
-            </button>
+            </Link>
           </div>
         </div>
       </div>

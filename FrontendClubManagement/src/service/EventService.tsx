@@ -7,7 +7,7 @@ export interface EventData {
   location: string;
   startTime: string; // ISO string
   endTime: string;   // ISO string
-  draft: boolean;
+  isDraft: boolean;
   clubId: number;
   clubName?: string;
   mediaUrls: string[];
@@ -72,6 +72,11 @@ export async function getEventById(id: number): Promise<EventData> {
   return res.data;
 }
 
+export async function getEventsByClubId(clubId: number): Promise<EventData[]> {
+  const res = await axiosClient.get<EventData[]>(`/events/club/${clubId}`);
+  return res.data ?? [];
+}
+
 export type EventStatusFilter = "all" | "upcoming" | "ongoing" | "completed";
 
 export function computeEventStatus(nowIso: string, startIso: string, endIso: string): EventStatusFilter {
@@ -82,5 +87,128 @@ export function computeEventStatus(nowIso: string, startIso: string, endIso: str
   if (now < start) return "upcoming";
   if (now > end) return "completed";
   return "ongoing";
+}
+
+export interface CreateEventPayload {
+  title: string;
+  description?: string;
+  location?: string;
+  startTime: string; // e.g. 2025-11-05T09:00
+  endTime: string;
+  eventTypeId?: number;
+  clubId?: number; // omit for staff
+  images?: File[];
+}
+
+export async function createEvent(payload: CreateEventPayload): Promise<EventData> {
+  const form = new FormData();
+  form.append("title", payload.title);
+  if (payload.description) form.append("description", payload.description);
+  if (payload.location) form.append("location", payload.location);
+  form.append("startTime", payload.startTime);
+  form.append("endTime", payload.endTime);
+  if (payload.eventTypeId != null) form.append("eventTypeId", String(payload.eventTypeId));
+  // Only append clubId if provided (non-staff). Staff should omit clubId so event has no club.
+  if (payload.clubId != null) form.append("clubId", String(payload.clubId));
+  (payload.images ?? []).forEach((file) => form.append("mediaFiles", file));
+
+  const res = await axiosClient.post<EventData>("/events/create", form, {
+    headers: { "Content-Type": "multipart/form-data" },
+    timeout: 60000, // increase timeout for large image uploads
+  });
+  if (!res.data) throw new Error("Create event failed");
+  return res.data;
+}
+
+export interface UpdateEventPayload {
+  title?: string;
+  description?: string;
+  location?: string;
+  startTime?: string; // ISO string or datetime-local to be parsed backend
+  endTime?: string;
+  eventTypeId?: number;
+  images?: File[]; // append
+}
+
+export async function updateEvent(eventId: number, payload: UpdateEventPayload): Promise<EventData> {
+  const form = new FormData();
+  if (payload.title != null) form.append("title", payload.title);
+  if (payload.description != null) form.append("description", payload.description);
+  if (payload.location != null) form.append("location", payload.location);
+  if (payload.startTime != null) form.append("startTime", payload.startTime);
+  if (payload.endTime != null) form.append("endTime", payload.endTime);
+  if (payload.eventTypeId != null) form.append("eventTypeId", String(payload.eventTypeId));
+  (payload.images ?? []).forEach((file) => form.append("mediaFiles", file));
+  const res = await axiosClient.put<EventData>(`/events/${eventId}`, form, {
+    headers: { "Content-Type": "multipart/form-data" },
+    timeout: 60000, // increase timeout for large image uploads
+  });
+  if (!res.data) throw new Error("Update event failed");
+  return res.data;
+}
+
+export async function deleteEvent(eventId: number): Promise<void> {
+  await axiosClient.delete(`/events/${eventId}`);
+}
+
+// ===== Pending Requests =====
+export interface PendingRequestDto {
+  requestEventId: number;
+  requestTitle: string;
+  status: string; // RequestStatus enum name
+  responseMessage?: string;
+  description?: string;
+  requestDate: string; // ISO
+  event: {
+    id: number;
+    title: string;
+    startTime: string;
+    endTime: string;
+    location?: string;
+    eventTypeName?: string;
+    isDraft: boolean;
+  } | null;
+  club: { id: number; name: string } | null;
+  createdBy: { id: number; fullName: string } | null;
+}
+
+export async function getPendingRequests(): Promise<PendingRequestDto[]> {
+  const res = await axiosClient.get<PendingRequestDto[]>("/events/pending-requests");
+  return res.data ?? [];
+}
+
+// ===== Approvals =====
+export async function approveByClub(
+  requestEventId: number,
+  approve: boolean,
+  responseMessage?: string
+): Promise<void> {
+  await axiosClient.post<void>("/events/approve/club", {
+    requestEventId,
+    status: approve ? "APPROVED_CLUB" : "REJECTED_CLUB",
+    responseMessage,
+  });
+}
+
+export async function approveByUniversity(
+  requestEventId: number,
+  approve: boolean,
+  responseMessage?: string
+): Promise<void> {
+  await axiosClient.post<void>("/events/approve/university", {
+    requestEventId,
+    status: approve ? "APPROVED_UNIVERSITY" : "REJECTED_UNIVERSITY",
+    responseMessage,
+  });
+}
+
+export interface MyDraftEventDto {
+  event: EventData;
+  requestStatus: string; // RequestStatus enum name
+}
+
+export async function getMyDraftEvents(): Promise<MyDraftEventDto[]> {
+  const res = await axiosClient.get<MyDraftEventDto[]>("/events/my-draft-events");
+  return res.data ?? [];
 }
 
