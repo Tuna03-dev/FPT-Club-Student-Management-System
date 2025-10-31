@@ -1,0 +1,172 @@
+package com.sep490.backendclubmanagement.service;
+
+import com.sep490.backendclubmanagement.dto.response.CommentDTO;
+import com.sep490.backendclubmanagement.entity.Comment;
+import com.sep490.backendclubmanagement.entity.Post;
+import com.sep490.backendclubmanagement.entity.User;
+import com.sep490.backendclubmanagement.exception.AppException;
+import com.sep490.backendclubmanagement.mapper.CommentMapper;
+import com.sep490.backendclubmanagement.repository.CommentRepository;
+import com.sep490.backendclubmanagement.repository.PostRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
+
+import java.time.LocalDateTime;
+import java.util.*;
+
+@Service
+@RequiredArgsConstructor
+public class CommentServiceImpl implements ICommentService {
+
+    private final CommentRepository commentRepo;
+    private final PostRepository postRepo;
+    private final UserService userService;      // đã có sẵn trong project bạn
+    private final CommentMapper commentMapper;
+    // 👈 Inject mapper mới tách
+
+    /* ====== CREATE ====== */
+    @Override
+    @Transactional
+    public CommentDTO create(Long postId, Long userId, String content, Long parentId){
+        if (content == null || content.trim().isEmpty())
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Content cannot be empty");
+
+        Post post = postRepo.findById(postId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Post not found"));
+        User user = userService.getUserById(userId);
+        if (user == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found");
+        }
+
+        Comment c = Comment.builder()
+                .post(post)
+                .user(user)
+                .content(content.trim())
+                .isEdited(false)
+                .build();
+
+        if (parentId != null) {
+            Comment parent = commentRepo.findActiveById(parentId);
+            // parent phải tồn tại và cùng post
+            if (parent == null || !parent.getPost().getId().equals(postId))
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid parent comment");
+
+            // ✅ Chuẩn hoá về 2 cấp:
+            // nếu parent là reply (có parentComment != null) thì gắn về cha top-level của nó
+            Comment topLevel = (parent.getParentComment() == null)
+                    ? parent
+                    : parent.getParentComment();
+
+            // (phòng hờ) đảm bảo vẫn cùng post
+            if (!topLevel.getPost().getId().equals(postId))
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid parent comment");
+
+            c.setParentComment(topLevel);
+        }
+
+
+        Comment saved = commentRepo.save(c);
+        return commentMapper.toDTO(saved); // 👈 dùng mapper
+    }
+
+    /* ====== LIST TOP-LEVEL (không kèm replies) ====== */
+    @Override
+    public List<CommentDTO> listTopLevel(Long postId, int page, int size){
+        var list = commentRepo.findTopLevelByPost(postId, PageRequest.of(page, size));
+        return commentMapper.toDTOs(list); // 👈 dùng mapper
+    }
+
+    /* ====== LIST REPLIES (không kèm replies của replies) ====== */
+    @Override
+    public List<CommentDTO> listReplies(Long parentId){
+        var list = commentRepo.findReplies(parentId);
+        return commentMapper.toDTOs(list); // 👈 dùng mapper
+    }
+
+    /* ====== EDIT ====== */
+    @Override
+    @Transactional
+    public CommentDTO edit(Long commentId, Long editorUserId, String newContent) {
+        if (newContent == null || newContent.trim().isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Content cannot be empty");
+        }
+
+        Comment c = commentRepo.findActiveById(commentId);
+        if (c == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Comment not found");
+        }
+
+        // ✅ Chỉ cho sửa nếu đúng chủ comment
+        if (!Objects.equals(c.getUser().getId(), editorUserId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You cannot edit others' comments");
+        }
+
+        c.setContent(newContent.trim());
+        c.setIsEdited(true);
+        return commentMapper.toDTO(commentRepo.save(c));
+    }
+
+    /* ====== SOFT DELETE ====== */
+    @Override
+    @Transactional
+    public void softDelete(Long commentId, Long requesterId) {
+        Comment c = commentRepo.findActiveById(commentId);
+        if (c == null) {
+            // tuỳ bạn: có thể throw 404
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Comment not found");
+        }
+
+        Long ownerId = c.getUser().getId();
+        Long postAuthorId = c.getPost().getCreatedBy().getId(); // field createdBy đã có trong Post
+
+        // Chỉ chủ comment hoặc chủ bài post được xoá
+        if (!Objects.equals(ownerId, requesterId) &&
+                !Objects.equals(postAuthorId, requesterId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You cannot delete this comment");
+        }
+
+        // Gom toàn bộ id: chính nó + mọi hậu duệ (BFS)
+        List<Long> toDelete = collectDescendantIdsBfs(c.getId());
+        toDelete.add(0, c.getId()); // include parent first
+
+        // Soft delete hàng loạt
+        commentRepo.bulkSoftDeleteByIds(toDelete, LocalDateTime.now());
+    }
+
+    /** Duyệt BFS để gom toàn bộ id con/cháu... (tránh đệ quy sâu) */
+    private List<Long> collectDescendantIdsBfs(Long rootId) {
+        List<Long> result = new ArrayList<>();
+        Deque<Long> q = new ArrayDeque<>();
+        q.add(rootId);
+
+        while (!q.isEmpty()) {
+            Long cur = q.poll();
+            List<Long> children = commentRepo.findActiveChildIds(cur);
+            if (!children.isEmpty()) {
+                result.addAll(children);
+                children.forEach(q::add);
+            }
+        }
+        return result; // KHÔNG gồm root
+    }
+
+    /* ====== (TUỲ CHỌN) Build cây thread đệ quy khi cần ======
+       Nếu muốn trả toàn bộ cây: gọi mapWithReplies(root) thay vì toDTO(root)
+       Không để vào mapper để tránh mapper phụ thuộc repository.
+    */
+    private CommentDTO mapWithReplies(Comment c){
+        CommentDTO dto = commentMapper.toDTO(c);
+        var children = commentRepo.findReplies(c.getId());
+        dto.setReplies(children.stream().map(this::mapWithReplies).toList());
+        return dto;
+    }
+    @Override
+    public List<CommentDTO> getAllFlat(Long postId) {
+        return commentRepo.findAllActiveByPost(postId)
+                .stream().map(commentMapper::toDTO).toList();
+    }
+}

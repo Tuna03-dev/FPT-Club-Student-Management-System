@@ -153,4 +153,33 @@ public interface RoleMemberShipRepository extends JpaRepository<RoleMemberShip, 
     List<String> findMyRoles(@Param("userId") Long userId,
                              @Param("teamId") Long teamId,
                              @Param("semesterId") Long semesterId);
+
+    @Query("""
+        SELECT CASE WHEN COUNT(rm) > 0 THEN true ELSE false END
+        FROM RoleMemberShip rm
+        JOIN rm.clubMemberShip cm
+        JOIN rm.clubRole cr
+        WHERE cm.user.id = :userId
+          AND rm.team.id = :teamId
+          AND COALESCE(rm.isActive, TRUE) = TRUE
+          AND ( cr.roleCode LIKE %:headSuffix OR cr.roleLevel = 3 )
+    """)
+    boolean existsTeamLeader(@Param("userId") Long userId,
+                             @Param("teamId") Long teamId,
+                             @Param("headSuffix") String headSuffix);
+
+    // RoleMemberShipRepository.java
+    @Query("""
+    SELECT CASE WHEN COUNT(rm) > 0 THEN true ELSE false END
+    FROM RoleMemberShip rm
+    JOIN rm.clubMemberShip c
+    JOIN rm.clubRole cr
+    WHERE c.user.id = :userId
+      AND c.club.id = :clubId
+      AND rm.team IS NULL
+      AND COALESCE(rm.isActive, TRUE) = TRUE
+      AND cr.roleLevel <= 2
+    """)
+    boolean existsClubAdmin(@Param("userId") Long userId,
+                            @Param("clubId") Long clubId);
 }

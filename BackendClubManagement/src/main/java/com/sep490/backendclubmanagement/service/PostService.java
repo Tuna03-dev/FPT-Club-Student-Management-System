@@ -5,6 +5,7 @@ import com.sep490.backendclubmanagement.dto.request.UpdatePostRequest;
 import com.sep490.backendclubmanagement.dto.response.*;
 import com.sep490.backendclubmanagement.entity.*;
 import com.sep490.backendclubmanagement.repository.PostRepository;
+import com.sep490.backendclubmanagement.util.PostStatus;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import jakarta.transaction.Transactional;
@@ -24,6 +25,7 @@ public class PostService {
 
     private final PostRepository postRepository;
     private final CloudinaryService cloudinaryService;
+    private final ClubRoleService clubRoleService;
     @PersistenceContext
     private EntityManager em;
 
@@ -65,8 +67,20 @@ public class PostService {
             throw new IllegalArgumentException("teamId is required when clubWide = false");
         }
 
-        String status = (req.getStatus() == null || req.getStatus().isBlank())
-                ? "DRAFT" : req.getStatus().trim();
+        // CHANGE: status do server tự quyết, KHÔNG lấy từ req
+        String status;
+        Long clubId = req.getClubId();
+        Long teamId = req.getTeamId();
+        boolean isClubWide = Boolean.TRUE.equals(req.getClubWide()) && teamId == null;
+
+        if (isClubWide && clubRoleService.isClubLeaderOrVice(authorId, clubId)) {
+            status = PostStatus.PUBLISHED;          // Chủ nhiệm/Phó đăng club-wide ⇒ auto publish
+        } else if (!isClubWide && teamId != null && clubRoleService.isTeamLeader(authorId, teamId)) {
+            status = PostStatus.PUBLISHED;          // Trưởng ban đăng đúng team ⇒ auto publish
+        } else {
+            status = PostStatus.PENDING;            // Còn lại ⇒ chờ duyệt
+        }
+
 
         // 2) Tham chiếu
         Club clubRef = em.getReference(Club.class, req.getClubId());
@@ -78,6 +92,13 @@ public class PostService {
         p.setTitle(req.getTitle());
         p.setContent(req.getContent());
         p.setStatus(status);
+        if (PostStatus.PUBLISHED.equals(status)) {
+            p.setApprovedBy(authorRef);
+            p.setApprovedAt(LocalDateTime.now());
+            p.setRejectedBy(null);
+            p.setRejectedAt(null);
+            p.setRejectReason(null);
+        }
         p.setIsClubWide(Boolean.TRUE.equals(req.getClubWide()));
         if (req.getWithinClub() != null) p.setIsWithinClub(req.getWithinClub());
         p.setCreatedAt(LocalDateTime.now());
@@ -131,44 +152,6 @@ public class PostService {
             }
         }
 
-//        // Nếu có files => upload lên Cloudinary
-//        if (files != null && !files.isEmpty()) {
-//            for (int i = 0; i < files.size(); i++) {
-//                MultipartFile f = files.get(i);
-//
-//                // Upload Cloudinary
-//                CloudinaryService.UploadResult up = cloudinaryService.uploadImage(f);
-//
-//                // Lấy metadata tương ứng nếu có
-//                CreatePostRequest.PostMediaItem mm = (i < meta.size()) ? meta.get(i) : null;
-//
-//                PostMedia pm = new PostMedia();
-//                pm.setTitle(mm != null && mm.getTitle() != null ? mm.getTitle() : filenameNoExt(f.getOriginalFilename()));
-//                pm.setMediaUrl(up.url());     // URL ảnh Cloudinary
-//                pm.setMediaType("IMAGE");
-//                pm.setCaption(mm != null ? mm.getCaption() : null);
-//                pm.setDisplayOrder(mm != null ? mm.getDisplayOrder() : i); // theo thứ tự file
-//                pm.setCreatedAt(LocalDateTime.now());
-//                pm.setPost(p);
-//                mediaSet.add(pm);
-//            }
-//        }
-
-        // Nếu req.media có mục mà KHÔNG có file (ví dụ mediaUrl có sẵn), vẫn thêm
-//        if (meta.size() > (files == null ? 0 : files.size())) {
-//            for (int i = (files == null ? 0 : files.size()); i < meta.size(); i++) {
-//                CreatePostRequest.PostMediaItem mm = meta.get(i);
-//                if (mm.getMediaUrl() == null || mm.getMediaUrl().isBlank()) continue; // bỏ nếu thiếu URL
-//                PostMedia pm = new PostMedia();
-//                pm.setTitle(mm.getTitle());
-//                pm.setMediaUrl(mm.getMediaUrl());
-//                pm.setMediaType(mm.getMediaType() != null ? mm.getMediaType() : "IMAGE");
-//                pm.setCaption(mm.getCaption());
-//                pm.setDisplayOrder(mm.getDisplayOrder() != null ? mm.getDisplayOrder() : i);
-//                pm.setCreatedAt(LocalDateTime.now());
-//                pm.setPost(p);
-//                mediaSet.add(pm);
-//            }
         if (meta.size() > (files == null ? 0 : files.size())) {
             for (int i = (files == null ? 0 : files.size()); i < meta.size(); i++) {
                 CreatePostRequest.PostMediaItem mm = meta.get(i);
@@ -232,7 +215,16 @@ public class PostService {
         if (req.getWithinClub() != null) p.setIsWithinClub(req.getWithinClub());
         if (req.getTitle() != null)      p.setTitle(req.getTitle());
         if (req.getContent() != null)    p.setContent(req.getContent());
-        if (req.getStatus() != null && !req.getStatus().isBlank()) p.setStatus(req.getStatus().trim());
+        // NEW: nếu đang chờ duyệt, người cập nhật đủ quyền thì auto publish
+        if (PostStatus.PENDING.equals(p.getStatus())) {
+            boolean isClubWide = p.isIsClubWide();
+            if (isClubWide && clubRoleService.isClubLeaderOrVice(authorId, p.getClub().getId())) {
+                p.setStatus(PostStatus.PUBLISHED);
+            } else if (!isClubWide && p.getTeam() != null
+                    && clubRoleService.isTeamLeader(authorId, p.getTeam().getId())) {
+                p.setStatus(PostStatus.PUBLISHED);
+            }
+        }
 
         // --- 3) Xóa media cũ theo ID (DB-only) ---
         if (req.getDeleteMediaIds() != null && !req.getDeleteMediaIds().isEmpty() && p.getPostMedia() != null) {
@@ -294,30 +286,7 @@ public class PostService {
                 p.getPostMedia().add(fu.join()); // (có thể bọc try/catch nếu muốn skip lỗi từng file)
             }
         }
-//        List<UpdatePostRequest.NewMediaMeta> metas =
-//                (req.getNewMediasMeta() == null) ? List.of() : req.getNewMediasMeta();
-//
-//        if (files != null && !files.isEmpty()) {
-//            if (p.getPostMedia() == null) p.setPostMedia(new LinkedHashSet<>());
-//            for (int i = 0; i < files.size(); i++) {
-//                MultipartFile f = files.get(i);
-//
-//                // dùng lại CloudinaryService để upload, NHƯNG chỉ lưu URL vào DB
-//                CloudinaryService.UploadResult up = cloudinaryService.uploadImage(f);
-//                UpdatePostRequest.NewMediaMeta meta = (i < metas.size()) ? metas.get(i) : null;
-//
-//                PostMedia pm = new PostMedia();
-//                pm.setTitle(meta != null && meta.getTitle() != null ? meta.getTitle() : filenameNoExt(f.getOriginalFilename()));
-//                pm.setMediaUrl(up.url()); // chỉ lưu URL
-//                pm.setMediaType(meta != null && meta.getMediaType() != null ? meta.getMediaType() : "IMAGE");
-//                pm.setCaption(meta != null ? meta.getCaption() : null);
-//                pm.setDisplayOrder(meta != null ? meta.getDisplayOrder() : calcNextOrder(p));
-//                pm.setCreatedAt(LocalDateTime.now());
-//                pm.setPost(p);
-//
-//                p.getPostMedia().add(pm);
-//            }
-//        }
+
 
         Post saved = postRepository.save(p);
         return toDetailsDTO(saved);
@@ -433,6 +402,13 @@ public class PostService {
                 .status(p.getStatus())// nếu bạn muốn hiển thị cờ phụ
                 .clubWide(p.isIsClubWide())
                 .createdAt(p.getCreatedAt())
+                .approvedById(p.getApprovedBy() != null ? p.getApprovedBy().getId() : null)
+                .approvedByName(p.getApprovedBy() != null ? p.getApprovedBy().getFullName() : null)
+                .approvedAt(p.getApprovedAt())
+                .rejectedById(p.getRejectedBy() != null ? p.getRejectedBy().getId() : null)
+                .rejectedByName(p.getRejectedBy() != null ? p.getRejectedBy().getFullName() : null)
+                .rejectedAt(p.getRejectedAt())
+                .rejectReason(p.getRejectReason())
                 .teamId(p.getTeam() != null ? p.getTeam().getId() : null)
                 .teamName(p.getTeam() != null ? p.getTeam().getTeamName() : null)
                 .clubId(p.getClub() != null ? p.getClub().getId() : null)
@@ -443,6 +419,17 @@ public class PostService {
                 .comments(comments)
                 .likes(likes)
                 .build();
+    }
+
+
+    public boolean canApprove(Long userId, Post p){
+        if (Boolean.TRUE.equals(p.isIsClubWide())) {
+            return clubRoleService.isClubLeaderOrVice(userId, p.getClub().getId());
+        } else {
+            boolean teamLead = p.getTeam()!=null && clubRoleService.isTeamLeader(userId, p.getTeam().getId());
+            boolean clubBoss = clubRoleService.isClubLeaderOrVice(userId, p.getClub().getId()); // cho phép override
+            return teamLead || clubBoss;
+        }
     }
 
 }
