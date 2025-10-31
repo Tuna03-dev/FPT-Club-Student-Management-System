@@ -39,7 +39,6 @@ public interface RecruitmentMapper {
                 .description(recruitment.getDescription())
                 .startDate(recruitment.getStartDate())
                 .endDate(recruitment.getEndDate())
-                .maxApplicants(recruitment.getMaxApplicants())
                 .status(recruitment.getStatus())
                 .requirements(recruitment.getRequirements())
                 .clubId(recruitment.getClub() != null ? recruitment.getClub().getId() : null)
@@ -96,7 +95,6 @@ public interface RecruitmentMapper {
                 .description(request.description)
                 .startDate(request.startDate)
                 .endDate(request.endDate)
-                .maxApplicants(request.maxApplicants)
                 .requirements(request.requirements)
                 .status(request.status != null ? request.status : RecruitmentStatus.DRAFT)
                 .club(Club.builder().id(clubId).build())
@@ -109,7 +107,6 @@ public interface RecruitmentMapper {
         entity.setDescription(request.description);
         entity.setStartDate(request.startDate);
         entity.setEndDate(request.endDate);
-        entity.setMaxApplicants(request.maxApplicants);
         entity.setRequirements(request.requirements);
         if (request.status != null) {
             entity.setStatus(request.status);

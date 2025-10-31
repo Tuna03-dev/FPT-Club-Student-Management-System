@@ -41,7 +41,7 @@ public class JwtAuthenticationEntryPoint implements AuthenticationEntryPoint {
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
         response.setCharacterEncoding("UTF-8");
 
-        ApiResponse<Void> apiResponse = ApiResponse.error(ErrorCode.UNAUTHORIZED, null);
+        ApiResponse<Void> apiResponse = ApiResponse.error(ErrorCode.UNAUTHENTICATED, null);
 
         response.getWriter().write(objectMapper.writeValueAsString(apiResponse));
     }

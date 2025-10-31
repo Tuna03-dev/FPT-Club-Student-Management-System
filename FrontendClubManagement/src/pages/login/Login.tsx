@@ -66,7 +66,7 @@ const LoginPage: React.FC = () => {
         authService.setTokens(result.data.accessToken);
         authService.setUser(result.data.user);
 
-        navigate("/myclub"); // Redirect to dashboard after successful login
+        navigate("/"); // Redirect to dashboard after successful login
       } else {
         console.error("Login failed:", result.message);
         alert("Đăng nhập thất bại: " + result.message);
