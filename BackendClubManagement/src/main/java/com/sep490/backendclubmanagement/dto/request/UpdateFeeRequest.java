@@ -7,7 +7,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 
 @Data
-public class CreateFeeRequest {
+public class UpdateFeeRequest {
     @NotBlank
     private String title;
 
@@ -18,7 +18,7 @@ public class CreateFeeRequest {
     private BigDecimal amount;
 
     @NotNull
-    private FeeType feeType; // MEMBERSHIP, EVENT, OTHER
+    private FeeType feeType;
 
     @NotNull
     private LocalDate dueDate;

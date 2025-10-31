@@ -14,6 +14,7 @@ public class FeeDetailResponse {
     private FeeType feeType;
     private LocalDate dueDate;
     private Boolean isMandatory;
+    private Boolean isLocked;
     private Integer paidMembers;
     private Integer totalMembers;
 }

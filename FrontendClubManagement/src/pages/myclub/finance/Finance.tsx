@@ -17,6 +17,7 @@ export default function Finance() {
   const numericClubId = Number(clubId);
   const [transactions, setTransactions] = useState(mockTransactions);
   const [fees, setFees] = useState<Fee[]>([]);
+  const [feesLoading, setFeesLoading] = useState<boolean>(false);
   const [isAddTransactionOpen, setIsAddTransactionOpen] = useState(false);
   const [isAddFeeOpen, setIsAddFeeOpen] = useState(false);
   const [clientId, setClientId] = useState("");
@@ -41,12 +42,15 @@ export default function Finance() {
     if (!Number.isFinite(numericClubId) || numericClubId <= 0) return;
     (async () => {
       try {
+        setFeesLoading(true);
         const res = await feeService.getFees(numericClubId);
         const feeList = res.data;
         if (Array.isArray(feeList)) setFees(feeList);
       } catch (e) {
         // handle error or show toast
         console.error("Failed to fetch fees", e);
+      } finally {
+        setFeesLoading(false);
       }
     })();
   }, [numericClubId]);
@@ -122,12 +126,14 @@ export default function Finance() {
           <TabsContent value="fees" className="space-y-4">
             <FeesTable
               fees={fees}
+              loading={feesLoading}
               onAddFee={() => setIsAddFeeOpen(true)}
               onDeleteFee={handleDeleteFee}
               isAddOpen={isAddFeeOpen}
               setIsAddOpen={setIsAddFeeOpen}
               onFeeCreated={handleFeeCreated}
               clubId={numericClubId}
+              onReloadFees={(list) => setFees(list)}
             />
           </TabsContent>
 

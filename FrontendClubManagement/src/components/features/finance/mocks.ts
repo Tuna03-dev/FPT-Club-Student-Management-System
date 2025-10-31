@@ -1,4 +1,3 @@
-
 import type { Transaction, Fee } from "@/types/fee";
 
 export const mockTransactions: Transaction[] = [
@@ -49,36 +48,6 @@ export const mockTransactions: Transaction[] = [
     date: "2024-01-08",
     status: "completed",
     category: "Học phí",
-  },
-];
-
-export const mockFees: Fee[] = [
-  {
-    id: "1",
-    name: "Học phí kỳ 1 năm 2024",
-    amount: 500000,
-    dueDate: "2024-02-15",
-    totalMembers: 50,
-    paidMembers: 30,
-    status: "active",
-  },
-  {
-    id: "2",
-    name: "Phí sự kiện Tết",
-    amount: 200000,
-    dueDate: "2024-01-20",
-    totalMembers: 50,
-    paidMembers: 50,
-    status: "completed",
-  },
-  {
-    id: "3",
-    name: "Học phí kỳ 2 năm 2023",
-    amount: 500000,
-    dueDate: "2023-12-15",
-    totalMembers: 45,
-    paidMembers: 42,
-    status: "overdue",
   },
 ];
 

@@ -9,5 +9,7 @@ import java.util.List;
 @Repository
 public interface FeeRepository extends JpaRepository<Fee, Long> {
     List<Fee> findByClub_Id(Long club_id);
+    boolean existsByTitleIgnoreCaseAndClub_Id(String title, Long clubId);
+    boolean existsByTitleIgnoreCaseAndClub_IdAndIdNot(String title, Long clubId, Long excludeId);
 }
 
