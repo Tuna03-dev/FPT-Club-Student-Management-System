@@ -260,6 +260,11 @@ public class RecruitmentService implements RecruitmentServiceInterface {
             throw new AppException(ErrorCode.ALREADY_CLUB_MEMBER);
         }
 
+        // Kiểm tra nếu user đã nộp đơn ứng tuyển cho đợt này thì không cho nộp nữa
+        if (applicationRepository.findByApplicant_IdAndRecruitment_Id(applicantId, recruitment.getId()).isPresent()) {
+            throw new AppException(ErrorCode.ALREADY_APPLIED);
+        }
+
         // Validate required questions are answered
         List<RecruitmentFormQuestion> questions = questionRepository.findByRecruitment_IdOrderByQuestionOrderAsc(recruitment.getId());
         for (RecruitmentFormQuestion question : questions) {

@@ -31,9 +31,6 @@ public class Recruitment extends BaseEntity {
     @Column(name = "end_date", nullable = false)
     private LocalDateTime endDate;
 
-    @Column(name = "max_applicants")
-    private Integer maxApplicants;
-
     @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 50)
     private RecruitmentStatus status;
