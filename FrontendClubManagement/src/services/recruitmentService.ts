@@ -17,9 +17,16 @@ export interface RecruitmentQuestionData {
   questionText: string;
   questionType: string;
   questionOrder: number;
+  isRequired?: number; // 0 = not required, 1 = required
   options?: string[];
   createdAt: string;
   updatedAt: string;
+}
+
+export interface TeamOptionData {
+  id: number;
+  teamName: string;
+  description?: string;
 }
 
 export interface RecruitmentData {
@@ -27,13 +34,15 @@ export interface RecruitmentData {
   title: string;
   description: string;
   startDate: string; // ISO string
-  endDate: string;   // ISO string
+  endDate: string; // ISO string
   maxApplicants?: number;
   status: "DRAFT" | "OPEN" | "CLOSED" | "CANCELLED";
   requirements?: string;
   clubId: number;
   questions?: RecruitmentQuestionData[];
-  teamOptionIds?: number[]; // Danh sách ID của các team cho phép sinh viên lựa chọn
+  teamOptions?: TeamOptionData[]; // Danh sách team options cho phép sinh viên lựa chọn
+  totalApplications?: number; // Tổng số đơn ứng tuyển đã nộp
+  acceptedApplications?: number; // Số đơn đã được chấp nhận
   createdAt: string;
   updatedAt: string;
 }
@@ -49,7 +58,7 @@ export interface RecruitmentApplicationData {
   teamId?: number;
   submittedDate: string;
   reviewedDate?: string;
-  status: "UNDER_REVIEW" | "ACCEPTED" | "REJECTED" | "INTERVIEWED";
+  status: "UNDER_REVIEW" | "ACCEPTED" | "REJECTED" | "INTERVIEW";
   reviewNotes?: string;
   score?: number;
   createdAt: string;
@@ -68,13 +77,15 @@ export interface ApplicationAnswerData {
 
 export interface RecruitmentFilterRequest {
   status?: "DRAFT" | "OPEN" | "CLOSED" | "CANCELLED";
+  keyword?: string;
   page?: number;
   size?: number;
   sort?: string;
 }
 
 export interface ApplicationFilterRequest {
-  status?: "UNDER_REVIEW" | "ACCEPTED" | "REJECTED" | "INTERVIEWED";
+  status?: "UNDER_REVIEW" | "ACCEPTED" | "REJECTED" | "INTERVIEW";
+  keyword?: string;
   page?: number;
   size?: number;
   sort?: string;
@@ -85,6 +96,7 @@ export interface RecruitmentQuestionRequest {
   questionText: string;
   questionType: string;
   questionOrder: number;
+  isRequired?: number; // 0 = not required, 1 = required
   options?: string[];
 }
 
@@ -92,7 +104,7 @@ export interface RecruitmentCreateRequest {
   title: string;
   description: string;
   startDate: string; // ISO datetime string
-  endDate: string;   // ISO datetime string
+  endDate: string; // ISO datetime string
   maxApplicants?: number;
   requirements?: string;
   status?: "DRAFT" | "OPEN"; // Status of recruitment
@@ -105,10 +117,11 @@ export async function getRecruitmentsByClubId(
   clubId: number,
   params: RecruitmentFilterRequest = {}
 ): Promise<PagedResponse<RecruitmentData>> {
-  const { status, page = 0, size = 10, sort = "startDate,desc" } = params;
-  
+  const { status, keyword, page = 0, size = 10, sort = "startDate,desc" } = params;
+
   const queryParams = new URLSearchParams();
   if (status) queryParams.append("status", status);
+  if (keyword && keyword.trim()) queryParams.append("keyword", keyword.trim());
   queryParams.append("page", page.toString());
   queryParams.append("size", size.toString());
   queryParams.append("sort", sort);
@@ -116,15 +129,13 @@ export async function getRecruitmentsByClubId(
   const res = await axiosClient.get<PagedResponse<RecruitmentData>>(
     `/recruitments/clubs/${clubId}?${queryParams.toString()}`
   );
-  
+
   if (!res.data) throw new Error("Empty response");
   return res.data;
 }
 
 // Get recruitment by ID
-export async function getRecruitmentById(
-  id: number
-): Promise<RecruitmentData> {
+export async function getRecruitmentById(id: number): Promise<RecruitmentData> {
   const res = await axiosClient.get<RecruitmentData>(`/recruitments/${id}`);
   if (!res.data) throw new Error("Recruitment not found");
   return res.data;
@@ -135,10 +146,11 @@ export async function getApplicationsByRecruitmentId(
   recruitmentId: number,
   params: ApplicationFilterRequest = {}
 ): Promise<PagedResponse<RecruitmentApplicationData>> {
-  const { status, page = 0, size = 10, sort = "submittedDate,desc" } = params;
-  
+  const { status, keyword, page = 0, size = 10, sort = "submittedDate,desc" } = params;
+
   const queryParams = new URLSearchParams();
   if (status) queryParams.append("status", status);
+  if (keyword && keyword.trim()) queryParams.append("keyword", keyword.trim());
   queryParams.append("page", page.toString());
   queryParams.append("size", size.toString());
   queryParams.append("sort", sort);
@@ -146,7 +158,7 @@ export async function getApplicationsByRecruitmentId(
   const res = await axiosClient.get<PagedResponse<RecruitmentApplicationData>>(
     `/recruitments/${recruitmentId}/applications?${queryParams.toString()}`
   );
-  
+
   if (!res.data) throw new Error("Empty response");
   return res.data;
 }
@@ -212,20 +224,20 @@ export async function submitApplication(
   filesByQuestionId?: Map<number, File>
 ): Promise<RecruitmentApplicationData> {
   const formData = new FormData();
-  
+
   // Add request as JSON blob
   formData.append(
     "request",
     new Blob([JSON.stringify(request)], { type: "application/json" })
   );
-  
+
   // Add files with questionId mapping if provided
   if (filesByQuestionId && filesByQuestionId.size > 0) {
     filesByQuestionId.forEach((file, questionId) => {
       formData.append(`file_${questionId}`, file);
     });
   }
-  
+
   const res = await axiosClient.post<RecruitmentApplicationData>(
     `/recruitments/applications/submit`,
     formData,
@@ -236,6 +248,66 @@ export async function submitApplication(
     }
   );
   if (!res.data) throw new Error("Failed to submit application");
+  return res.data;
+}
+
+// Get my applications (for current user)
+export async function getMyApplications(
+  params: ApplicationFilterRequest = {}
+): Promise<PagedResponse<RecruitmentApplicationData>> {
+  const { status, page = 0, size = 10, sort = "submittedDate,desc" } = params;
+
+  const queryParams = new URLSearchParams();
+  if (status) queryParams.append("status", status);
+  queryParams.append("page", page.toString());
+  queryParams.append("size", size.toString());
+  queryParams.append("sort", sort);
+
+  const res = await axiosClient.get<PagedResponse<RecruitmentApplicationData>>(
+    `/recruitments/myApplications?${queryParams.toString()}`
+  );
+
+  if (!res.data) throw new Error("Empty response");
+  return res.data;
+}
+
+// Get my application detail (for current user)
+export async function getMyApplicationDetail(
+  applicationId: number
+): Promise<RecruitmentApplicationData> {
+  const res = await axiosClient.get<RecruitmentApplicationData>(
+    `/recruitments/myApplications/${applicationId}`
+  );
+
+  if (!res.data) throw new Error("Application not found");
+  return res.data;
+}
+
+// Review/Update application status
+export interface ApplicationReviewRequest {
+  applicationId: number;
+  status: "UNDER_REVIEW" | "ACCEPTED" | "REJECTED" | "INTERVIEW";
+  reviewNotes?: string;
+}
+
+export async function updateApplicationStatus(
+  applicationId: number,
+  status: "UNDER_REVIEW" | "ACCEPTED" | "REJECTED" | "INTERVIEW",
+  reviewNotes?: string
+): Promise<RecruitmentApplicationData> {
+  const requestData: ApplicationReviewRequest = {
+    applicationId,
+    status,
+    reviewNotes,
+  };
+
+  const res = await axiosClient.post<RecruitmentApplicationData>(
+    `/recruitments/applications/review`,
+    requestData
+  );
+
+  // axiosClient returns ApiResponse<T>, so we need to access res.data for the actual data
+  if (!res.data) throw new Error("Failed to update application status");
   return res.data;
 }
 

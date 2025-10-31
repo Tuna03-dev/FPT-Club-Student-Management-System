@@ -1,6 +1,7 @@
 package com.sep490.backendclubmanagement.security;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.sep490.backendclubmanagement.dto.ApiResponse;
 import com.sep490.backendclubmanagement.exception.ErrorCode;
 import jakarta.servlet.ServletException;
@@ -22,7 +23,12 @@ import java.io.IOException;
 @Slf4j
 public class JwtAuthenticationEntryPoint implements AuthenticationEntryPoint {
 
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper;
+    
+    public JwtAuthenticationEntryPoint() {
+        this.objectMapper = new ObjectMapper();
+        this.objectMapper.registerModule(new JavaTimeModule());
+    }
 
     @Override
     public void commence(HttpServletRequest request,

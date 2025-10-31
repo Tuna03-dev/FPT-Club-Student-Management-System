@@ -28,6 +28,12 @@ public class ClubService implements ClubServiceInterface {
         
         ClubDetailData result = clubMapper.toClubDetailData(club);
         
+        // Set statistics using count queries (avoid N+1 and Cartesian product)
+        result.setTotalMembers(clubRepository.countMembersByClubId(clubId));
+        result.setTotalEvents(clubRepository.countEventsByClubId(clubId));
+        result.setTotalPosts(clubRepository.countNewsByClubId(clubId));
+        result.setIsRecruiting(clubRepository.hasActiveRecruitment(clubId));
+        
         // Find president manually and set to result
         ClubPresidentData president = findClubPresidentManually(club);
         result.setPresident(president);
@@ -42,6 +48,12 @@ public class ClubService implements ClubServiceInterface {
                 .orElseThrow(() -> new AppException(ErrorCode.CLUB_NOT_FOUND));
         
         ClubDetailData result = clubMapper.toClubDetailData(club);
+        
+        // Set statistics using count queries (avoid N+1 and Cartesian product)
+        result.setTotalMembers(clubRepository.countMembersByClubId(club.getId()));
+        result.setTotalEvents(clubRepository.countEventsByClubId(club.getId()));
+        result.setTotalPosts(clubRepository.countNewsByClubId(club.getId()));
+        result.setIsRecruiting(clubRepository.hasActiveRecruitment(club.getId()));
         
         // Find president manually and set to result
         ClubPresidentData president = findClubPresidentManually(club);

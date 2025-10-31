@@ -82,4 +82,22 @@ public class ClubManagementController {
         MyTeamDetailDTO data = clubTeamVisibilityService.getTeamDetail(clubId, teamId, semesterId);
         return ResponseEntity.ok(ApiResponse.success(data));
     }
+
+    /**
+     * Lấy tất cả teams của một club cho CLUB_PRESIDENT của kì hiện tại
+     * Chỉ CLUB_PRESIDENT của kì hiện tại mới có quyền truy cập API này
+     * @param clubId ID của club
+     * @return Danh sách tất cả teams của club
+     */
+    @GetMapping("/clubs/{clubId}/teams/president")
+    public ApiResponse<List<VisibleTeamDTO>> getAllTeamsForPresident(
+            @PathVariable Long clubId
+    ) {
+        if (!isAuthenticated()) {
+            return
+                    ApiResponse.error(ErrorCode.UNAUTHORIZED, "Unauthorized", null);
+        }
+        List<VisibleTeamDTO> data = clubTeamVisibilityService.getAllTeamsForClubPresident(clubId);
+        return ApiResponse.success(data);
+    }
 }

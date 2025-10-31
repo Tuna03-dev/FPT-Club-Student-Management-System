@@ -68,6 +68,15 @@ public class GlobalExceptionHandler {
                 .status(ErrorCode.NOT_FOUND.getHttpStatus())
                 .body(ApiResponse.error(ErrorCode.NOT_FOUND, ex.getMessage(), null));
     }
+    
+    @ExceptionHandler(ForbiddenException.class)
+    public ResponseEntity<ApiResponse<Void>> handleForbidden(ForbiddenException ex) {
+        log.warn("Forbidden access: {}", ex.getMessage());
+
+        return ResponseEntity
+                .status(403)
+                .body(ApiResponse.error(ErrorCode.FORBIDDEN, ex.getMessage(), null));
+    }
 
 
 }
