@@ -103,7 +103,7 @@ export function StudentRecruitment() {
     RecruitmentApplicationData[]
   >([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [listLoading, setListLoading] = useState(false);
+  const [listLoading] = useState(false);
 
   // Filter states for my applications
   const [myAppSearchQuery, setMyAppSearchQuery] = useState("");

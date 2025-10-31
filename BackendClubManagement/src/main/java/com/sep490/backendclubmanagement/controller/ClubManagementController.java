@@ -32,7 +32,7 @@ public class ClubManagementController {
     public ResponseEntity<ApiResponse<List<MyClubDTO>>> getMyClubs() {
         if (!isAuthenticated()) {
             return ResponseEntity.status(401).body(
-                    ApiResponse.error(ErrorCode.UNAUTHORIZED, "Unauthorized", null)
+                    ApiResponse.error(ErrorCode.UNAUTHENTICATED, null)
             );
         }
         List<MyClubDTO> myClubs = clubManagementService.getMyClubs();
@@ -43,7 +43,7 @@ public class ClubManagementController {
     public ResponseEntity<ApiResponse<ClubDetailDTO>> getClubManagementDetail(@PathVariable Long clubId) {
         if (!isAuthenticated()) {
             return ResponseEntity.status(401).body(
-                    ApiResponse.error(ErrorCode.UNAUTHORIZED, "Unauthorized", null)
+                    ApiResponse.error(ErrorCode.UNAUTHENTICATED, null)
             );
         }
         ClubDetailDTO clubDetail = clubManagementService.getClubManagementDetail(clubId);
@@ -57,7 +57,7 @@ public class ClubManagementController {
     ) {
         if (!isAuthenticated()) {
             return ResponseEntity.status(401).body(
-                    ApiResponse.error(ErrorCode.UNAUTHORIZED, "Unauthorized", null)
+                    ApiResponse.error(ErrorCode.UNAUTHENTICATED, null)
             );
         }
         List<VisibleTeamDTO> data = clubTeamVisibilityService.getVisibleTeams(clubId, semesterId);
@@ -72,7 +72,7 @@ public class ClubManagementController {
     ) {
         if (!isAuthenticated()) {
             return ResponseEntity.status(401).body(
-                    ApiResponse.error(ErrorCode.UNAUTHORIZED, "Unauthorized", null)
+                    ApiResponse.error(ErrorCode.UNAUTHENTICATED, null)
             );
         }
         MyTeamDetailDTO data = clubTeamVisibilityService.getTeamDetail(clubId, teamId, semesterId);
@@ -90,8 +90,7 @@ public class ClubManagementController {
             @PathVariable Long clubId
     ) {
         if (!isAuthenticated()) {
-            return
-                    ApiResponse.error(ErrorCode.UNAUTHORIZED, "Unauthorized", null);
+            return ApiResponse.error(ErrorCode.UNAUTHENTICATED, null);
         }
         List<VisibleTeamDTO> data = clubTeamVisibilityService.getAllTeamsForClubPresident(clubId);
         return ApiResponse.success(data);
