@@ -11,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,7 +31,7 @@ public class UserService {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
 
         if (authentication == null || !authentication.isAuthenticated()) {
-            throw new AppException(ErrorCode.UNAUTHORIZED);
+            throw new AppException(ErrorCode.UNAUTHENTICATED);
         }
         Object principal = authentication.getPrincipal();
         log.info("Current principal: {}", principal);
@@ -89,6 +90,9 @@ public class UserService {
             return Optional.empty();
         }
         return userRepository.findById(id);
+    }
+    public User getUserById(Long id) {
+        return userRepository.findById(id).orElse(null);
     }
 
     /**
@@ -200,6 +204,12 @@ public class UserService {
             return Optional.of(userOpt.get().getSystemRole().getRoleName());
         }
         return Optional.empty();
+    }
+    @Transactional(readOnly = true)
+    public Long getIdByEmail(String email) {
+        return userRepository.findByEmailIgnoreCase(email) // dùng ignore-case cho chắc
+                .map(User::getId)
+                .orElseThrow(() -> new UsernameNotFoundException("User not found: " + email));
     }
 }
 

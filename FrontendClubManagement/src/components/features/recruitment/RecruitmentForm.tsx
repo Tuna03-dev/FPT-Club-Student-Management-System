@@ -37,7 +37,6 @@ interface RecruitmentFormData {
   description: string;
   start_date: string;
   end_date: string;
-  max_applications?: number;
   requirements?: string[];
   benefits?: string[];
   form_questions: EditableFormQuestion[];
@@ -67,7 +66,6 @@ export function RecruitmentForm({
     description: "",
     start_date: "",
     end_date: "",
-    max_applications: "",
     requirements: [""],
     benefits: [""],
   });
@@ -116,7 +114,6 @@ export function RecruitmentForm({
         description: editingRecruitment.description,
         start_date: editingRecruitment.start_date.split("T")[0],
         end_date: editingRecruitment.end_date.split("T")[0],
-        max_applications: editingRecruitment.max_applications?.toString() || "",
         requirements: editingRecruitment.requirements?.length
           ? editingRecruitment.requirements
           : [""],
@@ -166,7 +163,6 @@ export function RecruitmentForm({
         description: "",
         start_date: "",
         end_date: "",
-        max_applications: "",
         requirements: [""],
         benefits: [""],
       });
@@ -355,9 +351,6 @@ export function RecruitmentForm({
       description: newRecruitment.description,
       startDate: startDate,
       endDate: endDate,
-      maxApplicants: newRecruitment.max_applications
-        ? parseInt(newRecruitment.max_applications)
-        : undefined,
       requirements: newRecruitment.requirements
         .filter((r) => r.trim())
         .join("\n"),
@@ -457,7 +450,10 @@ export function RecruitmentForm({
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {[...Array(4)].map((_, i) => (
-                <div key={i} className="flex items-center space-x-3 border rounded-lg p-3">
+                <div
+                  key={i}
+                  className="flex items-center space-x-3 border rounded-lg p-3"
+                >
                   <Skeleton className="h-5 w-5 rounded" />
                   <div className="flex-1 space-y-2">
                     <Skeleton className="h-4 w-32" />
@@ -575,6 +571,7 @@ export function RecruitmentForm({
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Dates only now (2 columns) */}
             <div>
               <Label htmlFor="start_date">Ngày bắt đầu</Label>
               <Input
@@ -601,21 +598,6 @@ export function RecruitmentForm({
                     end_date: e.target.value,
                   }))
                 }
-              />
-            </div>
-            <div>
-              <Label htmlFor="max_applications">Số lượng tối đa</Label>
-              <Input
-                id="max_applications"
-                type="number"
-                value={newRecruitment.max_applications}
-                onChange={(e) =>
-                  setNewRecruitment((prev) => ({
-                    ...prev,
-                    max_applications: e.target.value,
-                  }))
-                }
-                placeholder="50"
               />
             </div>
           </div>
@@ -819,11 +801,9 @@ export function RecruitmentForm({
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="TEXT">Văn bản</SelectItem>
-                      <SelectItem value="MCQ">
-                        Trắc nghiệm (1 đáp án)
-                      </SelectItem>
+                      <SelectItem value="MCQ">Lựa chọn 1 đáp án</SelectItem>
                       <SelectItem value="CHECKBOX">
-                        Trắc nghiệm (nhiều đáp án)
+                        Lựa chọn nhiều đáp án
                       </SelectItem>
                       <SelectItem value="FILE">Tải lên file</SelectItem>
                     </SelectContent>

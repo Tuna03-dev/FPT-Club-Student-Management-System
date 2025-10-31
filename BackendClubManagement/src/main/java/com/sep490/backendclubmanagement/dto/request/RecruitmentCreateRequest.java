@@ -17,7 +17,6 @@ public class RecruitmentCreateRequest {
     public LocalDateTime startDate;
     @NotNull @Future
     public LocalDateTime endDate;
-    public Integer maxApplicants;
     public String requirements;
     public RecruitmentStatus status; // DRAFT or OPEN
     public List<RecruitmentQuestionRequest> questions;

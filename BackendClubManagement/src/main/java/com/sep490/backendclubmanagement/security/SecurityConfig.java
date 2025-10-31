@@ -46,6 +46,8 @@ public class SecurityConfig {
             "/api/my-club/**",
             "/api/management/**",
             "/api/posts/**",
+            "/api/comments/**",
+            "/api/posts/**",
             "/api/clubs/**",
             "/api/events/get-all-by-filter",
             "/api/events/get-all-event-types",

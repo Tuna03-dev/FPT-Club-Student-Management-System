@@ -60,12 +60,13 @@ const LoginPage: React.FC = () => {
     setIsLoading(true);
     try {
       const result = await authService.loginWithGoogle(response.credential);
+      console.log("Login result:", result);
 
       if (result.code === 200 && result.data) {
         authService.setTokens(result.data.accessToken);
         authService.setUser(result.data.user);
 
-        navigate("/myclub"); // Redirect to dashboard after successful login
+        navigate("/"); // Redirect to dashboard after successful login
       } else {
         console.error("Login failed:", result.message);
         alert("Đăng nhập thất bại: " + result.message);

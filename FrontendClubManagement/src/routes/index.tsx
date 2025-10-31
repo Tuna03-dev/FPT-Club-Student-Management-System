@@ -24,6 +24,14 @@ import { ClubDetail } from "@/pages/clubDetail/ClubDetail";
 
 import LoginPage from "@/pages/login/Login";
 
+// ✅ Dùng alias @ cho thống nhất
+import PresidentNewsList from "@/pages/news/PresidentNewsList";
+import PresidentNewsEditor from "@/pages/news/PresidentNewsEditor";
+import StaffNewsList from "@/pages/news/StaffNewsList";
+import StaffNewsEditor from "@/pages/news/StaffNewsEditor";
+import TeamNewsDrafts from "@/pages/news/TeamNewsDrafts";
+import TeamNewsRequests from "@/pages/news/TeamNewsRequests";
+import TeamNewsEditor from "@/pages/news/TeamNewsEditor";
 export const router = createBrowserRouter([
   {
     path: "/",
@@ -75,6 +83,7 @@ export const router = createBrowserRouter([
 
   { path: "/login", element: <LoginPage /> },
 
+  // Auto-redirect vào CLB của mình
   {
     path: "/myclub",
     element: (
@@ -93,6 +102,25 @@ export const router = createBrowserRouter([
     ),
   },
 
+  // ✅ Khu staff (tuyệt đối, có dấu /)
+  {
+    path: "/staff/news",
+    element: (
+      <ProtectedRoute>
+        <StaffNewsList />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/staff/news-editor",
+    element: (
+      <ProtectedRoute>
+        <StaffNewsEditor />
+      </ProtectedRoute>
+    ),
+  },
+
+  // ✅ Khu CLB
   {
     path: "/myclub/:clubId",
     element: (
@@ -102,6 +130,11 @@ export const router = createBrowserRouter([
     ),
     children: [
       { index: true, element: <Dashboard /> },
+
+      // 🔥 Hai route của chủ nhiệm CLB để tạo/list news & draft
+      { path: "news", element: <PresidentNewsList /> },
+      { path: "news-editor", element: <PresidentNewsEditor /> },
+
       { path: "members", element: <MemberList /> },
       { path: "events", element: <EventList /> },
       { path: "recruitments", element: <RecruitmentManagement /> },
@@ -111,6 +144,10 @@ export const router = createBrowserRouter([
       { path: "teams/:teamId", element: <TeamDetailPage /> },
 
       { path: "myclub", element: <Navigate to="." replace /> },
+      { path: "teams/:teamId/news-drafts", element: <TeamNewsDrafts /> },
+{ path: "teams/:teamId/news-requests", element: <TeamNewsRequests /> },
+{ path: "teams/:teamId/news-editor", element: <TeamNewsEditor /> },
+
     ],
   },
 

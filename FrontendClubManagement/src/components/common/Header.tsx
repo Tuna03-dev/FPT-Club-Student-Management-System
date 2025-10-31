@@ -34,11 +34,18 @@ const Header: React.FC = () => {
               Câu lạc bộ
             </Link>
             <Link
+              to="/myclub/select"
+              className="text-gray-700 hover:text-orange-600 font-medium"
+            >
+              CLB của tôi
+            </Link>
+            <Link
               to="/events"
               className="text-gray-700 hover:text-orange-600 font-medium"
             >
               Sự kiện
             </Link>
+
             <Link
               to="/news"
               className="text-gray-700 hover:text-orange-600 font-medium"
