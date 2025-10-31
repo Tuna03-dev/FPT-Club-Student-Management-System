@@ -46,6 +46,7 @@ export default function Finance() {
         if (Array.isArray(feeList)) setFees(feeList);
       } catch (e) {
         // handle error or show toast
+        console.error("Failed to fetch fees", e);
       }
     })();
   }, [numericClubId]);
