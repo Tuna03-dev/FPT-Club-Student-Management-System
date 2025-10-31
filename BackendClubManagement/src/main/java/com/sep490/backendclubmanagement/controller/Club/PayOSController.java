@@ -1,11 +1,9 @@
-package com.sep490.backendclubmanagement.controller;
+package com.sep490.backendclubmanagement.controller.Club;
 
 import com.sep490.backendclubmanagement.dto.ApiResponse;
 import com.sep490.backendclubmanagement.dto.request.PayOSConfigRequest;
 import com.sep490.backendclubmanagement.dto.response.PayOSConfigResponse;
-import com.sep490.backendclubmanagement.dto.response.PayOSIncomingTransferResponse;
 import com.sep490.backendclubmanagement.dto.response.PayOSTestConnectionResponse;
-import com.sep490.backendclubmanagement.dto.response.RecentPaymentResponse;
 import com.sep490.backendclubmanagement.dto.request.PayOSCreatePaymentRequest;
 import com.sep490.backendclubmanagement.dto.response.PayOSCreatePaymentResponse;
 import com.sep490.backendclubmanagement.exception.AppException;
@@ -14,8 +12,6 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/clubs/{clubId}/pay-os")

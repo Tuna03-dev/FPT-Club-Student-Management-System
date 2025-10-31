@@ -1,0 +1,89 @@
+
+import type { Transaction, Fee } from "@/types/fee";
+
+export const mockTransactions: Transaction[] = [
+  {
+    id: "1",
+    type: "expense",
+    description: "Mua thiết bị sự kiện",
+    amount: 5000000,
+    date: "2024-01-15",
+    status: "completed",
+    category: "Sự kiện",
+    submittedBy: "Nguyễn Văn A",
+  },
+  {
+    id: "2",
+    type: "income",
+    description: "Tài trợ từ nhà tài trợ A",
+    amount: 10000000,
+    date: "2024-01-14",
+    status: "completed",
+    category: "Tài trợ",
+  },
+  {
+    id: "3",
+    type: "expense",
+    description: "Chi phí văn phòng phẩm",
+    amount: 500000,
+    date: "2024-01-12",
+    status: "completed",
+    category: "Văn phòng",
+    submittedBy: "Trần Thị B",
+  },
+  {
+    id: "4",
+    type: "expense",
+    description: "Phí địa điểm sự kiện",
+    amount: 3000000,
+    date: "2024-01-10",
+    status: "pending",
+    category: "Sự kiện",
+    submittedBy: "Lê Văn C",
+  },
+  {
+    id: "5",
+    type: "income",
+    description: "Học phí thành viên kỳ 1",
+    amount: 15000000,
+    date: "2024-01-08",
+    status: "completed",
+    category: "Học phí",
+  },
+];
+
+export const mockFees: Fee[] = [
+  {
+    id: "1",
+    name: "Học phí kỳ 1 năm 2024",
+    amount: 500000,
+    dueDate: "2024-02-15",
+    totalMembers: 50,
+    paidMembers: 30,
+    status: "active",
+  },
+  {
+    id: "2",
+    name: "Phí sự kiện Tết",
+    amount: 200000,
+    dueDate: "2024-01-20",
+    totalMembers: 50,
+    paidMembers: 50,
+    status: "completed",
+  },
+  {
+    id: "3",
+    name: "Học phí kỳ 2 năm 2023",
+    amount: 500000,
+    dueDate: "2023-12-15",
+    totalMembers: 45,
+    paidMembers: 42,
+    status: "overdue",
+  },
+];
+
+export const mockFinanceData = {
+  totalBudget: 50000000,
+  spent: 32000000,
+  remaining: 18000000,
+};
