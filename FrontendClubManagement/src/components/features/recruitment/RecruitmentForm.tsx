@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
   SelectContent,
@@ -13,8 +14,8 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Plus, XCircle, Trash2, Send, Loader2 } from "lucide-react";
-import { type RecruitmentCreateRequest } from "@/service/RecruitmentService";
-import { getVisibleTeams } from "@/api/teams";
+import { type RecruitmentCreateRequest } from "@/services/recruitmentService";
+import { getAllTeamsForPresident } from "@/api/teams";
 import type { VisibleTeamDTO } from "@/types/team";
 import { toast } from "sonner";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -36,19 +37,19 @@ interface RecruitmentFormData {
   description: string;
   start_date: string;
   end_date: string;
-  max_applications?: number;
   requirements?: string[];
   benefits?: string[];
   form_questions: EditableFormQuestion[];
-  teamOptionIds?: number[];
+  teamOptions?: Array<{ id: number; teamName: string; description?: string }>;
 }
 
 interface RecruitmentFormProps {
-  clubId: number;
+  clubId?: number;
   editingRecruitment: RecruitmentFormData | null;
   onSave: (data: RecruitmentCreateRequest, isEdit: boolean) => Promise<void>;
   onCancel: () => void;
   createLoading: boolean;
+  editLoading?: boolean;
 }
 
 export function RecruitmentForm({
@@ -57,6 +58,7 @@ export function RecruitmentForm({
   onSave,
   onCancel,
   createLoading,
+  editLoading = false,
 }: RecruitmentFormProps) {
   // Form states for creating recruitment
   const [newRecruitment, setNewRecruitment] = useState({
@@ -64,7 +66,6 @@ export function RecruitmentForm({
     description: "",
     start_date: "",
     end_date: "",
-    max_applications: "",
     requirements: [""],
     benefits: [""],
   });
@@ -86,13 +87,15 @@ export function RecruitmentForm({
   // Load teams when component mounts
   useEffect(() => {
     const fetchTeams = async () => {
+      if (!clubId) return;
+
       try {
         setLoadingTeams(true);
-        const teams = await getVisibleTeams(clubId);
+        const teams = await getAllTeamsForPresident(clubId);
         setAvailableTeams(teams);
-      } catch (error) {
+      } catch (error: any) {
         console.error("Error loading teams:", error);
-        toast.error("Không thể tải danh sách phòng ban");
+        toast.error(error.message || "Không thể tải danh sách phòng ban");
       } finally {
         setLoadingTeams(false);
       }
@@ -105,13 +108,12 @@ export function RecruitmentForm({
   useEffect(() => {
     if (editingRecruitment) {
       console.log("Loading editing recruitment data:", editingRecruitment);
-      
+
       setNewRecruitment({
         title: editingRecruitment.title,
         description: editingRecruitment.description,
         start_date: editingRecruitment.start_date.split("T")[0],
         end_date: editingRecruitment.end_date.split("T")[0],
-        max_applications: editingRecruitment.max_applications?.toString() || "",
         requirements: editingRecruitment.requirements?.length
           ? editingRecruitment.requirements
           : [""],
@@ -134,11 +136,17 @@ export function RecruitmentForm({
             ];
 
       setFormQuestions(questionsToLoad);
-      
+
       // Load team options immediately if available
-      if (editingRecruitment.teamOptionIds && editingRecruitment.teamOptionIds.length > 0) {
-        console.log("Setting team options from editing recruitment:", editingRecruitment.teamOptionIds);
-        setSelectedTeamIds(editingRecruitment.teamOptionIds);
+      if (
+        editingRecruitment.teamOptions &&
+        editingRecruitment.teamOptions.length > 0
+      ) {
+        console.log(
+          "Setting team options from editing recruitment:",
+          editingRecruitment.teamOptions
+        );
+        setSelectedTeamIds(editingRecruitment.teamOptions.map((t) => t.id));
       } else {
         console.log("No team options in editing recruitment");
         setSelectedTeamIds([]);
@@ -155,7 +163,6 @@ export function RecruitmentForm({
         description: "",
         start_date: "",
         end_date: "",
-        max_applications: "",
         requirements: [""],
         benefits: [""],
       });
@@ -344,9 +351,6 @@ export function RecruitmentForm({
       description: newRecruitment.description,
       startDate: startDate,
       endDate: endDate,
-      maxApplicants: newRecruitment.max_applications
-        ? parseInt(newRecruitment.max_applications)
-        : undefined,
       requirements: newRecruitment.requirements
         .filter((r) => r.trim())
         .join("\n"),
@@ -357,6 +361,7 @@ export function RecruitmentForm({
         questionType:
           q.question_type === "FILE" ? "FILE_UPLOAD" : q.question_type,
         questionOrder: index + 1,
+        isRequired: q.required ? 1 : 0, // Convert boolean to integer
         options:
           q.question_type === "MCQ" || q.question_type === "CHECKBOX"
             ? (q.options || []).filter((opt) => opt.trim())
@@ -379,6 +384,127 @@ export function RecruitmentForm({
     const requestData = buildRequestData("OPEN");
     await onSave(requestData, !!editingRecruitment);
   };
+
+  // Show skeleton when loading edit data
+  if (editLoading) {
+    return (
+      <div className="max-w-4xl mx-auto space-y-8">
+        {/* Header Skeleton */}
+        <div className="flex items-center justify-between">
+          <div className="space-y-2">
+            <Skeleton className="h-8 w-64" />
+            <Skeleton className="h-4 w-80" />
+          </div>
+          <Skeleton className="h-10 w-32" />
+        </div>
+
+        {/* Basic Info Card Skeleton */}
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-6 w-48" />
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-40" />
+              <Skeleton className="h-10 w-full" />
+            </div>
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-20" />
+              <Skeleton className="h-24 w-full" />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {[...Array(3)].map((_, i) => (
+                <div key={i} className="space-y-2">
+                  <Skeleton className="h-4 w-24" />
+                  <Skeleton className="h-10 w-full" />
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Requirements Card Skeleton */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <Skeleton className="h-6 w-24" />
+              <Skeleton className="h-9 w-32" />
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="flex gap-2">
+                <Skeleton className="h-10 flex-1" />
+                <Skeleton className="h-10 w-10" />
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+
+        {/* Team Selection Card Skeleton */}
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-6 w-40" />
+            <Skeleton className="h-4 w-full mt-2" />
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {[...Array(4)].map((_, i) => (
+                <div
+                  key={i}
+                  className="flex items-center space-x-3 border rounded-lg p-3"
+                >
+                  <Skeleton className="h-5 w-5 rounded" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-4 w-32" />
+                    <Skeleton className="h-3 w-48" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Form Questions Card Skeleton */}
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-6 w-56" />
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="border rounded-lg p-4 space-y-4">
+                <div className="flex items-center justify-between">
+                  <Skeleton className="h-5 w-24" />
+                  <Skeleton className="h-9 w-10" />
+                </div>
+                <Skeleton className="h-10 w-full" />
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Skeleton className="h-4 w-24" />
+                    <Skeleton className="h-10 w-full" />
+                  </div>
+                  <div className="flex items-center space-x-2 pt-6">
+                    <Skeleton className="h-4 w-4 rounded" />
+                    <Skeleton className="h-4 w-20" />
+                  </div>
+                </div>
+              </div>
+            ))}
+            <div className="flex justify-center pt-4">
+              <Skeleton className="h-10 w-32" />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Action Buttons Skeleton */}
+        <div className="flex gap-4 justify-end">
+          <Skeleton className="h-10 w-20" />
+          <Skeleton className="h-10 w-32" />
+          <Skeleton className="h-10 w-40" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-4xl mx-auto space-y-8">
@@ -445,6 +571,7 @@ export function RecruitmentForm({
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Dates only now (2 columns) */}
             <div>
               <Label htmlFor="start_date">Ngày bắt đầu</Label>
               <Input
@@ -471,21 +598,6 @@ export function RecruitmentForm({
                     end_date: e.target.value,
                   }))
                 }
-              />
-            </div>
-            <div>
-              <Label htmlFor="max_applications">Số lượng tối đa</Label>
-              <Input
-                id="max_applications"
-                type="number"
-                value={newRecruitment.max_applications}
-                onChange={(e) =>
-                  setNewRecruitment((prev) => ({
-                    ...prev,
-                    max_applications: e.target.value,
-                  }))
-                }
-                placeholder="50"
               />
             </div>
           </div>
@@ -558,11 +670,19 @@ export function RecruitmentForm({
         </CardHeader>
         <CardContent>
           {loadingTeams ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin text-primary" />
-              <span className="ml-2 text-muted-foreground">
-                Đang tải danh sách phòng ban...
-              </span>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {[...Array(4)].map((_, index) => (
+                <div
+                  key={index}
+                  className="flex items-center space-x-3 border rounded-lg p-3"
+                >
+                  <Skeleton className="h-5 w-5 rounded" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-4 w-32" />
+                    <Skeleton className="h-3 w-48" />
+                  </div>
+                </div>
+              ))}
             </div>
           ) : availableTeams.length === 0 ? (
             <div className="text-center py-8 border-2 border-dashed border-red-200 rounded-lg bg-red-50">
@@ -681,11 +801,9 @@ export function RecruitmentForm({
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="TEXT">Văn bản</SelectItem>
-                      <SelectItem value="MCQ">
-                        Trắc nghiệm (1 đáp án)
-                      </SelectItem>
+                      <SelectItem value="MCQ">Lựa chọn 1 đáp án</SelectItem>
                       <SelectItem value="CHECKBOX">
-                        Trắc nghiệm (nhiều đáp án)
+                        Lựa chọn nhiều đáp án
                       </SelectItem>
                       <SelectItem value="FILE">Tải lên file</SelectItem>
                     </SelectContent>
@@ -764,13 +882,12 @@ export function RecruitmentForm({
                   </p>
                   <ul className="list-disc list-inside space-y-1 text-xs">
                     <li>
-                      Ứng viên sẽ có thể tải lên file (PDF, Word, ảnh, v.v.)
+                      Ứng viên sẽ có thể tải lên file (PDF, Word, tối đa 10MB.)
                     </li>
                     <li>
-                      Nên chỉ định rõ loại file và kích thước tối đa trong câu
-                      hỏi
+                      Ứng viên có thể gửi link (Drive,..) nếu như vượt quá dung
+                      lượng hoặc định dạng khác.
                     </li>
-                    <li>Ví dụ: "Tải lên CV của bạn (PDF, tối đa 5MB)"</li>
                   </ul>
                 </div>
               )}

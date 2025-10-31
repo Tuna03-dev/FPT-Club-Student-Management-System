@@ -1,7 +1,5 @@
-"use client";
-
 import { useState, useEffect } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useSearchParams, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -25,14 +23,26 @@ import {
   Mail,
   Phone,
   Globe,
-  Loader2,
 } from "lucide-react";
-import { getClubDetailById, type ClubDetailData } from "@/service/ClubService";
+import { Skeleton } from "@/components/ui/skeleton";
+import { getClubDetailById, type ClubDetailData } from "@/services/clubService";
 import {
   getRecruitmentsByClubId,
   type RecruitmentData,
-} from "@/service/RecruitmentService";
+  getMyApplications,
+} from "@/services/recruitmentService";
 import { ClubApplicationForm } from "./ClubApplication";
+import { useMyClubs } from "@/hooks/useMyClubs";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { AlertCircle } from "lucide-react";
+import { authService } from "@/services/authService";
 
 interface ClubDetailProps {
   clubId?: string;
@@ -73,6 +83,8 @@ interface News {
 export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
   const params = useParams();
   const clubId = propClubId || params.clubId;
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
 
   const [activeTab, setActiveTab] = useState("overview");
   const [loading, setLoading] = useState(true);
@@ -81,7 +93,39 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
   const [recruitmentsLoaded, setRecruitmentsLoaded] = useState(false);
   const [loadingRecruitments, setLoadingRecruitments] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedRecruitmentId, setSelectedRecruitmentId] = useState<number | null>(null);
+  const [selectedRecruitmentId, setSelectedRecruitmentId] = useState<
+    number | null
+  >(null);
+  const [showMembershipWarning, setShowMembershipWarning] = useState(false);
+  const [showAlreadyAppliedDialog, setShowAlreadyAppliedDialog] =
+    useState(false);
+  const [alreadyAppliedMessage, setAlreadyAppliedMessage] = useState<
+    string | null
+  >(null);
+  const [showLoginPrompt, setShowLoginPrompt] = useState(false);
+
+  const formatRecruitmentStatus = (status?: string) => {
+    if (!status) return "";
+    const s = status.toLowerCase();
+    if (s === "open") return "Đang mở";
+    if (s === "closed") return "Đã đóng";
+    if (s === "draft") return "Bản nháp";
+    if (s === "cancelled" || s === "canceled") return "Đã hủy";
+    return status;
+  };
+
+  const normalizeRequirements = (req?: string | string[]) => {
+    if (!req) return [] as string[];
+    if (Array.isArray(req)) return req.filter(Boolean);
+    // Split by line breaks or bullets/semicolons and trim
+    return req
+      .split(/\r?\n|;|•|\u2022|-/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+  };
+
+  // Get user's clubs to check if already a member
+  const { data: myClubs } = useMyClubs();
 
   // Fetch club data only (isRecruiting is included in response)
   useEffect(() => {
@@ -135,6 +179,28 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
       fetchRecruitments();
     }
   }, [activeTab]);
+
+  useEffect(() => {
+    const tab = searchParams.get("tab");
+    if (tab === "recruitment") {
+      setActiveTab("recruitment");
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
+    // When recruitment tab is active and list loaded, try to scroll to anchor
+    if (activeTab !== "recruitment") return;
+    if (!recruitmentsLoaded) return;
+    const hash = window.location.hash;
+    if (hash && hash.startsWith("#recruitment-")) {
+      const el = document.querySelector(hash);
+      if (el) {
+        setTimeout(() => {
+          el.scrollIntoView({ behavior: "smooth", block: "start" });
+        }, 0);
+      }
+    }
+  }, [activeTab, recruitmentsLoaded]);
 
   const events: Event[] = [
     {
@@ -213,15 +279,152 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
     return date.toLocaleDateString("vi-VN");
   };
 
+  // Format number helper (add comma separator)
+  const formatNumber = (num: number | undefined | null): string => {
+    if (num === undefined || num === null) return "0";
+    return num.toLocaleString("vi-VN");
+  };
+
+  // Check if user is already a member of this club
+  const isAlreadyMember = () => {
+    if (!myClubs || !clubId) return false;
+    return myClubs.some((myClub) => myClub.clubId === Number(clubId));
+  };
+
+  // Handle recruitment application click
+  const handleApplyClick = async (recruitmentId: number) => {
+    // Prompt login if not authenticated
+    if (!authService.isAuthenticated()) {
+      setShowLoginPrompt(true);
+      return;
+    }
+    // Check if user is already a member
+    if (isAlreadyMember()) {
+      setShowMembershipWarning(true);
+      return;
+    }
+    // Kiểm tra đã nộp đơn chưa
+    try {
+      const myApps = await getMyApplications({ page: 0, size: 20 });
+      const existed = myApps.content.find(
+        (app) => app.recruitmentId === recruitmentId
+      );
+      if (existed) {
+        setAlreadyAppliedMessage(
+          "Bạn đã nộp đơn ứng tuyển cho đợt này. Không thể nộp lại."
+        );
+        setShowAlreadyAppliedDialog(true);
+        return;
+      }
+    } catch (e) {
+      // Có thể show lỗi hoặc cho phép tiếp tục
+      // alert('Không kiểm tra được trạng thái ứng tuyển');
+    }
+    // Chưa ứng tuyển, mở form
+    setSelectedRecruitmentId(recruitmentId);
+  };
+
   // Loading state
   if (loading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="h-12 w-12 animate-spin mx-auto text-primary mb-4" />
-          <p className="text-muted-foreground">
-            Đang tải thông tin câu lạc bộ...
-          </p>
+      <div className="min-h-screen bg-background">
+        {/* Hero Banner Skeleton */}
+        <Skeleton className="h-64 md:h-80 w-full rounded-none" />
+
+        {/* Club Header Skeleton */}
+        <div className="relative -mt-20 px-4 md:px-8 pb-8">
+          <div className="max-w-6xl mx-auto">
+            <div className="flex flex-col md:flex-row gap-6 items-start md:items-end">
+              {/* Logo Skeleton */}
+              <Skeleton className="h-32 w-32 rounded-full border-4 border-background" />
+
+              {/* Club Info Skeleton */}
+              <div className="flex-1 space-y-4">
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3">
+                    <Skeleton className="h-9 w-64" />
+                    <Skeleton className="h-6 w-24 rounded-full" />
+                  </div>
+                  <Skeleton className="h-4 w-96" />
+                </div>
+
+                {/* Stats Skeleton */}
+                <div className="flex flex-wrap gap-6">
+                  {[...Array(3)].map((_, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <Skeleton className="h-10 w-10 rounded-lg" />
+                      <div className="space-y-1">
+                        <Skeleton className="h-3 w-16" />
+                        <Skeleton className="h-5 w-12" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Main Content Skeleton */}
+        <div className="px-4 md:px-8 py-8">
+          <div className="max-w-6xl mx-auto space-y-6">
+            {/* Tabs Skeleton */}
+            <div className="flex gap-2 border-b">
+              {[...Array(4)].map((_, i) => (
+                <Skeleton key={i} className="h-10 w-28" />
+              ))}
+            </div>
+
+            {/* Content Cards Skeleton */}
+            <div className="space-y-6">
+              {/* Description Card */}
+              <Card>
+                <CardHeader>
+                  <Skeleton className="h-6 w-48" />
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-3/4" />
+
+                  {/* President Info Skeleton */}
+                  <div className="mt-6 p-4 border rounded-lg">
+                    <Skeleton className="h-3 w-32 mb-3" />
+                    <div className="flex items-center gap-3">
+                      <Skeleton className="h-10 w-10 rounded-full" />
+                      <div className="space-y-2">
+                        <Skeleton className="h-4 w-32" />
+                        <Skeleton className="h-3 w-48" />
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Contact Card */}
+              <Card>
+                <CardHeader>
+                  <Skeleton className="h-6 w-40" />
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {[...Array(4)].map((_, i) => (
+                      <div
+                        key={i}
+                        className="flex items-center gap-3 p-3 rounded-lg border"
+                      >
+                        <Skeleton className="h-10 w-10 rounded-lg" />
+                        <div className="flex-1 space-y-2">
+                          <Skeleton className="h-4 w-24" />
+                          <Skeleton className="h-3 w-32" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -296,24 +499,36 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
               {/* Stats */}
               <div className="flex flex-wrap gap-6 mb-4">
                 <div className="flex items-center gap-2">
-                  <Users className="h-5 w-5 text-muted-foreground" />
+                  <div className="h-10 w-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                    <Users className="h-5 w-5 text-blue-600" />
+                  </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Thành viên</p>
-                    <p className="font-semibold">{club.totalMembers}</p>
+                    <p className="font-semibold text-lg">
+                      {formatNumber(club.totalMembers)}
+                    </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Calendar className="h-5 w-5 text-muted-foreground" />
+                  <div className="h-10 w-10 bg-green-100 rounded-lg flex items-center justify-center">
+                    <Calendar className="h-5 w-5 text-green-600" />
+                  </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Sự kiện</p>
-                    <p className="font-semibold">{club.totalEvents}</p>
+                    <p className="font-semibold text-lg">
+                      {formatNumber(club.totalEvents)}
+                    </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <MessageSquare className="h-5 w-5 text-muted-foreground" />
+                  <div className="h-10 w-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                    <MessageSquare className="h-5 w-5 text-purple-600" />
+                  </div>
                   <div>
-                    <p className="text-sm text-muted-foreground">Bài viết</p>
-                    <p className="font-semibold">{club.totalPosts}</p>
+                    <p className="text-sm text-muted-foreground">Tin tức</p>
+                    <p className="font-semibold text-lg">
+                      {formatNumber(club.totalPosts)}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -351,7 +566,7 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
               <TabsTrigger value="events">Sự kiện</TabsTrigger>
               <TabsTrigger value="news">Tin tức</TabsTrigger>
               <TabsTrigger value="recruitment" className="relative">
-                Tuyển dụng
+                Tuyển thành viên
                 {club.isRecruiting && (
                   <span className="absolute top-1 right-1 flex h-2 w-2">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75"></span>
@@ -495,7 +710,9 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
             <TabsContent value="events" className="space-y-6">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-2xl font-bold">Sự kiện của câu lạc bộ</h2>
-                <Badge variant="secondary">{events.length} sự kiện</Badge>
+                <Badge variant="secondary">
+                  Tổng: {formatNumber(club.totalEvents)} sự kiện
+                </Badge>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -549,7 +766,9 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
             <TabsContent value="news" className="space-y-6">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-2xl font-bold">Tin tức của câu lạc bộ</h2>
-                <Badge variant="secondary">{news.length} tin tức</Badge>
+                <Badge variant="secondary">
+                  Tổng: {formatNumber(club.totalPosts)} tin tức
+                </Badge>
               </div>
 
               <div className="space-y-4">
@@ -603,11 +822,58 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
             <TabsContent value="recruitment" className="space-y-6">
               {/* Loading state for recruitments */}
               {loadingRecruitments ? (
-                <div className="flex flex-col items-center justify-center py-12">
-                  <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
-                  <p className="text-muted-foreground">
-                    Đang tải thông tin tuyển dụng...
-                  </p>
+                <div className="space-y-6">
+                  {/* Header Skeleton */}
+                  <div className="flex items-center justify-between">
+                    <Skeleton className="h-8 w-48" />
+                    <Skeleton className="h-6 w-24 rounded-full" />
+                  </div>
+
+                  {/* Recruitment Cards Skeleton */}
+                  <div className="space-y-4">
+                    {[...Array(3)].map((_, index) => (
+                      <Card
+                        key={index}
+                        className="hover:shadow-lg transition-shadow"
+                      >
+                        <CardHeader>
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1 space-y-2">
+                              <div className="flex items-center gap-2">
+                                <Skeleton className="h-5 w-5 rounded" />
+                                <Skeleton className="h-6 w-64" />
+                              </div>
+                              <Skeleton className="h-4 w-96" />
+                            </div>
+                            <Skeleton className="h-6 w-20 rounded-full" />
+                          </div>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                          {/* Requirements */}
+                          <div className="space-y-2">
+                            <Skeleton className="h-4 w-20" />
+                            <div className="space-y-1">
+                              <Skeleton className="h-3 w-full" />
+                              <Skeleton className="h-3 w-5/6" />
+                            </div>
+                          </div>
+
+                          {/* Stats Grid */}
+                          <div className="grid grid-cols-3 gap-4 p-3 rounded-lg bg-accent/5">
+                            {[...Array(3)].map((_, i) => (
+                              <div key={i} className="space-y-1">
+                                <Skeleton className="h-3 w-16" />
+                                <Skeleton className="h-4 w-20" />
+                              </div>
+                            ))}
+                          </div>
+
+                          {/* Apply Button */}
+                          <Skeleton className="h-10 w-full rounded" />
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
                 </div>
               ) : (
                 <>
@@ -625,6 +891,7 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
                       {recruitments.map((recruitment) => (
                         <Card
                           key={recruitment.id}
+                          id={`recruitment-${recruitment.id}`}
                           className="hover:shadow-lg transition-shadow"
                         >
                           <CardHeader>
@@ -642,25 +909,42 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
                                 variant="secondary"
                                 className="bg-green-100 text-green-700"
                               >
-                                {recruitment.status}
+                                {formatRecruitmentStatus(
+                                  recruitment.status as unknown as string
+                                )}
                               </Badge>
                             </div>
                           </CardHeader>
                           <CardContent className="space-y-4">
                             {/* Requirements */}
-                            {recruitment.requirements && (
+                            {normalizeRequirements(
+                              recruitment.requirements as unknown as
+                                | string
+                                | string[]
+                            ).length > 0 && (
                               <div>
                                 <p className="text-sm font-semibold mb-2">
                                   Yêu cầu:
                                 </p>
-                                <p className="text-sm text-muted-foreground whitespace-pre-line">
-                                  {recruitment.requirements}
-                                </p>
+                                <ul className="list-disc pl-5 space-y-1">
+                                  {normalizeRequirements(
+                                    recruitment.requirements as unknown as
+                                      | string
+                                      | string[]
+                                  ).map((item, idx) => (
+                                    <li
+                                      key={idx}
+                                      className="text-sm text-foreground"
+                                    >
+                                      {item}
+                                    </li>
+                                  ))}
+                                </ul>
                               </div>
                             )}
 
                             {/* Stats */}
-                            <div className="grid grid-cols-3 gap-4 p-3 bg-accent/5 rounded-lg">
+                            <div className="grid grid-cols-2 gap-4 p-3 bg-accent/5 rounded-lg">
                               <div>
                                 <p className="text-xs text-muted-foreground">
                                   Bắt đầu
@@ -677,20 +961,11 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
                                   {formatDate(recruitment.endDate)}
                                 </p>
                               </div>
-                              <div>
-                                <p className="text-xs text-muted-foreground">
-                                  Số lượng
-                                </p>
-                                <p className="font-semibold text-sm">
-                                  {recruitment.maxApplicants ||
-                                    "Không giới hạn"}
-                                </p>
-                              </div>
                             </div>
 
-                            <Button 
+                            <Button
                               className="w-full"
-                              onClick={() => setSelectedRecruitmentId(recruitment.id)}
+                              onClick={() => handleApplyClick(recruitment.id)}
                             >
                               Ứng tuyển ngay
                             </Button>
@@ -714,6 +989,103 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
           </Tabs>
         </div>
       </div>
+
+      {/* Membership Warning Dialog */}
+      <Dialog
+        open={showMembershipWarning}
+        onOpenChange={setShowMembershipWarning}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-orange-700">
+              <AlertCircle className="h-5 w-5" />
+              Không thể ứng tuyển
+            </DialogTitle>
+            <DialogDescription className="pt-4">
+              <div className="space-y-3">
+                <p className="text-foreground">
+                  Bạn đã là thành viên của{" "}
+                  <span className="font-semibold">{club?.clubName}</span> và
+                  không thể ứng tuyển lại.
+                </p>
+                <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                  <p className="text-sm text-orange-800">
+                    💡 <span className="font-medium">Gợi ý:</span> Nếu bạn muốn
+                    tham gia vào phòng ban khác hoặc thay đổi vai trò, vui lòng
+                    liên hệ với ban quản lý câu lạc bộ.
+                  </p>
+                </div>
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="sm:justify-start">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setShowMembershipWarning(false)}
+              className="w-full sm:w-auto"
+            >
+              Đã hiểu
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Login Prompt Dialog */}
+      <Dialog open={showLoginPrompt} onOpenChange={setShowLoginPrompt}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Yêu cầu đăng nhập</DialogTitle>
+            <DialogDescription>
+              Bạn cần đăng nhập để ứng tuyển vào đợt tuyển thành viên này.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="sm:justify-end gap-2">
+            <Button variant="outline" onClick={() => setShowLoginPrompt(false)}>
+              Để sau
+            </Button>
+            <Button onClick={() => navigate("/login")}>Đăng nhập</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog show when user already applied for this recruitment round */}
+      <Dialog
+        open={showAlreadyAppliedDialog}
+        onOpenChange={setShowAlreadyAppliedDialog}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <AlertCircle className="h-5 w-5" /> Đã nộp đơn ứng tuyển
+            </DialogTitle>
+            <DialogDescription className="pt-4">
+              <div className="space-y-3">
+                <p className="text-foreground">
+                  {alreadyAppliedMessage ||
+                    "Bạn đã nộp đơn ứng tuyển cho đợt này. Không thể nộp lại."}
+                </p>
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                  <p className="text-sm text-red-800">
+                    Vui lòng đợi kết quả xét tuyển trước khi nộp lại hoặc liên
+                    hệ ban quản lý câu lạc bộ nếu cần hỗ trợ.
+                  </p>
+                </div>
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="sm:justify-start">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setShowAlreadyAppliedDialog(false)}
+              className="w-full sm:w-auto"
+            >
+              Đã hiểu
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

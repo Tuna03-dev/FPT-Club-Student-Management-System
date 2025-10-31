@@ -1,6 +1,6 @@
-"use client";
 
-import { useState, useEffect } from "react";
+
+import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -15,23 +15,31 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   ArrowLeft,
   Send,
   AlertCircle,
   CheckCircle,
-  Loader2,
   Upload,
+  Calendar,
 } from "lucide-react";
 import {
   getRecruitmentById,
   submitApplication,
   type RecruitmentData,
   type ApplicationSubmitRequest,
-} from "@/service/RecruitmentService";
-import { getClubDetailById, type ClubDetailData } from "@/service/ClubService";
-import { getVisibleTeams } from "@/api/teams";
+} from "@/services/recruitmentService";
+import { getClubDetailById, type ClubDetailData } from "@/services/clubService";
 import type { VisibleTeamDTO } from "@/types/team";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 interface ClubApplicationFormProps {
   recruitmentId: number;
@@ -50,9 +58,25 @@ export function ClubApplicationForm({
   const [recruitment, setRecruitment] = useState<RecruitmentData | null>(null);
   const [club, setClub] = useState<ClubDetailData | null>(null);
   const [selectedTeamId, setSelectedTeamId] = useState<number | null>(null);
-  const [teams, setTeams] = useState<VisibleTeamDTO[]>([]);
-  const [loadingTeams, setLoadingTeams] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<Record<number, File>>({});
+  const [showAlreadyAppliedDialog, setShowAlreadyAppliedDialog] = useState(false);
+  const [alreadyAppliedMessage, setAlreadyAppliedMessage] = useState<string | null>(null);
+
+  // Memoize teams to prevent order changes on re-render
+  const teams = useMemo<VisibleTeamDTO[]>(() => {
+    if (!recruitment?.teamOptions || recruitment.teamOptions.length === 0) {
+      return [];
+    }
+
+    // Map teamOptions to VisibleTeamDTO format, maintaining order from API
+    return recruitment.teamOptions.map((team) => ({
+      teamId: team.id,
+      teamName: team.teamName,
+      description: team.description || "",
+      memberCount: 0,
+      myRoles: [],
+    }));
+  }, [recruitment?.teamOptions]);
 
   // Fetch recruitment and club data
   useEffect(() => {
@@ -66,26 +90,6 @@ export function ClubApplicationForm({
 
         const clubData = await getClubDetailById(recruitmentData.clubId);
         setClub(clubData);
-
-        // Fetch teams if teamOptionIds is provided
-        if (
-          recruitmentData.teamOptionIds &&
-          recruitmentData.teamOptionIds.length > 0
-        ) {
-          setLoadingTeams(true);
-          try {
-            const allTeams = await getVisibleTeams(recruitmentData.clubId);
-            // Filter teams based on teamOptionIds
-            const availableTeams = allTeams.filter((team) =>
-              recruitmentData.teamOptionIds?.includes(team.teamId)
-            );
-            setTeams(availableTeams);
-          } catch (teamErr) {
-            console.error("Error fetching teams:", teamErr);
-          } finally {
-            setLoadingTeams(false);
-          }
-        }
       } catch (err) {
         console.error("Error fetching data:", err);
         setError("Không thể tải thông tin tuyển dụng");
@@ -138,24 +142,63 @@ export function ClubApplicationForm({
       return;
     }
 
-    // Validate required questions
-    const requiredQuestions = recruitment.questions || [];
+    // Validate required questions (only check questions with isRequired = 1)
+    const requiredQuestions = (recruitment.questions || []).filter(
+      (q) => q.isRequired === 1
+    );
 
-    const allAnswered = requiredQuestions.every((q) => {
+    for (const q of requiredQuestions) {
       const answer = formAnswers[q.id];
-      if (!answer) return false;
 
-      // For file type, check if fileUrl is provided
-      if (q.questionType === "FILE") {
-        return answer.fileUrl || answer.answerText;
+      // Check if answer exists and is not empty
+      if (!answer) {
+        alert(`Vui lòng trả lời câu hỏi bắt buộc: ${q.questionText}`);
+        return;
       }
 
-      return true;
-    });
+      // For file type, check if file is uploaded or link is provided
+      if (q.questionType === "FILE_UPLOAD") {
+        const hasFile = uploadedFiles[q.id];
+        const hasLink =
+          typeof answer === "object"
+            ? answer.fileUrl && answer.fileUrl.trim()
+            : answer && answer.trim();
 
-    if (!allAnswered) {
-      alert("Vui lòng trả lời đầy đủ tất cả các câu hỏi");
-      return;
+        if (!hasFile && !hasLink) {
+          alert(
+            `Vui lòng tải lên file hoặc cung cấp link cho câu hỏi: ${q.questionText}`
+          );
+          return;
+        }
+      }
+      // For text type, check if answer is not empty
+      else if (q.questionType === "TEXT") {
+        const answerText =
+          typeof answer === "string" ? answer : answer?.answerText || "";
+        if (!answerText.trim()) {
+          alert(`Vui lòng trả lời câu hỏi bắt buộc: ${q.questionText}`);
+          return;
+        }
+      }
+      // For MCQ and CHECKBOX, check if at least one option is selected
+      else if (
+        q.questionType === "MCQ" ||
+        q.questionType === "MULTIPLE_CHOICE"
+      ) {
+        const answerText = typeof answer === "string" ? answer : "";
+        if (!answerText.trim()) {
+          alert(`Vui lòng chọn một đáp án cho câu hỏi: ${q.questionText}`);
+          return;
+        }
+      } else if (q.questionType === "CHECKBOX") {
+        const answers = Array.isArray(answer) ? answer : [];
+        if (answers.length === 0) {
+          alert(
+            `Vui lòng chọn ít nhất một đáp án cho câu hỏi: ${q.questionText}`
+          );
+          return;
+        }
+      }
     }
 
     setIsSubmitting(true);
@@ -167,16 +210,20 @@ export function ClubApplicationForm({
 
       Object.entries(formAnswers).forEach(([questionId, answer]) => {
         const qId = Number(questionId);
-        
+
         // Check if this question has an uploaded file
         if (uploadedFiles[qId]) {
           filesByQuestionId.set(qId, uploadedFiles[qId]);
           answers.push({
             questionId: qId,
-            answerText: typeof answer === "object" ? answer.answerText || "" : "",
+            answerText:
+              typeof answer === "object" ? answer.answerText || "" : "",
             fileUrl: "", // Will be filled by backend after upload
           });
-        } else if (typeof answer === "object" && (answer.fileUrl || answer.answerText)) {
+        } else if (
+          typeof answer === "object" &&
+          (answer.fileUrl || answer.answerText)
+        ) {
           // File URL provided (Google Drive link, etc.)
           answers.push({
             questionId: qId,
@@ -187,7 +234,9 @@ export function ClubApplicationForm({
           // Handle other types (TEXT, MCQ, CHECKBOX)
           answers.push({
             questionId: qId,
-            answerText: Array.isArray(answer) ? answer.join(", ") : String(answer),
+            answerText: Array.isArray(answer)
+              ? answer.join(", ")
+              : String(answer),
           });
         }
       });
@@ -198,11 +247,47 @@ export function ClubApplicationForm({
         answers,
       };
 
-      await submitApplication(request, filesByQuestionId.size > 0 ? filesByQuestionId : undefined);
+      await submitApplication(
+        request,
+        filesByQuestionId.size > 0 ? filesByQuestionId : undefined
+      );
       setSubmitSuccess(true);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error submitting application:", err);
-      alert("Đã có lỗi xảy ra khi gửi đơn ứng tuyển. Vui lòng thử lại.");
+
+      // Check if it's an axios error with response
+      if (err.response?.data) {
+        const errorCode = err.response.data.code;
+        const errorMessage = err.response.data.message;
+        // Handle specific error: already a club member
+        if (errorCode === 3001) {
+          alert(
+            "❌ " +
+              (errorMessage ||
+                "Bạn đã là thành viên của câu lạc bộ này và không thể ứng tuyển lại.")
+          );
+          return;
+        }
+        // Handle specific error: already applied for this recruitment round (ví dụ code 3002)
+        if (errorCode === 3002) {
+          setAlreadyAppliedMessage(
+            errorMessage || "Bạn đã nộp đơn ứng tuyển cho đợt này. Không thể nộp lại."
+          );
+          setShowAlreadyAppliedDialog(true);
+          return;
+        }
+        // Handle other specific errors
+        alert(
+          "❌ " + (errorMessage || "Đã có lỗi xảy ra khi gửi đơn ứng tuyển.")
+        );
+
+        // Scroll to top to show error
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      } else {
+        alert("Đã có lỗi xảy ra khi gửi đơn ứng tuyển. Vui lòng thử lại.");
+
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -211,12 +296,174 @@ export function ClubApplicationForm({
   // Loading state
   if (loading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="h-12 w-12 animate-spin mx-auto text-primary mb-4" />
-          <p className="text-muted-foreground">
-            Đang tải thông tin tuyển dụng...
-          </p>
+      <div className="min-h-screen bg-background">
+        <div className="container mx-auto px-4 py-8">
+          <div className="max-w-4xl mx-auto">
+            {/* Header Skeleton */}
+            <div className="flex items-center space-x-4 mb-8">
+              <Skeleton className="h-10 w-24 rounded" />
+              <div className="space-y-2">
+                <Skeleton className="h-8 w-48" />
+                <Skeleton className="h-4 w-32" />
+              </div>
+            </div>
+
+            {/* Club Info Card Skeleton */}
+            <Card className="mb-6">
+              <CardHeader>
+                <div className="flex items-start space-x-4">
+                  {/* Club logo */}
+                  <Skeleton className="w-20 h-20 rounded-lg flex-shrink-0" />
+                  <div className="flex-1 space-y-4">
+                    {/* Recruitment title */}
+                    <Skeleton className="h-6 w-3/4" />
+                    {/* Description - 2 lines */}
+                    <div className="space-y-2">
+                      <Skeleton className="h-4 w-full" />
+                      <Skeleton className="h-4 w-5/6" />
+                    </div>
+                    {/* Time and max applicants info */}
+                    <div className="flex flex-wrap gap-4">
+                      <div className="flex items-center gap-2">
+                        <Skeleton className="h-4 w-4 rounded" />
+                        <Skeleton className="h-4 w-36" />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Skeleton className="h-4 w-4 rounded" />
+                        <Skeleton className="h-4 w-28" />
+                      </div>
+                    </div>
+                    {/* Requirements section */}
+                    <div className="space-y-2">
+                      <Skeleton className="h-4 w-20" />
+                      <div className="space-y-1">
+                        <Skeleton className="h-3 w-full" />
+                        <Skeleton className="h-3 w-4/5" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </CardHeader>
+            </Card>
+
+            {/* Team Selection Skeleton */}
+            <Card className="mt-6">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <Skeleton className="h-6 w-32" />
+                  <Skeleton className="h-5 w-20 rounded-full" />
+                </div>
+                <Skeleton className="h-4 w-64 mt-2" />
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {[...Array(3)].map((_, index) => (
+                    <div 
+                      key={index} 
+                      className="flex items-start space-x-3 p-4 border rounded-lg hover:bg-accent/5"
+                    >
+                      <Skeleton className="h-5 w-5 rounded-full mt-1 flex-shrink-0" />
+                      <div className="flex-1 space-y-2">
+                        <Skeleton className="h-4 w-32" />
+                        <Skeleton className="h-3 w-48" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Form Questions Skeleton */}
+            <Card className="mt-6">
+              <CardHeader>
+                <Skeleton className="h-6 w-40" />
+                <Skeleton className="h-4 w-56 mt-2" />
+              </CardHeader>
+              <CardContent className="space-y-8">
+                {/* Different types of questions */}
+                {[...Array(4)].map((_, index) => (
+                  <div key={index} className="space-y-3">
+                    <div className="flex items-start justify-between">
+                      <Skeleton className="h-5 w-3/4" />
+                      {index < 2 && (
+                        <Skeleton className="h-5 w-20 rounded-full" />
+                      )}
+                    </div>
+                    {/* Text area for TEXT type */}
+                    {index === 0 && (
+                      <Skeleton className="h-32 w-full rounded-md" />
+                    )}
+                    {/* Radio options for MCQ type */}
+                    {index === 1 && (
+                      <div className="space-y-2">
+                        {[...Array(4)].map((_, i) => (
+                          <div key={i} className="flex items-center space-x-2">
+                            <Skeleton className="h-5 w-5 rounded-full" />
+                            <Skeleton className="h-4 w-32" />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {/* Checkboxes for CHECKBOX type */}
+                    {index === 2 && (
+                      <div className="space-y-2">
+                        {[...Array(3)].map((_, i) => (
+                          <div key={i} className="flex items-center space-x-2">
+                            <Skeleton className="h-5 w-5 rounded" />
+                            <Skeleton className="h-4 w-28" />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {/* File upload for FILE type */}
+                    {index === 3 && (
+                      <div className="space-y-4">
+                        <div className="border-2 border-dashed rounded-lg p-6 bg-gray-50">
+                          <div className="text-center space-y-3">
+                            <Skeleton className="h-10 w-10 mx-auto rounded" />
+                            <Skeleton className="h-4 w-32 mx-auto" />
+                            <Skeleton className="h-3 w-40 mx-auto" />
+                            <Skeleton className="h-10 w-32 mx-auto rounded" />
+                          </div>
+                        </div>
+                        <div className="relative">
+                          <div className="absolute inset-0 flex items-center">
+                            <Skeleton className="h-px w-full" />
+                          </div>
+                          <div className="relative flex justify-center">
+                            <Skeleton className="h-4 w-12" />
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <Skeleton className="h-4 w-48" />
+                          <Skeleton className="h-10 w-full rounded" />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+
+                {/* Info Box Skeleton */}
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-start gap-3">
+                  <Skeleton className="h-5 w-5 rounded flex-shrink-0" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-4 w-20" />
+                    <div className="space-y-1">
+                      <Skeleton className="h-3 w-full" />
+                      <Skeleton className="h-3 w-full" />
+                      <Skeleton className="h-3 w-2/3" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Submit Buttons Skeleton */}
+                <div className="flex gap-4 pt-6 border-t">
+                  <Skeleton className="h-11 flex-1 rounded" />
+                  <Skeleton className="h-11 w-24 rounded" />
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </div>
     );
@@ -271,6 +518,38 @@ export function ClubApplicationForm({
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Dialog show when user already applied for this recruitment round */}
+      <Dialog open={showAlreadyAppliedDialog} onOpenChange={setShowAlreadyAppliedDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <AlertCircle className="h-5 w-5" /> Đã nộp đơn ứng tuyển
+            </DialogTitle>
+            <DialogDescription className="pt-4">
+              <div className="space-y-3">
+                <p className="text-foreground">
+                  {alreadyAppliedMessage || "Bạn đã nộp đơn ứng tuyển cho đợt này. Không thể nộp lại."}
+                </p>
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                  <p className="text-sm text-red-800">
+                    Vui lòng đợi kết quả xét tuyển trước khi nộp lại hoặc liên hệ ban quản lý câu lạc bộ nếu cần hỗ trợ.
+                  </p>
+                </div>
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="sm:justify-start">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setShowAlreadyAppliedDialog(false)}
+              className="w-full sm:w-auto"
+            >
+              Đã hiểu
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-4xl mx-auto">
           {/* Header */}
@@ -301,6 +580,39 @@ export function ClubApplicationForm({
                   <CardDescription className="mt-2">
                     {recruitment.description}
                   </CardDescription>
+
+                  {/* Recruitment Info */}
+                  <div className="mt-4 flex flex-wrap gap-4">
+                    {/* Time Period */}
+                    <div className="flex items-center gap-2 text-sm">
+                      <Calendar className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-muted-foreground">
+                        {new Date(recruitment.startDate).toLocaleDateString(
+                          "vi-VN",
+                          {
+                            day: "2-digit",
+                            month: "2-digit",
+                            year: "numeric",
+                          }
+                        )}
+                        {" - "}
+                        {new Date(recruitment.endDate).toLocaleDateString(
+                          "vi-VN",
+                          {
+                            day: "2-digit",
+                            month: "2-digit",
+                            year: "numeric",
+                          }
+                        )}
+                      </span>
+                    </div>
+
+                    {/* Max Applicants */}
+                    {false && (
+                      <div />
+                    )}
+                  </div>
+
                   {recruitment.requirements && (
                     <div className="mt-4">
                       <p className="text-sm font-medium mb-2">Yêu cầu:</p>
@@ -318,51 +630,53 @@ export function ClubApplicationForm({
           {teams.length > 0 && (
             <Card className="mt-6">
               <CardHeader>
-                <CardTitle>Chọn phòng ban</CardTitle>
+                <div className="flex items-center justify-between">
+                  <CardTitle>Chọn phòng ban</CardTitle>
+                  <Badge
+                    variant="secondary"
+                    className="bg-orange-100 text-orange-700 hover:bg-orange-200"
+                  >
+                    Bắt buộc
+                  </Badge>
+                </div>
                 <CardDescription>
                   Vui lòng chọn phòng ban bạn muốn ứng tuyển
                 </CardDescription>
               </CardHeader>
 
               <CardContent>
-                {loadingTeams ? (
-                  <div className="flex items-center justify-center py-4">
-                    <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                  </div>
-                ) : (
-                  <RadioGroup
-                    value={selectedTeamId?.toString() || ""}
-                    onValueChange={(value) => setSelectedTeamId(Number(value))}
-                    className="space-y-3"
-                  >
-                    {teams.map((team) => (
-                      <div
-                        key={team.teamId}
-                        className="flex items-start space-x-3 p-4 border rounded-lg hover:bg-accent/5 transition-colors cursor-pointer"
-                        onClick={() => setSelectedTeamId(team.teamId)}
-                      >
-                        <RadioGroupItem
-                          value={team.teamId.toString()}
-                          id={`team-${team.teamId}`}
-                          className="mt-1"
-                        />
-                        <div className="flex-1">
-                          <Label
-                            htmlFor={`team-${team.teamId}`}
-                            className="font-medium cursor-pointer"
-                          >
-                            {team.teamName}
-                          </Label>
-                          {team.description && (
-                            <p className="text-sm text-muted-foreground mt-1">
-                              {team.description}
-                            </p>
-                          )}
-                        </div>
+                <RadioGroup
+                  value={selectedTeamId?.toString() || ""}
+                  onValueChange={(value) => setSelectedTeamId(Number(value))}
+                  className="space-y-3"
+                >
+                  {teams.map((team) => (
+                    <div
+                      key={team.teamId}
+                      className="flex items-start space-x-3 p-4 border rounded-lg hover:bg-accent/5 transition-colors cursor-pointer"
+                      onClick={() => setSelectedTeamId(team.teamId)}
+                    >
+                      <RadioGroupItem
+                        value={team.teamId.toString()}
+                        id={`team-${team.teamId}`}
+                        className="mt-1"
+                      />
+                      <div className="flex-1">
+                        <Label
+                          htmlFor={`team-${team.teamId}`}
+                          className="font-medium cursor-pointer"
+                        >
+                          {team.teamName}
+                        </Label>
+                        {team.description && (
+                          <p className="text-sm text-muted-foreground mt-1">
+                            {team.description}
+                          </p>
+                        )}
                       </div>
-                    ))}
-                  </RadioGroup>
-                )}
+                    </div>
+                  ))}
+                </RadioGroup>
               </CardContent>
             </Card>
           )}
@@ -384,13 +698,18 @@ export function ClubApplicationForm({
                       <div className="flex items-start justify-between">
                         <Label className="text-base font-medium">
                           {index + 1}. {question.questionText}
+                          {question.isRequired === 1 && (
+                            <span className="text-red-500 ml-1">*</span>
+                          )}
                         </Label>
-                        <Badge
-                          variant="secondary"
-                          className="ml-2 bg-orange-100 text-orange-700 hover:bg-orange-200"
-                        >
-                          Bắt buộc
-                        </Badge>
+                        {question.isRequired === 1 && (
+                          <Badge
+                            variant="secondary"
+                            className="ml-2 bg-orange-100 text-orange-700 hover:bg-orange-200"
+                          >
+                            Bắt buộc
+                          </Badge>
+                        )}
                       </div>
 
                       {question.questionType === "TEXT" && (
@@ -601,7 +920,9 @@ export function ClubApplicationForm({
                               htmlFor={`file-url-${question.id}`}
                               className="text-sm"
                             >
-                              Link file (Google Drive, Dropbox, v.v.)
+                              Link file (Google Drive, Dropbox, v.v.) nếu như
+                              file vượt quá dung lượng hoặc các định dạng file
+                              khác.
                             </Label>
                             <Input
                               id={`file-url-${question.id}`}
@@ -658,7 +979,7 @@ export function ClubApplicationForm({
                     <li>
                       Đơn ứng tuyển sẽ được xem xét trong vòng 3-5 ngày làm việc
                     </li>
-                    <li>Bạn sẽ nhận được thông báo qua email về kết quả</li>
+                    {/* <li>Bạn sẽ nhận được thông báo qua email về kết quả</li> */}
                   </ul>
                 </div>
               </div>

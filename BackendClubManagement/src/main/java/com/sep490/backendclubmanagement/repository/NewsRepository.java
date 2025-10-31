@@ -26,44 +26,30 @@ public interface NewsRepository extends JpaRepository<News, Long> {
             "ORDER BY n.createdAt DESC")
     List<LatestNewsDTO> findLatestNews(Pageable pageable);
 
-    // Lấy tin spotlight mới nhất
+    // Lấy tin non-draft mới nhất
     Optional<News> findTopByIsDraftFalseOrderByCreatedAtDesc();
 
+    // Lấy tin spotlight mới nhất
     Optional<News> findTopByIsSpotlightTrueOrderByCreatedAtDesc();
+
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("UPDATE News n SET n.isSpotlight = false WHERE n.isSpotlight = true")
     int clearAllSpotlight();
+
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("UPDATE News n SET n.isSpotlight = true WHERE n.id = :id")
     int markSpotlight(@Param("id") Long id);
-    // Dành cho phần quản trị: lọc/tìm kiếm tin tức (native)
-    @Query(
-            value = """
-            SELECT DISTINCT n.*
-            FROM news n
-            LEFT JOIN clubs c ON n.club_id = c.id
-            LEFT JOIN news_media nm ON nm.news_id = n.id
-            WHERE
-                (:#{#request.keyword} IS NULL
-                    OR n.title   LIKE CONCAT('%', :#{#request.keyword}, '%')
-                    OR n.content LIKE CONCAT('%', :#{#request.keyword}, '%'))
-            AND (:#{#request.clubId} IS NULL OR n.club_id = :#{#request.clubId})
-            ORDER BY n.created_at DESC
-        """,
-            countQuery = """
-            SELECT COUNT(DISTINCT n.id)
-            FROM news n
-            LEFT JOIN clubs c ON n.club_id = c.id
-            LEFT JOIN news_media nm ON nm.news_id = n.id
-            WHERE
-                (:#{#request.keyword} IS NULL
-                    OR n.title   LIKE CONCAT('%', :#{#request.keyword}, '%')
-                    OR n.content LIKE CONCAT('%', :#{#request.keyword}, '%'))
-            AND (:#{#request.clubId} IS NULL OR n.club_id = :#{#request.clubId})
-        """,
-            nativeQuery = true
-    )
-    Page<News> getAllNewsByFilter(@Param("request") NewsRequest request, Pageable pageable);
+
+    // Dành cho phần quản trị: lọc/tìm kiếm tin tức (native) - GIỮ NGUYÊN
+    @Query(value = """
+                                     SELECT DISTINCT e.*
+                                         FROM news e
+                                         LEFT JOIN clubs c ON e.club_id = c.id
+                                         WHERE
+                                             (:#{#request.clubId} IS NULL OR e.club_id = :#{#request.clubId})
+                                            AND e.is_draft = false
+          """, nativeQuery = true, countProjection = "e.id")
+    Page<News> getAllNewsByFilter(NewsRequest request, Pageable pageable);
 
     // Activity theo tác giả (JPQL) — phục vụ ClubManagementService
     @Query("SELECT new com.sep490.backendclubmanagement.dto.response.ActivityDTO(" +
@@ -72,9 +58,11 @@ public interface NewsRepository extends JpaRepository<News, Long> {
             "WHERE u.id IN :authorIds " +
             "ORDER BY n.createdAt DESC")
     List<ActivityDTO> findActivitiesByAuthorIds(@Param("authorIds") List<Long> authorIds);
+
     List<News> findByIsDraftFalseOrderByCreatedAtDesc();
     List<News> findByClubAndIsDraftFalseOrderByCreatedAtDesc(Club club);
     Page<News> findByIsDraftTrueAndCreatedBy_Id(Long userId, Pageable pageable);
+
     @Query("""
       SELECT n FROM News n
       WHERE n.createdBy.id = :authorId
@@ -82,5 +70,4 @@ public interface NewsRepository extends JpaRepository<News, Long> {
       ORDER BY n.updatedAt DESC
     """)
     Page<News> findDraftsByAuthor(@Param("authorId") Long authorId, Pageable pageable);
-
 }

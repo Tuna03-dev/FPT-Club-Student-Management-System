@@ -31,7 +31,7 @@ public class UserService {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
 
         if (authentication == null || !authentication.isAuthenticated()) {
-            throw new AppException(ErrorCode.UNAUTHORIZED);
+            throw new AppException(ErrorCode.UNAUTHENTICATED);
         }
         Object principal = authentication.getPrincipal();
         log.info("Current principal: {}", principal);
@@ -90,6 +90,9 @@ public class UserService {
             return Optional.empty();
         }
         return userRepository.findById(id);
+    }
+    public User getUserById(Long id) {
+        return userRepository.findById(id).orElse(null);
     }
 
     /**

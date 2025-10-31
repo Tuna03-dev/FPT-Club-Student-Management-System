@@ -1,11 +1,22 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -20,14 +31,20 @@ import {
   CheckCircle,
   XCircle,
   Eye,
-  BarChart3,
-  Download,
   MessageSquare,
-  Loader2,
   Calendar,
 } from "lucide-react";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+  PaginationEllipsis,
+} from "@/components/ui/pagination";
 
-type ApplicationStatus = "under_review" | "accepted" | "rejected" | "interviewed";
+type ApplicationStatus = "under_review" | "accepted" | "rejected" | "interview";
 type QuestionType = "TEXT" | "MCQ" | "CHECKBOX" | "FILE";
 
 interface RecruitmentForm {
@@ -65,21 +82,41 @@ interface ApplicationsListProps {
   selectedRecruitment: Recruitment;
   applications: RecruitmentApplication[];
   applicationsLoading: boolean;
-  onUpdateApplicationStatus: (applicationId: string, newStatus: ApplicationStatus) => void;
+  onUpdateApplicationStatus: (
+    applicationId: string,
+    newStatus: ApplicationStatus,
+    notes?: string
+  ) => void;
+  // Pagination props
+  currentPage?: number;
+  totalPages?: number;
+  totalElements?: number;
+  onPageChange?: (page: number) => void;
+  // Search and filter props
+  searchQuery?: string;
+  onSearchChange?: (query: string) => void;
+  statusFilter?: ApplicationStatus | "all";
+  onStatusFilterChange?: (status: ApplicationStatus | "all") => void;
+}
+
+interface StatusChangeDialogData {
+  applicationId: string;
+  applicationName: string;
+  newStatus: ApplicationStatus;
 }
 
 const applicationStatusLabels: Record<ApplicationStatus, string> = {
   under_review: "Đang xem xét",
   accepted: "Đã duyệt",
   rejected: "Từ chối",
-  interviewed: "Đã phỏng vấn",
+  interview: "Phỏng vấn",
 };
 
 const applicationStatusColors: Record<ApplicationStatus, string> = {
   under_review: "bg-yellow-100 text-yellow-700",
   accepted: "bg-green-100 text-green-700",
   rejected: "bg-red-100 text-red-700",
-  interviewed: "bg-purple-100 text-purple-700",
+  interview: "bg-purple-100 text-purple-700",
 };
 
 export function ApplicationsList({
@@ -87,26 +124,124 @@ export function ApplicationsList({
   applications,
   applicationsLoading,
   onUpdateApplicationStatus,
+  currentPage = 0,
+  totalPages = 1,
+  totalElements = 0,
+  onPageChange,
+  searchQuery = "",
+  onSearchChange,
+  statusFilter = "all",
+  onStatusFilterChange,
 }: ApplicationsListProps) {
-  const [searchQuery, setSearchQuery] = useState("");
-  const [applicationStatusFilter, setApplicationStatusFilter] = useState<
-    ApplicationStatus | "all"
-  >("all");
   const [selectedApplication, setSelectedApplication] =
     useState<RecruitmentApplication | null>(null);
 
-  const filteredApplications = useMemo(() => {
-    return applications.filter((app) => {
-      const matchesSearch =
-        app.user_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        app.user_email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        app.student_id.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesStatus =
-        applicationStatusFilter === "all" ||
-        app.status === applicationStatusFilter;
-      return matchesSearch && matchesStatus;
+  // Status change dialog state
+  const [statusChangeDialog, setStatusChangeDialog] =
+    useState<StatusChangeDialogData | null>(null);
+  const [notes, setNotes] = useState("");
+
+  // Notes-only dialog state
+  const [notesDialog, setNotesDialog] = useState<{
+    applicationId: string;
+    applicationName: string;
+    currentStatus: ApplicationStatus;
+    currentNotes?: string;
+  } | null>(null);
+
+  // TRƯỚC: gọi onUpdateApplicationStatus(..., notes.trim() || undefined)
+  // SAU (với trường phỏng vấn): gộp trường thành notesText
+  const [interviewDatetime, setInterviewDatetime] = useState("");
+  const [interviewLocation, setInterviewLocation] = useState("");
+  const [interviewLink, setInterviewLink] = useState("");
+  const [interviewNote, setInterviewNote] = useState("");
+
+  const handleStatusChange = (
+    applicationId: string,
+    applicationName: string,
+    newStatus: ApplicationStatus
+  ) => {
+    setStatusChangeDialog({ applicationId, applicationName, newStatus });
+    setNotes("");
+    if (newStatus === "interview") {
+      setInterviewDatetime("");
+      setInterviewLocation("");
+      setInterviewLink("");
+      setInterviewNote("");
+    }
+  };
+
+  const handleConfirmStatusChange = () => {
+    if (!statusChangeDialog) return;
+
+    // Kiểm tra riêng cho mode phỏng vấn
+    if (statusChangeDialog.newStatus === "interview") {
+      if (!interviewDatetime.trim() || !interviewLocation.trim()) {
+        return; // Không gửi nếu thiếu
+      }
+    }
+
+    const notesText =
+      statusChangeDialog?.newStatus === "interview"
+        ? (
+            (interviewDatetime ? `Ngày giờ: ${interviewDatetime}\n` : "") +
+            (interviewLocation ? `Địa điểm: ${interviewLocation}\n` : "") +
+            (interviewLink ? `Link: ${interviewLink}\n` : "") +
+            (interviewNote ? `Yêu cầu chuẩn bị: ${interviewNote}` : "")
+          ).trim()
+        : notes.trim() || undefined;
+
+    onUpdateApplicationStatus(
+      statusChangeDialog.applicationId,
+      statusChangeDialog.newStatus,
+      notesText
+    );
+
+    setStatusChangeDialog(null);
+    setSelectedApplication(null);
+  };
+
+  const handleCancelStatusChange = () => {
+    setStatusChangeDialog(null);
+    setNotes("");
+    setInterviewDatetime("");
+    setInterviewLocation("");
+    setInterviewLink("");
+    setInterviewNote("");
+  };
+
+  const handleOpenNotesDialog = (
+    applicationId: string,
+    applicationName: string,
+    currentStatus: ApplicationStatus,
+    currentNotes?: string
+  ) => {
+    setNotesDialog({
+      applicationId,
+      applicationName,
+      currentStatus,
+      currentNotes,
     });
-  }, [applications, searchQuery, applicationStatusFilter]);
+    setNotes(currentNotes || "");
+  };
+
+  const handleSaveNotes = () => {
+    if (!notesDialog) return;
+
+    onUpdateApplicationStatus(
+      notesDialog.applicationId,
+      notesDialog.currentStatus,
+      notes.trim() || undefined
+    );
+
+    setNotesDialog(null);
+    setSelectedApplication(null);
+  };
+
+  const handleCancelNotesDialog = () => {
+    setNotesDialog(null);
+    setNotes("");
+  };
 
   return (
     <>
@@ -114,22 +249,10 @@ export function ApplicationsList({
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-2xl font-bold">
-              {selectedRecruitment.title}
-            </h2>
+            <h2 className="text-2xl font-bold">{selectedRecruitment.title}</h2>
             <p className="text-muted-foreground">
-              {selectedRecruitment.applications.length} đơn ứng tuyển
+              {totalElements} đơn ứng tuyển
             </p>
-          </div>
-          <div className="flex gap-2">
-            <Button variant="outline" className="bg-transparent">
-              <Download className="h-4 w-4 mr-2" />
-              Xuất Excel
-            </Button>
-            <Button variant="outline" className="bg-transparent">
-              <BarChart3 className="h-4 w-4 mr-2" />
-              Thống kê
-            </Button>
           </div>
         </div>
 
@@ -140,14 +263,14 @@ export function ApplicationsList({
             <Input
               placeholder="Tìm kiếm ứng viên..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => onSearchChange?.(e.target.value)}
               className="pl-10"
             />
           </div>
           <Select
-            value={applicationStatusFilter}
+            value={statusFilter}
             onValueChange={(value) =>
-              setApplicationStatusFilter(value as ApplicationStatus | "all")
+              onStatusFilterChange?.(value as ApplicationStatus | "all")
             }
           >
             <SelectTrigger className="w-[180px]">
@@ -156,7 +279,7 @@ export function ApplicationsList({
             <SelectContent>
               <SelectItem value="all">Tất cả trạng thái</SelectItem>
               <SelectItem value="under_review">Đang xem xét</SelectItem>
-              <SelectItem value="interviewed">Đã phỏng vấn</SelectItem>
+              <SelectItem value="interview">Phỏng vấn</SelectItem>
               <SelectItem value="accepted">Đã duyệt</SelectItem>
               <SelectItem value="rejected">Từ chối</SelectItem>
             </SelectContent>
@@ -165,18 +288,68 @@ export function ApplicationsList({
 
         {/* Applications Loading State */}
         {applicationsLoading && (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            <span className="ml-2 text-muted-foreground">
-              Đang tải đơn ứng tuyển...
-            </span>
+          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+            {[...Array(6)].map((_, index) => (
+              <Card key={index} className="hover:shadow-lg transition-shadow">
+                <CardHeader>
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-3">
+                      {/* Avatar skeleton */}
+                      <Skeleton className="h-10 w-10 rounded-full" />
+                      <div className="space-y-2">
+                        {/* User name */}
+                        <Skeleton className="h-4 w-28" />
+                        {/* Student ID */}
+                        <Skeleton className="h-3 w-20" />
+                      </div>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {/* Badge and date */}
+                    <div className="flex items-center justify-between">
+                      <Skeleton className="h-6 w-24 rounded-full" />
+                      <Skeleton className="h-3 w-20" />
+                    </div>
+
+                    {/* Email section */}
+                    <div className="text-sm space-y-1">
+                      <Skeleton className="h-3 w-12" />
+                      <Skeleton className="h-4 w-44" />
+                    </div>
+
+                    {/* Phone section */}
+                    <div className="text-sm space-y-1">
+                      <Skeleton className="h-3 w-10" />
+                      <Skeleton className="h-4 w-28" />
+                    </div>
+
+                    {/* Notes section (sometimes) */}
+                    {index % 2 === 0 && (
+                      <div className="border-l-2 border-blue-400 pl-3 py-2 space-y-2">
+                        <Skeleton className="h-3 w-24" />
+                        <Skeleton className="h-8 w-full rounded" />
+                      </div>
+                    )}
+
+                    {/* Action buttons */}
+                    <div className="flex gap-2 pt-2">
+                      <Skeleton className="h-9 w-16" />
+                      <Skeleton className="h-9 w-28" />
+                      <Skeleton className="h-9 w-20" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
           </div>
         )}
 
         {/* Applications List */}
         {!applicationsLoading && (
           <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-            {filteredApplications.map((application) => (
+            {applications.map((application) => (
               <Card
                 key={application.application_id}
                 className="hover:shadow-lg transition-shadow"
@@ -193,9 +366,7 @@ export function ApplicationsList({
                         </AvatarFallback>
                       </Avatar>
                       <div>
-                        <h4 className="font-medium">
-                          {application.user_name}
-                        </h4>
+                        <h4 className="font-medium">{application.user_name}</h4>
                         <p className="text-sm text-muted-foreground">
                           {application.student_id}
                         </p>
@@ -207,24 +378,20 @@ export function ApplicationsList({
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <Badge
-                        className={
-                          applicationStatusColors[application.status]
-                        }
+                        className={applicationStatusColors[application.status]}
                       >
                         {applicationStatusLabels[application.status]}
                       </Badge>
                       <span className="text-xs text-muted-foreground">
-                        {new Date(
-                          application.submitted_at
-                        ).toLocaleDateString("vi-VN")}
+                        {new Date(application.submitted_at).toLocaleDateString(
+                          "vi-VN"
+                        )}
                       </span>
                     </div>
 
                     <div className="text-sm">
                       <div className="text-muted-foreground">Email:</div>
-                      <div className="truncate">
-                        {application.user_email}
-                      </div>
+                      <div className="truncate">{application.user_email}</div>
                     </div>
 
                     {application.user_phone && (
@@ -235,11 +402,14 @@ export function ApplicationsList({
                     )}
 
                     {application.notes && (
-                      <div className="text-sm">
-                        <div className="text-muted-foreground">
-                          Ghi chú:
+                      <div className="text-sm border-l-2 border-blue-400 pl-3 py-2">
+                        <div className="text-muted-foreground font-medium flex items-center gap-1 mb-1">
+                          <MessageSquare className="h-3 w-3" />
+                          {application.status === "interview"
+                            ? "Thông tin PV:"
+                            : "Phản hồi:"}
                         </div>
-                        <div className="text-xs bg-muted/50 rounded p-2">
+                        <div className="text-xs bg-blue-50 rounded p-2 line-clamp-2">
                           {application.notes}
                         </div>
                       </div>
@@ -253,72 +423,8 @@ export function ApplicationsList({
                         className="bg-transparent"
                       >
                         <Eye className="h-4 w-4 mr-1" />
-                        Xem
+                        Xem chi tiết
                       </Button>
-                      {application.status === "under_review" && (
-                        <>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() =>
-                              onUpdateApplicationStatus(
-                                application.application_id,
-                                "interviewed"
-                              )
-                            }
-                            className="bg-transparent text-purple-600 border-purple-200 hover:bg-purple-50"
-                            title="Mời phỏng vấn"
-                          >
-                            <Calendar className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() =>
-                              onUpdateApplicationStatus(
-                                application.application_id,
-                                "rejected"
-                              )
-                            }
-                            className="bg-transparent text-red-600 border-red-200 hover:bg-red-50"
-                            title="Từ chối"
-                          >
-                            <XCircle className="h-4 w-4" />
-                          </Button>
-                        </>
-                      )}
-                      {application.status === "interviewed" && (
-                        <>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() =>
-                              onUpdateApplicationStatus(
-                                application.application_id,
-                                "accepted"
-                              )
-                            }
-                            className="bg-transparent text-green-600 border-green-200 hover:bg-green-50"
-                            title="Chấp nhận"
-                          >
-                            <CheckCircle className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() =>
-                              onUpdateApplicationStatus(
-                                application.application_id,
-                                "rejected"
-                              )
-                            }
-                            className="bg-transparent text-red-600 border-red-200 hover:bg-red-50"
-                            title="Từ chối"
-                          >
-                            <XCircle className="h-4 w-4" />
-                          </Button>
-                        </>
-                      )}
                     </div>
                   </div>
                 </CardContent>
@@ -327,12 +433,169 @@ export function ApplicationsList({
           </div>
         )}
 
-        {!applicationsLoading && filteredApplications.length === 0 && (
+        {!applicationsLoading && applications.length === 0 && (
           <div className="text-center py-12">
             <Users className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
             <p className="text-muted-foreground">
               Không tìm thấy đơn ứng tuyển nào
             </p>
+          </div>
+        )}
+
+        {/* Pagination for Applications */}
+        {!applicationsLoading && onPageChange && totalPages > 1 && (
+          <div className="space-y-4">
+            {/* Results info */}
+            <div className="flex items-center justify-between text-sm text-muted-foreground">
+              <div>
+                Hiển thị{" "}
+                <span className="font-semibold">
+                  {Math.min(currentPage * 10 + 1, totalElements)} -{" "}
+                  {Math.min((currentPage + 1) * 10, totalElements)}
+                </span>{" "}
+                trong tổng số{" "}
+                <span className="font-semibold">{totalElements}</span> đơn ứng
+                tuyển
+              </div>
+              <div>
+                Trang {currentPage + 1} / {totalPages}
+              </div>
+            </div>
+
+            {/* Pagination controls */}
+            <div className="flex justify-center">
+              <Pagination>
+                <PaginationContent>
+                  <PaginationItem>
+                    <PaginationPrevious
+                      onClick={() => {
+                        if (currentPage > 0) {
+                          onPageChange(currentPage - 1);
+                          window.scrollTo({
+                            top: 0,
+                            behavior: "smooth",
+                          });
+                        }
+                      }}
+                      className={
+                        currentPage === 0
+                          ? "pointer-events-none opacity-50"
+                          : "cursor-pointer"
+                      }
+                    />
+                  </PaginationItem>
+
+                  {/* First page */}
+                  {currentPage > 2 && (
+                    <>
+                      <PaginationItem>
+                        <PaginationLink
+                          onClick={() => {
+                            onPageChange(0);
+                            window.scrollTo({
+                              top: 0,
+                              behavior: "smooth",
+                            });
+                          }}
+                          className="cursor-pointer"
+                        >
+                          1
+                        </PaginationLink>
+                      </PaginationItem>
+                      {currentPage > 3 && (
+                        <PaginationItem>
+                          <PaginationEllipsis />
+                        </PaginationItem>
+                      )}
+                    </>
+                  )}
+
+                  {/* Pages around current page */}
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    let pageNum;
+                    if (totalPages <= 5) {
+                      pageNum = i;
+                    } else if (currentPage <= 2) {
+                      pageNum = i;
+                    } else if (currentPage >= totalPages - 3) {
+                      pageNum = totalPages - 5 + i;
+                    } else {
+                      pageNum = currentPage - 2 + i;
+                    }
+
+                    if (pageNum < 0 || pageNum >= totalPages) return null;
+                    if (currentPage > 2 && pageNum === 0) return null;
+                    if (
+                      currentPage < totalPages - 3 &&
+                      pageNum === totalPages - 1
+                    )
+                      return null;
+
+                    return (
+                      <PaginationItem key={pageNum}>
+                        <PaginationLink
+                          onClick={() => {
+                            onPageChange(pageNum);
+                            window.scrollTo({
+                              top: 0,
+                              behavior: "smooth",
+                            });
+                          }}
+                          isActive={currentPage === pageNum}
+                          className="cursor-pointer"
+                        >
+                          {pageNum + 1}
+                        </PaginationLink>
+                      </PaginationItem>
+                    );
+                  })}
+
+                  {/* Last page */}
+                  {currentPage < totalPages - 3 && (
+                    <>
+                      {currentPage < totalPages - 4 && (
+                        <PaginationItem>
+                          <PaginationEllipsis />
+                        </PaginationItem>
+                      )}
+                      <PaginationItem>
+                        <PaginationLink
+                          onClick={() => {
+                            onPageChange(totalPages - 1);
+                            window.scrollTo({
+                              top: 0,
+                              behavior: "smooth",
+                            });
+                          }}
+                          className="cursor-pointer"
+                        >
+                          {totalPages}
+                        </PaginationLink>
+                      </PaginationItem>
+                    </>
+                  )}
+
+                  <PaginationItem>
+                    <PaginationNext
+                      onClick={() => {
+                        if (currentPage < totalPages - 1) {
+                          onPageChange(currentPage + 1);
+                          window.scrollTo({
+                            top: 0,
+                            behavior: "smooth",
+                          });
+                        }
+                      }}
+                      className={
+                        currentPage === totalPages - 1
+                          ? "pointer-events-none opacity-50"
+                          : "cursor-pointer"
+                      }
+                    />
+                  </PaginationItem>
+                </PaginationContent>
+              </Pagination>
+            </div>
           </div>
         )}
       </div>
@@ -394,14 +657,26 @@ export function ApplicationsList({
                       >
                         {applicationStatusLabels[selectedApplication.status]}
                       </Badge>
-                      {selectedApplication.notes && (
-                        <div className="text-sm bg-muted/50 rounded p-3">
-                          <strong>Ghi chú:</strong> {selectedApplication.notes}
-                        </div>
-                      )}
                     </div>
                   </div>
                 </div>
+
+                {/* Notes Section */}
+                {selectedApplication.notes && (
+                  <div className="border-t pt-4">
+                    <h4 className="font-medium mb-3 flex items-center gap-2">
+                      <MessageSquare className="h-4 w-4" />
+                      {selectedApplication.status === "interview"
+                        ? "Thông tin phỏng vấn"
+                        : "Phản hồi đánh giá"}
+                    </h4>
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                      <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                        {selectedApplication.notes}
+                      </p>
+                    </div>
+                  </div>
+                )}
 
                 {/* Answers */}
                 <div>
@@ -464,9 +739,10 @@ export function ApplicationsList({
                     <>
                       <Button
                         onClick={() =>
-                          onUpdateApplicationStatus(
+                          handleStatusChange(
                             selectedApplication.application_id,
-                            "interviewed"
+                            selectedApplication.user_name,
+                            "interview"
                           )
                         }
                         className="bg-purple-600 hover:bg-purple-700"
@@ -476,8 +752,9 @@ export function ApplicationsList({
                       </Button>
                       <Button
                         onClick={() =>
-                          onUpdateApplicationStatus(
+                          handleStatusChange(
                             selectedApplication.application_id,
+                            selectedApplication.user_name,
                             "rejected"
                           )
                         }
@@ -488,12 +765,13 @@ export function ApplicationsList({
                       </Button>
                     </>
                   )}
-                  {selectedApplication.status === "interviewed" && (
+                  {selectedApplication.status === "interview" && (
                     <>
                       <Button
                         onClick={() =>
-                          onUpdateApplicationStatus(
+                          handleStatusChange(
                             selectedApplication.application_id,
+                            selectedApplication.user_name,
                             "accepted"
                           )
                         }
@@ -504,8 +782,9 @@ export function ApplicationsList({
                       </Button>
                       <Button
                         onClick={() =>
-                          onUpdateApplicationStatus(
+                          handleStatusChange(
                             selectedApplication.application_id,
+                            selectedApplication.user_name,
                             "rejected"
                           )
                         }
@@ -516,12 +795,25 @@ export function ApplicationsList({
                       </Button>
                     </>
                   )}
-                  <Button variant="outline" className="bg-transparent">
+                  <Button
+                    variant="outline"
+                    className="bg-transparent"
+                    onClick={() =>
+                      handleOpenNotesDialog(
+                        selectedApplication.application_id,
+                        selectedApplication.user_name,
+                        selectedApplication.status,
+                        selectedApplication.notes
+                      )
+                    }
+                  >
                     <MessageSquare className="h-4 w-4 mr-2" />
-                    Ghi chú
+                    {selectedApplication.notes
+                      ? "Chỉnh sửa Phản hồi"
+                      : "Thêm Phản hồi"}
                   </Button>
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
                     className="ml-auto"
                     onClick={() => setSelectedApplication(null)}
                   >
@@ -533,7 +825,197 @@ export function ApplicationsList({
           </Card>
         </div>
       )}
+
+      {/* Status Change Confirmation Dialog */}
+      <Dialog
+        open={!!statusChangeDialog}
+        onOpenChange={(open) => !open && handleCancelStatusChange()}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {statusChangeDialog?.newStatus === "interview" && "Mời phỏng vấn"}
+              {statusChangeDialog?.newStatus === "accepted" && "Chấp nhận đơn"}
+              {statusChangeDialog?.newStatus === "rejected" && "Từ chối đơn"}
+            </DialogTitle>
+            <DialogDescription>
+              Xác nhận thay đổi trạng thái đơn của{" "}
+              <strong>{statusChangeDialog?.applicationName}</strong>
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            {statusChangeDialog?.newStatus === "interview" ? (
+              <div className="space-y-2">
+                <div>
+                  <Label htmlFor="interviewDatetime">
+                    Ngày giờ phỏng vấn <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    id="interviewDatetime"
+                    type="datetime-local"
+                    value={interviewDatetime}
+                    onChange={(e) => setInterviewDatetime(e.target.value)}
+                    min={new Date().toISOString().slice(0, 16)}
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="interviewLocation">
+                    Địa điểm <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    id="interviewLocation"
+                    placeholder="Nhập địa điểm (offline/online)"
+                    value={interviewLocation}
+                    onChange={(e) => setInterviewLocation(e.target.value)}
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="interviewLink">Link meeting (nếu có)</Label>
+                  <Input
+                    id="interviewLink"
+                    placeholder="Ví dụ: https://meet.google.com/..."
+                    value={interviewLink}
+                    onChange={(e) => setInterviewLink(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="interviewNote">
+                    Yêu cầu chuẩn bị (nếu có)
+                  </Label>
+                  <Textarea
+                    id="interviewNote"
+                    placeholder="Ví dụ: chuẩn bị CV, bài test..."
+                    value={interviewNote}
+                    onChange={(e) => setInterviewNote(e.target.value)}
+                    rows={3}
+                  />
+                </div>
+                {/* Hiển thị lỗi nếu thiếu bắt buộc */}
+                {(!interviewDatetime.trim() ||
+                  !interviewLocation.trim() ||
+                  (interviewDatetime.trim() &&
+                    new Date(interviewDatetime) <= new Date())) && (
+                  <p className="text-sm text-red-500">
+                    {!interviewDatetime.trim() || !interviewLocation.trim()
+                      ? "Vui lòng nhập đủ ngày giờ và địa điểm phỏng vấn"
+                      : "Thời gian phỏng vấn phải lớn hơn thời gian hiện tại"}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <Label htmlFor="notes">Phản hồi (tùy chọn)</Label>
+                <Textarea
+                  id="notes"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  rows={5}
+                />
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={handleCancelStatusChange}>
+              Hủy
+            </Button>
+            <Button
+              onClick={handleConfirmStatusChange}
+              disabled={
+                !!(
+                  statusChangeDialog?.newStatus === "interview" &&
+                  (!interviewDatetime.trim() ||
+                    !interviewLocation.trim() ||
+                    (interviewDatetime.trim() &&
+                      new Date(interviewDatetime) <= new Date()))
+                )
+              }
+              className={
+                statusChangeDialog?.newStatus === "interview"
+                  ? "bg-purple-600 hover:bg-purple-700"
+                  : statusChangeDialog?.newStatus === "accepted"
+                  ? "bg-green-600 hover:bg-green-700"
+                  : "bg-red-600 hover:bg-red-700"
+              }
+            >
+              {statusChangeDialog?.newStatus === "interview" &&
+                "Xác nhận mời phỏng vấn"}
+              {statusChangeDialog?.newStatus === "accepted" &&
+                "Xác nhận chấp nhận"}
+              {statusChangeDialog?.newStatus === "rejected" &&
+                "Xác nhận từ chối"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Notes-Only Dialog */}
+      <Dialog
+        open={!!notesDialog}
+        onOpenChange={(open) => !open && handleCancelNotesDialog()}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {notesDialog?.currentNotes
+                ? "Chỉnh sửa Phản hồi"
+                : "Thêm Phản hồi"}
+            </DialogTitle>
+            <DialogDescription>
+              {notesDialog?.currentStatus === "interview"
+                ? "Cập nhật thông tin phỏng vấn cho "
+                : "Thêm Phản hồi đánh giá cho "}
+              <strong>{notesDialog?.applicationName}</strong>
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="notes-edit" className="flex items-center gap-2">
+                <MessageSquare className="h-4 w-4" />
+                {notesDialog?.currentStatus === "interview"
+                  ? "Thông tin về cuộc phỏng vấn"
+                  : "Phản hồi"}
+              </Label>
+              <Textarea
+                id="notes-edit"
+                placeholder={
+                  notesDialog?.currentStatus === "interview"
+                    ? "Nhập thông tin về cuộc phỏng vấn (ngày giờ, địa điểm, link meeting, yêu cầu chuẩn bị...)..."
+                    : notesDialog?.currentStatus === "accepted"
+                    ? "Phản hồi về việc chấp nhận đơn..."
+                    : notesDialog?.currentStatus === "rejected"
+                    ? "Lý do từ chối hoặc Phản hồi..."
+                    : "Phản hồi đánh giá..."
+                }
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                rows={5}
+              />
+              <p className="text-xs text-muted-foreground">
+                {notes.trim()
+                  ? `${notes.trim().length} ký tự`
+                  : "Để trống để xóa Phản hồi"}
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={handleCancelNotesDialog}>
+              Hủy
+            </Button>
+            <Button
+              onClick={handleSaveNotes}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              {notesDialog?.currentNotes ? "Cập nhật" : "Lưu Phản hồi"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
-
