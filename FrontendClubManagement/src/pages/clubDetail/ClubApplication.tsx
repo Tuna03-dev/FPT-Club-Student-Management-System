@@ -1,4 +1,4 @@
-"use client";
+
 
 import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
@@ -23,7 +23,6 @@ import {
   CheckCircle,
   Upload,
   Calendar,
-  Users,
 } from "lucide-react";
 import {
   getRecruitmentById,

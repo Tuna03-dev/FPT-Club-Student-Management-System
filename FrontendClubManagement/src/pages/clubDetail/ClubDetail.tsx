@@ -1,5 +1,3 @@
-"use client";
-
 import { useState, useEffect } from "react";
 import { useParams, useSearchParams, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -99,8 +97,11 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
     number | null
   >(null);
   const [showMembershipWarning, setShowMembershipWarning] = useState(false);
-  const [showAlreadyAppliedDialog, setShowAlreadyAppliedDialog] = useState(false);
-  const [alreadyAppliedMessage, setAlreadyAppliedMessage] = useState<string | null>(null);
+  const [showAlreadyAppliedDialog, setShowAlreadyAppliedDialog] =
+    useState(false);
+  const [alreadyAppliedMessage, setAlreadyAppliedMessage] = useState<
+    string | null
+  >(null);
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
 
   const formatRecruitmentStatus = (status?: string) => {
@@ -305,9 +306,13 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
     // Kiểm tra đã nộp đơn chưa
     try {
       const myApps = await getMyApplications({ page: 0, size: 20 });
-      const existed = myApps.content.find(app => app.recruitmentId === recruitmentId);
+      const existed = myApps.content.find(
+        (app) => app.recruitmentId === recruitmentId
+      );
       if (existed) {
-        setAlreadyAppliedMessage("Bạn đã nộp đơn ứng tuyển cho đợt này. Không thể nộp lại.");
+        setAlreadyAppliedMessage(
+          "Bạn đã nộp đơn ứng tuyển cho đợt này. Không thể nộp lại."
+        );
         setShowAlreadyAppliedDialog(true);
         return;
       }
@@ -904,18 +909,35 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
                                 variant="secondary"
                                 className="bg-green-100 text-green-700"
                               >
-                                {formatRecruitmentStatus(recruitment.status as unknown as string)}
+                                {formatRecruitmentStatus(
+                                  recruitment.status as unknown as string
+                                )}
                               </Badge>
                             </div>
                           </CardHeader>
                           <CardContent className="space-y-4">
                             {/* Requirements */}
-                            {normalizeRequirements(recruitment.requirements as unknown as string | string[]).length > 0 && (
+                            {normalizeRequirements(
+                              recruitment.requirements as unknown as
+                                | string
+                                | string[]
+                            ).length > 0 && (
                               <div>
-                                <p className="text-sm font-semibold mb-2">Yêu cầu:</p>
+                                <p className="text-sm font-semibold mb-2">
+                                  Yêu cầu:
+                                </p>
                                 <ul className="list-disc pl-5 space-y-1">
-                                  {normalizeRequirements(recruitment.requirements as unknown as string | string[]).map((item, idx) => (
-                                    <li key={idx} className="text-sm text-foreground">{item}</li>
+                                  {normalizeRequirements(
+                                    recruitment.requirements as unknown as
+                                      | string
+                                      | string[]
+                                  ).map((item, idx) => (
+                                    <li
+                                      key={idx}
+                                      className="text-sm text-foreground"
+                                    >
+                                      {item}
+                                    </li>
                                   ))}
                                 </ul>
                               </div>
@@ -1028,7 +1050,10 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
       </Dialog>
 
       {/* Dialog show when user already applied for this recruitment round */}
-      <Dialog open={showAlreadyAppliedDialog} onOpenChange={setShowAlreadyAppliedDialog}>
+      <Dialog
+        open={showAlreadyAppliedDialog}
+        onOpenChange={setShowAlreadyAppliedDialog}
+      >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-red-600">
@@ -1037,11 +1062,13 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
             <DialogDescription className="pt-4">
               <div className="space-y-3">
                 <p className="text-foreground">
-                  {alreadyAppliedMessage || 'Bạn đã nộp đơn ứng tuyển cho đợt này. Không thể nộp lại.'}
+                  {alreadyAppliedMessage ||
+                    "Bạn đã nộp đơn ứng tuyển cho đợt này. Không thể nộp lại."}
                 </p>
                 <div className="bg-red-50 border border-red-200 rounded-lg p-4">
                   <p className="text-sm text-red-800">
-                    Vui lòng đợi kết quả xét tuyển trước khi nộp lại hoặc liên hệ ban quản lý câu lạc bộ nếu cần hỗ trợ.
+                    Vui lòng đợi kết quả xét tuyển trước khi nộp lại hoặc liên
+                    hệ ban quản lý câu lạc bộ nếu cần hỗ trợ.
                   </p>
                 </div>
               </div>
