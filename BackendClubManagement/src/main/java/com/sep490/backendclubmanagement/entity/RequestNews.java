@@ -18,7 +18,7 @@ public class RequestNews extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "request_title", nullable = false, length = 500)
+    @Column(name = "request_title", nullable = false, length = 255)
     private String requestTitle;
 
     @Column(name = "description", nullable = false, columnDefinition = "TEXT")
@@ -37,11 +37,27 @@ public class RequestNews extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "created_by", nullable = false)
     private User createdBy;
-
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "club_id", nullable = false)
+    private Club club;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "team_id")
+    private Team team;
+    @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name="semester_id")
+    private Semester semester;
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "news_id", unique = true)
     private News news;
+    @Column(name = "thumbnail_url", length = 500)
+    private String thumbnailUrl;
 
+    @Column(name = "news_type", length = 100)
+    private String newsType;
+    @PrePersist
+    void prePersist() {
+        if (requestDate == null) requestDate = LocalDateTime.now();
+        if (responseMessage == null) responseMessage = "";
+    }
 
 }
 

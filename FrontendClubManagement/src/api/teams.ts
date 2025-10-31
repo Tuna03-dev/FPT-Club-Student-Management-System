@@ -1,5 +1,4 @@
 import { axiosClient } from "./axiosClient";
-import type { ApiResponse } from "@/types/api";
 import type { VisibleTeamDTO, MyTeamDetailDTO } from "@/types/team";
 
 export async function getVisibleTeams(

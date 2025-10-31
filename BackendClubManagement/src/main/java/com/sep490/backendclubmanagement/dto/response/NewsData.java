@@ -3,9 +3,6 @@ package com.sep490.backendclubmanagement.dto.response;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.mapstruct.Builder;
-
-import java.time.LocalDateTime;
 
 @Data
 @AllArgsConstructor
@@ -16,8 +13,18 @@ public class NewsData {
     private String content;
     private String thumbnailUrl;
     private String newsType;
-    private boolean isDraft;
+
+    // Đổi từ isDraft -> draft để MapStruct nhận diện property đúng chuẩn JavaBeans
+    private Boolean draft;
+
     private Long clubId;
     private String clubName;
+
+    // Chuỗi thời gian đã format
     private String updatedAt;
+    private Long authorId;
+    private String authorName;
+    private String authorEmail;
+    private String authorRole; // "STAFF" hoặc "CLUB"
+
 }
