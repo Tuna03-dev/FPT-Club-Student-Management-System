@@ -18,7 +18,7 @@ public class RequestEvent extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "request_title", unique = true, length = 100)
+    @Column(name = "request_title", unique = true, length = 255)
     private String requestTitle;
 
     @Enumerated(EnumType.STRING)
