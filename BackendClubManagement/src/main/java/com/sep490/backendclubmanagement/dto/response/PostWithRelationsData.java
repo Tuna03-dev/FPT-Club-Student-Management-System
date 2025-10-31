@@ -19,6 +19,16 @@ public class PostWithRelationsData {
     private Long authorId;
     private String authorName;
 
+    private Long approvedById;
+    private String approvedByName;
+    private LocalDateTime approvedAt;
+
+    private Long rejectedById;
+    private String rejectedByName;
+    private LocalDateTime rejectedAt;
+
+    private String rejectReason;
+
     private List<CommentData> comments;
     private List<LikeData> likes;
     private List<PostMediaData> media;

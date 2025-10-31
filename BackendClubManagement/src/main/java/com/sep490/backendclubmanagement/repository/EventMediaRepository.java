@@ -14,4 +14,7 @@ public interface EventMediaRepository extends JpaRepository<EventMedia, Long> {
              SELECT em.mediaUrl FROM EventMedia em WHERE em.event.id = :eventId""",
            nativeQuery = false)
     List<String> findMediaUrlsByEventId(@Param("eventId") Long eventId);
+
+    // Xóa tất cả media theo event id (để tránh lỗi FK)
+    void deleteByEvent_Id(Long eventId);
 }

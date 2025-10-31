@@ -38,7 +38,7 @@ public class Event extends BaseEntity {
     private Boolean isDraft = true;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "club_id", nullable = false)
+    @JoinColumn(name = "club_id", nullable = true)
     private Club club;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -52,8 +52,7 @@ public class Event extends BaseEntity {
     @OneToMany(mappedBy = "event", cascade = CascadeType.ALL)
     private Set<EventAttendance> eventAttendances;
 
-    @OneToOne
-    @JoinColumn(name = "request_event_id", referencedColumnName = "id")
+    @OneToOne(mappedBy = "event", cascade = CascadeType.ALL)
     private RequestEvent requestEvent;
 
 

@@ -10,15 +10,20 @@ import com.sep490.backendclubmanagement.entity.Event;
 import com.sep490.backendclubmanagement.entity.EventType;
 import com.sep490.backendclubmanagement.exception.NotFoundException;
 import com.sep490.backendclubmanagement.mapper.EventMapper;
+import com.sep490.backendclubmanagement.repository.ClubMemberShipRepository;
 import com.sep490.backendclubmanagement.repository.EventMediaRepository;
 import com.sep490.backendclubmanagement.repository.EventRepository;
 import com.sep490.backendclubmanagement.shared.ModelMapperUtils;
 import lombok.Builder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.MessageSource;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.data.domain.Page;
 
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -28,6 +33,7 @@ import java.util.stream.Collectors;
 public class EventService {
     private final EventRepository eventRepository;
     private final EventMediaRepository eventMediaRepository;
+    private final ClubMemberShipRepository clubMemberShipRepository;
     private final EventMapper eventMapper;
     private final MessageSource messageSource;
 
@@ -97,5 +103,20 @@ public class EventService {
     public List<ClubDto> getAllClubs() {
         List<Club> clubs = eventRepository.findAllClubs();
         return ModelMapperUtils.mapList(clubs, ClubDto.class);
+    }
+
+    public List<EventData> getEventsByClubId(Long clubId, Long userId) {
+        if (!clubMemberShipRepository.existsByClubIdAndUserIdAndStatusActive(clubId, userId)) {
+            throw new NotFoundException("You are not a member of this club or your membership is not active");
+        }
+        return eventRepository.findByClubIdAndIsDraftFalse(clubId)
+                .stream()
+                .map(event -> {
+                    EventData dto = eventMapper.toDto(event);
+                    dto.setMediaUrls(eventMediaRepository.findMediaUrlsByEventId(event.getId()));
+                    dto.setClubId(event.getClub() != null ? event.getClub().getId() : null);
+                    return dto;
+                })
+                .toList();
     }
 }
