@@ -35,11 +35,7 @@ public class PayOSController {
         return ResponseEntity.ok(ApiResponse.success(data));
     }
 
-    @PostMapping("/test")
-    public ResponseEntity<ApiResponse<PayOSTestConnectionResponse>> testConnection(@PathVariable Long clubId) throws AppException {
-        PayOSTestConnectionResponse data = payOSIntegrationService.testConnection(clubId);
-        return ResponseEntity.ok(ApiResponse.success(data));
-    }
+
 
     @PostMapping("/create-payment")
     public ResponseEntity<ApiResponse<PayOSCreatePaymentResponse>> createPaymentRequest(
@@ -49,7 +45,7 @@ public class PayOSController {
         PayOSCreatePaymentResponse data = payOSIntegrationService.createPaymentRequest(clubId, request);
         return ResponseEntity.ok(ApiResponse.success(data));
     }
-    
+
 
 }
 

@@ -44,25 +44,14 @@ export function PayOSIntegration({
       setApiKey("");
       setChecksumKey("");
     } catch (e) {
+      console.error(e);
       toast("Không thể lưu cấu hình");
     } finally {
       setPayosLoading(false);
     }
   };
 
-  const handleTestConnection = async () => {
-    if (!Number.isFinite(numericClubId) || numericClubId <= 0) return;
-    try {
-      setPayosLoading(true);
-      const res = await payosService.testConnection(numericClubId);
-      const ok = res.data?.connected;
-      toast(ok ? "Kết nối PayOS thành công" : res.data?.message || "Kết nối thất bại");
-    } catch {
-      toast("Không thể kiểm tra kết nối");
-    } finally {
-      setPayosLoading(false);
-    }
-  };
+  
 
   return (
     <Card>
@@ -170,14 +159,7 @@ export function PayOSIntegration({
                   >
                     {payosLoading ? "Đang lưu…" : "Lưu cấu hình"}
                   </Button>
-                  <Button
-                    variant="outline"
-                    className="w-full mt-2"
-                    disabled={payosLoading}
-                    onClick={handleTestConnection}
-                  >
-                    Kiểm tra kết nối
-                  </Button>
+                  
                 </div>
               </div>
             </div>

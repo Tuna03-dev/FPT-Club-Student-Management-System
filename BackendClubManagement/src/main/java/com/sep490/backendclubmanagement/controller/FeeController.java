@@ -5,12 +5,15 @@ import com.sep490.backendclubmanagement.dto.request.CreateFeeRequest;
 import com.sep490.backendclubmanagement.dto.request.LockFeeRequest;
 import com.sep490.backendclubmanagement.dto.request.UpdateFeeRequest;
 import com.sep490.backendclubmanagement.dto.response.FeeDetailResponse;
+import com.sep490.backendclubmanagement.dto.response.PayOSCreatePaymentResponse;
 import com.sep490.backendclubmanagement.exception.AppException;
+import com.sep490.backendclubmanagement.exception.ErrorCode;
 import com.sep490.backendclubmanagement.service.FeeService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Arrays;
 import java.util.List;
 
 @RestController
@@ -88,6 +91,24 @@ public class FeeController {
             return ApiResponse.success(feeDto);
         } catch (AppException ex) {
             return ApiResponse.error(ex.getErrorCode(), ex.getMessage(), null);
+        }
+    }
+
+
+    @PostMapping("/{feeId}/generate-payment")
+    public ApiResponse<PayOSCreatePaymentResponse> generatePaymentQR(
+            @PathVariable Long clubId,
+            @PathVariable Long feeId,
+            @RequestParam Long userId
+    ) {
+        try {
+            PayOSCreatePaymentResponse response = feeService.generatePaymentQR(clubId, feeId, userId);
+            return ApiResponse.success(response);
+        } catch (AppException ex) {
+            return ApiResponse.error(ex.getErrorCode(), ex.getMessage(), null);
+        } catch (Exception ex) {
+            return ApiResponse.error(ErrorCode.INTERNAL_SERVER_ERROR, 
+                    "Không thể tạo mã QR thanh toán: " + Arrays.toString(ex.getStackTrace()), null);
         }
     }
 }

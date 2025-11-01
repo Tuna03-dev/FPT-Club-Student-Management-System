@@ -9,6 +9,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface PayOSPaymentRepository extends JpaRepository<PayOSPayment, Long> {
@@ -25,5 +26,11 @@ public interface PayOSPaymentRepository extends JpaRepository<PayOSPayment, Long
     default List<PayOSPayment> findTop10RecentPaymentsByClubId(Long clubId) {
         return findTop10ByClubIdOrderByPaymentTimeDesc(clubId, PageRequest.of(0, 10));
     }
+    
+    /**
+     * Find PayOSPayment by orderCode
+     * Used to check if payment already processed
+     */
+    Optional<PayOSPayment> findByOrderCode(String orderCode);
 }
 

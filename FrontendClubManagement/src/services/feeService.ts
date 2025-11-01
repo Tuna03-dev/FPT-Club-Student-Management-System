@@ -1,5 +1,6 @@
 import { axiosClient, type ApiResponse } from "@/api/axiosClient";
 import type { Fee, CreateFeeRequest, UpdateFeeRequest } from "@/types/fee";
+import type { PayOSCreatePaymentResponse } from "./payosService";
 
 export const feeService = {
   async getFees(clubId: number): Promise<ApiResponse<Fee[]>> {
@@ -35,6 +36,23 @@ export const feeService = {
   async lockFee(clubId: number, feeId: number, isLocked: boolean): Promise<ApiResponse<Fee>> {
     const url = `/clubs/${clubId}/fees/${feeId}/lock`;
     return axiosClient.patch<Fee>(url, { isLocked });
+  },
+
+  /**
+   * Generate PayOS payment QR code for a specific member and fee
+   * @param clubId Club ID
+   * @param feeId Fee ID
+   * @param userId User/Member ID who will pay
+   */
+  async generatePaymentQR(
+    clubId: number,
+    feeId: number,
+    userId: number
+  ): Promise<ApiResponse<PayOSCreatePaymentResponse>> {
+    const url = `/clubs/${clubId}/fees/${feeId}/generate-payment`;
+    return axiosClient.post<PayOSCreatePaymentResponse>(url, null, {
+      params: { userId },
+    });
   },
 };
 

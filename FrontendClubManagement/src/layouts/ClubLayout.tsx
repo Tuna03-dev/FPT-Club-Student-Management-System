@@ -12,6 +12,7 @@ import {
   Clock,
   Briefcase,
   DollarSign,
+  Wallet,
 } from "lucide-react";
 import { NavLink, Outlet, useParams, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -40,6 +41,7 @@ const navItems = [
   { key: "dashboard", url: "", icon: Home },
   { key: "members", url: "/members", icon: Users },
   { key: "events", url: "/events", icon: Calendar },
+  { key: "payments", url: "/payments", icon: Wallet },
   { key: "notifications", url: "/notifications", icon: Bell },
 ];
 

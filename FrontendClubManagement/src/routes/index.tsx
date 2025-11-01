@@ -32,6 +32,7 @@ import StaffNewsEditor from "@/pages/news/StaffNewsEditor";
 import TeamNewsDrafts from "@/pages/news/TeamNewsDrafts";
 import TeamNewsRequests from "@/pages/news/TeamNewsRequests";
 import TeamNewsEditor from "@/pages/news/TeamNewsEditor";
+import Payment from "@/pages/myclub/payments/MemberPaymentPage";
 export const router = createBrowserRouter([
   {
     path: "/",
@@ -139,6 +140,7 @@ export const router = createBrowserRouter([
       { path: "events", element: <EventList /> },
       { path: "recruitments", element: <RecruitmentManagement /> },
       { path: "finance", element: <Finance /> },
+      { path: "payments", element: <Payment /> },
       { path: "notifications", element: <Notifications /> },
       { path: "settings", element: <Settings /> },
       { path: "teams/:teamId", element: <TeamDetailPage /> },

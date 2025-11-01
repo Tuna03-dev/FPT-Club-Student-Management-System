@@ -14,6 +14,13 @@ export interface PayOSConfigRequest {
   active?: boolean;
 }
 
+export interface PayOSCreatePaymentResponse {
+  orderCode: number;
+  paymentLink: string;
+  qrCode: string;
+  raw?: Record<string, unknown>;
+}
+
 export const payosService = {
   async getConfig(clubId: number): Promise<ApiResponse<PayOSConfigResponse>> {
     const url = `/clubs/${clubId}/pay-os/config`;

@@ -20,6 +20,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.List;
 import java.util.stream.Collectors;
 import org.springframework.beans.factory.annotation.Value;
@@ -29,6 +30,11 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
+import vn.payos.PayOS;
+import vn.payos.exception.APIException;
+import vn.payos.model.v2.paymentRequests.CreatePaymentLinkRequest;
+import vn.payos.model.v2.paymentRequests.CreatePaymentLinkResponse;
+import vn.payos.model.v2.paymentRequests.PaymentLinkItem;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -45,6 +51,9 @@ public class PayOSIntegrationService {
     private final PayOSPaymentRepository payOSPaymentRepository;
 
     private static final String PAYOS_PAYMENT_REQUEST_ENDPOINT = "https://api-merchant.payos.vn/v2/payment-requests";
+
+    @Value("${app.payos.webhook-url}")
+    private String webhookUrl;
 
     @Transactional(readOnly = true)
     public PayOSConfigResponse getConfig(Long clubId) throws AppException {
@@ -82,8 +91,15 @@ public class PayOSIntegrationService {
         if (request.getActive() != null) {
             wallet.setPayOsStatus(request.getActive() ? "ACTIVE" : "INACTIVE");
         }
-
         wallet = clubWalletRepository.save(wallet);
+
+        PayOS payOS = new PayOS(wallet.getPayOsClientId(), wallet.getPayOsApiKey(), wallet.getPayOsChecksumKey());
+        try{
+            payOS.webhooks().confirm(webhookUrl);
+        } catch (Exception ex){
+            log.error("[PayOS] Error confirming webhook via PayOS SDK: {}", ex.getMessage(), ex);
+            throw new RuntimeException("PayOS webhook confirmation failed: " + ex.getMessage(), ex);
+        }
         return PayOSConfigResponse.builder()
                 .clubId(clubId)
                 .clientId(wallet.getPayOsClientId())
@@ -92,52 +108,10 @@ public class PayOSIntegrationService {
                 .build();
     }
 
-    @Transactional(readOnly = true)
-    public PayOSTestConnectionResponse testConnection(Long clubId) throws AppException {
-        ClubWallet wallet = clubWalletRepository.findByClub_Id(clubId)
-                .orElseThrow(() -> new AppException(ErrorCode.CLUB_NOT_FOUND));
 
-        if (wallet.getPayOsClientId() == null || wallet.getPayOsApiKey() == null || wallet.getPayOsChecksumKey() == null) {
-            return PayOSTestConnectionResponse.builder()
-                    .connected(false)
-                    .message("Thiếu Client ID/API Key/Checksum Key")
-                    .build();
-        }
 
-        // TODO: Optionally call PayOS sandbox API here; for now, validate presence only
-        boolean active = wallet.getPayOsStatus() == null || wallet.getPayOsStatus().equalsIgnoreCase("ACTIVE");
-        return PayOSTestConnectionResponse.builder()
-                .connected(active)
-                .message(active ? "Kết nối hợp lệ (đã cấu hình)" : "Cấu hình ở trạng thái INACTIVE")
-                .build();
-    }
 
-    @Transactional(readOnly = true)
-    public List<RecentPaymentResponse> getRecentPayments(Long clubId) throws AppException {
-        // Verify club exists
-        clubRepository.findById(clubId)
-                .orElseThrow(() -> new AppException(ErrorCode.CLUB_NOT_FOUND));
 
-        List<PayOSPayment> payments = payOSPaymentRepository.findTop10RecentPaymentsByClubId(clubId);
-        
-        return payments.stream()
-                .map(payment -> RecentPaymentResponse.builder()
-                        .id(payment.getId())
-                        .transactionCode(payment.getTransactionCode())
-                        .orderCode(payment.getOrderCode())
-                        .amount(payment.getAmount())
-                        .description(payment.getDescription())
-                        .paymentMethod(payment.getPaymentMethod())
-                        .paymentStatus(payment.getPaymentStatus() != null ? payment.getPaymentStatus().name() : null)
-                        .success(payment.getSuccess())
-                        .paymentTime(payment.getPaymentTime())
-                        .transactionDateTime(payment.getTransactionDateTime())
-                        .counterAccountName(payment.getCounterAccountName())
-                        .counterAccountBankName(payment.getCounterAccountBankName())
-                        .reference(payment.getReference())
-                        .build())
-                .collect(Collectors.toList());
-    }
 
     public PayOSCreatePaymentResponse createPaymentRequest(Long clubId, PayOSCreatePaymentRequest request) throws AppException {
         // 🔹 Lấy thông tin ví của CLB
@@ -147,84 +121,57 @@ public class PayOSIntegrationService {
         if (wallet.getPayOsClientId() == null || wallet.getPayOsApiKey() == null || wallet.getPayOsChecksumKey() == null) {
             throw new RuntimeException("Thiếu cấu hình PayOS (ClientID/API Key/Checksum Key)");
         }
-
-        // 🔹 Tự sinh orderCode (số nguyên dương duy nhất)
-        long orderCode = System.currentTimeMillis();
+        PayOS payOS = new PayOS(wallet.getPayOsClientId(), wallet.getPayOsApiKey(), wallet.getPayOsChecksumKey());
+        // 🔹 Tự sinh orderCode nếu chưa có (số nguyên dương duy nhất)
+        // Nếu orderCode đã được set từ trước (như trong FeeService), giữ nguyên
+        long orderCode = request.getOrderCode() != null ? request.getOrderCode() : System.currentTimeMillis();
         request.setOrderCode(orderCode);
+        long expiredAt = Instant.now().plusSeconds(15 * 60).getEpochSecond();
 
-        // 🔹 Tạo chữ ký signature hợp lệ theo PayOS docs
-        String signature = generateSignature(
-                wallet.getPayOsChecksumKey(),
-                request.getAmount(),
-                request.getCancelUrl(),
-                request.getDescription(),
-                orderCode,
-                request.getReturnUrl()
-        );
-        request.setSignature(signature);
 
-        // 🔹 Tạo RestTemplate và headers
-        RestTemplate restTemplate = new RestTemplate();
-        HttpHeaders headers = new HttpHeaders();
-        headers.add("x-client-id", wallet.getPayOsClientId());
-        headers.add("x-api-key", wallet.getPayOsApiKey());
-        headers.setContentType(MediaType.APPLICATION_JSON);
+        PaymentLinkItem item = PaymentLinkItem.builder()
+                .name(request.getDescription())
+                .quantity(1)
+                .price(request.getAmount())
+                .build();
 
-        // 🔹 Gửi request tới PayOS
-        HttpEntity<PayOSCreatePaymentRequest> entity = new HttpEntity<>(request, headers);
-        ResponseEntity<HashMap> responseEntity = restTemplate.exchange(
-                PAYOS_PAYMENT_REQUEST_ENDPOINT,
-                HttpMethod.POST,
-                entity,
-                HashMap.class
-        );
+        CreatePaymentLinkRequest sdkRequest = CreatePaymentLinkRequest.builder()
+                .orderCode(orderCode)
+                .amount(request.getAmount())
+                .description(request.getDescription())
+                .returnUrl(request.getReturnUrl())
+                .cancelUrl(request.getCancelUrl())
+                .item(item)
+                .build();
 
-        // 🔹 Xử lý phản hồi
-        HashMap result = responseEntity.getBody();
-        PayOSCreatePaymentResponse response = new PayOSCreatePaymentResponse();
+        sdkRequest.setExpiredAt(expiredAt);
 
-        if (result != null) {
-            Object data = result.get("data");
-            if (data instanceof Map dataMap) {
-                response.setOrderCode((Long) dataMap.getOrDefault("orderCode", null));
-                response.setPaymentLink((String) dataMap.getOrDefault("checkoutUrl", null));
-                response.setQrCode((String) dataMap.getOrDefault("qrCode", null));
-                response.setRaw(dataMap);
-            } else {
-                response.setRaw(result);
-            }
+
+
+        CreatePaymentLinkResponse sdkResponse;
+        try {
+            sdkResponse = payOS.paymentRequests().create(sdkRequest);
+        } catch (APIException e) {
+            log.error("[PayOS] Lỗi tạo QR: code={}, desc={}", e.getErrorCode(), e.getErrorDesc().orElse(e.getMessage()));
+            throw new AppException(ErrorCode.INTERNAL_SERVER_ERROR, "Tạo QR thất bại: " + e.getMessage());
+        } catch (Exception e) {
+            log.error("[PayOS] Exception tạo QR: {}", e.getMessage());
+            throw new AppException(ErrorCode.INTERNAL_SERVER_ERROR, "Lỗi hệ thống");
         }
 
-        log.info("PayOS create payment result: {}", result);
+
+        PayOSCreatePaymentResponse response = new PayOSCreatePaymentResponse();
+        response.setOrderCode(sdkResponse.getOrderCode());
+        response.setPaymentLink(sdkResponse.getCheckoutUrl());
+        response.setQrCode(sdkResponse.getQrCode());
+        response.setRaw(Map.of("data", sdkResponse));
+
+        log.info("[PayOS] Tạo QR one-time thành công: clubId={}, orderCode={}, qrCodeLength={}",
+                clubId, orderCode, sdkResponse.getQrCode().length());
         return response;
     }
 
-    private String generateSignature(String checksumKey, long amount, String cancelUrl,
-                                     String description, long orderCode, String returnUrl) {
-        try {
-            String data = String.format(
-                    "amount=%d&cancelUrl=%s&description=%s&orderCode=%d&returnUrl=%s",
-                    amount, cancelUrl, description, orderCode, returnUrl
-            );
 
-            Mac sha256_HMAC = Mac.getInstance("HmacSHA256");
-            SecretKeySpec secretKeySpec = new SecretKeySpec(checksumKey.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
-            sha256_HMAC.init(secretKeySpec);
-
-            byte[] hashBytes = sha256_HMAC.doFinal(data.getBytes(StandardCharsets.UTF_8));
-
-            StringBuilder hexString = new StringBuilder();
-            for (byte b : hashBytes) {
-                String hex = Integer.toHexString(0xff & b);
-                if (hex.length() == 1) hexString.append('0');
-                hexString.append(hex);
-            }
-
-            return hexString.toString();
-        } catch (Exception e) {
-            throw new RuntimeException("Lỗi tạo signature PayOS", e);
-        }
-    }
 
 }
 

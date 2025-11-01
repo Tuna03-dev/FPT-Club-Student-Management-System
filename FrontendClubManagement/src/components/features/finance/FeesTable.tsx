@@ -394,6 +394,7 @@ export function FeesTable({
       toast.success(nextState ? "Đã khóa phí." : "Đã mở khóa phí.");
       setLockDialogFee(null);
     } catch (e) {
+      console.error(e);
       toast.error("Không thể thay đổi trạng thái khóa phí.");
     } finally {
       setLockInProgress(false);
