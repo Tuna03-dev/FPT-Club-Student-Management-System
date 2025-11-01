@@ -22,8 +22,8 @@ import { StudentRecruitment } from "@/pages/studentRecruitment/StudentRecruitmen
 import { ClubDetail } from "@/pages/clubDetail/ClubDetail";
 
 import LoginPage from "@/pages/login/Login";
-
-// ✅ Dùng alias @ cho thống nhất
+import ClubDetailPage from "@/pages/myclub/ClubDetailPage";
+import ClubsPage from "@/pages/myclub/ClubsPage";
 import PresidentNewsList from "@/pages/news/PresidentNewsList";
 import PresidentNewsEditor from "@/pages/news/PresidentNewsEditor";
 import StaffNewsList from "@/pages/news/StaffNewsList";
@@ -56,11 +56,10 @@ export const router = createBrowserRouter([
 
       {
         path: "clubs",
-        element: (
-          <div className="container mx-auto px-4 py-8">
-            Trang Câu lạc bộ/Hội nhóm
-          </div>
-        ),
+        children: [
+          { index: true, element: <ClubsPage /> },
+          { path: ":id", element: <ClubDetailPage /> },
+        ],
       },
       {
         path: "achievements",
@@ -130,7 +129,6 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <Dashboard /> },
 
-      // 🔥 Hai route của chủ nhiệm CLB để tạo/list news & draft
       { path: "news", element: <PresidentNewsList /> },
       { path: "news-editor", element: <PresidentNewsEditor /> },
 
