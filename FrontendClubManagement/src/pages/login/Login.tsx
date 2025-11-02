@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { authService } from "../../services/authService";
 import { useNavigate } from "react-router-dom";
+import { ArrowLeft } from "lucide-react";
+import { toast } from "sonner";
 import "./Login.css";
 import logoImage from "@/assets/Logo_FPT_Education.png";
 declare global {
@@ -55,7 +57,10 @@ const LoginPage: React.FC = () => {
   }, []);
 
   const handleCredentialResponse = async (response: any) => {
-    if (!response.credential) return;
+    if (!response.credential) {
+      toast.error("Lỗi xác thực Google");
+      return;
+    }
 
     setIsLoading(true);
     try {
@@ -66,14 +71,22 @@ const LoginPage: React.FC = () => {
         authService.setTokens(result.data.accessToken);
         authService.setUser(result.data.user);
 
+        // Dispatch custom event to notify Header about auth state change
+        window.dispatchEvent(new Event("auth-state-changed"));
+
         navigate("/"); // Redirect to dashboard after successful login
       } else {
         console.error("Login failed:", result.message);
-        alert("Đăng nhập thất bại: " + result.message);
+        toast.error("Đăng nhập không thành công");
       }
     } catch (error) {
       console.error("Login error:", error);
-      alert("Có lỗi xảy ra khi đăng nhập");
+      // Check if it's a Google authentication error or login API error
+      if (error instanceof Error && error.message.includes("credential")) {
+        toast.error("Lỗi xác thực Google");
+      } else {
+        toast.error("Đăng nhập không thành công");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -81,6 +94,16 @@ const LoginPage: React.FC = () => {
 
   return (
     <div className={`login-container ${isLoading ? "loading" : ""}`}>
+      {/* Back Button */}
+      <button
+        className="back-button"
+        onClick={() => navigate(-1)}
+        aria-label="Quay lại"
+      >
+        <ArrowLeft size={20} />
+        <span>Quay lại</span>
+      </button>
+
       <div className="login-card">
         {/* Logo */}
         <div className="logo-container">
