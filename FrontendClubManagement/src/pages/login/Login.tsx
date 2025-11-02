@@ -66,6 +66,9 @@ const LoginPage: React.FC = () => {
         authService.setTokens(result.data.accessToken);
         authService.setUser(result.data.user);
 
+        // Dispatch custom event to notify Header about auth state change
+        window.dispatchEvent(new Event("auth-state-changed"));
+
         navigate("/"); // Redirect to dashboard after successful login
       } else {
         console.error("Login failed:", result.message);
