@@ -32,6 +32,7 @@ public class SecurityConfig {
     private final CustomAccessDeniedHandler customAccessDeniedHandler;
 
     private final String[] PUBLIC_URL = {
+//            "/api/**",
             "/api/auth/google",
             "/api/auth/refreshToken",
             "/api/v1/auth/**",
@@ -52,7 +53,8 @@ public class SecurityConfig {
             "/api/events/{id}",
             "/api/events/get-all-club",
             "/api/news/get-all-by-filter",
-            "/api/news/{id}"
+            "/api/news/{id}",
+            "/api/pay-os/webhook"
 
     };
 
