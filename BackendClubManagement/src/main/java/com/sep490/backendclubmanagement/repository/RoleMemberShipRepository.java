@@ -281,16 +281,18 @@ SELECT CASE WHEN EXISTS (
 
     // RoleMemberShipRepository.java
     @Query("""
-    SELECT CASE WHEN COUNT(rm) > 0 THEN true ELSE false END
-    FROM RoleMemberShip rm
-    JOIN rm.clubMemberShip c
-    JOIN rm.clubRole cr
-    WHERE c.user.id = :userId
-      AND c.club.id = :clubId
-      AND rm.team IS NULL
-      AND COALESCE(rm.isActive, TRUE) = TRUE
-      AND cr.roleLevel <= 2
-    """)
+SELECT CASE WHEN COUNT(rm) > 0 THEN true ELSE false END
+FROM RoleMemberShip rm
+JOIN rm.clubMemberShip c
+JOIN rm.clubRole cr
+JOIN rm.semester s
+WHERE c.user.id = :userId
+  AND c.club.id = :clubId
+  AND rm.team IS NULL
+  AND COALESCE(rm.isActive, TRUE) = TRUE
+  AND cr.roleLevel <= 2
+  AND s.isCurrent = true
+""")
     boolean existsClubAdmin(@Param("userId") Long userId,
                             @Param("clubId") Long clubId);
 
