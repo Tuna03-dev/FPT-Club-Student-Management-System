@@ -13,9 +13,34 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { User, Users, LogOut, Shield } from "lucide-react";
 
+// Mock data for clubs
+const mockClubs = [
+  {
+    clubId: 1,
+    clubName: "CLB HÍT HÀ DRAMA FU 2.0",
+    logoUrl: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='12' fill='%2348a9f0'/%3E%3Cpath d='M30 50 L50 30 L70 50 L50 70 Z' fill='white'/%3E%3C/svg%3E",
+  },
+  {
+    clubId: 2,
+    clubName: "FU - Hòa Lạc",
+    logoUrl: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='12' fill='%23ff69b4'/%3E%3Ctext x='50' y='60' font-size='36' font-weight='bold' text-anchor='middle' fill='white'%3E2025%3C/text%3E%3C/svg%3E",
+  },
+  {
+    clubId: 3,
+    clubName: "DỊCH VỤ SUPPORT COURSERA và UDEMY-OFFICIAL OPEN SOURCE...",
+    logoUrl: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='12' fill='%23ffd700'/%3E%3Ccircle cx='25' cy='50' r='15' fill='%23ff69b4'/%3E%3Ccircle cx='50' cy='50' r='15' fill='%23ffff00'/%3E%3Ccircle cx='75' cy='50' r='15' fill='%2348a9f0'/%3E%3C/svg%3E",
+  },
+  {
+    clubId: 4,
+    clubName: "FUOverflow | Cộng đồng sinh viên Đại",
+    logoUrl: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='12' fill='%23a855f7'/%3E%3Ctext x='50' y='60' font-size='32' font-weight='bold' text-anchor='middle' fill='white'%3EJO%3C/text%3E%3C/svg%3E",
+  },
+];
+
 const Header: React.FC = () => {
   const [user, setUser] = useState<UserInfo | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [showClubsList, setShowClubsList] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -145,7 +170,7 @@ const Header: React.FC = () => {
                     </span>
                   </button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuContent align="end" className="w-56 max-h-[32rem] overflow-y-auto">
                   <DropdownMenuLabel>
                     <div className="flex flex-col space-y-1">
                       <p className="text-sm font-medium">{user.fullName}</p>
@@ -155,37 +180,82 @@ const Header: React.FC = () => {
                     </div>
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onClick={() => navigate("/profile")}
-                    className="cursor-pointer"
-                  >
-                    <User className="mr-2 h-4 w-4" />
-                    <span>Thông tin cá nhân</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => navigate("/myclub")}
-                    className="cursor-pointer"
-                  >
-                    <Users className="mr-2 h-4 w-4" />
-                    <span>Câu lạc bộ của tôi</span>
-                  </DropdownMenuItem>
-                  {isAdmin && (
-                    <DropdownMenuItem
-                      onClick={() => navigate("/admin")}
-                      className="cursor-pointer"
-                    >
-                      <Shield className="mr-2 h-4 w-4" />
-                      <span>Trang quản trị</span>
-                    </DropdownMenuItem>
+                  {!showClubsList ? (
+                    <>
+                      <DropdownMenuItem
+                        onClick={() => navigate("/profile")}
+                        className="cursor-pointer"
+                      >
+                        <User className="mr-2 h-4 w-4" />
+                        <span>Thông tin cá nhân</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => setShowClubsList(true)}
+                        onSelect={(e) => e.preventDefault()}
+                        className="cursor-pointer"
+                      >
+                        <Users className="mr-2 h-4 w-4" />
+                        <span>Câu lạc bộ của tôi</span>
+                      </DropdownMenuItem>
+                      {isAdmin && (
+                        <DropdownMenuItem
+                          onClick={() => navigate("/admin")}
+                          className="cursor-pointer"
+                        >
+                          <Shield className="mr-2 h-4 w-4" />
+                          <span>Trang quản trị</span>
+                        </DropdownMenuItem>
+                      )}
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onClick={handleLogout}
+                        className="cursor-pointer text-red-600 "
+                      >
+                        <LogOut className="mr-2 h-4 w-4" />
+                        <span>Đăng xuất</span>
+                      </DropdownMenuItem>
+                    </>
+                  ) : (
+                    <>
+                      <DropdownMenuItem
+                        onClick={() => setShowClubsList(false)}
+                        onSelect={(e) => e.preventDefault()}
+                        className="cursor-pointer"
+                      >
+                        <span className="text-xs text-gray-500">← Quay lại</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuLabel className="px-3 py-2 text-base font-semibold">
+                        Lối tắt của bạn
+                      </DropdownMenuLabel>
+                      {mockClubs.map((club) => (
+                        <DropdownMenuItem
+                          key={club.clubId}
+                          onClick={() => navigate(`/myclub/${club.clubId}`)}
+                          className="cursor-pointer"
+                        >
+                          <div className="flex items-center gap-3 w-full">
+                            {club.logoUrl ? (
+                              <img
+                                src={club.logoUrl}
+                                alt={club.clubName}
+                                className="h-10 w-10 rounded-md flex-shrink-0 object-cover"
+                              />
+                            ) : (
+                              <div className="h-10 w-10 rounded-md bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center flex-shrink-0">
+                                <span className="text-white font-bold text-sm">
+                                  {club.clubName.charAt(0)}
+                                </span>
+                              </div>
+                            )}
+                            <span className="text-sm truncate flex-1">
+                              {club.clubName}
+                            </span>
+                          </div>
+                        </DropdownMenuItem>
+                      ))}
+                    </>
                   )}
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onClick={handleLogout}
-                    className="cursor-pointer text-red-600 "
-                  >
-                    <LogOut className="mr-2 h-4 w-4" />
-                    <span>Đăng xuất</span>
-                  </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : (
