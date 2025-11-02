@@ -54,7 +54,9 @@ google:
 auth:
   fap-api-url: ${FAP_API_URL:http://localhost:8081/api/allowed-users}
 
-
+app:
+  payos:
+    webhook-url: ${PAYOS_WEBHOOK_URL:https://7bbf598a5eff.ngrok-free.app/api/pay-os/webhook}
 
 cloudinary:
   cloud-name: ${CLOUDINARY_CLOUD_NAME:dbeir3ru4}

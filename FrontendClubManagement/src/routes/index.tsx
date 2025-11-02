@@ -18,6 +18,7 @@ import MyClubRedirect from "@/pages/myclub/MyClubRedirect";
 import ClubSelect from "@/pages/myclub/ClubSelect";
 import TeamDetailPage from "@/pages/myclub/teams/TeamDetail";
 import { RecruitmentManagement } from "@/pages/myclub/recruitmentManagement/RecruitmentManagement";
+import Finance from "@/pages/myclub/finance/Finance";
 import { StudentRecruitment } from "@/pages/studentRecruitment/StudentRecruitment";
 import { ClubDetail } from "@/pages/clubDetail/ClubDetail";
 
@@ -31,6 +32,7 @@ import StaffNewsEditor from "@/pages/news/StaffNewsEditor";
 import TeamNewsDrafts from "@/pages/news/TeamNewsDrafts";
 import TeamNewsRequests from "@/pages/news/TeamNewsRequests";
 import TeamNewsEditor from "@/pages/news/TeamNewsEditor";
+import Payment from "@/pages/myclub/payments/MemberPaymentPage";
 export const router = createBrowserRouter([
   {
     path: "/",
@@ -135,6 +137,8 @@ export const router = createBrowserRouter([
       { path: "members", element: <MemberList /> },
       { path: "events", element: <EventList /> },
       { path: "recruitments", element: <RecruitmentManagement /> },
+      { path: "finance", element: <Finance /> },
+      { path: "payments", element: <Payment /> },
       { path: "notifications", element: <Notifications /> },
       { path: "settings", element: <Settings /> },
       { path: "teams/:teamId", element: <TeamDetailPage /> },
