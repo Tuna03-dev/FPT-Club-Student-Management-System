@@ -1,7 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { useParams } from "react-router-dom";
 import { CreatePost } from "@/components/features/post/CreatePost";
 import { PostCard } from "@/components/features/post/PostCard";
-import { postService, type PostWithRelationsData } from "@/services/postService";
+import {
+  postService,
+  type PostWithRelationsData,
+} from "@/services/postService";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent } from "@/components/ui/card";
@@ -10,98 +14,145 @@ export const Dashboard = () => {
   const [posts, setPosts] = useState<PostWithRelationsData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [page, setPage] = useState(0);
-  const [hasMore, setHasMore] = useState(true);
+  const [currentPage, setCurrentPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
 
-  const clubId = 1; // TODO: Get from context/route
+  // Dùng ref để tránh dependency issues
+  const loadingRef = useRef(false);
 
-  const loadPosts = async (pageNum: number = 0, reset: boolean = true) => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      const response = await postService.getClubWidePosts(clubId, {
-        page: pageNum,
-        size: 10,
-        sort: "createdAt,desc",
-      });
-
-      if (response.code === 200 && response.data) {
-        const newPosts = response.data.content;
-        if (reset) {
-          setPosts(newPosts);
-        } else {
-          setPosts(prev => [...prev, ...newPosts]);
-        }
-        setHasMore(response.data.hasNext);
-        setPage(pageNum);
-      } else {
-        const message = response.message || "Không thể tải bài viết";
-        setError(message);
-        toast.error(message);
-      }
-    } catch (err) {
-      console.error("Error loading posts:", err);
-      const message = "Có lỗi khi tải bài viết";
-      setError(message);
-      toast.error(message);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { clubId: clubIdParam } = useParams<{ clubId: string }>();
+  const clubId = clubIdParam ? parseInt(clubIdParam, 10) : 1;
 
   useEffect(() => {
-    loadPosts(0, true);
-  }, []);
-
-  const loadMore = () => {
-    if (!loading && hasMore) {
-      loadPosts(page + 1, false);
+    if (!clubIdParam || isNaN(clubId)) {
+      toast.error("Không tìm thấy ID câu lạc bộ. Vui lòng kiểm tra URL.");
     }
-  };
+  }, [clubIdParam, clubId]);
+
+  // Load posts function
+  const loadPosts = useCallback(
+    async (page: number, append: boolean = false) => {
+      if (loadingRef.current) return; // Prevent double loading
+
+      try {
+        loadingRef.current = true;
+        setLoading(true);
+        setError(null);
+
+        const response = await postService.getClubWidePosts(clubId, {
+          page: page,
+          size: 10,
+          sort: "createdAt,desc",
+        });
+
+        if (response.code === 200 && response.data) {
+          const newPosts = response.data.content;
+
+          setPosts((prev) => (append ? [...prev, ...newPosts] : newPosts));
+          setCurrentPage(response.data.number);
+          setTotalPages(response.data.totalPages);
+        } else {
+          const message = response.message || "Không thể tải bài viết";
+          setError(message);
+          toast.error(message);
+        }
+      } catch (err) {
+        console.error("Error loading posts:", err);
+        const message = "Có lỗi khi tải bài viết";
+        setError(message);
+        toast.error(message);
+      } finally {
+        setLoading(false);
+        loadingRef.current = false;
+      }
+    },
+    [clubId]
+  );
+
+  // Load initial posts
+  useEffect(() => {
+    loadPosts(0, false);
+  }, [clubId, loadPosts]);
+
+  // IntersectionObserver sentinel-based infinite scroll
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+
+  const loadMore = useCallback(() => {
+    if (loadingRef.current) return;
+    if (currentPage >= totalPages - 1) return;
+
+    loadPosts(currentPage + 1, true);
+  }, [currentPage, totalPages, loadPosts]);
+
+  useEffect(() => {
+    const node = sentinelRef.current;
+    if (!node) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (
+          entries[0].isIntersecting &&
+          currentPage < totalPages - 1 &&
+          !loadingRef.current
+        ) {
+          loadMore();
+        }
+      },
+      { threshold: 0.5 }
+    );
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [loadMore, currentPage, totalPages]);
 
   const refreshPosts = () => {
-    loadPosts(0, true);
+    setCurrentPage(0);
+    setTotalPages(0);
+    setPosts([]);
+    loadPosts(0, false);
   };
 
   const convertPostToCard = (post: PostWithRelationsData) => ({
     id: post.id.toString(),
     author: {
       name: post.authorName || "Người dùng",
-      avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=default", // Default avatar
-      role: "Thành viên", // Default role
+      avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=default",
+      role: "Thành viên",
     },
     content: post.content || "",
     images: (post.media || [])
-      .filter(m => m && m.mediaType === "IMAGE")
-      .map(m => m.mediaUrl), // Get all images
+      .filter((m) => m && m.mediaType === "IMAGE")
+      .map((m) => m.mediaUrl),
     timestamp: formatTimestamp(post.createdAt || new Date().toISOString()),
     likes: (post.likes || []).length,
     comments: (post.comments || []).length,
-    shares: 0, // Backend doesn't have shares field, using default
+    shares: 0,
   });
 
   const formatTimestamp = (dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
-    const diffInHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60));
-    
+    const diffInHours = Math.floor(
+      (now.getTime() - date.getTime()) / (1000 * 60 * 60)
+    );
+
     if (diffInHours < 1) return "Vừa xong";
     if (diffInHours < 24) return `${diffInHours} giờ trước`;
-    
+
     const diffInDays = Math.floor(diffInHours / 24);
     if (diffInDays < 7) return `${diffInDays} ngày trước`;
-    
-    return date.toLocaleDateString('vi-VN');
+
+    return date.toLocaleDateString("vi-VN");
   };
+
+  const hasMore = currentPage < totalPages - 1;
 
   return (
     <div className="min-h-full bg-secondary/20">
       <div className="max-w-lg mx-auto p-4 space-y-4">
-        {/* Create Post */}
-        <CreatePost onPostCreated={refreshPosts} />
+        <CreatePost onPostCreated={refreshPosts} clubId={clubId} />
 
-        {/* Loading State */}
+        {/* Loading State - First Load */}
         {loading && posts.length === 0 && (
           <div className="space-y-4">
             {Array.from({ length: 3 }).map((_, index) => (
@@ -124,13 +175,11 @@ export const Dashboard = () => {
         )}
 
         {/* Error State */}
-        {error && (
+        {error && posts.length === 0 && (
           <Card className="p-6 border-destructive/20">
             <CardContent>
               <div className="text-center space-y-4">
-                <div className="text-destructive font-semibold">
-                  {error}
-                </div>
+                <div className="text-destructive font-semibold">{error}</div>
                 <button
                   onClick={refreshPosts}
                   className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
@@ -143,19 +192,16 @@ export const Dashboard = () => {
         )}
 
         {/* Posts Feed */}
-        {!loading && !error && posts.length > 0 && (
+        {posts.length > 0 && (
           <div className="space-y-4">
             {posts.map((post) => (
-              <PostCard
-                key={post.id}
-                {...convertPostToCard(post)}
-              />
+              <PostCard key={post.id} {...convertPostToCard(post)} />
             ))}
           </div>
         )}
 
         {/* Empty State */}
-        {!loading && !error && posts.length === 0 && (
+        {!loading && posts.length === 0 && !error && (
           <Card className="p-6">
             <CardContent>
               <div className="text-center space-y-4">
@@ -173,22 +219,22 @@ export const Dashboard = () => {
           </Card>
         )}
 
-        {/* Load More Button */}
-        {!loading && hasMore && posts.length > 0 && (
-          <div className="flex justify-center pt-4">
-            <button
-              onClick={loadMore}
-              className="px-6 py-2 bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/80 transition-colors"
-            >
-              Tải thêm
-            </button>
+        {hasMore && (
+          <div ref={sentinelRef} className="py-8 text-center">
+            {loading && (
+              <div className="animate-pulse text-muted-foreground">
+                Đang tải thêm...
+              </div>
+            )}
           </div>
         )}
 
-        {/* Loading More State */}
-        {loading && posts.length > 0 && (
-          <div className="flex justify-center pt-4">
-            <div className="text-muted-foreground">Đang tải...</div>
+        {/* No More Posts */}
+        {!loading && !hasMore && posts.length > 0 && (
+          <div className="flex justify-center py-4">
+            <div className="text-muted-foreground text-sm">
+              Đã hiển thị tất cả bài viết
+            </div>
           </div>
         )}
       </div>

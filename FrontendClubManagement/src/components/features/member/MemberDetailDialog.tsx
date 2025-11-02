@@ -505,21 +505,21 @@ const MemberDetailDialog = ({
                       )}
                     </div>
                   </div>
-                  <div>
-                    <div className="text-center p-3 rounded-xl bg-card/80 backdrop-blur-sm border border-primary/20">
-                      <div className="text-xs text-muted-foreground mb-2">
-                        Phòng Ban
-                      </div>
-                      <div className="flex items-center justify-center gap-2">
-                        {member.currentTerm?.teamName && (
-                          <Badge
-                            variant="outline"
-                            className="border-orange-500/30 text-orange-600"
-                          >
-                            {member.currentTerm.teamName}
-                          </Badge>
-                        )}
-                      </div>
+                  <div className="text-center p-3 rounded-xl bg-card/80 backdrop-blur-sm border border-primary/20">
+                    <div className="text-xs text-muted-foreground mb-2">
+                      Phòng Ban
+                    </div>
+                    <div className="flex items-center justify-center gap-2">
+                      {member.currentTerm?.teamName ? (
+                        <Badge
+                          variant="outline"
+                          className="border-orange-500/30 text-orange-600"
+                        >
+                          {member.currentTerm.teamName}
+                        </Badge>
+                      ) : (
+                        <div className="text-sm font-medium">N/A</div>
+                      )}
                     </div>
                   </div>
                   <div className="text-center p-3 rounded-xl bg-card/80 backdrop-blur-sm border border-primary/20 flex flex-col items-center justify-center">
@@ -643,7 +643,9 @@ const MemberDetailDialog = ({
             <Button variant="outline" onClick={() => setIsEditRoleOpen(false)}>
               Hủy
             </Button>
-            <Button onClick={handleChangeRole} disabled={isActionLoading} >Lưu thay đổi</Button>
+            <Button onClick={handleChangeRole} disabled={isActionLoading}>
+              Lưu thay đổi
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -690,7 +692,9 @@ const MemberDetailDialog = ({
             >
               Hủy
             </Button>
-            <Button onClick={handleAssignTeam} disabled={isActionLoading} >Lưu thay đổi</Button>
+            <Button onClick={handleAssignTeam} disabled={isActionLoading}>
+              Lưu thay đổi
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -762,7 +766,11 @@ const MemberDetailDialog = ({
             <Button variant="outline" onClick={() => setIsRemoveOpen(false)}>
               Hủy
             </Button>
-            <Button variant="destructive" onClick={handleRemove} disabled={isActionLoading} >
+            <Button
+              variant="destructive"
+              onClick={handleRemove}
+              disabled={isActionLoading}
+            >
               Xác nhận đá khỏi CLB
             </Button>
           </DialogFooter>
