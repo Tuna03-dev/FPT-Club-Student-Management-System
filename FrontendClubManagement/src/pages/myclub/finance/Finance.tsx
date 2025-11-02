@@ -4,21 +4,21 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { payosService } from "@/services/payosService";
-import { SummaryCards } from "@/components/features/finance/SummaryCards";
-import { TransactionsTable } from "@/components/features/finance/TransactionsTable";
+// import { SummaryCards } from "@/components/features/finance/SummaryCards";
+// import { TransactionsTable } from "@/components/features/finance/TransactionsTable";
 import { FeesTable } from "@/components/features/finance/FeesTable";
 import { PayOSIntegration } from "@/components/features/finance/PayOsIntegration";
-import { mockTransactions } from "@/components/features/finance/mocks";
+// import { mockTransactions } from "@/components/features/finance/mocks";
 import type { Fee } from "@/types/fee";
 import feeService from "@/services/feeService";
 
 export default function Finance() {
   const { clubId } = useParams();
   const numericClubId = Number(clubId);
-  const [transactions, setTransactions] = useState(mockTransactions);
+  // const [transactions, setTransactions] = useState(mockTransactions);
   const [fees, setFees] = useState<Fee[]>([]);
   const [feesLoading, setFeesLoading] = useState<boolean>(false);
-  const [isAddTransactionOpen, setIsAddTransactionOpen] = useState(false);
+  // const [isAddTransactionOpen, setIsAddTransactionOpen] = useState(false);
   const [isAddFeeOpen, setIsAddFeeOpen] = useState(false);
   const [clientId, setClientId] = useState("");
   const [apiKey, setApiKey] = useState("");
@@ -55,39 +55,39 @@ export default function Finance() {
     })();
   }, [numericClubId]);
 
-  const handleDeleteTransaction = (id: string) => {
-    setTransactions(transactions.filter((t) => t.id !== id));
-    toast("Đã xóa giao dịch");
-  };
+  // const handleDeleteTransaction = (id: string) => {
+  //   setTransactions(transactions.filter((t) => t.id !== id));
+  //   toast("Đã xóa giao dịch");
+  // };
 
   const handleDeleteFee = (id: string) => {
     setFees((prev) => prev.filter((f) => f.id !== id));
     toast("Đã xóa khoản phí");
   };
 
-  const handleApproveTransaction = (id: string) => {
-    setTransactions(
-      transactions.map((t) => (t.id === id ? { ...t, status: "completed" } : t))
-    );
-    toast("Đã duyệt giao dịch");
-  };
+  // const handleApproveTransaction = (id: string) => {
+  //   setTransactions(
+  //     transactions.map((t) => (t.id === id ? { ...t, status: "completed" } : t))
+  //   );
+  //   toast("Đã duyệt giao dịch");
+  // };
 
-  const handleRejectTransaction = (id: string) => {
-    setTransactions(
-      transactions.map((t) => (t.id === id ? { ...t, status: "rejected" } : t))
-    );
-    toast("Đã từ chối giao dịch");
-  };
+  // const handleRejectTransaction = (id: string) => {
+  //   setTransactions(
+  //     transactions.map((t) => (t.id === id ? { ...t, status: "rejected" } : t))
+  //   );
+  //   toast("Đã từ chối giao dịch");
+  // };
 
   const handleFeeCreated = (newFee: Fee) =>
     setFees((prev) => [newFee, ...prev]);
 
-  const totalIncome = transactions
-    .filter((t) => t.type === "income" && t.status === "completed")
-    .reduce((sum, t) => sum + t.amount, 0);
-  const totalExpense = transactions
-    .filter((t) => t.type === "expense" && t.status === "completed")
-    .reduce((sum, t) => sum + t.amount, 0);
+  // const totalIncome = transactions
+  //   .filter((t) => t.type === "income" && t.status === "completed")
+  //   .reduce((sum, t) => sum + t.amount, 0);
+  // const totalExpense = transactions
+  //   .filter((t) => t.type === "expense" && t.status === "completed")
+  //   .reduce((sum, t) => sum + t.amount, 0);
 
   return (
     <div className="min-h-screen bg-background p-6">
@@ -101,7 +101,7 @@ export default function Finance() {
           </p>
         </div>
 
-        <SummaryCards totalIncome={totalIncome} totalExpense={totalExpense} />
+        {/* <SummaryCards totalIncome={totalIncome} totalExpense={totalExpense} /> */}
 
         <Tabs defaultValue="transactions" className="w-full">
           <TabsList className="grid w-full grid-cols-3">
@@ -110,7 +110,7 @@ export default function Finance() {
             <TabsTrigger value="payos">Tích hợp PayOS</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="transactions" className="space-y-4">
+          {/* <TabsContent value="transactions" className="space-y-4">
             <TransactionsTable
               transactions={transactions}
               onAddTransaction={() => setIsAddTransactionOpen(true)}
@@ -121,7 +121,7 @@ export default function Finance() {
               isAddOpen={isAddTransactionOpen}
               setIsAddOpen={setIsAddTransactionOpen}
             />
-          </TabsContent>
+          </TabsContent> */}
 
           <TabsContent value="fees" className="space-y-4">
             <FeesTable

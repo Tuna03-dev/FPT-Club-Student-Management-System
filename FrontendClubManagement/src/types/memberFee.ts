@@ -1,10 +1,7 @@
-import { Fee } from "./fee";
-import { PaymentStatus } from "@/utils/feeUtils";
+import type { Fee } from "./fee";
+import type { PaymentStatus } from "@/utils/feeUtils";
 
-/**
- * Extended Fee interface for member payment view
- * Includes payment status and optional fields
- */
+
 export interface MemberFee extends Fee {
   /**
    * Payment status: paid, pending, or overdue
