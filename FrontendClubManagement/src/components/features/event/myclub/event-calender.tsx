@@ -1,7 +1,8 @@
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
-import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react"
+import { ChevronLeft, ChevronRight, Loader2, ClipboardList } from "lucide-react"
+import { useNavigate } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { EventDetailModal } from "./event-detail-modal"
@@ -48,6 +49,7 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
   const [eventTypes, setEventTypes] = useState<Array<{ id: string; name: string }>>([])
   const [pendingRequests, setPendingRequests] = useState<PendingRequestDto[] | null>(null)
   const [loadingPending, setLoadingPending] = useState(false)
+  const navigate = useNavigate()
 
   // Fetch events from API
   useEffect(() => {
@@ -301,10 +303,25 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
                 </Button>
                 {(() => {
                   const user = authService.getCurrentUser()
+                  const isClubPresident = !!user && user.systemRole === "CLUB_PRESIDENT"
                   const canCreate = !!user && ["STAFF", "CLUB_PRESIDENT", "CLUB_OFFICER"].includes(user.systemRole)
-                  if (!canCreate) return null
+                  
                   return (
-                    <Button onClick={() => setOpenCreate(true)}>+ Tạo sự kiện mới</Button>
+                    <>
+                      {isClubPresident && clubId && clubId > 0 && (
+                        <Button 
+                          variant="outline" 
+                          onClick={() => navigate(`/myclub/${clubId}/events/attendance-list`)}
+                          className="gap-2"
+                        >
+                          <ClipboardList className="h-4 w-4" />
+                          Điểm danh
+                        </Button>
+                      )}
+                      {canCreate && (
+                        <Button onClick={() => setOpenCreate(true)}>+ Tạo sự kiện mới</Button>
+                      )}
+                    </>
                   )
                 })()}
               </div>

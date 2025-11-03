@@ -1,0 +1,317 @@
+"use client"
+
+import { useState, useEffect } from "react"
+import { useSearchParams } from "react-router-dom"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Search, Save, Download, Loader2 } from "lucide-react"
+import { toast } from "sonner"
+import { AttendanceItem } from "./attendance-item"
+import { EventHeader } from "./event-header"
+import { 
+  getEventRegistrations, 
+  batchMarkAttendance, 
+  getEventById,
+  type EventRegistrationDto,
+  type BatchMarkAttendanceItem
+} from "@/service/EventService"
+import { authService } from "@/services/authService"
+
+interface Student {
+  id: string
+  userId: number
+  name: string
+  studentId: string
+  attendance: "present" | "absent" | null
+  note: string
+}
+
+interface Event {
+  id: string
+  name: string
+  date: string
+  time: string
+  location: string
+}
+
+interface AttendancePageProps {
+  eventId?: string | number
+  event?: Event
+}
+
+export function AttendancePage({ eventId, event: propEvent }: AttendancePageProps) {
+  const [searchParams] = useSearchParams()
+  const user = authService.getCurrentUser()
+  const isPresident = user?.systemRole === "CLUB_PRESIDENT"
+  const readOnly = (searchParams.get("mode") ?? "") === "view" || !isPresident
+  const [searchTerm, setSearchTerm] = useState("")
+  const [students, setStudents] = useState<Student[]>([])
+  const [loading, setLoading] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [event, setEvent] = useState<Event | undefined>(propEvent)
+
+  // Fetch event data and registrations
+  useEffect(() => {
+    const fetchData = async () => {
+      if (!eventId) return
+      
+      try {
+        setLoading(true)
+        const eventIdNum = typeof eventId === 'string' ? parseInt(eventId, 10) : eventId
+        
+        // Fetch event details
+        const eventData = await getEventById(eventIdNum)
+        const startDate = new Date(eventData.startTime)
+        
+        setEvent({
+          id: eventData.id.toString(),
+          name: eventData.title,
+          date: startDate.toLocaleDateString("vi-VN"),
+          time: startDate.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
+          location: eventData.location || "Chưa có địa điểm"
+        })
+        
+        // Fetch registrations
+        const registrations = await getEventRegistrations(eventIdNum)
+        
+        // Map to Student interface
+        const mappedStudents: Student[] = registrations.map((reg: EventRegistrationDto) => ({
+          id: reg.id.toString(),
+          userId: reg.userId,
+          name: reg.fullName,
+          studentId: reg.studentCode || reg.email,
+          attendance: reg.attendanceStatus === "PRESENT" ? "present" 
+                     : reg.attendanceStatus === "ABSENT" ? "absent" 
+                     : null,
+          note: reg.notes || ""
+        }))
+        
+        setStudents(mappedStudents)
+      } catch (error) {
+        console.error("Error fetching attendance data:", error)
+        toast.error("Không thể tải dữ liệu điểm danh")
+      } finally {
+        setLoading(false)
+      }
+    }
+    
+    fetchData()
+  }, [eventId])
+
+  // Debounced server search
+  useEffect(() => {
+    const t = setTimeout(async () => {
+      if (!eventId) return
+      try {
+        const eventIdNum = typeof eventId === 'string' ? parseInt(eventId, 10) : eventId
+        const registrations = await getEventRegistrations(eventIdNum, searchTerm || undefined)
+        const mappedStudents: Student[] = registrations.map((reg: EventRegistrationDto) => ({
+          id: reg.id.toString(),
+          userId: reg.userId,
+          name: reg.fullName,
+          studentId: reg.studentCode || reg.email,
+          attendance: reg.attendanceStatus === "PRESENT" ? "present" 
+                     : reg.attendanceStatus === "ABSENT" ? "absent" 
+                     : null,
+          note: reg.notes || ""
+        }))
+        setStudents(mappedStudents)
+      } catch {}
+    }, 300)
+    return () => clearTimeout(t)
+  }, [searchTerm, eventId])
+
+  const filteredStudents = students
+
+  const handleAttendanceChange = (studentId: string, status: "present" | "absent") => {
+    setStudents(students.map((s) => (s.id === studentId ? { ...s, attendance: status } : s)))
+  }
+
+  const handleNoteChange = (studentId: string, note: string) => {
+    setStudents(students.map((s) => (s.id === studentId ? { ...s, note } : s)))
+  }
+
+  const presentCount = students.filter((s) => s.attendance === "present").length
+  const absentCount = students.filter((s) => s.attendance === "absent").length
+
+  const handleSave = async () => {
+    if (!eventId) {
+      toast.error("Không tìm thấy thông tin sự kiện")
+      return
+    }
+    
+    try {
+      setSaving(true)
+      const eventIdNum = typeof eventId === 'string' ? parseInt(eventId, 10) : eventId
+      
+      // Prepare batch attendance data
+      const attendances: BatchMarkAttendanceItem[] = students
+        .filter(s => s.attendance !== null)
+        .map(s => ({
+          userId: s.userId,
+          attendanceStatus: s.attendance === "present" ? "PRESENT" : "ABSENT",
+          notes: s.note || undefined
+        }))
+      
+      if (attendances.length === 0) {
+        toast.info("Vui lòng điểm danh ít nhất một người tham gia")
+        return
+      }
+      
+      await batchMarkAttendance({
+        eventId: eventIdNum,
+        attendances
+      })
+      
+      toast.success("Điểm danh đã được lưu thành công!")
+      
+      // Refresh data
+      const registrations = await getEventRegistrations(eventIdNum)
+      const mappedStudents: Student[] = registrations.map((reg: EventRegistrationDto) => ({
+        id: reg.id.toString(),
+        userId: reg.userId,
+        name: reg.fullName,
+        studentId: reg.studentCode || reg.email,
+        attendance: reg.attendanceStatus === "PRESENT" ? "present" 
+                   : reg.attendanceStatus === "ABSENT" ? "absent" 
+                   : null,
+        note: reg.notes || ""
+      }))
+      setStudents(mappedStudents)
+    } catch (error: any) {
+      console.error("Error saving attendance:", error)
+      toast.error(error?.response?.data?.message || "Không thể lưu điểm danh")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleDownload = () => {
+    const csv = [
+      ["Mã Sinh Viên", "Tên Sinh Viên", "Trạng Thái", "Ghi Chú"].join(","),
+      ...students.map((s) =>
+        [
+          s.studentId,
+          s.name,
+          s.attendance === "present" ? "Có mặt" : s.attendance === "absent" ? "Vắng mặt" : "Chưa điểm danh",
+          `"${s.note}"`,
+        ].join(","),
+      ),
+    ].join("\n")
+
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" })
+    const link = document.createElement("a")
+    link.href = URL.createObjectURL(blob)
+    link.download = `attendance-${new Date().toISOString().split("T")[0]}.csv`
+    link.click()
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="flex items-center gap-2">
+          <Loader2 className="w-6 h-6 animate-spin" />
+          <span>Đang tải dữ liệu điểm danh...</span>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6 p-6">
+      <EventHeader event={event} />
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card>
+          <CardContent className="pt-6">
+            <div className="text-center">
+              <div className="text-3xl font-bold text-primary">{presentCount}</div>
+              <p className="text-sm text-muted-foreground">Có mặt</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="text-center">
+              <div className="text-3xl font-bold text-destructive">{absentCount}</div>
+              <p className="text-sm text-muted-foreground">Vắng mặt</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="text-center">
+              <div className="text-3xl font-bold text-muted-foreground">
+                {students.length - presentCount - absentCount}
+              </div>
+              <p className="text-sm text-muted-foreground">Chưa điểm danh</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Danh sách sinh viên</CardTitle>
+          <CardDescription>Điểm danh cho sự kiện ngày hôm nay</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Tìm kiếm theo tên hoặc mã sinh viên..."
+                className="pl-10"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+          <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={handleDownload} className="gap-2 bg-transparent">
+                <Download className="h-4 w-4" />
+                <span className="hidden sm:inline">Xuất Excel</span>
+              </Button>
+              {!readOnly && (
+              <Button 
+                size="sm" 
+                onClick={handleSave} 
+                disabled={saving}
+                className="gap-2 bg-primary hover:bg-primary/90"
+              >
+                {saving ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span className="hidden sm:inline">Đang lưu...</span>
+                  </>
+                ) : (
+                  <>
+                    <Save className="h-4 w-4" />
+                    <span className="hidden sm:inline">Lưu</span>
+                  </>
+                )}
+              </Button>
+              )}
+            </div>
+          </div>
+
+          <div className="divide-y">
+              {filteredStudents.length > 0 ? (
+              filteredStudents.map((student) => (
+                <AttendanceItem
+                  key={student.id}
+                  student={student}
+                  onAttendanceChange={handleAttendanceChange}
+                  onNoteChange={handleNoteChange}
+                  disabled={readOnly}
+                />
+              ))
+            ) : (
+              <div className="py-8 text-center text-muted-foreground">Không tìm thấy sinh viên nào</div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}

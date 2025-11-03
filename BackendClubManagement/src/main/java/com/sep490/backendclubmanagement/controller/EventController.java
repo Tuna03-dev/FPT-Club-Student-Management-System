@@ -1,9 +1,11 @@
 package com.sep490.backendclubmanagement.controller;
 
 import com.sep490.backendclubmanagement.dto.ApiResponse;
+import com.sep490.backendclubmanagement.dto.request.BatchMarkAttendanceRequest;
 import com.sep490.backendclubmanagement.dto.request.CreateEventRequest;
 import com.sep490.backendclubmanagement.dto.request.EventApprovalRequest;
 import com.sep490.backendclubmanagement.dto.request.EventRequest;
+import com.sep490.backendclubmanagement.dto.request.MarkAttendanceRequest;
 import com.sep490.backendclubmanagement.dto.request.UpdateEventRequest;
 import com.sep490.backendclubmanagement.dto.response.*;
 import com.sep490.backendclubmanagement.entity.RequestEvent;
@@ -188,7 +190,53 @@ public class EventController {
      * Lấy danh sách người đăng ký sự kiện
      */
     @GetMapping("/{eventId}/registrations")
-    public ApiResponse<List<EventRegistrationDto>> getEventRegistrations(@PathVariable Long eventId) {
-        return ApiResponse.success(eventService.getEventRegistrations(eventId));
+    public ApiResponse<List<EventRegistrationDto>> getEventRegistrations(@PathVariable Long eventId,
+                                                                         @RequestParam(value = "keyword", required = false) String keyword) {
+        return ApiResponse.success(eventService.getEventRegistrations(eventId, keyword));
+    }
+
+    /**
+     * Club President: Lấy danh sách events của club để điểm danh
+     */
+    @GetMapping("/president/club/{clubId}")
+    public ApiResponse<List<EventData>> getClubEventsForPresident(
+            @PathVariable Long clubId,
+            @RequestParam(value = "keyword", required = false) String keyword,
+            @RequestParam(value = "startTime", required = false) String startTime,
+            @RequestParam(value = "endTime", required = false) String endTime) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        
+        // Ràng theo đúng CLB: chỉ PRESIDENT của CLB này mới được xem danh sách để điểm danh
+        if (!roleService.isClubPresident(userId, clubId)) {
+            throw new ForbiddenException("Chỉ CLUB_PRESIDENT của CLB này mới có quyền truy cập");
+        }
+        
+        return ApiResponse.success(eventService.getClubEventsForPresident(clubId, keyword, startTime, endTime));
+    }
+
+
+
+    /**
+     * Club President: Điểm danh hàng loạt cho tất cả người tham gia sự kiện
+     */
+    @PostMapping("/batch-mark-attendance")
+    public ApiResponse<Void> batchMarkAttendance(@Valid @RequestBody BatchMarkAttendanceRequest request) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        
+        // Lấy clubId từ event để kiểm tra quyền theo club
+        EventData event = eventService.getEventById(request.getEventId());
+        Long clubId = event != null ? event.getClubId() : null;
+        if (clubId == null) {
+            throw new ForbiddenException("Event không thuộc về club nào");
+        }
+        
+        // Kiểm tra quyền President theo club cụ thể
+        if (!roleService.isClubPresident(userId, clubId)) {
+            throw new ForbiddenException("Chỉ CLUB_PRESIDENT của CLB này mới có quyền điểm danh");
+        }
+        
+        eventService.batchMarkAttendance(request.getEventId(), request.getAttendances());
+        
+        return ApiResponse.success();
     }
 }

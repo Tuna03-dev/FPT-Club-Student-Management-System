@@ -247,3 +247,50 @@ export async function getEventRegistrationCount(eventId: number): Promise<number
   return res.data ?? 0;
 }
 
+// ===== Event Attendance =====
+export interface EventRegistrationDto {
+  id: number;
+  userId: number;
+  fullName: string;
+  studentCode: string;
+  email: string;
+  avatarUrl?: string;
+  registrationTime: string; // ISO
+  attendanceStatus?: string; // "REGISTERED" | "PRESENT" | "ABSENT"
+  checkInTime?: string; // ISO
+  notes?: string;
+}
+
+export async function getEventRegistrations(eventId: number, keyword?: string): Promise<EventRegistrationDto[]> {
+  const res = await axiosClient.get<EventRegistrationDto[]>(`/events/${eventId}/registrations`, {
+    params: keyword ? { keyword } : undefined,
+  });
+  return res.data ?? [];
+}
+
+export interface BatchMarkAttendanceItem {
+  userId: number;
+  attendanceStatus: "PRESENT" | "ABSENT";
+  notes?: string;
+}
+
+export interface BatchMarkAttendanceRequest {
+  eventId: number;
+  attendances: BatchMarkAttendanceItem[];
+}
+
+export async function batchMarkAttendance(payload: BatchMarkAttendanceRequest): Promise<void> {
+  await axiosClient.post<void>("/events/batch-mark-attendance", payload);
+}
+
+/**
+ * Club President: Lấy danh sách events của club để điểm danh
+ */
+export async function getClubEventsForPresident(
+  clubId: number,
+  params?: { keyword?: string; startTime?: string; endTime?: string }
+): Promise<EventData[]> {
+  const res = await axiosClient.get<EventData[]>(`/events/president/club/${clubId}`, { params });
+  return res.data ?? [];
+}
+

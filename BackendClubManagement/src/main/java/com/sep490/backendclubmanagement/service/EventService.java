@@ -1,5 +1,6 @@
 package com.sep490.backendclubmanagement.service;
 
+import com.sep490.backendclubmanagement.dto.request.BatchMarkAttendanceRequest;
 import com.sep490.backendclubmanagement.dto.request.EventRequest;
 import com.sep490.backendclubmanagement.dto.response.ClubDto;
 import com.sep490.backendclubmanagement.dto.response.EventData;
@@ -26,6 +27,7 @@ import org.springframework.context.MessageSource;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.data.domain.Page;
 
 import java.time.LocalDateTime;
@@ -251,10 +253,149 @@ public class EventService {
                 .collect(Collectors.toList());
     }
 
+    public List<EventRegistrationDto> getEventRegistrations(Long eventId, String keyword) {
+        List<EventRegistrationDto> list = getEventRegistrations(eventId);
+        if (keyword == null || keyword.isBlank()) return list;
+        String kw = keyword.trim().toLowerCase();
+        return list.stream()
+                .filter(r -> {
+                    String name = r.getFullName() != null ? r.getFullName().toLowerCase() : "";
+                    String code = r.getStudentCode() != null ? r.getStudentCode().toLowerCase() : "";
+                    return name.contains(kw) || code.contains(kw);
+                })
+                .toList();
+    }
+
     /**
      * Lấy số lượng người đã đăng ký sự kiện
      */
     public Long getEventRegistrationCount(Long eventId) {
-        return eventAttendanceRepository.countByEventIdAndStatus(eventId, AttendanceStatus.REGISTERED);
+        return eventAttendanceRepository.countByEventIdAndStatus(eventId);
+    }
+
+    /**
+     * Lấy danh sách events của club (cho Club President)
+     * Chỉ lấy các events đã được publish (isDraft = false)
+     */
+    public List<EventData> getClubEventsForPresident(Long clubId) {
+        return eventRepository.findByClubIdAndIsDraftFalse(clubId)
+                .stream()
+                .map(event -> {
+                    EventData dto = eventMapper.toDto(event);
+                    dto.setMediaUrls(eventMediaRepository.findMediaUrlsByEventId(event.getId()));
+                    dto.setClubId(event.getClub() != null ? event.getClub().getId() : null);
+                    return dto;
+                })
+                .toList();
+    }
+
+    // Version with optional keyword/time filter
+    public List<EventData> getClubEventsForPresident(Long clubId, String keyword, String startTime, String endTime) {
+        List<Event> events = eventRepository.findByClubIdAndIsDraftFalse(clubId);
+
+        // Keyword filter (title/description/location) - simple lowercase contains
+        if (keyword != null && !keyword.isBlank()) {
+            final List<String> keywords = Arrays.stream(keyword.split(","))
+                    .map(String::trim)
+                    .filter(k -> !k.isEmpty())
+                    .toList();
+            if (!keywords.isEmpty()) {
+                events = events.stream()
+                        .filter(event -> {
+                            String title = event.getTitle() != null ? event.getTitle().toLowerCase() : "";
+                            String desc = event.getDescription() != null ? event.getDescription().toLowerCase() : "";
+                            String loc = event.getLocation() != null ? event.getLocation().toLowerCase() : "";
+                            return keywords.stream().anyMatch(kw -> {
+                                String kwl = kw.toLowerCase();
+                                return title.contains(kwl) || desc.contains(kwl) || loc.contains(kwl);
+                            });
+                        })
+                        .toList();
+            }
+        }
+
+        // Time overlap filter
+        if (startTime != null || endTime != null) {
+            LocalDateTime from = null;
+            LocalDateTime to = null;
+            try { if (startTime != null) from = LocalDateTime.parse(startTime); } catch (Exception ignored) {}
+            try { if (endTime != null) to = LocalDateTime.parse(endTime); } catch (Exception ignored) {}
+
+            final LocalDateTime fFrom = from;
+            final LocalDateTime fTo = to;
+            events = events.stream()
+                    .filter(e -> {
+                        if (fFrom == null && fTo == null) return true;
+                        LocalDateTime s = e.getStartTime();
+                        LocalDateTime ed = e.getEndTime();
+                        if (s == null && ed == null) return false;
+                        boolean afterFrom = (fFrom == null) || (ed != null && !ed.isBefore(fFrom));
+                        boolean beforeTo = (fTo == null) || (s != null && !s.isAfter(fTo));
+                        return afterFrom && beforeTo;
+                    })
+                    .toList();
+        }
+
+        return events.stream()
+                .map(event -> {
+                    EventData dto = eventMapper.toDto(event);
+                    dto.setMediaUrls(eventMediaRepository.findMediaUrlsByEventId(event.getId()));
+                    dto.setClubId(event.getClub() != null ? event.getClub().getId() : null);
+                    return dto;
+                })
+                .toList();
+    }
+
+    // removed search/filter overload and normalization (revert)
+
+
+
+    /**
+     * Điểm danh hàng loạt cho nhiều user trong event
+     * Lưu ý: Phải check quyền Club President ở controller trước khi gọi method này
+     */
+    @Transactional
+    public void batchMarkAttendance(Long eventId, List<BatchMarkAttendanceRequest.AttendanceItem> attendances) {
+        // Kiểm tra event tồn tại và thuộc club
+        Event event = eventRepository.findById(eventId)
+                .orElseThrow(() -> new NotFoundException("Event not found"));
+        
+        // Kiểm tra event thuộc club nào
+        if (event.getClub() == null) {
+            throw new NotFoundException("Event không thuộc về club nào");
+        }
+        
+        // Không cho điểm danh nếu sự kiện đã kết thúc
+        if (event.getEndTime() != null && event.getEndTime().isBefore(LocalDateTime.now())) {
+            throw new RuntimeException("Event has ended. Attendance can no longer be modified");
+        }
+        
+        if (attendances == null || attendances.isEmpty()) {
+            throw new RuntimeException("Danh sách điểm danh không được rỗng");
+        }
+        
+        List<EventAttendance> updatedAttendances = new ArrayList<>();
+        
+        for (BatchMarkAttendanceRequest.AttendanceItem item : attendances) {
+            // Kiểm tra status hợp lệ
+            if (item.getAttendanceStatus() != AttendanceStatus.PRESENT && 
+                item.getAttendanceStatus() != AttendanceStatus.ABSENT) {
+                throw new RuntimeException("Chỉ có thể điểm danh PRESENT hoặc ABSENT cho userId: " + item.getUserId());
+            }
+            
+            // Kiểm tra user đã đăng ký event chưa
+            EventAttendance attendance = eventAttendanceRepository.findByEventIdAndUserId(eventId, item.getUserId())
+                    .orElseThrow(() -> new NotFoundException("User với ID " + item.getUserId() + " chưa đăng ký sự kiện này"));
+            
+            // Cập nhật điểm danh
+            attendance.setAttendanceStatus(item.getAttendanceStatus());
+            attendance.setCheckInTime(item.getAttendanceStatus() == AttendanceStatus.PRESENT ? LocalDateTime.now() : null);
+            attendance.setNotes(item.getNotes());
+            
+            updatedAttendances.add(attendance);
+        }
+        
+        // Lưu tất cả cùng lúc
+        eventAttendanceRepository.saveAll(updatedAttendances);
     }
 }

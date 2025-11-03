@@ -24,9 +24,12 @@ public interface EventAttendanceRepository extends JpaRepository<EventAttendance
     @Query("SELECT ea FROM EventAttendance ea WHERE ea.event.id = :eventId AND ea.attendanceStatus = :status")
     List<EventAttendance> findByEventIdAndStatus(@Param("eventId") Long eventId, @Param("status") AttendanceStatus status);
     
-    @Query("SELECT COUNT(ea) FROM EventAttendance ea WHERE ea.event.id = :eventId AND ea.attendanceStatus = :status")
-    Long countByEventIdAndStatus(@Param("eventId") Long eventId, @Param("status") AttendanceStatus status);
+    @Query("SELECT COUNT(ea) FROM EventAttendance ea WHERE ea.event.id = :eventId ")
+    Long countByEventIdAndStatus(@Param("eventId") Long eventId);
 }
+
+
+
 
 
 
