@@ -12,6 +12,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { User, Users, LogOut, Shield } from "lucide-react";
+import { toast } from "sonner";
 
 // Mock data for clubs
 const mockClubs = [
@@ -73,12 +74,14 @@ const Header: React.FC = () => {
       await authService.logoutWithApi();
       setUser(null);
       setIsAuthenticated(false);
+      toast.success("Đăng xuất thành công!", { duration: 1000 });
       navigate("/");
     } catch (error) {
       console.error("Logout error:", error);
       // Even if API fails, clear local state and redirect
       setUser(null);
       setIsAuthenticated(false);
+      toast.success("Đăng xuất thành công!", { duration: 1000 });
       navigate("/");
     }
   };
