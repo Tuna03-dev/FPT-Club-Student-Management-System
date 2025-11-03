@@ -84,6 +84,8 @@ const LoginPage: React.FC = () => {
 
         toast.success("Đăng nhập thành công!", { duration: 2000 });
         navigate("/"); // Redirect to dashboard after successful login
+      } else if (result.code === 403) {
+        toast.error("Tài khoản của bạn không thuộc tổ chức của chúng tôi");
       } else {
         console.error("Login failed:", result.message);
         toast.error("Đăng nhập không thành công");
@@ -159,7 +161,7 @@ const LoginPage: React.FC = () => {
       {/* Back Button */}
       <button
         className="back-button"
-        onClick={() => navigate(-1)}
+        onClick={() => navigate("")}
         aria-label="Quay lại"
       >
         <ArrowLeft size={20} />

@@ -60,7 +60,7 @@ public class AuthController {
 
             Optional<Map<String, Object>> profileOpt = fapApiServiceService.findProfileByEmail(email);
             if (profileOpt.isEmpty()) {
-                return ApiResponse.error(ErrorCode.UNAUTHORIZED, null);
+                return ApiResponse.error(ErrorCode.ORG_UNAUTHORIZED, null);
             }
 
             Map<String, Object> profile = profileOpt.get();
