@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { UpdateEventForm, type UpdateEventFormData } from "./update-event-form"
-import { updateEvent, deleteEvent, getEventById } from "@/service/EventService"
+import { updateEvent, deleteEvent, getEventById, registerForEvent, cancelEventRegistration, getRegistrationStatus } from "@/service/EventService"
 import React from "react"
 
 interface EventDetailModalProps {
@@ -33,11 +33,19 @@ export function EventDetailModal({ event, onClose, onUpdated, onDeleted }: Event
   const [openUpdate, setOpenUpdate] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [images, setImages] = useState<string[]>(event.images ?? [])
+  const [isRegistered, setIsRegistered] = useState(false)
+  const [isRegistering, setIsRegistering] = useState(false)
+
+  // Kiểm tra sự kiện đã kết thúc chưa
+  const isEventEnded = new Date() >= event.endDate
+  
+  // Kiểm tra sự kiện đang diễn ra (thời gian hiện tại nằm giữa startDate và endDate)
+  const isEventOngoing = new Date() >= event.startDate && new Date() < event.endDate
 
   // If draft event has no images loaded, fetch full event details to get mediaUrls
   React.useEffect(() => {
     let cancelled = false
-    if ((event.isMyDraft || true) && (!images || images.length === 0)) {
+    if ((event.isMyDraft) && (!images || images.length === 0)) {
       getEventById(Number(event.id))
         .then((full) => {
           if (!cancelled) {
@@ -49,6 +57,19 @@ export function EventDetailModal({ event, onClose, onUpdated, onDeleted }: Event
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [event.id])
+
+  // Kiểm tra trạng thái đăng ký khi không phải draft
+  React.useEffect(() => {
+    if (!event.isMyDraft && !isEventEnded) {
+      getRegistrationStatus(Number(event.id))
+        .then((registered) => {
+          setIsRegistered(registered)
+        })
+        .catch(() => {
+          setIsRegistered(false)
+        })
+    }
+  }, [event.id, event.isMyDraft, isEventEnded])
 
   const handlePrevImage = () => {
     setCurrentImageIndex((prev) => (prev === 0 ? images.length - 1 : prev - 1))
@@ -81,6 +102,31 @@ export function EventDetailModal({ event, onClose, onUpdated, onDeleted }: Event
         return "Đã kết thúc"
       default:
         return status
+    }
+  }
+
+  const handleRegisterClick = async () => {
+    try {
+      setIsRegistering(true)
+      if (isRegistered) {
+        // Kiểm tra nếu sự kiện đang diễn ra thì không cho phép hủy đăng ký
+        if (isEventOngoing) {
+          alert("Không thể hủy đăng ký khi sự kiện đang diễn ra.")
+          setIsRegistering(false)
+          return
+        }
+        await cancelEventRegistration(Number(event.id))
+        setIsRegistered(false)
+      } else {
+        await registerForEvent(Number(event.id))
+        setIsRegistered(true)
+      }
+    } catch (error) {
+      console.error("Error registering for event:", error)
+      // Có thể thêm toast notification ở đây
+      alert(isRegistered ? "Không thể hủy đăng ký. Vui lòng thử lại." : "Không thể đăng ký. Vui lòng thử lại.")
+    } finally {
+      setIsRegistering(false)
     }
   }
 
@@ -200,9 +246,26 @@ export function EventDetailModal({ event, onClose, onUpdated, onDeleted }: Event
               </Button>
             </div>
           ) : (
-            <Button className="w-full bg-primary hover:bg-primary/90 text-primary-foreground py-6 text-base">
-              Đăng ký tham gia
+            // Chỉ hiển thị nút đăng ký nếu sự kiện chưa kết thúc
+            !isEventEnded && (
+              <Button 
+                className={`w-full py-6 text-base ${
+                  isRegistered 
+                    ? "bg-gray-500 hover:bg-gray-600 text-white" 
+                    : "bg-primary hover:bg-primary/90 text-primary-foreground"
+                }`}
+                onClick={handleRegisterClick}
+                disabled={isRegistering || (isRegistered && isEventOngoing)}
+                title={isRegistered && isEventOngoing ? "Không thể hủy đăng ký khi sự kiện đang diễn ra" : undefined}
+              >
+                {isRegistering 
+                  ? "Đang xử lý..." 
+                  : isRegistered 
+                    ? isEventOngoing ? "Đã đăng ký" : "Hủy đăng ký"
+                    : "Đăng ký tham gia"
+                }
             </Button>
+            )
           )}
         </div>
       </Card>

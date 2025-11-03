@@ -5,7 +5,7 @@ import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { EventDetailModal } from "./event-detail-modal"
-import { type EventData, getEventsByClubId, createEvent, getAllEventTypes, getPendingRequests, type PendingRequestDto, approveByClub, approveByUniversity, getMyDraftEvents, type MyDraftEventDto } from "@/service/EventService"
+import { type EventData, getEventsByClubId, getStaffEventsByClubId, getStaffAllEvents, createEvent, getAllEventTypes, getPendingRequests, type PendingRequestDto, approveByClub, approveByUniversity, getMyDraftEvents, type MyDraftEventDto } from "@/service/EventService"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { CreateEventForm } from "./create-event-form"
 import { authService } from "@/services/authService"
@@ -55,7 +55,29 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
       try {
         setLoading(true)
         setError(null)
-        const eventData = await getEventsByClubId(clubId)
+        
+        // Check if user is STAFF - if yes, use staff API (no membership check)
+        const user = authService.getCurrentUser()
+        const roleUpper = user?.systemRole ? String(user.systemRole).trim().toUpperCase() : undefined
+        const isStaff = roleUpper === "STAFF"
+        
+        let eventData: EventData[]
+        if (isStaff) {
+          // Staff: use staff API - can view events by clubId or all events
+          // clubId = 0 or null means "all events"
+          if (clubId && clubId > 0) {
+            eventData = await getStaffEventsByClubId(clubId)
+          } else {
+            eventData = await getStaffAllEvents()
+          }
+        } else {
+          // Non-staff: use regular API (requires membership check)
+          // Must have valid clubId
+          if (!clubId || clubId <= 0) {
+            throw new Error("Club ID is required")
+          }
+          eventData = await getEventsByClubId(clubId)
+        }
         
         // Map API data to Event interface
         const mappedEvents: Event[] = eventData.map((event: EventData) => ({
@@ -73,8 +95,6 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
         let all: Event[] = mappedEvents
 
         // If user is CLUB_PRESIDENT or CLUB_OFFICER, also fetch my draft events and merge
-        const user = authService.getCurrentUser()
-        const roleUpper = user?.systemRole ? String(user.systemRole).trim().toUpperCase() : undefined
         if (roleUpper === "CLUB_PRESIDENT" || roleUpper === "CLUB_OFFICER") {
           try {
             const drafts = await getMyDraftEvents()

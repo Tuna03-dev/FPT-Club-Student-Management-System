@@ -2,10 +2,12 @@ import { createBrowserRouter, Navigate } from "react-router-dom";
 import MainLayout from "@/layouts/MainLayout";
 import HomePage from "@/pages/HomePage";
 import { ClubLayout } from "@/layouts/ClubLayout";
+import { StaffLayout } from "@/layouts/StaffLayout";
 
 import { Dashboard } from "@/pages/myclub/Dashboard";
 import MemberList from "@/pages/myclub/members/MemberList";
 import { EventList } from "@/pages/myclub/events/EventList";
+import { StaffEventList } from "@/pages/myclub/staff/StaffEventList";
 import { Notifications } from "@/pages/myclub/Notifications";
 import { Settings } from "@/pages/myclub/Settings";
 
@@ -109,6 +111,19 @@ export const router = createBrowserRouter([
       { path: "teams/:teamId", element: <TeamDetailPage /> },
 
       { path: "myclub", element: <Navigate to="." replace /> },
+    ],
+  },
+
+  {
+    path: "/myclub/staff",
+    element: (
+      <ProtectedRoute>
+        <StaffLayout />
+      </ProtectedRoute>
+    ),
+    children: [
+      { path: "events", element: <StaffEventList /> },
+      { path: "settings", element: <Settings /> },
     ],
   },
 

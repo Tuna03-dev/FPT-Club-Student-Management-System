@@ -7,8 +7,10 @@ import com.sep490.backendclubmanagement.dto.request.EventRequest;
 import com.sep490.backendclubmanagement.dto.request.UpdateEventRequest;
 import com.sep490.backendclubmanagement.dto.response.*;
 import com.sep490.backendclubmanagement.entity.RequestEvent;
+import com.sep490.backendclubmanagement.exception.ForbiddenException;
 import com.sep490.backendclubmanagement.service.EventManagementService;
 import com.sep490.backendclubmanagement.service.EventService;
+import com.sep490.backendclubmanagement.service.RoleService;
 import com.sep490.backendclubmanagement.util.SecurityUtils;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +26,7 @@ public class EventController {
 
     private final EventService eventService;
     private final EventManagementService eventManagementService;
+    private final RoleService roleService;
     
     @PostMapping("/get-all-by-filter")
     public ApiResponse<EventResponse> getAllEventsByFilter(@RequestBody EventRequest request){
@@ -49,6 +52,30 @@ public class EventController {
     public ApiResponse<List<EventData>> getEventsByClubId(@PathVariable Long clubId) {
         Long userId = SecurityUtils.getCurrentUserId();
         return ApiResponse.success(eventService.getEventsByClubId(clubId, userId));
+    }
+
+    /**
+     * Staff: Lấy tất cả events (không cần check membership)
+     */
+    @GetMapping("/staff/all")
+    public ApiResponse<List<EventData>> getStaffAllEvents() {
+        Long userId = SecurityUtils.getCurrentUserId();
+        if (!roleService.isStaff(userId)) {
+            throw new ForbiddenException("Chỉ STAFF mới có quyền truy cập");
+        }
+        return ApiResponse.success(eventService.getStaffAllEvents());
+    }
+
+    /**
+     * Staff: Lấy events theo clubId (không cần check membership)
+     */
+    @GetMapping("/staff/club/{clubId}")
+    public ApiResponse<List<EventData>> getStaffEventsByClubId(@PathVariable Long clubId) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        if (!roleService.isStaff(userId)) {
+            throw new ForbiddenException("Chỉ STAFF mới có quyền truy cập");
+        }
+        return ApiResponse.success(eventService.getStaffEventsByClubId(clubId));
     }
     
     /**
@@ -116,5 +143,52 @@ public class EventController {
         Long userId = SecurityUtils.getCurrentUserId();
         eventManagementService.deleteMyDraftEvent(eventId, userId);
         return ApiResponse.success();
+    }
+
+    /**
+     * Đăng ký tham gia sự kiện
+     */
+    @PostMapping("/{eventId}/register")
+    public ApiResponse<Void> registerForEvent(@PathVariable Long eventId) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        eventService.registerForEvent(eventId, userId);
+        return ApiResponse.success();
+    }
+
+    /**
+     * Hủy đăng ký sự kiện
+     */
+    @DeleteMapping("/{eventId}/register")
+    public ApiResponse<Void> cancelEventRegistration(@PathVariable Long eventId) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        eventService.cancelEventRegistration(eventId, userId);
+        return ApiResponse.success();
+    }
+
+    /**
+     * Kiểm tra user đã đăng ký sự kiện chưa
+     */
+    @GetMapping("/{eventId}/registration-status")
+    public ApiResponse<Boolean> getRegistrationStatus(@PathVariable Long eventId) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        boolean isRegistered = eventService.isUserRegisteredForEvent(eventId, userId);
+        return ApiResponse.success(isRegistered);
+    }
+
+    /**
+     * Lấy số lượng người đã đăng ký sự kiện
+     */
+    @GetMapping("/{eventId}/registration-count")
+    public ApiResponse<Long> getEventRegistrationCount(@PathVariable Long eventId) {
+        Long count = eventService.getEventRegistrationCount(eventId);
+        return ApiResponse.success(count);
+    }
+
+    /**
+     * Lấy danh sách người đăng ký sự kiện
+     */
+    @GetMapping("/{eventId}/registrations")
+    public ApiResponse<List<EventRegistrationDto>> getEventRegistrations(@PathVariable Long eventId) {
+        return ApiResponse.success(eventService.getEventRegistrations(eventId));
     }
 }

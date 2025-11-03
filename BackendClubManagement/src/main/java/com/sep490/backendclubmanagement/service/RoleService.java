@@ -27,6 +27,11 @@ public class RoleService {
                 .orElse("STUDENT"); // Default role nếu không tìm thấy
     }
 
+    public String getUserSystemRoleStaff(Long userId) {
+        return roleMemberShipRepository.findSystemRoleStaff(userId)
+                .orElse("STUDENT"); // Default role nếu không tìm thấy
+    }
+
     /**
      * Kiểm tra user có role cụ thể trong club không (dựa vào system role)
      */
@@ -68,7 +73,7 @@ public class RoleService {
      * Kiểm tra user có phải STAFF không (dựa vào system role)
      */
     public boolean isStaff(Long userId) {
-        String systemRole = getUserSystemRole(userId);
+        String systemRole = getUserSystemRoleStaff(userId);
         return "STAFF".equals(systemRole);
     }
     
@@ -76,9 +81,13 @@ public class RoleService {
      * Kiểm tra user có quyền tạo event không
      */
     public boolean canCreateEvent(Long userId, Long clubId) {
+        // Staff không có club membership, cần check từ users.system_role_id
+        if (isStaff(userId)) {
+            return true;
+        }
+        // Các role khác check từ club membership
         String systemRole = getUserSystemRole(userId);
-        return "STAFF".equals(systemRole) || 
-               "CLUB_PRESIDENT".equals(systemRole) || 
+        return "CLUB_PRESIDENT".equals(systemRole) || 
                "CLUB_OFFICER".equals(systemRole);
     }
     

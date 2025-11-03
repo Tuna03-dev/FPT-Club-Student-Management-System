@@ -53,4 +53,22 @@ public interface EventRepository extends JpaRepository<Event, Long> {
 
     @Query("SELECT e FROM Event e WHERE (e.club.id = :clubId OR e.club.id IS NULL ) AND e.isDraft = false")
     List<Event> findByClubIdAndIsDraftFalse(Long clubId);
+
+    @Query("SELECT e FROM Event e WHERE e.isDraft = false")
+    List<Event> findByIsDraftFalse();
+
+    /**
+     * Lấy tất cả events cho Staff (không bao gồm MEETING)
+     */
+    @Query("SELECT e FROM Event e WHERE e.isDraft = false " +
+           "AND (e.eventType IS NULL OR UPPER(TRIM(e.eventType.typeName)) <> 'MEETING')")
+    List<Event> findStaffAllEventsExcludingMeeting();
+
+    /**
+     * Lấy events theo clubId cho Staff (không bao gồm MEETING)
+     */
+    @Query("SELECT e FROM Event e WHERE (e.club.id = :clubId OR e.club.id IS NULL) " +
+           "AND e.isDraft = false " +
+           "AND (e.eventType IS NULL OR UPPER(TRIM(e.eventType.typeName)) <> 'MEETING')")
+    List<Event> findStaffEventsByClubIdExcludingMeeting(Long clubId);
 }

@@ -16,11 +16,24 @@ public interface RoleMemberShipRepository extends JpaRepository<RoleMemberShip, 
 
 
     // Trả về system role của user
-    @Query(value = "SELECT sr.role_name FROM users u " +
-           "JOIN system_roles sr ON u.system_role_id = sr.id " +
-           "WHERE u.id = :userId",
+    @Query(value = "SELECT sr.role_name\n" +
+            "FROM users u\n" +
+            "         JOIN club_memberships cm ON u.id = cm.user_id\n" +
+            "         JOIN role_memberships rm ON cm.id = rm.club_membership_id\n" +
+            "         JOIN semesters s ON rm.semester_id = s.id\n" +
+            "         JOIN club_roles cr ON rm.clubrole_id = cr.id\n" +
+            "         JOIN system_roles sr ON cr.system_role_id = sr.id\n" +
+            "WHERE u.id = :userId\n" +
+            "  AND s.is_current = true\n" +
+            "LIMIT 1",
            nativeQuery = true)
     Optional<String> findSystemRoleByUserId(@Param("userId") Long userId);
+
+    @Query(value = "SELECT sr.role_name FROM users u " +
+            "JOIN system_roles sr ON u.system_role_id = sr.id " +
+            "WHERE u.id = :userId",
+            nativeQuery = true)
+    Optional<String> findSystemRoleStaff(Long userId);
 
     List<RoleMemberShip> findByClubMemberShipId(Long clubMemberShipId);
 

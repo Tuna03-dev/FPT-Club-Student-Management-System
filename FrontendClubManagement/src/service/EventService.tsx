@@ -77,6 +77,22 @@ export async function getEventsByClubId(clubId: number): Promise<EventData[]> {
   return res.data ?? [];
 }
 
+/**
+ * Staff: Lấy tất cả events (không cần check membership)
+ */
+export async function getStaffAllEvents(): Promise<EventData[]> {
+  const res = await axiosClient.get<EventData[]>("/events/staff/all");
+  return res.data ?? [];
+}
+
+/**
+ * Staff: Lấy events theo clubId (không cần check membership)
+ */
+export async function getStaffEventsByClubId(clubId: number): Promise<EventData[]> {
+  const res = await axiosClient.get<EventData[]>(`/events/staff/club/${clubId}`);
+  return res.data ?? [];
+}
+
 export type EventStatusFilter = "all" | "upcoming" | "ongoing" | "completed";
 
 export function computeEventStatus(nowIso: string, startIso: string, endIso: string): EventStatusFilter {
@@ -210,5 +226,24 @@ export interface MyDraftEventDto {
 export async function getMyDraftEvents(): Promise<MyDraftEventDto[]> {
   const res = await axiosClient.get<MyDraftEventDto[]>("/events/my-draft-events");
   return res.data ?? [];
+}
+
+// ===== Event Registration =====
+export async function registerForEvent(eventId: number): Promise<void> {
+  await axiosClient.post<void>(`/events/${eventId}/register`);
+}
+
+export async function cancelEventRegistration(eventId: number): Promise<void> {
+  await axiosClient.delete<void>(`/events/${eventId}/register`);
+}
+
+export async function getRegistrationStatus(eventId: number): Promise<boolean> {
+  const res = await axiosClient.get<boolean>(`/events/${eventId}/registration-status`);
+  return res.data ?? false;
+}
+
+export async function getEventRegistrationCount(eventId: number): Promise<number> {
+  const res = await axiosClient.get<number>(`/events/${eventId}/registration-count`);
+  return res.data ?? 0;
 }
 

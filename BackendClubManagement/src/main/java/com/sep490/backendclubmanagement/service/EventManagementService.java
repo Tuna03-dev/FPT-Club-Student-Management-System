@@ -315,7 +315,6 @@ public class EventManagementService {
         }
 
         if (isMeetingNow) {
-            // Tự động duyệt request vì MEETING không cần phê duyệt
             requestEvent.setStatus(RequestStatus.APPROVED_UNIVERSITY);
             requestEvent.setResponseMessage("Auto-approved due to MEETING type change");
             requestEventRepository.save(requestEvent);
@@ -345,10 +344,7 @@ public class EventManagementService {
             throw new NotFoundException("Event không tồn tại");
         }
 
-        // Xóa media trước để tránh lỗi FK
         eventMediaRepository.deleteByEvent_Id(event.getId());
-
-        // Xóa RequestEvent trước để tránh lỗi FK, sau đó xóa Event
         requestEventRepository.delete(requestEvent);
         eventRepository.delete(event);
     }

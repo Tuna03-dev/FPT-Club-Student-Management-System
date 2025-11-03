@@ -3,16 +3,22 @@ package com.sep490.backendclubmanagement.service;
 import com.sep490.backendclubmanagement.dto.request.EventRequest;
 import com.sep490.backendclubmanagement.dto.response.ClubDto;
 import com.sep490.backendclubmanagement.dto.response.EventData;
+import com.sep490.backendclubmanagement.dto.response.EventRegistrationDto;
 import com.sep490.backendclubmanagement.dto.response.EventResponse;
 import com.sep490.backendclubmanagement.dto.response.EventTypesDto;
+import com.sep490.backendclubmanagement.entity.AttendanceStatus;
 import com.sep490.backendclubmanagement.entity.Club;
 import com.sep490.backendclubmanagement.entity.Event;
+import com.sep490.backendclubmanagement.entity.EventAttendance;
 import com.sep490.backendclubmanagement.entity.EventType;
+import com.sep490.backendclubmanagement.entity.User;
 import com.sep490.backendclubmanagement.exception.NotFoundException;
 import com.sep490.backendclubmanagement.mapper.EventMapper;
 import com.sep490.backendclubmanagement.repository.ClubMemberShipRepository;
+import com.sep490.backendclubmanagement.repository.EventAttendanceRepository;
 import com.sep490.backendclubmanagement.repository.EventMediaRepository;
 import com.sep490.backendclubmanagement.repository.EventRepository;
+import com.sep490.backendclubmanagement.repository.UserRepository;
 import com.sep490.backendclubmanagement.shared.ModelMapperUtils;
 import lombok.Builder;
 import lombok.RequiredArgsConstructor;
@@ -34,6 +40,8 @@ public class EventService {
     private final EventRepository eventRepository;
     private final EventMediaRepository eventMediaRepository;
     private final ClubMemberShipRepository clubMemberShipRepository;
+    private final EventAttendanceRepository eventAttendanceRepository;
+    private final UserRepository userRepository;
     private final EventMapper eventMapper;
     private final MessageSource messageSource;
 
@@ -118,5 +126,135 @@ public class EventService {
                     return dto;
                 })
                 .toList();
+    }
+
+    /**
+     * Lấy tất cả events cho Staff (không cần check membership, loại bỏ MEETING)
+     */
+    public List<EventData> getStaffAllEvents() {
+        return eventRepository.findStaffAllEventsExcludingMeeting()
+                .stream()
+                .map(event -> {
+                    EventData dto = eventMapper.toDto(event);
+                    dto.setMediaUrls(eventMediaRepository.findMediaUrlsByEventId(event.getId()));
+                    dto.setClubId(event.getClub() != null ? event.getClub().getId() : null);
+                    return dto;
+                })
+                .toList();
+    }
+
+    /**
+     * Lấy events theo clubId cho Staff (không cần check membership, loại bỏ MEETING)
+     */
+    public List<EventData> getStaffEventsByClubId(Long clubId) {
+        return eventRepository.findStaffEventsByClubIdExcludingMeeting(clubId)
+                .stream()
+                .map(event -> {
+                    EventData dto = eventMapper.toDto(event);
+                    dto.setMediaUrls(eventMediaRepository.findMediaUrlsByEventId(event.getId()));
+                    dto.setClubId(event.getClub() != null ? event.getClub().getId() : null);
+                    return dto;
+                })
+                .toList();
+    }
+
+    /**
+     * Đăng ký tham gia sự kiện
+     */
+    public void registerForEvent(Long eventId, Long userId) {
+        // Kiểm tra event tồn tại
+        Event event = eventRepository.findById(eventId)
+                .orElseThrow(() -> new NotFoundException("Event not found"));
+        
+        // Kiểm tra event đã được publish chưa
+        if (event.getIsDraft() != null && event.getIsDraft()) {
+            throw new RuntimeException("Cannot register for draft event");
+        }
+        
+        // Kiểm tra event đã kết thúc chưa
+        if (event.getStartTime() != null && event.getStartTime().isBefore(LocalDateTime.now())) {
+            throw new RuntimeException("Cannot register for event that has already started");
+        }
+        
+        // Kiểm tra user tồn tại
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new NotFoundException("User not found"));
+        
+        // Kiểm tra đã đăng ký chưa
+        if (eventAttendanceRepository.existsByEventIdAndUserId(eventId, userId)) {
+            throw new RuntimeException("You have already registered for this event");
+        }
+        
+        // Tạo event attendance với status REGISTERED
+        EventAttendance eventAttendance = EventAttendance.builder()
+                .event(event)
+                .user(user)
+                .registrationTime(LocalDateTime.now())
+                .attendanceStatus(AttendanceStatus.REGISTERED)
+                .build();
+        
+        eventAttendanceRepository.save(eventAttendance);
+    }
+
+    /**
+     * Hủy đăng ký sự kiện
+     */
+    public void cancelEventRegistration(Long eventId, Long userId) {
+        // Kiểm tra đã đăng ký chưa
+        EventAttendance eventAttendance = eventAttendanceRepository.findByEventIdAndUserId(eventId, userId)
+                .orElseThrow(() -> new NotFoundException("You have not registered for this event"));
+        
+        // Kiểm tra event đã bắt đầu chưa
+        Event event = eventAttendance.getEvent();
+        if (event.getStartTime() != null && event.getStartTime().isBefore(LocalDateTime.now())) {
+            throw new RuntimeException("Cannot cancel registration for event that has already started");
+        }
+        
+        // Xóa đăng ký
+        eventAttendanceRepository.delete(eventAttendance);
+    }
+
+    /**
+     * Kiểm tra user đã đăng ký sự kiện chưa
+     */
+    public boolean isUserRegisteredForEvent(Long eventId, Long userId) {
+        return eventAttendanceRepository.existsByEventIdAndUserId(eventId, userId);
+    }
+
+    /**
+     * Lấy danh sách người đăng ký sự kiện
+     */
+    public List<EventRegistrationDto> getEventRegistrations(Long eventId) {
+        Event event = eventRepository.findById(eventId)
+                .orElseThrow(() -> new NotFoundException("Event not found"));
+        
+        List<EventAttendance> attendances = eventAttendanceRepository.findByEventId(eventId);
+        
+        return attendances.stream()
+                .map(attendance -> {
+                    User user = attendance.getUser();
+                    return EventRegistrationDto.builder()
+                            .id(attendance.getId())
+                            .userId(user.getId())
+                            .fullName(user.getFullName())
+                            .studentCode(user.getStudentCode())
+                            .email(user.getEmail())
+                            .avatarUrl(user.getAvatarUrl())
+                            .registrationTime(attendance.getRegistrationTime())
+                            .attendanceStatus(attendance.getAttendanceStatus() != null 
+                                    ? attendance.getAttendanceStatus().name() 
+                                    : null)
+                            .checkInTime(attendance.getCheckInTime())
+                            .notes(attendance.getNotes())
+                            .build();
+                })
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Lấy số lượng người đã đăng ký sự kiện
+     */
+    public Long getEventRegistrationCount(Long eventId) {
+        return eventAttendanceRepository.countByEventIdAndStatus(eventId, AttendanceStatus.REGISTERED);
     }
 }
