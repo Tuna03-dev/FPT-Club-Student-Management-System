@@ -26,23 +26,28 @@ public class ClubTeamVisibilityService {
     private final UserRepository userRepository;
     private final ClubMemberShipRepository clubMemberShipRepository;
 
+    /**
+     * ✅ MỞ QUYỀN XEM:
+     * - Là thành viên ACTIVE của CLB -> thấy TOÀN BỘ team trong CLB (không chỉ team của mình).
+     * - Vẫn trả myRoles (nếu user có vai trò trong team đó).
+     */
     public List<VisibleTeamDTO> getVisibleTeams(Long clubId, Long semesterIdNullable) {
         User currentUser = getCurrentUser();
         Long semesterId = resolveSemesterId(semesterIdNullable);
 
+        // Chỉ cần là thành viên ACTIVE của CLB (hoặc admin) là được xem toàn bộ team
+        boolean isActiveClubMember = clubMemberShipRepository
+                .existsByClubIdAndUserIdAndStatusActive(clubId, currentUser.getId());
         boolean isAdmin = roleMembershipRepository.isClubAdmin(currentUser.getId(), clubId, semesterId);
 
-        // Admin: thấy tất cả team trong CLB
-        List<Team> teams = isAdmin
-                ? teamRepository.findAllByClubId(clubId)
-                : Collections.emptyList();
+        if (!isActiveClubMember && !isAdmin) {
+            throw new ResourceNotFoundException("Bạn không thuộc CLB này.");
+        }
 
-        // Member thường: chỉ thấy team mình tham gia
-        List<Object[]> myTeamRows = isAdmin
-                ? Collections.emptyList()
-                : roleMembershipRepository.findMyTeamsInClub(currentUser.getId(), clubId, semesterId);
+        // 1) TOÀN BỘ team của CLB
+        List<Team> teams = teamRepository.findAllByClubId(clubId);
 
-        // Map teamId -> memberCount
+        // 2) Đếm member theo team (distinct) theo semester (nếu cần)
         Map<Long, Long> memberCountMap = roleMembershipRepository.countMembersByTeam(clubId, semesterId)
                 .stream()
                 .collect(Collectors.toMap(
@@ -50,7 +55,7 @@ public class ClubTeamVisibilityService {
                         r -> ((Number) r[1]).longValue()
                 ));
 
-        // Map teamId -> myRoles
+        // 3) Vai trò của current user trên từng team (nếu có)
         Map<Long, List<String>> myRolesMap = roleMembershipRepository.findMyRolesPerTeam(currentUser.getId(), clubId, semesterId)
                 .stream()
                 .collect(Collectors.groupingBy(
@@ -58,67 +63,55 @@ public class ClubTeamVisibilityService {
                         Collectors.mapping(r -> (String) r[1], Collectors.toList())
                 ));
 
-        List<VisibleTeamDTO> result = new ArrayList<>();
-
-        if (isAdmin) {
-            for (Team t : teams) {
-                result.add(new VisibleTeamDTO(
-                        t.getId(),
-                        t.getTeamName(),
-                        t.getDescription(),
-                        memberCountMap.getOrDefault(t.getId(), 0L),
-                        myRolesMap.getOrDefault(t.getId(), List.of()) // admin có thể rỗng nếu không thuộc team
-                ));
-            }
-        } else {
-            for (Object[] r : myTeamRows) {
-                Long teamId = ((Number) r[0]).longValue();
-                String name = (String) r[1];
-                String desc = (String) r[2];
-                result.add(new VisibleTeamDTO(
-                        teamId,
-                        name,
-                        desc,
-                        memberCountMap.getOrDefault(teamId, 0L),
-                        myRolesMap.getOrDefault(teamId, List.of())
-                ));
-            }
+        // 4) Map ra VisibleTeamDTO
+        List<VisibleTeamDTO> result = new ArrayList<>(teams.size());
+        for (Team t : teams) {
+            result.add(new VisibleTeamDTO(
+                    t.getId(),
+                    t.getTeamName(),
+                    t.getDescription(),
+                    memberCountMap.getOrDefault(t.getId(), 0L),
+                    myRolesMap.getOrDefault(t.getId(), List.of())
+            ));
         }
-
         return result;
     }
 
+    /**
+     * ✅ MỞ QUYỀN XEM:
+     * - Là thành viên ACTIVE của CLB -> xem được danh sách THÀNH VIÊN của BẤT KỲ team trong CLB.
+     * - member = isMyTeam(...) để FE quyết định có hiển thị "Bài đăng" hay không.
+     */
     public MyTeamDetailDTO getTeamDetail(Long clubId, Long teamId, Long semesterIdNullable) {
         User currentUser = getCurrentUser();
         Long semesterId = resolveSemesterId(semesterIdNullable);
 
-        boolean isAdmin  = roleMembershipRepository.isClubAdmin(currentUser.getId(), clubId, semesterId);
-        boolean isMember = roleMembershipRepository.isMyTeam(currentUser.getId(), clubId, teamId, semesterId);
+        // Team phải thuộc CLB (dùng truy vấn ràng buộc clubId)
+        Team team = teamRepository.findByIdAndClubId(teamId, clubId)
+                .orElseThrow(() -> new ResourceNotFoundException("Team không thuộc CLB này."));
 
-        if (!isAdmin && !isMember) {
-            throw new ResourceNotFoundException("User cannot access this team.");
+        // CHỈ CẦN là thành viên ACTIVE trong CLB là được truy cập (kể cả không thuộc team)
+        boolean isActiveClubMember = clubMemberShipRepository
+                .existsByClubIdAndUserIdAndStatusActive(clubId, currentUser.getId());
+        if (!isActiveClubMember) {
+            throw new ResourceNotFoundException("Bạn không thuộc CLB này.");
         }
 
-        Team team = teamRepository.findById(teamId)
-                .orElseThrow(() -> new ResourceNotFoundException("Team not found with id " + teamId));
+        // memberFlag: user có thuộc chính team này không (FE dùng để ẩn/hiện tab Posts)
+        boolean isMember = roleMembershipRepository.isMyTeam(currentUser.getId(), clubId, teamId, semesterId);
 
         Long memberCount = roleMembershipRepository.countDistinctMembers(teamId, semesterId);
         List<String> myRoles = roleMembershipRepository.findMyRoles(currentUser.getId(), teamId, semesterId);
 
-        // ✅ CN/PCN xem được toàn bộ thành viên dù không thuộc team
+        // Luôn trả danh sách thành viên team vì đã xác nhận thuộc CLB
         List<TeamMemberDTO> members = roleMembershipRepository
                 .findMembersByTeamIdAndSemesterId(teamId, semesterId);
-
-        // (tuỳ chọn) nếu muốn hiển thị rõ hơn vai trò admin trong UI:
-        if (isAdmin && myRoles.isEmpty()) {
-            myRoles = List.of("Quyền quản trị cấp CLB");
-        }
 
         return new MyTeamDetailDTO(
                 team.getId(),
                 team.getTeamName(),
                 team.getDescription(),
-                /* isMember */ isMember,
+                /* member */ isMember,
                 myRoles,
                 memberCount,
                 members
@@ -126,48 +119,39 @@ public class ClubTeamVisibilityService {
     }
 
     /**
-     * Lấy tất cả teams của một club nếu user là CLUB_PRESIDENT của kì hiện tại
-     * Chỉ trả về thông tin cơ bản của team, không bao gồm memberCount và myRoles
-     * @param clubId ID của club
-     * @return Danh sách teams với giá trị mặc định cho memberCount (0) và myRoles (empty list)
-     * @throws ResourceNotFoundException nếu user không phải CLUB_PRESIDENT
+     * Giữ nguyên logic cho PRESIDENT (nếu bạn đang dùng).
      */
     public List<VisibleTeamDTO> getAllTeamsForClubPresident(Long clubId) {
         User currentUser = getCurrentUser();
-        
-        // Lấy semester hiện tại
+
         Semester currentSemester = semesterRepository.findCurrentSemester()
                 .orElseThrow(() -> new ResourceNotFoundException("Current semester not found."));
         Long semesterId = currentSemester.getId();
-        
-        // Kiểm tra user có phải CLUB_PRESIDENT của kì hiện tại không
+
         boolean isPresident = clubMemberShipRepository.isClubPresidentInSemester(
-                currentUser.getId(), 
+                currentUser.getId(),
                 clubId,
                 semesterId
         );
-        
+
         if (!isPresident) {
             throw new ResourceNotFoundException(
-                "User is not CLUB_PRESIDENT of this club in the current semester."
+                    "User is not CLUB_PRESIDENT of this club in the current semester."
             );
         }
-        
-        // Lấy tất cả teams của club
+
         List<Team> teams = teamRepository.findAllByClubId(clubId);
-        
-        // Build result với giá trị mặc định cho memberCount và myRoles
-        List<VisibleTeamDTO> result = new ArrayList<>();
+
+        List<VisibleTeamDTO> result = new ArrayList<>(teams.size());
         for (Team t : teams) {
             result.add(new VisibleTeamDTO(
                     t.getId(),
                     t.getTeamName(),
                     t.getDescription(),
-                    0L,        // memberCount mặc định
-                    List.of()  // myRoles mặc định (empty list)
+                    0L,
+                    List.of()
             ));
         }
-        
         return result;
     }
 
@@ -190,7 +174,7 @@ public class ClubTeamVisibilityService {
         String email;
 
         if (principal instanceof UserDetails ud) {
-            email = ud.getUsername(); // username = email
+            email = ud.getUsername();
         } else if (principal instanceof String s) {
             if ("anonymousUser".equalsIgnoreCase(s)) {
                 throw new IllegalStateException("Anonymous user.");
