@@ -33,6 +33,8 @@ import TeamNewsDrafts from "@/pages/news/TeamNewsDrafts";
 import TeamNewsRequests from "@/pages/news/TeamNewsRequests";
 import TeamNewsEditor from "@/pages/news/TeamNewsEditor";
 import Payment from "@/pages/myclub/payments/MemberPaymentPage";
+import { StaffReportManagement } from "@/pages/staffReportManagement/StaffReport";
+import { PeriodicReportClubs } from "@/pages/staffReportManagement/PeriodicReportClubs";
 export const router = createBrowserRouter([
   {
     path: "/",
@@ -120,6 +122,22 @@ export const router = createBrowserRouter([
       </ProtectedRoute>
     ),
   },
+  {
+    path: "/staff/report",
+    element: (
+      <ProtectedRoute>
+        <StaffReportManagement />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/staff/report/:reportId/clubs",
+    element: (
+      <ProtectedRoute>
+        <PeriodicReportClubs />
+      </ProtectedRoute>
+    ),
+  },
 
   // ✅ Khu CLB
   {
@@ -147,9 +165,8 @@ export const router = createBrowserRouter([
 
       { path: "myclub", element: <Navigate to="." replace /> },
       { path: "teams/:teamId/news-drafts", element: <TeamNewsDrafts /> },
-{ path: "teams/:teamId/news-requests", element: <TeamNewsRequests /> },
-{ path: "teams/:teamId/news-editor", element: <TeamNewsEditor /> },
-
+      { path: "teams/:teamId/news-requests", element: <TeamNewsRequests /> },
+      { path: "teams/:teamId/news-editor", element: <TeamNewsEditor /> },
     ],
   },
 

@@ -35,6 +35,10 @@ public class SubmissionReportRequirement extends BaseEntity {
     @Column(name = "template_url", length = 500)
     private String templateUrl;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "createdBy")
+    private User createdBy;
+
     @OneToMany(mappedBy = "reportRequirement", cascade = CascadeType.ALL)
     private Set<Report> reports;
 
