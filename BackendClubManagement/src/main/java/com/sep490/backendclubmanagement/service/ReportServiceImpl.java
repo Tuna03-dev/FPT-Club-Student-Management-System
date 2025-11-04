@@ -20,6 +20,7 @@ import com.sep490.backendclubmanagement.entity.SubmissionReportRequirement;
 import com.sep490.backendclubmanagement.exception.ForbiddenException;
 import com.sep490.backendclubmanagement.exception.NotFoundException;
 import com.sep490.backendclubmanagement.mapper.ReportMapper;
+import com.sep490.backendclubmanagement.mapper.SubmissionReportRequirementMapper;
 import com.sep490.backendclubmanagement.entity.Semester;
 import com.sep490.backendclubmanagement.entity.User;
 import com.sep490.backendclubmanagement.repository.ClubReportRequirementRepository;
@@ -53,6 +54,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
     private final EventRepository eventRepository;
     private final RoleService roleService;
     private final ReportMapper reportMapper;
+    private final SubmissionReportRequirementMapper submissionReportRequirementMapper;
     private final RoleMemberShipRepository roleMemberShipRepository;
     private final SemesterRepository semesterRepository;
     private final UserRepository userRepository;
@@ -183,6 +185,10 @@ public class ReportServiceImpl implements ReportServiceInterface {
                     .orElseThrow(() -> new NotFoundException("Event not found with ID: " + request.getEventId()));
         }
 
+        // Get user
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new NotFoundException("User not found with ID: " + userId));
+
         // Create SubmissionReportRequirement
         SubmissionReportRequirement submissionRequirement = SubmissionReportRequirement.builder()
                 .title(request.getTitle())
@@ -191,6 +197,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
                 .reportType(request.getReportType())
                 .templateUrl(request.getTemplateUrl())
                 .event(event)
+                .createdBy(user)
                 .build();
 
         SubmissionReportRequirement savedSubmissionRequirement = submissionReportRequirementRepository.save(submissionRequirement);
@@ -225,17 +232,13 @@ public class ReportServiceImpl implements ReportServiceInterface {
 
         log.info("Staff {} has created report requirement {} for {} clubs", userId, savedSubmissionRequirement.getId(), clubs.size());
 
-        return ReportRequirementResponse.builder()
-                .id(savedSubmissionRequirement.getId())
-                .title(savedSubmissionRequirement.getTitle())
-                .description(savedSubmissionRequirement.getDescription())
-                .dueDate(savedSubmissionRequirement.getDueDate())
-                .reportType(savedSubmissionRequirement.getReportType())
-                .templateUrl(savedSubmissionRequirement.getTemplateUrl())
-                .createdAt(savedSubmissionRequirement.getCreatedAt())
-                .updatedAt(savedSubmissionRequirement.getUpdatedAt())
-                .clubRequirements(clubRequirementInfos)
-                .build();
+        // Map SubmissionReportRequirement to response using mapper
+        ReportRequirementResponse response = submissionReportRequirementMapper.toDto(savedSubmissionRequirement);
+        
+        // Set clubRequirements (not mapped by mapper as it comes from ClubReportRequirement)
+        response.setClubRequirements(clubRequirementInfos);
+
+        return response;
     }
 
     /**

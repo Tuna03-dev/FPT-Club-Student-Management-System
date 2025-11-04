@@ -37,7 +37,8 @@ public interface ReportRepository extends JpaRepository<Report, Long> {
            "LEFT JOIN FETCH r.club " +
            "LEFT JOIN FETCH r.semester " +
            "LEFT JOIN FETCH r.createdBy " +
-           "LEFT JOIN FETCH r.reportRequirement " +
+           "LEFT JOIN FETCH r.reportRequirement rr " +
+           "LEFT JOIN FETCH rr.createdBy " +
            "WHERE r.id = :id")
     Optional<Report> findByIdWithRelations(@Param("id") Long id);
 
@@ -59,7 +60,8 @@ public interface ReportRepository extends JpaRepository<Report, Long> {
            "LEFT JOIN FETCH r.club " +
            "LEFT JOIN FETCH r.semester " +
            "LEFT JOIN FETCH r.createdBy " +
-           "LEFT JOIN FETCH r.reportRequirement " +
+           "LEFT JOIN FETCH r.reportRequirement rr " +
+           "LEFT JOIN FETCH rr.createdBy " +
            "WHERE r.club.id = :clubId " +
            "AND (:status IS NULL OR r.status = :status) " +
            "ORDER BY r.createdAt DESC")
@@ -70,7 +72,8 @@ public interface ReportRepository extends JpaRepository<Report, Long> {
            "LEFT JOIN FETCH r.club " +
            "LEFT JOIN FETCH r.semester " +
            "LEFT JOIN FETCH r.createdBy " +
-           "LEFT JOIN FETCH r.reportRequirement " +
+           "LEFT JOIN FETCH r.reportRequirement rr " +
+           "LEFT JOIN FETCH rr.createdBy " +
            "WHERE r.club.id = :clubId " +
            "AND r.createdBy.id = :userId " +
            "AND (:status IS NULL OR r.status = :status) " +

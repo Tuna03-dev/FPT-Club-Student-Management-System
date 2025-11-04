@@ -96,6 +96,16 @@ public interface ReportMapper {
 
         ReportDetailResponse.ReportRequirementInfo requirementInfo = null;
         if (report.getReportRequirement() != null) {
+            ReportDetailResponse.UserInfo requirementCreatedByInfo = null;
+            if (report.getReportRequirement().getCreatedBy() != null) {
+                requirementCreatedByInfo = ReportDetailResponse.UserInfo.builder()
+                        .id(report.getReportRequirement().getCreatedBy().getId())
+                        .fullName(report.getReportRequirement().getCreatedBy().getFullName())
+                        .email(report.getReportRequirement().getCreatedBy().getEmail())
+                        .studentCode(report.getReportRequirement().getCreatedBy().getStudentCode())
+                        .build();
+            }
+
             requirementInfo = ReportDetailResponse.ReportRequirementInfo.builder()
                     .id(report.getReportRequirement().getId())
                     .title(report.getReportRequirement().getTitle())
@@ -105,6 +115,7 @@ public interface ReportMapper {
                             : null)
                     .reportType(report.getReportRequirement().getReportType())
                     .templateUrl(report.getReportRequirement().getTemplateUrl())
+                    .createdBy(requirementCreatedByInfo)
                     .build();
         }
 

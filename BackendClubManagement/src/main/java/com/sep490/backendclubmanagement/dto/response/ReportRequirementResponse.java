@@ -23,6 +23,7 @@ public class ReportRequirementResponse {
     private String templateUrl;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private UserInfo createdBy;
 
     private List<ClubRequirementInfo> clubRequirements;
 
@@ -37,6 +38,17 @@ public class ReportRequirementResponse {
         private String clubCode;
         private String status;
         private String note;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class UserInfo {
+        private Long id;
+        private String fullName;
+        private String email;
+        private String studentCode;
     }
 }
 

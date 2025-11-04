@@ -72,6 +72,7 @@ public class ReportDetailResponse {
         private LocalDateTime dueDate;
         private ReportType reportType;
         private String templateUrl;
+        private UserInfo createdBy;
     }
 }
 
