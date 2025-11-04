@@ -299,6 +299,45 @@ public class EventManagementService {
         
         // Lấy clubId từ event
         Long clubId = event.getClub() != null ? event.getClub().getId() : null;
+
+        // Trường hợp đặc biệt: Sự kiện đã publish, loại MEETING (nội bộ CLB)
+        // Cho phép CHÍNH NGƯỜI TẠO (creator của RequestEvent) cập nhật trước khi bắt đầu
+        boolean isMeeting = event.getEventType() != null &&
+                "MEETING".equalsIgnoreCase(event.getEventType().getTypeName());
+        if (Boolean.FALSE.equals(event.getIsDraft()) && isMeeting) {
+            if (event.getStartTime().isBefore(LocalDateTime.now())) {
+                throw new ForbiddenException("Sự kiện đã bắt đầu, không thể cập nhật");
+            }
+            // Ưu tiên xác thực theo creator của RequestEvent (nếu có)
+            boolean isCreator = requestEventRepository
+                    .findByEventIdAndCreatedById(eventId, userId)
+                    .isPresent();
+            boolean isClubLeader = (clubId != null) && (roleService.isClubPresident(userId, clubId) || roleService.isClubOfficer(userId, clubId));
+            if (!isCreator && !isClubLeader) {
+                throw new ForbiddenException("Bạn không có quyền cập nhật sự kiện này");
+            }
+
+            Event eventToUpdate = event; // dùng trực tiếp event đã lấy
+            // Không cho đổi club và không cho đổi loại ra khỏi MEETING
+            if (request.getEventTypeId() != null) {
+                EventType newType = getEventTypeById(request.getEventTypeId());
+                if (!"MEETING".equalsIgnoreCase(newType.getTypeName())) {
+                    throw new ForbiddenException("Không thể đổi loại sự kiện MEETING thành loại khác sau khi đã công bố");
+                }
+                eventToUpdate.setEventType(newType);
+            }
+            if (request.getTitle() != null) eventToUpdate.setTitle(request.getTitle());
+            if (request.getDescription() != null) eventToUpdate.setDescription(request.getDescription());
+            if (request.getLocation() != null) eventToUpdate.setLocation(request.getLocation());
+            if (request.getStartTime() != null) eventToUpdate.setStartTime(request.getStartTime());
+            if (request.getEndTime() != null) eventToUpdate.setEndTime(request.getEndTime());
+
+            Event savedMeeting = eventRepository.save(eventToUpdate);
+            if (request.getMediaFiles() != null && !request.getMediaFiles().isEmpty()) {
+                uploadAndSaveEventMedia(savedMeeting, request.getMediaFiles());
+            }
+            return eventMapper.toDto(savedMeeting);
+        }
         
         // Xác định status hợp lệ theo role và clubId
         List<RequestStatus> allowedStatuses;
@@ -359,6 +398,15 @@ public class EventManagementService {
         if (isMeetingNow) {
             requestEvent.setStatus(RequestStatus.APPROVED_UNIVERSITY);
             requestEvent.setResponseMessage("Auto-approved due to MEETING type change");
+            // Đồng bộ tiêu đề/mô tả lần cuối trước khi chốt
+            requestEvent.setRequestTitle(saved.getTitle());
+            requestEvent.setDescription(saved.getDescription());
+            requestEventRepository.save(requestEvent);
+        }
+        else {
+            // Đồng bộ request title/description với bản nháp đã cập nhật
+            if (request.getTitle() != null) requestEvent.setRequestTitle(saved.getTitle());
+            if (request.getDescription() != null) requestEvent.setDescription(saved.getDescription());
             requestEventRepository.save(requestEvent);
         }
 
@@ -373,6 +421,27 @@ public class EventManagementService {
         
         // Lấy clubId từ event
         Long clubId = event.getClub() != null ? event.getClub().getId() : null;
+
+        // Trường hợp đặc biệt: MEETING đã publish — cho phép creator xóa trước khi bắt đầu
+        boolean isMeeting = event.getEventType() != null &&
+                "MEETING".equalsIgnoreCase(event.getEventType().getTypeName());
+        if (Boolean.FALSE.equals(event.getIsDraft()) && isMeeting) {
+            if (event.getStartTime().isBefore(LocalDateTime.now())) {
+                throw new ForbiddenException("Sự kiện đã bắt đầu, không thể xóa");
+            }
+            boolean isCreator = requestEventRepository
+                    .findByEventIdAndCreatedById(eventId, userId)
+                    .isPresent();
+            boolean isClubLeader = (clubId != null) && (roleService.isClubPresident(userId, clubId) || roleService.isClubOfficer(userId, clubId));
+            if (!isCreator && !isClubLeader) {
+                throw new ForbiddenException("Bạn không có quyền xóa sự kiện này");
+            }
+            // Xóa media, request (nếu có), và sự kiện
+            eventMediaRepository.deleteByEvent_Id(event.getId());
+            requestEventRepository.findByEventId(eventId).ifPresent(requestEventRepository::delete);
+            eventRepository.delete(event);
+            return;
+        }
         
         // Xác định status hợp lệ theo role và clubId
         List<RequestStatus> allowedStatuses;

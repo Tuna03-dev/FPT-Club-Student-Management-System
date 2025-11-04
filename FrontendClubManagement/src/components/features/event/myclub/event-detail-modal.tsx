@@ -30,9 +30,10 @@ interface EventDetailModalProps {
   onClose: () => void
   onUpdated?: (updated: { id: string; title: string; description: string; startDate: Date; endDate: Date; location: string; attendees: number; status: "upcoming" | "ongoing" | "completed"; images: string[]; isMyDraft?: boolean; requestStatus?: string }) => void
   onDeleted?: (id: string) => void
+  readOnly?: boolean
 }
 
-export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted }: EventDetailModalProps) {
+export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted, readOnly }: EventDetailModalProps) {
   const navigate = useNavigate()
   const params = useParams()
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
@@ -50,9 +51,12 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted 
   const isClubPresident = user?.systemRole === "CLUB_PRESIDENT"
   const isClubOfficer = user?.systemRole === "CLUB_OFFICER"
   const canMarkAttendance = isClubPresident || isClubOfficer
+  const canManageMeeting = canMarkAttendance // FE: lãnh đạo CLB có quyền quản lý MEETING
 
   // Kiểm tra sự kiện đã kết thúc chưa
   const isEventEnded = new Date() >= event.endDate
+  const isEventUpcoming = new Date() < event.startDate
+  const isMeeting = (eventTypeName ?? "").toUpperCase() === "MEETING"
   
   // Kiểm tra sự kiện đang diễn ra (thời gian hiện tại nằm giữa startDate và endDate)
   const isEventOngoing = new Date() >= event.startDate && new Date() < event.endDate
@@ -253,7 +257,7 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted 
           </div>
 
           {/* Actions */}
-          {event.isMyDraft ? (
+        {!readOnly && (event.isMyDraft ? (
             <div className="flex gap-2 pt-2">
               <Button
                 className="flex-1 bg-blue-600 hover:bg-blue-700 text-white h-10 text-sm gap-2"
@@ -295,6 +299,48 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted 
             </div>
           ) : (
             <div className="flex gap-2 pt-2">
+              {/* Nút Sửa/Xóa cho sự kiện MEETING sắp diễn ra (cho lãnh đạo CLB) */}
+              {isMeeting && isEventUpcoming && canManageMeeting && (
+                <>
+                  <Button
+                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white h-10 text-sm gap-2"
+                    onClick={() => setOpenUpdate(true)}
+                  >
+                    <Edit className="w-4 h-4" />
+                    Sửa
+                  </Button>
+                  <Button
+                    className="flex-1 bg-rose-600 hover:bg-rose-700 text-white h-10 text-sm gap-2"
+                    disabled={isDeleting}
+                    onClick={async () => {
+                      try {
+                        setIsDeleting(true)
+                        await deleteEvent(Number(event.id))
+                        toast.success("Đã xóa sự kiện thành công")
+                        onDeleted?.(event.id)
+                        onClose()
+                      } catch (error: any) {
+                        console.error("Error deleting event:", error)
+                        toast.error(error?.response?.data?.message || "Không thể xóa sự kiện. Vui lòng thử lại.")
+                      } finally {
+                        setIsDeleting(false)
+                      }
+                    }}
+                  >
+                    {isDeleting ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Đang xóa...
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 className="w-4 h-4" />
+                        Xóa
+                      </>
+                    )}
+                  </Button>
+                </>
+              )}
               {/* Nút Điểm danh/Xem điểm danh - chỉ hiện cho CLUB_PRESIDENT và CLUB_OFFICER */}
               {canMarkAttendance && currentClubId && (
                 <Button
@@ -355,7 +401,7 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted 
                 </Button>
               )}
             </div>
-          )}
+          ))}
         </div>
       </Card>
       {/* Update Modal */}

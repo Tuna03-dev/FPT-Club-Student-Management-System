@@ -49,6 +49,7 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
   const [openCreate, setOpenCreate] = useState(false)
   const [defaultCreateStartISO, setDefaultCreateStartISO] = useState<string | null>(null)
   const [defaultCreateEndISO, setDefaultCreateEndISO] = useState<string | null>(null)
+  const [selectedReadOnly, setSelectedReadOnly] = useState(false)
   const [eventTypes, setEventTypes] = useState<Array<{ id: string; name: string }>>([])
   const [pendingRequests, setPendingRequests] = useState<PendingRequestDto[] | null>(null)
   const [loadingPending, setLoadingPending] = useState(false)
@@ -547,7 +548,8 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
                                   title={`${event.title}${event.isMyDraft ? ' (Draft)' : ''} - ${event.location} - ${event.startDate.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}`}
                                   onClick={(e) => {
                                     e.stopPropagation()
-                                    setSelectedEvent(event)
+                            setSelectedEvent(event)
+                            setSelectedReadOnly(false)
                                   }}
                                 >
                                   {event.title}
@@ -629,7 +631,28 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
                       // Debug: check console to verify values
                       console.log("Debug approve buttons:", { userRole: roleUpper, reqStatus: req.status, reqStatusUpper, isStaffActionable, showActions })
                       return (
-                      <div key={req.requestEventId} className="rounded-md border bg-amber-50 px-4 py-3">
+                      <div
+                        key={req.requestEventId}
+                        className="rounded-md border bg-amber-50 px-4 py-3 cursor-pointer hover:bg-amber-100/60"
+                        onClick={() => {
+                          if (!req.event) return
+                          const mapped: Event = {
+                            id: String(req.event.id),
+                            title: req.requestTitle || req.event.title,
+                            description: req.description || "",
+                            startDate: new Date(req.event.startTime),
+                            endDate: new Date(req.event.endTime),
+                            location: req.event.location ?? "",
+                            attendees: 0,
+                            status: determineEventStatus(new Date(req.event.startTime), new Date(req.event.endTime)),
+                            images: [],
+                            isMyDraft: true,
+                            requestStatus: req.status,
+                          }
+                          setSelectedEvent(mapped)
+                          setSelectedReadOnly(true)
+                        }}
+                      >
                         <div className="font-semibold text-foreground">{req.requestTitle}</div>
                         <div className="text-xs text-muted-foreground">Tạo bởi: {req.createdBy?.fullName ?? "N/A"}</div>
                         {(() => {
@@ -762,6 +785,7 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
           event={selectedEvent}
           clubId={clubId}
           onClose={() => setSelectedEvent(null)}
+          readOnly={selectedReadOnly}
           onUpdated={(upd: Event) => {
             setEvents(prev => prev.map(e => e.id === upd.id ? { ...e, ...upd } : e))
             setSelectedEvent(upd)
