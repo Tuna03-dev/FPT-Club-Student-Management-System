@@ -187,34 +187,27 @@ public class EventController {
     }
 
     /**
-     * Lấy danh sách người đăng ký sự kiện
+     * Lấy danh sách người đăng ký sự kiện (chỉ ban cán sự mới có quyền xem)
      */
     @GetMapping("/{eventId}/registrations")
     public ApiResponse<List<EventRegistrationDto>> getEventRegistrations(@PathVariable Long eventId,
                                                                          @RequestParam(value = "keyword", required = false) String keyword) {
-        return ApiResponse.success(eventService.getEventRegistrations(eventId, keyword));
-    }
-
-    /**
-     * Club President: Lấy danh sách events của club để điểm danh
-     */
-    @GetMapping("/president/club/{clubId}")
-    public ApiResponse<List<EventData>> getClubEventsForPresident(
-            @PathVariable Long clubId,
-            @RequestParam(value = "keyword", required = false) String keyword,
-            @RequestParam(value = "startTime", required = false) String startTime,
-            @RequestParam(value = "endTime", required = false) String endTime) {
         Long userId = SecurityUtils.getCurrentUserId();
         
-        // Ràng theo đúng CLB: chỉ PRESIDENT của CLB này mới được xem danh sách để điểm danh
-        if (!roleService.isClubPresident(userId, clubId)) {
-            throw new ForbiddenException("Chỉ CLUB_PRESIDENT của CLB này mới có quyền truy cập");
+        // Lấy clubId từ event để kiểm tra quyền theo club
+        EventData event = eventService.getEventById(eventId);
+        Long clubId = event != null ? event.getClubId() : null;
+        if (clubId == null) {
+            throw new ForbiddenException("Event không thuộc về club nào");
         }
         
-        return ApiResponse.success(eventService.getClubEventsForPresident(clubId, keyword, startTime, endTime));
+        // Kiểm tra quyền President hoặc Officer theo club cụ thể
+        if (!roleService.isClubPresident(userId, clubId) && !roleService.isClubOfficer(userId, clubId)) {
+            throw new ForbiddenException("Chỉ ban cán sự của CLB này mới có quyền xem danh sách đăng ký");
+        }
+        
+        return ApiResponse.success(eventService.getEventRegistrations(eventId, keyword));
     }
-
-
 
     /**
      * Club President: Điểm danh hàng loạt cho tất cả người tham gia sự kiện
@@ -230,9 +223,9 @@ public class EventController {
             throw new ForbiddenException("Event không thuộc về club nào");
         }
         
-        // Kiểm tra quyền President theo club cụ thể
-        if (!roleService.isClubPresident(userId, clubId)) {
-            throw new ForbiddenException("Chỉ CLUB_PRESIDENT của CLB này mới có quyền điểm danh");
+        // Kiểm tra quyền President hoặc Officer theo club cụ thể
+        if (!roleService.isClubPresident(userId, clubId) && !roleService.isClubOfficer(userId, clubId)) {
+            throw new ForbiddenException("Chỉ ban cán sự của CLB này mới có quyền điểm danh");
         }
         
         eventService.batchMarkAttendance(request.getEventId(), request.getAttendances());

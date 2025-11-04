@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Search, Save, Download, Loader2 } from "lucide-react"
+import { Skeleton } from "@/components/ui/skeleton"
 import { toast } from "sonner"
 import { AttendanceItem } from "./attendance-item"
 import { EventHeader } from "./event-header"
@@ -44,7 +45,9 @@ export function AttendancePage({ eventId, event: propEvent }: AttendancePageProp
   const [searchParams] = useSearchParams()
   const user = authService.getCurrentUser()
   const isPresident = user?.systemRole === "CLUB_PRESIDENT"
-  const readOnly = (searchParams.get("mode") ?? "") === "view" || !isPresident
+  const isOfficer = user?.systemRole === "CLUB_OFFICER"
+  const canMarkAttendance = isPresident || isOfficer
+  const readOnly = (searchParams.get("mode") ?? "") === "view" || !canMarkAttendance
   const [searchTerm, setSearchTerm] = useState("")
   const [students, setStudents] = useState<Student[]>([])
   const [loading, setLoading] = useState(false)
@@ -209,11 +212,74 @@ export function AttendancePage({ eventId, event: propEvent }: AttendancePageProp
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="flex items-center gap-2">
-          <Loader2 className="w-6 h-6 animate-spin" />
-          <span>Đang tải dữ liệu điểm danh...</span>
+      <div className="space-y-6 p-6">
+        {/* Event Header Skeleton */}
+        <Card className="border-2 border-primary/20 bg-gradient-to-r from-primary/5 to-primary/5">
+          <CardContent className="pt-6">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <Skeleton className="h-9 w-64" />
+                <Skeleton className="h-12 w-12 rounded-full" />
+              </div>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <Skeleton className="h-5 w-40" />
+                <Skeleton className="h-5 w-32" />
+                <Skeleton className="h-5 w-48" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Stats Cards Skeleton */}
+        <div className="grid gap-4 md:grid-cols-3">
+          {[...Array(3)].map((_, index) => (
+            <Card key={index}>
+              <CardContent className="pt-6">
+                <div className="text-center space-y-2">
+                  <Skeleton className="h-9 w-16 mx-auto" />
+                  <Skeleton className="h-4 w-24 mx-auto" />
+                </div>
+              </CardContent>
+            </Card>
+          ))}
         </div>
+
+        {/* Student List Card Skeleton */}
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-6 w-48 mb-2" />
+            <Skeleton className="h-4 w-64" />
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Search and Actions Skeleton */}
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+              <Skeleton className="h-10 flex-1" />
+              <div className="flex gap-2">
+                <Skeleton className="h-10 w-32" />
+                <Skeleton className="h-10 w-24" />
+              </div>
+            </div>
+
+            {/* Student List Skeleton */}
+            <div className="divide-y">
+              {[...Array(5)].map((_, index) => (
+                <div key={index} className="py-4">
+                  <div className="flex items-center gap-4">
+                    <div className="min-w-0 flex-1 pl-4 space-y-2">
+                      <Skeleton className="h-5 w-48" />
+                      <Skeleton className="h-4 w-32" />
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <Skeleton className="h-9 w-20" />
+                      <Skeleton className="h-9 w-20" />
+                      <Skeleton className="h-9 w-48" />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       </div>
     )
   }

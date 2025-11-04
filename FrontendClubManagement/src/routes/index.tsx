@@ -8,7 +8,6 @@ import { Dashboard } from "@/pages/myclub/Dashboard";
 import MemberList from "@/pages/myclub/members/MemberList";
 import { EventList } from "@/pages/myclub/events/EventList";
 import { StaffEventList } from "@/pages/myclub/staff/StaffEventList";
-import EventAttendanceListPage from "@/pages/myclub/events/attendance/EventAttendanceListPage";
 import EventAttendancePage from "@/pages/myclub/events/attendance/AttendancePage";
 import { Notifications } from "@/pages/myclub/Notifications";
 import { Settings } from "@/pages/myclub/Settings";
@@ -107,7 +106,6 @@ export const router = createBrowserRouter([
       { index: true, element: <Dashboard /> },
       { path: "members", element: <MemberList /> },
       { path: "events", element: <EventList /> },
-      { path: "events/attendance-list", element: <EventAttendanceListPage /> },
       { path: "events/attendance/:eventId", element: <EventAttendancePage /> },
       { path: "recruitments", element: <RecruitmentManagement /> },
       { path: "notifications", element: <Notifications /> },

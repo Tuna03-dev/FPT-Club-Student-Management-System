@@ -1,8 +1,7 @@
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
-import { ChevronLeft, ChevronRight, Loader2, ClipboardList } from "lucide-react"
-import { useNavigate } from "react-router-dom"
+import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { EventDetailModal } from "./event-detail-modal"
@@ -49,7 +48,6 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
   const [eventTypes, setEventTypes] = useState<Array<{ id: string; name: string }>>([])
   const [pendingRequests, setPendingRequests] = useState<PendingRequestDto[] | null>(null)
   const [loadingPending, setLoadingPending] = useState(false)
-  const navigate = useNavigate()
 
   // Fetch events from API
   useEffect(() => {
@@ -308,16 +306,6 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
                   
                   return (
                     <>
-                      {isClubPresident && clubId && clubId > 0 && (
-                        <Button 
-                          variant="outline" 
-                          onClick={() => navigate(`/myclub/${clubId}/events/attendance-list`)}
-                          className="gap-2"
-                        >
-                          <ClipboardList className="h-4 w-4" />
-                          Điểm danh
-                        </Button>
-                      )}
                       {canCreate && (
                         <Button onClick={() => setOpenCreate(true)}>+ Tạo sự kiện mới</Button>
                       )}
@@ -567,6 +555,7 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
       {selectedEvent && (
         <EventDetailModal
           event={selectedEvent}
+          clubId={clubId}
           onClose={() => setSelectedEvent(null)}
           onUpdated={(upd: Event) => {
             setEvents(prev => prev.map(e => e.id === upd.id ? { ...e, ...upd } : e))

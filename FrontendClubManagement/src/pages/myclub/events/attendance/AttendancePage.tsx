@@ -18,7 +18,7 @@ export default function EventAttendancePage() {
             variant="ghost" 
             size="sm" 
             className="gap-2"
-            onClick={() => navigate(`/myclub/${clubId}/events/attendance-list`)}
+            onClick={() => navigate(`/myclub/${clubId}/events`)}
           >
             <ChevronLeft className="h-4 w-4" />
             Quay lại

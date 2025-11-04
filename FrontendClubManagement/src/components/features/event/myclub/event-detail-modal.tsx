@@ -2,11 +2,13 @@
 
 import { useState } from "react"
 import { ChevronLeft, ChevronRight, X, Calendar, MapPin } from "lucide-react"
+import { useNavigate, useParams } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { UpdateEventForm, type UpdateEventFormData } from "./update-event-form"
 import { updateEvent, deleteEvent, getEventById, registerForEvent, cancelEventRegistration, getRegistrationStatus } from "@/service/EventService"
+import { authService } from "@/services/authService"
 import React from "react"
 
 interface EventDetailModalProps {
@@ -23,18 +25,28 @@ interface EventDetailModalProps {
     isMyDraft?: boolean
     requestStatus?: string
   }
+  clubId?: number
   onClose: () => void
   onUpdated?: (updated: { id: string; title: string; description: string; startDate: Date; endDate: Date; location: string; attendees: number; status: "upcoming" | "ongoing" | "completed"; images: string[]; isMyDraft?: boolean; requestStatus?: string }) => void
   onDeleted?: (id: string) => void
 }
 
-export function EventDetailModal({ event, onClose, onUpdated, onDeleted }: EventDetailModalProps) {
+export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted }: EventDetailModalProps) {
+  const navigate = useNavigate()
+  const params = useParams()
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
   const [openUpdate, setOpenUpdate] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [images, setImages] = useState<string[]>(event.images ?? [])
   const [isRegistered, setIsRegistered] = useState(false)
   const [isRegistering, setIsRegistering] = useState(false)
+  
+  // Get clubId from props or URL params
+  const currentClubId = clubId || (params.clubId ? parseInt(params.clubId as string, 10) : undefined)
+  const user = authService.getCurrentUser()
+  const isClubPresident = user?.systemRole === "CLUB_PRESIDENT"
+  const isClubOfficer = user?.systemRole === "CLUB_OFFICER"
+  const canMarkAttendance = isClubPresident || isClubOfficer
 
   // Kiểm tra sự kiện đã kết thúc chưa
   const isEventEnded = new Date() >= event.endDate
@@ -246,26 +258,47 @@ export function EventDetailModal({ event, onClose, onUpdated, onDeleted }: Event
               </Button>
             </div>
           ) : (
-            // Chỉ hiển thị nút đăng ký nếu sự kiện chưa kết thúc
-            !isEventEnded && (
-              <Button 
-                className={`w-full py-6 text-base ${
-                  isRegistered 
-                    ? "bg-gray-500 hover:bg-gray-600 text-white" 
-                    : "bg-primary hover:bg-primary/90 text-primary-foreground"
-                }`}
-                onClick={handleRegisterClick}
-                disabled={isRegistering || (isRegistered && isEventOngoing)}
-                title={isRegistered && isEventOngoing ? "Không thể hủy đăng ký khi sự kiện đang diễn ra" : undefined}
-              >
-                {isRegistering 
-                  ? "Đang xử lý..." 
-                  : isRegistered 
-                    ? isEventOngoing ? "Đã đăng ký" : "Hủy đăng ký"
-                    : "Đăng ký tham gia"
-                }
-            </Button>
-            )
+            <div className="flex gap-3">
+              {/* Nút Điểm danh/Xem điểm danh - chỉ hiện cho CLUB_PRESIDENT và CLUB_OFFICER */}
+              {canMarkAttendance && currentClubId && (
+                <Button
+                  className={`flex-1 py-6 text-base ${
+                    isEventEnded 
+                      ? "bg-white text-foreground border border-border hover:bg-orange-500 hover:text-white hover:border-orange-600"
+                      : "bg-orange-500 hover:bg-orange-600 text-white"
+                  }`}
+                  onClick={() => {
+                    onClose()
+                    const url = isEventEnded 
+                      ? `/myclub/${currentClubId}/events/attendance/${event.id}?mode=view`
+                      : `/myclub/${currentClubId}/events/attendance/${event.id}`
+                    navigate(url)
+                  }}
+                >
+                  {isEventEnded ? "Xem điểm danh" : "Điểm danh"}
+                </Button>
+              )}
+              {/* Nút đăng ký - chỉ hiển thị nếu sự kiện chưa kết thúc */}
+              {!isEventEnded && (
+                <Button 
+                  className={`${canMarkAttendance && currentClubId ? "flex-1" : "w-full"} py-6 text-base ${
+                    isRegistered 
+                      ? "bg-gray-500 hover:bg-gray-600 text-white" 
+                      : "bg-primary hover:bg-primary/90 text-primary-foreground"
+                  }`}
+                  onClick={handleRegisterClick}
+                  disabled={isRegistering || (isRegistered && isEventOngoing)}
+                  title={isRegistered && isEventOngoing ? "Không thể hủy đăng ký khi sự kiện đang diễn ra" : undefined}
+                >
+                  {isRegistering 
+                    ? "Đang xử lý..." 
+                    : isRegistered 
+                      ? isEventOngoing ? "Đã đăng ký" : "Hủy đăng ký"
+                      : "Đăng ký tham gia"
+                  }
+                </Button>
+              )}
+            </div>
           )}
         </div>
       </Card>

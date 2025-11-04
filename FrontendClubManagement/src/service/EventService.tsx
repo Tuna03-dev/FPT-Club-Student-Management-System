@@ -283,14 +283,4 @@ export async function batchMarkAttendance(payload: BatchMarkAttendanceRequest): 
   await axiosClient.post<void>("/events/batch-mark-attendance", payload);
 }
 
-/**
- * Club President: Lấy danh sách events của club để điểm danh
- */
-export async function getClubEventsForPresident(
-  clubId: number,
-  params?: { keyword?: string; startTime?: string; endTime?: string }
-): Promise<EventData[]> {
-  const res = await axiosClient.get<EventData[]>(`/events/president/club/${clubId}`, { params });
-  return res.data ?? [];
-}
 
