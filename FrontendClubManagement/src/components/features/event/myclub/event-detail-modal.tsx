@@ -7,10 +7,16 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { UpdateEventForm, type UpdateEventFormData } from "./update-event-form"
-import { updateEvent, deleteEvent, getEventById, registerForEvent, cancelEventRegistration, getRegistrationStatus } from "@/service/EventService"
+import { updateEvent, deleteEvent, getEventById, registerForEvent, cancelEventRegistration, getRegistrationStatus, cancelClubEventByStaff } from "@/service/EventService"
 import { authService } from "@/services/authService"
 import { toast } from "sonner"
 import React from "react"
+
+// Helper to normalize error messages
+const getErrorMessage = (error: unknown, fallback = "Đã xảy ra lỗi"): string => {
+  const anyErr = error as { response?: { data?: { message?: string } } ; message?: string }
+  return anyErr?.response?.data?.message || anyErr?.message || fallback
+}
 
 interface EventDetailModalProps {
   event: {
@@ -44,12 +50,14 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
   const [isRegistering, setIsRegistering] = useState(false)
   const [clubName, setClubName] = useState<string | null>(null)
   const [eventTypeName, setEventTypeName] = useState<string | null>(null)
+  const [eventClubId, setEventClubId] = useState<number | null>(null)
   
   // Get clubId from props or URL params
   const currentClubId = clubId || (params.clubId ? parseInt(params.clubId as string, 10) : undefined)
   const user = authService.getCurrentUser()
   const isClubPresident = user?.systemRole === "CLUB_PRESIDENT"
   const isClubOfficer = user?.systemRole === "CLUB_OFFICER"
+  const isStaff = user?.systemRole === "STAFF"
   const canMarkAttendance = isClubPresident || isClubOfficer
   const canManageMeeting = canMarkAttendance // FE: lãnh đạo CLB có quyền quản lý MEETING
 
@@ -57,6 +65,7 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
   const isEventEnded = new Date() >= event.endDate
   const isEventUpcoming = new Date() < event.startDate
   const isMeeting = (eventTypeName ?? "").toUpperCase() === "MEETING"
+  const canEditStaffEvent = isStaff && isEventUpcoming && (eventClubId == null)
   
   // Kiểm tra sự kiện đang diễn ra (thời gian hiện tại nằm giữa startDate và endDate)
   const isEventOngoing = new Date() >= event.startDate && new Date() < event.endDate
@@ -72,6 +81,7 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
           }
           setClubName(full.clubName || null)
           setEventTypeName(full.eventTypeName || null)
+          setEventClubId(full.clubId ?? null)
         }
       })
       .catch(() => {})
@@ -130,7 +140,6 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
     try {
       setIsRegistering(true)
       if (isRegistered) {
-        // Kiểm tra nếu sự kiện đang diễn ra thì không cho phép hủy đăng ký
         if (isEventOngoing) {
           toast.error("Không thể hủy đăng ký khi sự kiện đang diễn ra.")
           setIsRegistering(false)
@@ -144,9 +153,9 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
         setIsRegistered(true)
         toast.success("Đăng ký tham gia sự kiện thành công!")
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error registering for event:", error)
-      toast.error(error?.response?.data?.message || (isRegistered ? "Không thể hủy đăng ký. Vui lòng thử lại." : "Không thể đăng ký. Vui lòng thử lại."))
+      toast.error(getErrorMessage(error, isRegistered ? "Không thể hủy đăng ký. Vui lòng thử lại." : "Không thể đăng ký. Vui lòng thử lại."))
     } finally {
       setIsRegistering(false)
     }
@@ -276,9 +285,9 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
                     toast.success("Đã xóa sự kiện thành công")
                     onDeleted?.(event.id)
                     onClose()
-                  } catch (error: any) {
+                  } catch (error: unknown) {
                     console.error("Error deleting event:", error)
-                    toast.error(error?.response?.data?.message || "Không thể xóa sự kiện. Vui lòng thử lại.")
+                    toast.error(getErrorMessage(error, "Không thể xóa sự kiện. Vui lòng thử lại."))
                   } finally {
                     setIsDeleting(false)
                   }
@@ -299,8 +308,8 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
             </div>
           ) : (
             <div className="flex gap-2 pt-2">
-              {/* Nút Sửa/Xóa cho sự kiện MEETING sắp diễn ra (cho lãnh đạo CLB) */}
-              {isMeeting && isEventUpcoming && canManageMeeting && (
+              {/* Nút Sửa/Xóa cho sự kiện MEETING (lãnh đạo CLB) hoặc sự kiện STAFF tạo (toàn trường) trước khi bắt đầu */}
+              {((isMeeting && canManageMeeting) || canEditStaffEvent) && isEventUpcoming && (
                 <>
                   <Button
                     className="flex-1 bg-blue-600 hover:bg-blue-700 text-white h-10 text-sm gap-2"
@@ -319,9 +328,9 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
                         toast.success("Đã xóa sự kiện thành công")
                         onDeleted?.(event.id)
                         onClose()
-                      } catch (error: any) {
+                      } catch (error: unknown) {
                         console.error("Error deleting event:", error)
-                        toast.error(error?.response?.data?.message || "Không thể xóa sự kiện. Vui lòng thử lại.")
+                        toast.error(getErrorMessage(error, "Không thể xóa sự kiện. Vui lòng thử lại."))
                       } finally {
                         setIsDeleting(false)
                       }
@@ -341,6 +350,28 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
                   </Button>
                 </>
               )}
+                  {/* STAFF: Hủy sự kiện CLB (đưa về nháp) trước khi bắt đầu */}
+              {isStaff && eventClubId != null && isEventUpcoming && (
+                    <Button
+                      className="flex-1 bg-amber-500 hover:bg-amber-600 text-white h-10 text-sm gap-2"
+                      onClick={async () => {
+                        try {
+                          await cancelClubEventByStaff(Number(event.id))
+                      toast.success("Đã hủy sự kiện (đưa về nháp)")
+                          // Thông báo cho calendar refetch lại dữ liệu
+                          try {
+                            window.dispatchEvent(new CustomEvent('events:refetch'))
+                          } catch {}
+                          onClose()
+                        } catch (error: unknown) {
+                          console.error("Cancel event failed:", error)
+                          toast.error(getErrorMessage(error, "Không thể hủy sự kiện. Vui lòng thử lại."))
+                        }
+                      }}
+                    >
+                      Hủy sự kiện
+                    </Button>
+                  )}
               {/* Nút Điểm danh/Xem điểm danh - chỉ hiện cho CLUB_PRESIDENT và CLUB_OFFICER */}
               {canMarkAttendance && currentClubId && (
                 <Button
@@ -370,8 +401,8 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
                   )}
                 </Button>
               )}
-              {/* Nút đăng ký - chỉ hiển thị nếu sự kiện chưa kết thúc */}
-              {!isEventEnded && (
+              {/* Nút đăng ký - chỉ hiển thị nếu sự kiện chưa kết thúc và không phải STAFF */}
+              {!isStaff && !isEventEnded && (
                 <Button 
                   className={`${canMarkAttendance && currentClubId ? "flex-1" : "w-full"} h-10 text-sm gap-2 ${
                     isRegistered 
@@ -453,9 +484,9 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
                   isMyDraft: event.isMyDraft,
                   requestStatus: event.requestStatus,
                 })
-              } catch (error: any) {
+              } catch (error: unknown) {
                 console.error("Error updating event:", error)
-                toast.error(error?.response?.data?.message || "Không thể cập nhật sự kiện. Vui lòng thử lại.")
+                toast.error(getErrorMessage(error, "Không thể cập nhật sự kiện. Vui lòng thử lại."))
                 throw error
               }
             }}

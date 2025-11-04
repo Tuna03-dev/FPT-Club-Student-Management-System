@@ -300,8 +300,28 @@ public class EventManagementService {
         // Lấy clubId từ event
         Long clubId = event.getClub() != null ? event.getClub().getId() : null;
 
-        // Trường hợp đặc biệt: Sự kiện đã publish, loại MEETING (nội bộ CLB)
-        // Cho phép CHÍNH NGƯỜI TẠO (creator của RequestEvent) cập nhật trước khi bắt đầu
+        if (Boolean.FALSE.equals(event.getIsDraft()) && event.getClub() == null && roleService.isStaff(userId)) {
+            if (event.getStartTime().isBefore(LocalDateTime.now())) {
+                throw new ForbiddenException("Sự kiện đã bắt đầu, không thể cập nhật");
+            }
+            Event eventToUpdate = event;
+            if (request.getTitle() != null) eventToUpdate.setTitle(request.getTitle());
+            if (request.getDescription() != null) eventToUpdate.setDescription(request.getDescription());
+            if (request.getLocation() != null) eventToUpdate.setLocation(request.getLocation());
+            if (request.getStartTime() != null) eventToUpdate.setStartTime(request.getStartTime());
+            if (request.getEndTime() != null) eventToUpdate.setEndTime(request.getEndTime());
+            if (request.getEventTypeId() != null) {
+                EventType newType = getEventTypeById(request.getEventTypeId());
+                eventToUpdate.setEventType(newType);
+            }
+            Event savedStaffEvent = eventRepository.save(eventToUpdate);
+            if (request.getMediaFiles() != null && !request.getMediaFiles().isEmpty()) {
+                uploadAndSaveEventMedia(savedStaffEvent, request.getMediaFiles());
+            }
+            return eventMapper.toDto(savedStaffEvent);
+        }
+
+
         boolean isMeeting = event.getEventType() != null &&
                 "MEETING".equalsIgnoreCase(event.getEventType().getTypeName());
         if (Boolean.FALSE.equals(event.getIsDraft()) && isMeeting) {
@@ -422,7 +442,17 @@ public class EventManagementService {
         // Lấy clubId từ event
         Long clubId = event.getClub() != null ? event.getClub().getId() : null;
 
-        // Trường hợp đặc biệt: MEETING đã publish — cho phép creator xóa trước khi bắt đầu
+        if (Boolean.FALSE.equals(event.getIsDraft()) && event.getClub() == null && roleService.isStaff(userId)) {
+            if (event.getStartTime().isBefore(LocalDateTime.now())) {
+                throw new ForbiddenException("Sự kiện đã bắt đầu, không thể xóa");
+            }
+            eventMediaRepository.deleteByEvent_Id(event.getId());
+            requestEventRepository.findByEventId(eventId).ifPresent(requestEventRepository::delete);
+            eventRepository.delete(event);
+            return;
+        }
+
+        // Trường hợp đặc biệt B: MEETING đã publish — cho phép creator xóa trước khi bắt đầu
         boolean isMeeting = event.getEventType() != null &&
                 "MEETING".equalsIgnoreCase(event.getEventType().getTypeName());
         if (Boolean.FALSE.equals(event.getIsDraft()) && isMeeting) {
@@ -475,6 +505,85 @@ public class EventManagementService {
 
         eventMediaRepository.deleteByEvent_Id(event.getId());
         requestEventRepository.delete(requestEvent);
+        eventRepository.delete(event);
+    }
+
+    // ================= STAFF Cancel/Restore =================
+    @Transactional
+    public void cancelClubEventByStaff(Long eventId, Long userId, String reason) {
+        if (!roleService.isStaff(userId)) {
+            throw new ForbiddenException("Chỉ STAFF mới có quyền hủy sự kiện");
+        }
+        Event event = eventRepository.findById(eventId)
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy sự kiện"));
+        if (event.getClub() == null) {
+            throw new ForbiddenException("Chỉ hủy được sự kiện của CLB");
+        }
+        if (event.getStartTime().isBefore(LocalDateTime.now())) {
+            throw new ForbiddenException("Sự kiện đã bắt đầu, không thể hủy");
+        }
+        event.setIsDraft(true);
+        eventRepository.save(event);
+        // Optionally: lưu reason vào requestEvent nếu tồn tại
+        requestEventRepository.findByEventId(eventId).ifPresent(re -> {
+            re.setResponseMessage(reason);
+            requestEventRepository.save(re);
+        });
+    }
+
+    @Transactional
+    public void restoreCancelledEventByStaff(Long eventId, Long userId) {
+        if (!roleService.isStaff(userId)) {
+            throw new ForbiddenException("Chỉ STAFF mới có quyền khôi phục sự kiện");
+        }
+        Event event = eventRepository.findById(eventId)
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy sự kiện"));
+        if (event.getClub() == null) {
+            throw new ForbiddenException("Chỉ khôi phục được sự kiện của CLB");
+        }
+        if (event.getStartTime().isBefore(LocalDateTime.now())) {
+            throw new ForbiddenException("Sự kiện đã bắt đầu, không thể khôi phục");
+        }
+        event.setIsDraft(false);
+        eventRepository.save(event);
+    }
+
+    @Transactional(readOnly = true)
+    public List<EventData> getStaffCancelledEvents(Long userId, Long clubId) {
+        if (!roleService.isStaff(userId)) {
+            throw new ForbiddenException("Chỉ STAFF mới có quyền xem danh sách đã hủy");
+        }
+        List<Event> list;
+        List<RequestStatus> pending = java.util.List.of(RequestStatus.PENDING_CLUB, RequestStatus.PENDING_UNIVERSITY);
+        if (clubId != null && clubId > 0) {
+            list = eventRepository.findCancelledByStaffAndClubIdExcludingPending(clubId, pending);
+        } else {
+            list = eventRepository.findCancelledByStaffExcludingPending(pending);
+        }
+        return list.stream().map(e -> {
+            EventData dto = eventMapper.toDto(e);
+            dto.setMediaUrls(eventMediaRepository.findMediaUrlsByEventId(e.getId()));
+            dto.setClubId(e.getClub() != null ? e.getClub().getId() : null);
+            return dto;
+        }).toList();
+    }
+
+    @Transactional
+    public void staffHardDeleteCancelledEvent(Long eventId, Long userId) {
+        if (!roleService.isStaff(userId)) {
+            throw new ForbiddenException("Chỉ STAFF mới có quyền xóa vĩnh viễn sự kiện");
+        }
+        Event event = eventRepository.findById(eventId)
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy sự kiện"));
+        if (event.getClub() == null) {
+            throw new ForbiddenException("Chỉ xóa các sự kiện của CLB");
+        }
+        if (!Boolean.TRUE.equals(event.getIsDraft())) {
+            throw new ForbiddenException("Chỉ xóa được sự kiện đang ở trạng thái đã hủy (draft)");
+        }
+        // Xóa media và request liên quan rồi xóa event
+        eventMediaRepository.deleteByEvent_Id(event.getId());
+        requestEventRepository.findByEventId(eventId).ifPresent(requestEventRepository::delete);
         eventRepository.delete(event);
     }
 

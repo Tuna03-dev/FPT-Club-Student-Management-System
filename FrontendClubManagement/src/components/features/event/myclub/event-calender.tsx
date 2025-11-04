@@ -1,5 +1,4 @@
 "use client"
-
 import { useState, useMemo, useEffect } from "react"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -7,10 +6,16 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { toast } from "sonner"
 import { EventDetailModal } from "./event-detail-modal"
-import { type EventData, getEventsByClubId, getStaffEventsByClubId, getStaffAllEvents, createEvent, getAllEventTypes, getPendingRequests, type PendingRequestDto, approveByClub, approveByUniversity, getMyDraftEvents, type MyDraftEventDto } from "@/service/EventService"
+import { type EventData, getEventsByClubId, getStaffEventsByClubId, getStaffAllEvents, createEvent, getAllEventTypes, getPendingRequests, type PendingRequestDto, approveByClub, approveByUniversity, getMyDraftEvents, type MyDraftEventDto, getStaffCancelledEvents, restoreCancelledEventByStaff, deleteCancelledEventByStaff } from "@/service/EventService"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { CreateEventForm } from "./create-event-form"
 import { authService } from "@/services/authService"
+
+// Helper to normalize error messages
+const getErrorMessage = (error: unknown, fallback = "Đã xảy ra lỗi"): string => {
+  const anyErr = error as { response?: { data?: { message?: string } } ; message?: string }
+  return anyErr?.response?.data?.message || anyErr?.message || fallback
+}
 
 interface Event {
   id: string
@@ -35,7 +40,6 @@ interface EventFormValues {
   eventImages: File[]
 }
 
-
 interface EventCalendarProps {
   clubId: number;
 }
@@ -49,10 +53,11 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
   const [openCreate, setOpenCreate] = useState(false)
   const [defaultCreateStartISO, setDefaultCreateStartISO] = useState<string | null>(null)
   const [defaultCreateEndISO, setDefaultCreateEndISO] = useState<string | null>(null)
-  const [selectedReadOnly, setSelectedReadOnly] = useState(false)
   const [eventTypes, setEventTypes] = useState<Array<{ id: string; name: string }>>([])
   const [pendingRequests, setPendingRequests] = useState<PendingRequestDto[] | null>(null)
   const [loadingPending, setLoadingPending] = useState(false)
+  const [cancelledEvents, setCancelledEvents] = useState<Event[] | null>(null)
+  const [loadingCancelled, setLoadingCancelled] = useState(false)
 
   // Fetch events from API
   useEffect(() => {
@@ -60,31 +65,22 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
       try {
         setLoading(true)
         setError(null)
-        
-        // Check if user is STAFF - if yes, use staff API (no membership check)
         const user = authService.getCurrentUser()
         const roleUpper = user?.systemRole ? String(user.systemRole).trim().toUpperCase() : undefined
         const isStaff = roleUpper === "STAFF"
-        
         let eventData: EventData[]
         if (isStaff) {
-          // Staff: use staff API - can view events by clubId or all events
-          // clubId = 0 or null means "all events"
           if (clubId && clubId > 0) {
             eventData = await getStaffEventsByClubId(clubId)
           } else {
             eventData = await getStaffAllEvents()
           }
         } else {
-          // Non-staff: use regular API (requires membership check)
-          // Must have valid clubId
           if (!clubId || clubId <= 0) {
             throw new Error("Club ID is required")
           }
           eventData = await getEventsByClubId(clubId)
         }
-        
-        // Map API data to Event interface
         const mappedEvents: Event[] = eventData.map((event: EventData) => ({
           id: event.id.toString(),
           title: event.title,
@@ -92,15 +88,13 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
           startDate: new Date(event.startTime),
           endDate: new Date(event.endTime),
           location: event.location,
-          attendees: 0, // Default value since attendees not in EventData
+          attendees: 0,
           status: determineEventStatus(new Date(event.startTime), new Date(event.endTime)),
           images: event.mediaUrls || []
         }))
-        
         let all: Event[] = mappedEvents
-
-        // If user is CLUB_PRESIDENT or CLUB_OFFICER, also fetch my draft events and merge
-        if (roleUpper === "CLUB_PRESIDENT" || roleUpper === "CLUB_OFFICER") {
+        const userUpper = roleUpper
+        if (userUpper === "CLUB_PRESIDENT" || userUpper === "CLUB_OFFICER") {
           try {
             const drafts = await getMyDraftEvents(clubId && clubId > 0 ? clubId : undefined)
             const mappedDrafts: Event[] = (drafts ?? []).map((d: MyDraftEventDto) => ({
@@ -116,38 +110,27 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
               isMyDraft: true,
               requestStatus: d.requestStatus,
             }))
-            // Merge by id, prefer draft flag if same id appears
             const byId = new Map<string, Event>()
-            // First add all regular events
-            for (const e of all) {
-              byId.set(e.id, e)
-            }
-            // Then merge drafts, preserving draft flags
+            for (const e of all) byId.set(e.id, e)
             for (const draft of mappedDrafts) {
               const existing = byId.get(draft.id)
-              if (existing) {
-                // Merge but preserve draft flags
-                byId.set(draft.id, { ...existing, ...draft, isMyDraft: true, requestStatus: draft.requestStatus })
-              } else {
-                byId.set(draft.id, draft)
-              }
+              if (existing) byId.set(draft.id, { ...existing, ...draft, isMyDraft: true, requestStatus: draft.requestStatus })
+              else byId.set(draft.id, draft)
             }
             all = Array.from(byId.values())
-          } catch (e) {
+          } catch (e: unknown) {
             console.warn("Failed to fetch my draft events", e)
           }
         }
-
         setEvents(all)
-      } catch (err) {
+      } catch (err: unknown) {
         console.error('Error fetching events:', err)
         setError('Không thể tải danh sách sự kiện')
-        toast.error('Không thể tải danh sách sự kiện')
+        toast.error(getErrorMessage(err, 'Không thể tải danh sách sự kiện'))
       } finally {
         setLoading(false)
       }
     }
-
     fetchEvents()
   }, [clubId])
 
@@ -221,17 +204,17 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
             }
           }
           all = Array.from(byId.values())
-        } catch (e) {
+        } catch (e: unknown) {
           console.warn("Failed to fetch my draft events", e)
         }
       }
 
       setEvents(all)
       setLoading(false)
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('Error fetching events:', err)
       setError('Không thể tải danh sách sự kiện')
-      toast.error('Không thể tải danh sách sự kiện')
+      toast.error(getErrorMessage(err, 'Không thể tải danh sách sự kiện'))
       setLoading(false)
     }
   }
@@ -242,26 +225,75 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
       try {
         const types = await getAllEventTypes()
         setEventTypes(types.map(t => ({ id: String(t.id), name: t.typeName })))
-      } catch (e) {
+      } catch (e: unknown) {
         console.error("Error fetching event types:", e)
       }
     })()
   }, [])
 
-  // Load pending requests for STAFF or CLUB_PRESIDENT
+  // Load pending requests (STAFF/CLUB_PRESIDENT) and cancelled events (STAFF)
   useEffect(() => {
     const user = authService.getCurrentUser()
     if (!user) return
     const isReviewer = ["STAFF", "CLUB_PRESIDENT"].includes(user.systemRole)
-    if (!isReviewer) return
-    setLoadingPending(true)
-    getPendingRequests()
-      .then((list) => setPendingRequests(list))
-      .catch(() => setPendingRequests([]))
-      .finally(() => setLoadingPending(false))
+    if (isReviewer) {
+      setLoadingPending(true)
+      getPendingRequests()
+        .then((list) => setPendingRequests(list))
+        .catch(() => setPendingRequests([]))
+        .finally(() => setLoadingPending(false))
+    }
+    if (user.systemRole === "STAFF") {
+      setLoadingCancelled(true)
+      getStaffCancelledEvents(clubId && clubId > 0 ? clubId : undefined)
+        .then((cancelled) => {
+          const mapped: Event[] = (cancelled ?? []).map((e) => ({
+            id: String(e.id),
+            title: e.title,
+            description: e.description,
+            startDate: new Date(e.startTime),
+            endDate: new Date(e.endTime),
+            location: e.location ?? "",
+            attendees: 0,
+            status: determineEventStatus(new Date(e.startTime), new Date(e.endTime)),
+            images: e.mediaUrls || [],
+            isMyDraft: true,
+            requestStatus: "CANCELLED",
+          }))
+          setCancelledEvents(mapped)
+        })
+        .catch(() => setCancelledEvents([]))
+        .finally(() => setLoadingCancelled(false))
+    }
   }, [])
 
-  // Determine event status based on dates
+  // Listen to global refetch event (after cancel from modal)
+  useEffect(() => {
+    const handler = async () => {
+      await refetchEvents()
+      const user = authService.getCurrentUser()
+      if (user?.systemRole === "STAFF") {
+        const cancelled = await getStaffCancelledEvents(clubId && clubId > 0 ? clubId : undefined)
+        const mapped: Event[] = (cancelled ?? []).map((e) => ({
+          id: String(e.id),
+          title: e.title,
+          description: e.description,
+          startDate: new Date(e.startTime),
+          endDate: new Date(e.endTime),
+          location: e.location ?? "",
+          attendees: 0,
+          status: determineEventStatus(new Date(e.startTime), new Date(e.endTime)),
+          images: e.mediaUrls || [],
+          isMyDraft: true,
+          requestStatus: "CANCELLED",
+        }))
+        setCancelledEvents(mapped)
+      }
+    }
+    window.addEventListener('events:refetch', handler)
+    return () => window.removeEventListener('events:refetch', handler)
+  }, [clubId])
+
   const determineEventStatus = (startDate: Date, endDate: Date): "upcoming" | "ongoing" | "completed" => {
     const now = new Date()
     if (now < startDate) return "upcoming"
@@ -276,13 +308,8 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
     const days = []
     const firstDay = firstDayOfMonth(currentDate)
     const totalDays = daysInMonth(currentDate)
-
-    for (let i = 0; i < firstDay; i++) {
-      days.push(null)
-    }
-    for (let i = 1; i <= totalDays; i++) {
-      days.push(i)
-    }
+    for (let i = 0; i < firstDay; i++) days.push(null)
+    for (let i = 1; i <= totalDays; i++) days.push(i)
     return days
   }, [currentDate])
 
@@ -466,7 +493,11 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
                   return (
                     <>
                       {canCreate && (
-                        <Button onClick={() => setOpenCreate(true)}>+ Tạo sự kiện mới</Button>
+                        <Button onClick={() => {
+                          setOpenCreate(true)
+                          setDefaultCreateStartISO(null)
+                          setDefaultCreateEndISO(null)
+                        }}>+ Tạo sự kiện mới</Button>
                       )}
                     </>
                   )
@@ -502,7 +533,7 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
                   const isLastRow = index >= monthDays.length - 7
 
                   return (
-                <div
+                    <div
                       key={index}
                       className={`aspect-square p-2 border-r border-b border-border transition-all flex flex-col ${
                         isLastInRow ? "border-r-0" : ""
@@ -514,7 +545,6 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
                         const user = authService.getCurrentUser()
                         const canCreate = !!user && ["STAFF", "CLUB_PRESIDENT", "CLUB_OFFICER"].includes(user.systemRole)
                         if (!canCreate) return
-                        // Prefill start 08:00, end +2h for selected day
                         const start = new Date(currentDate.getFullYear(), currentDate.getMonth(), day, 8, 0, 0)
                         const end = new Date(start.getTime() + 2 * 60 * 60 * 1000)
                         setDefaultCreateStartISO(start.toISOString())
@@ -548,8 +578,7 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
                                   title={`${event.title}${event.isMyDraft ? ' (Draft)' : ''} - ${event.location} - ${event.startDate.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}`}
                                   onClick={(e) => {
                                     e.stopPropagation()
-                            setSelectedEvent(event)
-                            setSelectedReadOnly(false)
+                                    setSelectedEvent(event)
                                   }}
                                 >
                                   {event.title}
@@ -580,29 +609,99 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
                 <div className="w-4 h-4 rounded bg-green-500"></div>
                 <span className="text-sm text-foreground">Đang diễn ra</span>
               </div>
-              <div className="flex items-center gap-3">
-                <div className="w-4 h-4 rounded bg-red-500"></div>
-                <span className="text-sm text-foreground">Đã kết thúc</span>
-              </div>
-              {(() => {
-                const user = authService.getCurrentUser()
-                const roleUpper = user?.systemRole ? String(user.systemRole).trim().toUpperCase() : undefined
-                const canSeeDraft = roleUpper === "CLUB_PRESIDENT" || roleUpper === "CLUB_OFFICER"
-                
-                if (canSeeDraft) {
-                  return (
-                    <div className="flex items-center gap-3">
-                      <div className="w-4 h-4 rounded bg-gray-400"></div>
-                      <span className="text-sm text-foreground">Chờ duyệt</span>
-                    </div>
-                  )
-                }
-                return null
-              })()}
+                  <div className="flex items-center gap-3">
+                    <div className="w-4 h-4 rounded bg-red-500"></div>
+                    <span className="text-sm text-foreground">Đã kết thúc</span>
+                  </div>
             </div>
             
             
           </Card>
+          {/* Cancelled events card (STAFF) */}
+          {(() => {
+            const user = authService.getCurrentUser()
+            const isStaff = !!user && user.systemRole === "STAFF"
+            if (!isStaff) return null
+            const items = cancelledEvents ?? []
+            return (
+              <Card className="p-6 shadow-lg mt-6 border-gray-300">
+                <div className="flex items-center gap-2 mb-4">
+                  <span className="inline-block w-3 h-3 rounded-full bg-gray-400" />
+                  <h3 className="text-lg font-bold text-foreground">Sự kiện đã hủy{items.length != null ? ` (${items.length})` : ""}</h3>
+                </div>
+                {loadingCancelled ? (
+                  <div className="text-sm text-muted-foreground">Đang tải danh sách...</div>
+                ) : items.length === 0 ? (
+                  <div className="text-sm text-muted-foreground">Không có sự kiện nào</div>
+                ) : (
+                  <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
+                    {items.map((ev) => (
+                      <div key={ev.id} className="rounded-md border bg-gray-50 px-4 py-3">
+                        <div className="font-semibold text-foreground">{ev.title}</div>
+                        <div className="text-xs text-muted-foreground mt-1 mb-3">
+                          <span>
+                            {ev.startDate.toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}
+                            {" - "}
+                            {ev.endDate.toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}
+                          </span>
+                          {ev.location ? (<div className="mt-1">📍 {ev.location}</div>) : null}
+                        </div>
+                        <div className="flex gap-3">
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            className="bg-blue-50 text-blue-600 hover:bg-blue-100"
+                            disabled={(() => { const now=new Date(); return ev.startDate <= now; })()}
+                            onClick={async () => {
+                              if ((() => { const now=new Date(); return ev.startDate <= now; })()) return
+                              await restoreCancelledEventByStaff(Number(ev.id))
+                              toast.success("Đã khôi phục sự kiện")
+                              const refreshed = await getStaffCancelledEvents(clubId && clubId > 0 ? clubId : undefined)
+                              const mapped: Event[] = (refreshed ?? []).map((e) => ({
+                                id: String(e.id),
+                                title: e.title,
+                                description: e.description,
+                                startDate: new Date(e.startTime),
+                                endDate: new Date(e.endTime),
+                                location: e.location ?? "",
+                                attendees: 0,
+                                status: determineEventStatus(new Date(e.startTime), new Date(e.endTime)),
+                                images: e.mediaUrls || [],
+                                isMyDraft: true,
+                                requestStatus: "CANCELLED",
+                              }))
+                              setCancelledEvents(mapped)
+                              await refetchEvents()
+                            }}
+                          >
+                            Khôi phục
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            className="bg-rose-50 text-rose-600 hover:bg-rose-100"
+                            onClick={async () => {
+                              try {
+                                await deleteCancelledEventByStaff(Number(ev.id))
+                                toast.success("Đã xóa sự kiện")
+                                setCancelledEvents((prev) => (prev ?? []).filter((x: Event) => x.id !== ev.id))
+                                await refetchEvents()
+                              } catch (e: unknown) {
+                                console.error(e)
+                                toast.error(getErrorMessage(e, "Không thể xóa sự kiện"))
+                              }
+                            }}
+                          >
+                            Xóa
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Card>
+            )
+          })()}
           {/* Pending requests card (STAFF/CLUB_PRESIDENT) */}
           {(() => {
             const user = authService.getCurrentUser()
@@ -631,28 +730,7 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
                       // Debug: check console to verify values
                       console.log("Debug approve buttons:", { userRole: roleUpper, reqStatus: req.status, reqStatusUpper, isStaffActionable, showActions })
                       return (
-                      <div
-                        key={req.requestEventId}
-                        className="rounded-md border bg-amber-50 px-4 py-3 cursor-pointer hover:bg-amber-100/60"
-                        onClick={() => {
-                          if (!req.event) return
-                          const mapped: Event = {
-                            id: String(req.event.id),
-                            title: req.requestTitle || req.event.title,
-                            description: req.description || "",
-                            startDate: new Date(req.event.startTime),
-                            endDate: new Date(req.event.endTime),
-                            location: req.event.location ?? "",
-                            attendees: 0,
-                            status: determineEventStatus(new Date(req.event.startTime), new Date(req.event.endTime)),
-                            images: [],
-                            isMyDraft: true,
-                            requestStatus: req.status,
-                          }
-                          setSelectedEvent(mapped)
-                          setSelectedReadOnly(true)
-                        }}
-                      >
+                      <div key={req.requestEventId} className="rounded-md border bg-amber-50 px-4 py-3">
                         <div className="font-semibold text-foreground">{req.requestTitle}</div>
                         <div className="text-xs text-muted-foreground">Tạo bởi: {req.createdBy?.fullName ?? "N/A"}</div>
                         {(() => {
@@ -694,9 +772,9 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
                                   }
                                   // Refetch events to update calendar
                                   await refetchEvents()
-                                } catch (e: any) {
+                                } catch (e: unknown) {
                                   console.error("Approve failed", e)
-                                  toast.error(e?.response?.data?.message || "Không thể duyệt sự kiện. Vui lòng thử lại.")
+                                  toast.error(getErrorMessage(e, "Không thể duyệt sự kiện. Vui lòng thử lại."))
                                 }
                               }}
                             >
@@ -719,9 +797,9 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
                                     setPendingRequests((prev) => (prev ?? []).map(x => x.requestEventId === req.requestEventId ? { ...x, status: "REJECTED_CLUB" } : x))
                                     toast.success("Đã từ chối sự kiện")
                                   }
-                                } catch (e: any) {
+                                } catch (e: unknown) {
                                   console.error("Reject failed", e)
-                                  toast.error(e?.response?.data?.message || "Không thể từ chối sự kiện. Vui lòng thử lại.")
+                                  toast.error(getErrorMessage(e, "Không thể từ chối sự kiện. Vui lòng thử lại."))
                                 }
                               }}
                             >
@@ -749,8 +827,6 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
           </DialogHeader>
           <CreateEventForm
             eventTypes={eventTypes}
-            initialStartTime={defaultCreateStartISO ?? undefined}
-            initialEndTime={defaultCreateEndISO ?? undefined}
             onSubmit={async (data: EventFormValues) => {
               try {
                 const user = authService.getCurrentUser()
@@ -769,13 +845,15 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
                 toast.success("Tạo sự kiện thành công!")
                 // Refetch events to get the latest data
                 await refetchEvents()
-              } catch (error: any) {
+              } catch (error: unknown) {
                 console.error("Error creating event:", error)
-                toast.error(error?.response?.data?.message || "Không thể tạo sự kiện. Vui lòng thử lại.")
+                toast.error(getErrorMessage(error, "Không thể tạo sự kiện. Vui lòng thử lại."))
                 throw error
               }
             }}
             onSuccess={() => setOpenCreate(false)}
+            initialStartTime={defaultCreateStartISO ?? undefined}
+            initialEndTime={defaultCreateEndISO ?? undefined}
           />
         </DialogContent>
       </Dialog>
@@ -785,7 +863,6 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
           event={selectedEvent}
           clubId={clubId}
           onClose={() => setSelectedEvent(null)}
-          readOnly={selectedReadOnly}
           onUpdated={(upd: Event) => {
             setEvents(prev => prev.map(e => e.id === upd.id ? { ...e, ...upd } : e))
             setSelectedEvent(upd)

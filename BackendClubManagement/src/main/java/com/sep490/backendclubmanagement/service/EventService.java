@@ -130,9 +130,7 @@ public class EventService {
                 .toList();
     }
 
-    /**
-     * Lấy tất cả events cho Staff (không cần check membership, loại bỏ MEETING)
-     */
+
     public List<EventData> getStaffAllEvents() {
         return eventRepository.findStaffAllEventsExcludingMeeting()
                 .stream()
@@ -145,9 +143,7 @@ public class EventService {
                 .toList();
     }
 
-    /**
-     * Lấy events theo clubId cho Staff (không cần check membership, loại bỏ MEETING)
-     */
+
     public List<EventData> getStaffEventsByClubId(Long clubId) {
         return eventRepository.findStaffEventsByClubIdExcludingMeeting(clubId)
                 .stream()
@@ -160,9 +156,7 @@ public class EventService {
                 .toList();
     }
 
-    /**
-     * Đăng ký tham gia sự kiện
-     */
+
     public void registerForEvent(Long eventId, Long userId) {
         // Kiểm tra event tồn tại
         Event event = eventRepository.findById(eventId)
@@ -198,9 +192,7 @@ public class EventService {
         eventAttendanceRepository.save(eventAttendance);
     }
 
-    /**
-     * Hủy đăng ký sự kiện
-     */
+
     public void cancelEventRegistration(Long eventId, Long userId) {
         // Kiểm tra đã đăng ký chưa
         EventAttendance eventAttendance = eventAttendanceRepository.findByEventIdAndUserId(eventId, userId)
@@ -216,16 +208,12 @@ public class EventService {
         eventAttendanceRepository.delete(eventAttendance);
     }
 
-    /**
-     * Kiểm tra user đã đăng ký sự kiện chưa
-     */
+
     public boolean isUserRegisteredForEvent(Long eventId, Long userId) {
         return eventAttendanceRepository.existsByEventIdAndUserId(eventId, userId);
     }
 
-    /**
-     * Lấy danh sách người đăng ký sự kiện
-     */
+
     public List<EventRegistrationDto> getEventRegistrations(Long eventId) {
         Event event = eventRepository.findById(eventId)
                 .orElseThrow(() -> new NotFoundException("Event not found"));
@@ -266,94 +254,12 @@ public class EventService {
                 .toList();
     }
 
-    /**
-     * Lấy số lượng người đã đăng ký sự kiện
-     */
+
     public Long getEventRegistrationCount(Long eventId) {
         return eventAttendanceRepository.countByEventIdAndStatus(eventId);
     }
 
-    /**
-     * Lấy danh sách events của club (cho Club President)
-     * Chỉ lấy các events đã được publish (isDraft = false)
-     */
-    public List<EventData> getClubEventsForPresident(Long clubId) {
-        return eventRepository.findByClubIdAndIsDraftFalse(clubId)
-                .stream()
-                .map(event -> {
-                    EventData dto = eventMapper.toDto(event);
-                    dto.setMediaUrls(eventMediaRepository.findMediaUrlsByEventId(event.getId()));
-                    dto.setClubId(event.getClub() != null ? event.getClub().getId() : null);
-                    return dto;
-                })
-                .toList();
-    }
 
-    // Version with optional keyword/time filter
-    public List<EventData> getClubEventsForPresident(Long clubId, String keyword, String startTime, String endTime) {
-        List<Event> events = eventRepository.findByClubIdAndIsDraftFalse(clubId);
-
-        // Keyword filter (title/description/location) - simple lowercase contains
-        if (keyword != null && !keyword.isBlank()) {
-            final List<String> keywords = Arrays.stream(keyword.split(","))
-                    .map(String::trim)
-                    .filter(k -> !k.isEmpty())
-                    .toList();
-            if (!keywords.isEmpty()) {
-                events = events.stream()
-                        .filter(event -> {
-                            String title = event.getTitle() != null ? event.getTitle().toLowerCase() : "";
-                            String desc = event.getDescription() != null ? event.getDescription().toLowerCase() : "";
-                            String loc = event.getLocation() != null ? event.getLocation().toLowerCase() : "";
-                            return keywords.stream().anyMatch(kw -> {
-                                String kwl = kw.toLowerCase();
-                                return title.contains(kwl) || desc.contains(kwl) || loc.contains(kwl);
-                            });
-                        })
-                        .toList();
-            }
-        }
-
-        // Time overlap filter
-        if (startTime != null || endTime != null) {
-            LocalDateTime from = null;
-            LocalDateTime to = null;
-            try { if (startTime != null) from = LocalDateTime.parse(startTime); } catch (Exception ignored) {}
-            try { if (endTime != null) to = LocalDateTime.parse(endTime); } catch (Exception ignored) {}
-
-            final LocalDateTime fFrom = from;
-            final LocalDateTime fTo = to;
-            events = events.stream()
-                    .filter(e -> {
-                        if (fFrom == null && fTo == null) return true;
-                        LocalDateTime s = e.getStartTime();
-                        LocalDateTime ed = e.getEndTime();
-                        if (s == null && ed == null) return false;
-                        boolean afterFrom = (fFrom == null) || (ed != null && !ed.isBefore(fFrom));
-                        boolean beforeTo = (fTo == null) || (s != null && !s.isAfter(fTo));
-                        return afterFrom && beforeTo;
-                    })
-                    .toList();
-        }
-
-        return events.stream()
-                .map(event -> {
-                    EventData dto = eventMapper.toDto(event);
-                    dto.setMediaUrls(eventMediaRepository.findMediaUrlsByEventId(event.getId()));
-                    dto.setClubId(event.getClub() != null ? event.getClub().getId() : null);
-                    return dto;
-                })
-                .toList();
-    }
-
-    // removed search/filter overload and normalization (revert)
-
-
-
-    /**
-     * Điểm danh hàng loạt cho nhiều user trong event
-     * Lưu ý: Phải check quyền Club President ở controller trước khi gọi method này
-     */
     @Transactional
     public void batchMarkAttendance(Long eventId, List<BatchMarkAttendanceRequest.AttendanceItem> attendances) {
         // Kiểm tra event tồn tại và thuộc club
@@ -395,7 +301,6 @@ public class EventService {
             updatedAttendances.add(attendance);
         }
         
-        // Lưu tất cả cùng lúc
         eventAttendanceRepository.saveAll(updatedAttendances);
     }
 }

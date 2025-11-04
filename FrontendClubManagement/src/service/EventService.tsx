@@ -93,6 +93,24 @@ export async function getStaffEventsByClubId(clubId: number): Promise<EventData[
   return res.data ?? [];
 }
 
+// ===== Staff Cancelled Events =====
+export async function getStaffCancelledEvents(clubId?: number): Promise<EventData[]> {
+  const res = await axiosClient.get<EventData[]>(`/events/staff/cancelled`, { params: clubId ? { clubId } : undefined });
+  return res.data ?? [];
+}
+
+export async function cancelClubEventByStaff(eventId: number, reason?: string): Promise<void> {
+  await axiosClient.post<void>(`/events/${eventId}/cancel`, undefined, { params: reason ? { reason } : undefined });
+}
+
+export async function restoreCancelledEventByStaff(eventId: number): Promise<void> {
+  await axiosClient.post<void>(`/events/${eventId}/restore`);
+}
+
+export async function deleteCancelledEventByStaff(eventId: number): Promise<void> {
+  await axiosClient.delete<void>(`/events/${eventId}/staff-hard-delete`);
+}
+
 export type EventStatusFilter = "all" | "upcoming" | "ongoing" | "completed";
 
 export function computeEventStatus(nowIso: string, startIso: string, endIso: string): EventStatusFilter {

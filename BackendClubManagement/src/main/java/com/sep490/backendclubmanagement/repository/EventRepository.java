@@ -71,4 +71,13 @@ public interface EventRepository extends JpaRepository<Event, Long> {
            "AND e.isDraft = false " +
            "AND (e.eventType IS NULL OR UPPER(TRIM(e.eventType.typeName)) <> 'MEETING')")
     List<Event> findStaffEventsByClubIdExcludingMeeting(Long clubId);
+
+    // STAFF: các sự kiện CLB đã hủy (isDraft = true, không còn chờ duyệt)
+    @Query("SELECT e FROM Event e LEFT JOIN RequestEvent re ON re.event = e AND re.status IN :pendingStatuses " +
+           "WHERE e.isDraft = true AND e.club IS NOT NULL AND re.id IS NULL")
+    List<Event> findCancelledByStaffExcludingPending(java.util.List<com.sep490.backendclubmanagement.entity.RequestStatus> pendingStatuses);
+
+    @Query("SELECT e FROM Event e LEFT JOIN RequestEvent re ON re.event = e AND re.status IN :pendingStatuses " +
+           "WHERE e.isDraft = true AND e.club.id = :clubId AND re.id IS NULL")
+    List<Event> findCancelledByStaffAndClubIdExcludingPending(Long clubId, java.util.List<com.sep490.backendclubmanagement.entity.RequestStatus> pendingStatuses);
 }

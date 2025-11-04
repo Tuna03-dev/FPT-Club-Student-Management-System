@@ -129,6 +129,46 @@ public class EventController {
     }
 
     /**
+     * STAFF: Hủy sự kiện CLB (đưa về trạng thái draft)
+     */
+    @PostMapping("/{eventId}/cancel")
+    public ApiResponse<Void> cancelClubEventByStaff(@PathVariable Long eventId,
+                                                    @RequestParam(value = "reason", required = false) String reason) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        eventManagementService.cancelClubEventByStaff(eventId, userId, reason);
+        return ApiResponse.success();
+    }
+
+    /**
+     * STAFF: Khôi phục sự kiện đã hủy (draft -> publish lại)
+     */
+    @PostMapping("/{eventId}/restore")
+    public ApiResponse<Void> restoreCancelledEventByStaff(@PathVariable Long eventId) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        eventManagementService.restoreCancelledEventByStaff(eventId, userId);
+        return ApiResponse.success();
+    }
+
+    /**
+     * STAFF: Danh sách sự kiện đã hủy (draft) theo club (hoặc tất cả)
+     */
+    @GetMapping("/staff/cancelled")
+    public ApiResponse<List<EventData>> getStaffCancelledEvents(@RequestParam(value = "clubId", required = false) Long clubId) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        return ApiResponse.success(eventManagementService.getStaffCancelledEvents(userId, clubId));
+    }
+
+    /**
+     * STAFF: Xóa vĩnh viễn sự kiện đã hủy (draft) của CLB
+     */
+    @DeleteMapping("/{eventId}/staff-hard-delete")
+    public ApiResponse<Void> staffHardDeleteCancelledEvent(@PathVariable Long eventId) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        eventManagementService.staffHardDeleteCancelledEvent(eventId, userId);
+        return ApiResponse.success();
+    }
+
+    /**
      * Cập nhật sự kiện nháp do user hiện tại tạo (theo role/status)
      */
     @PutMapping(value = "/{eventId}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
