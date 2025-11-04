@@ -247,21 +247,43 @@ public class EventManagementService {
 
 
     /**
-     * Lấy các event và trạng thái request chờ duyệt mà user này tạo
+     * Lấy các event và trạng thái request chờ duyệt mà user này tạo (theo club)
      */
-    public List<MyDraftEventDto> getMyDraftEvents(Long userId) {
+    public List<MyDraftEventDto> getMyDraftEvents(Long userId, Long clubId) {
         List<RequestStatus> statuses;
-        if (roleService.isClubPresident(userId)) {
-            statuses = List.of(RequestStatus.PENDING_UNIVERSITY);
-        } else if (roleService.isClubOfficer(userId)) {
-            statuses = List.of(RequestStatus.PENDING_CLUB);
+        
+        // Check role theo clubId nếu có, nếu không thì check global role
+        if (clubId != null && clubId > 0) {
+            if (roleService.isClubPresident(userId, clubId)) {
+                statuses = List.of(RequestStatus.PENDING_UNIVERSITY);
+            } else if (roleService.isClubOfficer(userId, clubId)) {
+                statuses = List.of(RequestStatus.PENDING_CLUB);
+            } else {
+                return List.of();
+            }
         } else {
-            return List.of();
+            // Fallback: check global role (for backward compatibility)
+            if (roleService.isClubPresident(userId)) {
+                statuses = List.of(RequestStatus.PENDING_UNIVERSITY);
+            } else if (roleService.isClubOfficer(userId)) {
+                statuses = List.of(RequestStatus.PENDING_CLUB);
+            } else {
+                return List.of();
+            }
         }
+        
         List<RequestEvent> reqEvents = requestEventRepository.findByCreatedByIdAndStatusIn(userId, statuses);
         if (reqEvents == null || reqEvents.isEmpty()) return List.of();
+        
+        // Filter by clubId if provided
         return reqEvents.stream()
             .filter(re -> re.getEvent() != null)
+            .filter(re -> {
+                if (clubId == null || clubId <= 0) return true;
+                Event event = re.getEvent();
+                if (event.getClub() == null) return clubId == null;
+                return event.getClub().getId() != null && event.getClub().getId().equals(clubId);
+            })
             .map(re -> MyDraftEventDto.builder()
                 .event(eventMapper.toDto(re.getEvent()))
                 .requestStatus(re.getStatus())
@@ -271,44 +293,64 @@ public class EventManagementService {
 
     @Transactional
     public EventData updateMyDraftEvent(Long eventId, UpdateEventRequest request, Long userId) {
-        // Xác định status hợp lệ theo role
+        // Lấy event trước để check clubId
+        Event event = eventRepository.findById(eventId)
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy sự kiện"));
+        
+        // Lấy clubId từ event
+        Long clubId = event.getClub() != null ? event.getClub().getId() : null;
+        
+        // Xác định status hợp lệ theo role và clubId
         List<RequestStatus> allowedStatuses;
-        if (roleService.isClubPresident(userId)) {
-            allowedStatuses = List.of(RequestStatus.PENDING_UNIVERSITY);
-        } else if (roleService.isClubOfficer(userId)) {
-            allowedStatuses = List.of(RequestStatus.PENDING_CLUB);
+        if (clubId != null && clubId > 0) {
+            // Check role theo clubId
+            if (roleService.isClubPresident(userId, clubId)) {
+                allowedStatuses = List.of(RequestStatus.PENDING_UNIVERSITY);
+            } else if (roleService.isClubOfficer(userId, clubId)) {
+                allowedStatuses = List.of(RequestStatus.PENDING_CLUB);
+            } else {
+                throw new ForbiddenException("Bạn không có quyền cập nhật sự kiện này");
+            }
         } else {
-            throw new ForbiddenException("Bạn không có quyền cập nhật sự kiện này");
+            // Event toàn trường hoặc không có club - check global role
+            if (roleService.isClubPresident(userId)) {
+                allowedStatuses = List.of(RequestStatus.PENDING_UNIVERSITY);
+            } else if (roleService.isClubOfficer(userId)) {
+                allowedStatuses = List.of(RequestStatus.PENDING_CLUB);
+            } else {
+                throw new ForbiddenException("Bạn không có quyền cập nhật sự kiện này");
+            }
         }
 
         RequestEvent requestEvent = requestEventRepository
                 .findByEventIdAndCreatorWithEventAndStatusIn(eventId, userId, allowedStatuses)
                 .orElseThrow(() -> new NotFoundException("Không tìm thấy sự kiện nháp của bạn hoặc trạng thái không phù hợp"));
 
-        Event event = requestEvent.getEvent();
-        if (event == null) {
-            throw new NotFoundException("Event không tồn tại");
+        // Đảm bảo event từ requestEvent match với event đã lấy
+        Event eventToUpdate = requestEvent.getEvent();
+        if (eventToUpdate == null || !eventToUpdate.getId().equals(event.getId())) {
+            throw new NotFoundException("Event không tồn tại hoặc không khớp");
         }
 
-        // Cập nhật các trường nếu có
-        if (request.getTitle() != null) event.setTitle(request.getTitle());
-        if (request.getDescription() != null) event.setDescription(request.getDescription());
-        if (request.getLocation() != null) event.setLocation(request.getLocation());
-        if (request.getStartTime() != null) event.setStartTime(request.getStartTime());
-        if (request.getEndTime() != null) event.setEndTime(request.getEndTime());
+        // Cập nhật các trường nếu có (dùng event từ requestEvent để đảm bảo consistency)
+        if (request.getTitle() != null) eventToUpdate.setTitle(request.getTitle());
+        if (request.getDescription() != null) eventToUpdate.setDescription(request.getDescription());
+        if (request.getLocation() != null) eventToUpdate.setLocation(request.getLocation());
+        if (request.getStartTime() != null) eventToUpdate.setStartTime(request.getStartTime());
+        if (request.getEndTime() != null) eventToUpdate.setEndTime(request.getEndTime());
         if (request.getEventTypeId() != null) {
             EventType eventType = getEventTypeById(request.getEventTypeId());
-            event.setEventType(eventType);
+            eventToUpdate.setEventType(eventType);
         }
 
         // Nếu đổi sang MEETING thì publish ngay và chốt request
-        boolean isMeetingNow = event.getEventType() != null &&
-                "MEETING".equalsIgnoreCase(event.getEventType().getTypeName());
+        boolean isMeetingNow = eventToUpdate.getEventType() != null &&
+                "MEETING".equalsIgnoreCase(eventToUpdate.getEventType().getTypeName());
         if (isMeetingNow) {
-            event.setIsDraft(false);
+            eventToUpdate.setIsDraft(false);
         }
 
-        Event saved = eventRepository.save(event);
+        Event saved = eventRepository.save(eventToUpdate);
 
         if (request.getMediaFiles() != null && !request.getMediaFiles().isEmpty()) {
             uploadAndSaveEventMedia(saved, request.getMediaFiles()); // append ảnh mới
@@ -325,22 +367,40 @@ public class EventManagementService {
 
     @Transactional
     public void deleteMyDraftEvent(Long eventId, Long userId) {
-        // Xác định status hợp lệ theo role
+        // Lấy event trước để check clubId
+        Event event = eventRepository.findById(eventId)
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy sự kiện"));
+        
+        // Lấy clubId từ event
+        Long clubId = event.getClub() != null ? event.getClub().getId() : null;
+        
+        // Xác định status hợp lệ theo role và clubId
         List<RequestStatus> allowedStatuses;
-        if (roleService.isClubPresident(userId)) {
-            allowedStatuses = List.of(RequestStatus.PENDING_UNIVERSITY);
-        } else if (roleService.isClubOfficer(userId)) {
-            allowedStatuses = List.of(RequestStatus.PENDING_CLUB);
+        if (clubId != null && clubId > 0) {
+            // Check role theo clubId
+            if (roleService.isClubPresident(userId, clubId)) {
+                allowedStatuses = List.of(RequestStatus.PENDING_UNIVERSITY);
+            } else if (roleService.isClubOfficer(userId, clubId)) {
+                allowedStatuses = List.of(RequestStatus.PENDING_CLUB);
+            } else {
+                throw new ForbiddenException("Bạn không có quyền xóa sự kiện này");
+            }
         } else {
-            throw new ForbiddenException("Bạn không có quyền xóa sự kiện này");
+            // Event toàn trường hoặc không có club - check global role
+            if (roleService.isClubPresident(userId)) {
+                allowedStatuses = List.of(RequestStatus.PENDING_UNIVERSITY);
+            } else if (roleService.isClubOfficer(userId)) {
+                allowedStatuses = List.of(RequestStatus.PENDING_CLUB);
+            } else {
+                throw new ForbiddenException("Bạn không có quyền xóa sự kiện này");
+            }
         }
 
         RequestEvent requestEvent = requestEventRepository
                 .findByEventIdAndCreatorWithEventAndStatusIn(eventId, userId, allowedStatuses)
                 .orElseThrow(() -> new NotFoundException("Không tìm thấy sự kiện nháp của bạn hoặc trạng thái không phù hợp"));
 
-        Event event = requestEvent.getEvent();
-        if (event == null) {
+        if (requestEvent.getEvent() == null) {
             throw new NotFoundException("Event không tồn tại");
         }
 

@@ -120,7 +120,7 @@ export function AttendancePage({ eventId, event: propEvent }: AttendancePageProp
           note: reg.notes || ""
         }))
         setStudents(mappedStudents)
-      } catch {}
+      } catch { /* empty */ }
     }, 300)
     return () => clearTimeout(t)
   }, [searchTerm, eventId])

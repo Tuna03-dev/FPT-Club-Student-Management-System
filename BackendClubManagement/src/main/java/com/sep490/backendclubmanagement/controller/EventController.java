@@ -119,12 +119,13 @@ public class EventController {
     }
 
     /**
-     * Lấy các event và trạng thái request chờ duyệt mà user hiện tại tạo
+     * Lấy các event và trạng thái request chờ duyệt mà user hiện tại tạo (theo club)
      */
     @GetMapping("/my-draft-events")
-    public ApiResponse<List<MyDraftEventDto>> getMyDraftEvents() {
+    public ApiResponse<List<MyDraftEventDto>> getMyDraftEvents(
+            @RequestParam(value = "clubId", required = false) Long clubId) {
         Long userId = SecurityUtils.getCurrentUserId();
-        return ApiResponse.success(eventManagementService.getMyDraftEvents(userId));
+        return ApiResponse.success(eventManagementService.getMyDraftEvents(userId, clubId));
     }
 
     /**

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { ChevronLeft, ChevronRight, X, Calendar, MapPin } from "lucide-react"
+import { ChevronLeft, ChevronRight, X, Calendar, MapPin, Users, ClipboardCheck, UserPlus, UserMinus, Edit, Trash2, Eye, Loader2, Tag } from "lucide-react"
 import { useNavigate, useParams } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { UpdateEventForm, type UpdateEventFormData } from "./update-event-form"
 import { updateEvent, deleteEvent, getEventById, registerForEvent, cancelEventRegistration, getRegistrationStatus } from "@/service/EventService"
 import { authService } from "@/services/authService"
+import { toast } from "sonner"
 import React from "react"
 
 interface EventDetailModalProps {
@@ -40,6 +41,8 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted 
   const [images, setImages] = useState<string[]>(event.images ?? [])
   const [isRegistered, setIsRegistered] = useState(false)
   const [isRegistering, setIsRegistering] = useState(false)
+  const [clubName, setClubName] = useState<string | null>(null)
+  const [eventTypeName, setEventTypeName] = useState<string | null>(null)
   
   // Get clubId from props or URL params
   const currentClubId = clubId || (params.clubId ? parseInt(params.clubId as string, 10) : undefined)
@@ -54,18 +57,20 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted 
   // Kiểm tra sự kiện đang diễn ra (thời gian hiện tại nằm giữa startDate và endDate)
   const isEventOngoing = new Date() >= event.startDate && new Date() < event.endDate
 
-  // If draft event has no images loaded, fetch full event details to get mediaUrls
+  // Fetch full event details to get clubName and mediaUrls
   React.useEffect(() => {
     let cancelled = false
-    if ((event.isMyDraft) && (!images || images.length === 0)) {
-      getEventById(Number(event.id))
-        .then((full) => {
-          if (!cancelled) {
+    getEventById(Number(event.id))
+      .then((full) => {
+        if (!cancelled) {
+          if (!images || images.length === 0) {
             setImages(full.mediaUrls ?? [])
           }
-        })
-        .catch(() => {})
-    }
+          setClubName(full.clubName || null)
+          setEventTypeName(full.eventTypeName || null)
+        }
+      })
+      .catch(() => {})
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [event.id])
@@ -123,20 +128,21 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted 
       if (isRegistered) {
         // Kiểm tra nếu sự kiện đang diễn ra thì không cho phép hủy đăng ký
         if (isEventOngoing) {
-          alert("Không thể hủy đăng ký khi sự kiện đang diễn ra.")
+          toast.error("Không thể hủy đăng ký khi sự kiện đang diễn ra.")
           setIsRegistering(false)
           return
         }
         await cancelEventRegistration(Number(event.id))
         setIsRegistered(false)
+        toast.success("Đã hủy đăng ký sự kiện")
       } else {
         await registerForEvent(Number(event.id))
         setIsRegistered(true)
+        toast.success("Đăng ký tham gia sự kiện thành công!")
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error registering for event:", error)
-      // Có thể thêm toast notification ở đây
-      alert(isRegistered ? "Không thể hủy đăng ký. Vui lòng thử lại." : "Không thể đăng ký. Vui lòng thử lại.")
+      toast.error(error?.response?.data?.message || (isRegistered ? "Không thể hủy đăng ký. Vui lòng thử lại." : "Không thể đăng ký. Vui lòng thử lại."))
     } finally {
       setIsRegistering(false)
     }
@@ -208,12 +214,12 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted 
           </div>
 
           {/* Event Info */}
-          <div className="space-y-4 border-t border-border pt-4">
+          <div className="space-y-3 border-t border-border pt-4">
             <div className="flex items-start gap-3">
-              <Calendar className="w-5 h-5 text-primary mt-0.5 flex-shrink-0" />
-              <div>
-                <p className="text-sm text-muted-foreground">Thời gian</p>
-                <p className="text-foreground font-medium">
+              <Calendar className="w-4 h-4 text-primary mt-1 flex-shrink-0" />
+              <div className="flex-1">
+                <p className="text-xs text-muted-foreground mb-1">Thời gian</p>
+                <p className="text-sm text-foreground font-medium">
                   {event.startDate.toLocaleDateString("vi-VN")} : {event.startDate.toLocaleTimeString("vi-VN", { hour: '2-digit', minute: '2-digit' })}
                   {event.endDate.getTime() !== event.startDate.getTime() &&
                     ` - ${event.endDate.toLocaleDateString("vi-VN")} : ${event.endDate.toLocaleTimeString("vi-VN", { hour: '2-digit', minute: '2-digit' })}`}
@@ -222,47 +228,77 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted 
             </div>
 
             <div className="flex items-start gap-3">
-              <MapPin className="w-5 h-5 text-primary mt-0.5 flex-shrink-0" />
-              <div>
-                <p className="text-sm text-muted-foreground">Địa điểm</p>
-                <p className="text-foreground font-medium">{event.location}</p>
+              <Users className="w-4 h-4 text-primary mt-1 flex-shrink-0" />
+              <div className="flex-1">
+                <p className="text-xs text-muted-foreground mb-1">Câu lạc bộ</p>
+                <p className="text-sm text-foreground font-medium">{clubName || "Sự kiện toàn trường"}</p>
               </div>
             </div>
 
+            <div className="flex items-start gap-3">
+              <MapPin className="w-4 h-4 text-primary mt-1 flex-shrink-0" />
+              <div className="flex-1">
+                <p className="text-xs text-muted-foreground mb-1">Địa điểm</p>
+                <p className="text-sm text-foreground font-medium">{event.location}</p>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-3">
+              <Tag className="w-4 h-4 text-primary mt-1 flex-shrink-0" />
+              <div className="flex-1">
+                <p className="text-xs text-muted-foreground mb-1">Thể loại</p>
+                <p className="text-sm text-foreground font-medium">{eventTypeName || "Không xác định"}</p>
+              </div>
+            </div>
           </div>
 
           {/* Actions */}
           {event.isMyDraft ? (
-            <div className="flex gap-3">
+            <div className="flex gap-2 pt-2">
               <Button
-                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-6 text-base"
+                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white h-10 text-sm gap-2"
                 onClick={() => setOpenUpdate(true)}
               >
+                <Edit className="w-4 h-4" />
                 Cập nhật
               </Button>
               <Button
-                className="flex-1 bg-rose-600 hover:bg-rose-700 text-white py-6 text-base"
+                className="flex-1 bg-rose-600 hover:bg-rose-700 text-white h-10 text-sm gap-2"
                 disabled={isDeleting}
                 onClick={async () => {
                   try {
                     setIsDeleting(true)
                     await deleteEvent(Number(event.id))
+                    toast.success("Đã xóa sự kiện thành công")
                     onDeleted?.(event.id)
                     onClose()
+                  } catch (error: any) {
+                    console.error("Error deleting event:", error)
+                    toast.error(error?.response?.data?.message || "Không thể xóa sự kiện. Vui lòng thử lại.")
                   } finally {
                     setIsDeleting(false)
                   }
                 }}
               >
-                {isDeleting ? "Đang xóa..." : "Xóa"}
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Đang xóa...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4" />
+                    Xóa
+                  </>
+                )}
               </Button>
             </div>
           ) : (
-            <div className="flex gap-3">
+            <div className="flex gap-2 pt-2">
               {/* Nút Điểm danh/Xem điểm danh - chỉ hiện cho CLUB_PRESIDENT và CLUB_OFFICER */}
               {canMarkAttendance && currentClubId && (
                 <Button
-                  className={`flex-1 py-6 text-base ${
+                  className={`${!isEventEnded ? "flex-1" : "flex-1"} h-10 text-sm gap-2 ${
                     isEventEnded 
                       ? "bg-white text-foreground border border-border hover:bg-orange-500 hover:text-white hover:border-orange-600"
                       : "bg-orange-500 hover:bg-orange-600 text-white"
@@ -275,13 +311,23 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted 
                     navigate(url)
                   }}
                 >
-                  {isEventEnded ? "Xem điểm danh" : "Điểm danh"}
+                  {isEventEnded ? (
+                    <>
+                      <Eye className="w-4 h-4" />
+                      Xem điểm danh
+                    </>
+                  ) : (
+                    <>
+                      <ClipboardCheck className="w-4 h-4" />
+                      Điểm danh
+                    </>
+                  )}
                 </Button>
               )}
               {/* Nút đăng ký - chỉ hiển thị nếu sự kiện chưa kết thúc */}
               {!isEventEnded && (
                 <Button 
-                  className={`${canMarkAttendance && currentClubId ? "flex-1" : "w-full"} py-6 text-base ${
+                  className={`${canMarkAttendance && currentClubId ? "flex-1" : "w-full"} h-10 text-sm gap-2 ${
                     isRegistered 
                       ? "bg-gray-500 hover:bg-gray-600 text-white" 
                       : "bg-primary hover:bg-primary/90 text-primary-foreground"
@@ -290,12 +336,22 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted 
                   disabled={isRegistering || (isRegistered && isEventOngoing)}
                   title={isRegistered && isEventOngoing ? "Không thể hủy đăng ký khi sự kiện đang diễn ra" : undefined}
                 >
-                  {isRegistering 
-                    ? "Đang xử lý..." 
-                    : isRegistered 
-                      ? isEventOngoing ? "Đã đăng ký" : "Hủy đăng ký"
-                      : "Đăng ký tham gia"
-                  }
+                  {isRegistering ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Đang xử lý...
+                    </>
+                  ) : isRegistered ? (
+                    <>
+                      <UserMinus className="w-4 h-4" />
+                      {isEventOngoing ? "Đã đăng ký" : "Hủy đăng ký"}
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus className="w-4 h-4" />
+                      Đăng ký tham gia
+                    </>
+                  )}
                 </Button>
               )}
             </div>
@@ -327,28 +383,35 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted 
                 eventTypeId: data.eventTypeId ? Number(data.eventTypeId) : undefined,
                 images: data.eventImages ?? [],
               }
-              const updated = await updateEvent(Number(event.id), payload)
-              // Map back to local event shape
-              onUpdated?.({
-                id: String(updated.id),
-                title: updated.title,
-                description: updated.description,
-                startDate: new Date(updated.startTime),
-                endDate: new Date(updated.endTime),
-                location: updated.location,
-                attendees: event.attendees,
-                status: (() => {
-                  const now = new Date()
-                  const s = new Date(updated.startTime)
-                  const e = new Date(updated.endTime)
-                  if (now < s) return "upcoming"
-                  if (now >= s && now <= e) return "ongoing"
-                  return "completed"
-                })(),
-                images: updated.mediaUrls || [],
-                isMyDraft: event.isMyDraft,
-                requestStatus: event.requestStatus,
-              })
+              try {
+                const updated = await updateEvent(Number(event.id), payload)
+                toast.success("Cập nhật sự kiện thành công!")
+                // Map back to local event shape
+                onUpdated?.({
+                  id: String(updated.id),
+                  title: updated.title,
+                  description: updated.description,
+                  startDate: new Date(updated.startTime),
+                  endDate: new Date(updated.endTime),
+                  location: updated.location,
+                  attendees: event.attendees,
+                  status: (() => {
+                    const now = new Date()
+                    const s = new Date(updated.startTime)
+                    const e = new Date(updated.endTime)
+                    if (now < s) return "upcoming"
+                    if (now >= s && now <= e) return "ongoing"
+                    return "completed"
+                  })(),
+                  images: updated.mediaUrls || [],
+                  isMyDraft: event.isMyDraft,
+                  requestStatus: event.requestStatus,
+                })
+              } catch (error: any) {
+                console.error("Error updating event:", error)
+                toast.error(error?.response?.data?.message || "Không thể cập nhật sự kiện. Vui lòng thử lại.")
+                throw error
+              }
             }}
             onSuccess={() => setOpenUpdate(false)}
           />

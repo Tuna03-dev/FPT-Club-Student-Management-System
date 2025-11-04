@@ -223,8 +223,9 @@ export interface MyDraftEventDto {
   requestStatus: string; // RequestStatus enum name
 }
 
-export async function getMyDraftEvents(): Promise<MyDraftEventDto[]> {
-  const res = await axiosClient.get<MyDraftEventDto[]>("/events/my-draft-events");
+export async function getMyDraftEvents(clubId?: number): Promise<MyDraftEventDto[]> {
+  const params = clubId ? { clubId } : undefined;
+  const res = await axiosClient.get<MyDraftEventDto[]>("/events/my-draft-events", { params });
   return res.data ?? [];
 }
 
