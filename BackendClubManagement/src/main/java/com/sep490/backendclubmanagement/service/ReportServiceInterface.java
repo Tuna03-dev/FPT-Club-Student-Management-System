@@ -1,10 +1,12 @@
 package com.sep490.backendclubmanagement.service;
 
+import com.sep490.backendclubmanagement.dto.request.CreateReportRequirementRequest;
 import com.sep490.backendclubmanagement.dto.request.ReportFilterRequest;
 import com.sep490.backendclubmanagement.dto.request.ReportReviewRequest;
 import com.sep490.backendclubmanagement.dto.response.PageResponse;
 import com.sep490.backendclubmanagement.dto.response.ReportDetailResponse;
 import com.sep490.backendclubmanagement.dto.response.ReportListItemResponse;
+import com.sep490.backendclubmanagement.dto.response.ReportRequirementResponse;
 
 /**
  * Interface for Report Service
@@ -33,5 +35,13 @@ public interface ReportServiceInterface {
      * @param userId Current user ID
      */
     void reviewReport(ReportReviewRequest request, Long userId);
+
+    /**
+     * Create report requirement for multiple clubs (for staff only)
+     * @param request Create request containing requirement details and list of club IDs
+     * @param userId Current user ID
+     * @return Created report requirement response with club requirements
+     */
+    ReportRequirementResponse createReportRequirement(CreateReportRequirementRequest request, Long userId);
 }
 

@@ -1,11 +1,13 @@
 package com.sep490.backendclubmanagement.controller;
 
 import com.sep490.backendclubmanagement.dto.ApiResponse;
+import com.sep490.backendclubmanagement.dto.request.CreateReportRequirementRequest;
 import com.sep490.backendclubmanagement.dto.request.ReportFilterRequest;
 import com.sep490.backendclubmanagement.dto.request.ReportReviewRequest;
 import com.sep490.backendclubmanagement.dto.response.PageResponse;
 import com.sep490.backendclubmanagement.dto.response.ReportDetailResponse;
 import com.sep490.backendclubmanagement.dto.response.ReportListItemResponse;
+import com.sep490.backendclubmanagement.dto.response.ReportRequirementResponse;
 import com.sep490.backendclubmanagement.service.ReportServiceInterface;
 import com.sep490.backendclubmanagement.util.SecurityUtils;
 import jakarta.validation.Valid;
@@ -49,6 +51,18 @@ public class ReportController {
         Long userId = SecurityUtils.getCurrentUserId();
         reportService.reviewReport(request, userId);
         return ApiResponse.success();
+    }
+
+    /**
+     * Create report requirement for multiple clubs (for staff only)
+     */
+    @PostMapping("/staff/requirements")
+    public ApiResponse<ReportRequirementResponse> createReportRequirement(
+            @RequestBody @Valid CreateReportRequirementRequest request
+    ) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        ReportRequirementResponse data = reportService.createReportRequirement(request, userId);
+        return ApiResponse.success(data);
     }
 }
 

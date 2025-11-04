@@ -1,19 +1,27 @@
 package com.sep490.backendclubmanagement.service;
 
+import com.sep490.backendclubmanagement.dto.request.CreateReportRequirementRequest;
 import com.sep490.backendclubmanagement.dto.request.ReportFilterRequest;
 import com.sep490.backendclubmanagement.dto.request.ReportReviewRequest;
 import com.sep490.backendclubmanagement.dto.response.PageResponse;
 import com.sep490.backendclubmanagement.dto.response.ReportDetailResponse;
 import com.sep490.backendclubmanagement.dto.response.ReportListItemResponse;
+import com.sep490.backendclubmanagement.dto.response.ReportRequirementResponse;
+import com.sep490.backendclubmanagement.entity.Club;
 import com.sep490.backendclubmanagement.entity.ClubReportRequirement;
 import com.sep490.backendclubmanagement.entity.ClubReportRequirementStatus;
+import com.sep490.backendclubmanagement.entity.Event;
 import com.sep490.backendclubmanagement.entity.Report;
 import com.sep490.backendclubmanagement.entity.ReportStatus;
+import com.sep490.backendclubmanagement.entity.SubmissionReportRequirement;
 import com.sep490.backendclubmanagement.exception.ForbiddenException;
 import com.sep490.backendclubmanagement.exception.NotFoundException;
 import com.sep490.backendclubmanagement.mapper.ReportMapper;
 import com.sep490.backendclubmanagement.repository.ClubReportRequirementRepository;
+import com.sep490.backendclubmanagement.repository.ClubRepository;
+import com.sep490.backendclubmanagement.repository.EventRepository;
 import com.sep490.backendclubmanagement.repository.ReportRepository;
+import com.sep490.backendclubmanagement.repository.SubmissionReportRequirementRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -22,6 +30,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -30,6 +40,9 @@ public class ReportServiceImpl implements ReportServiceInterface {
 
     private final ReportRepository reportRepository;
     private final ClubReportRequirementRepository clubReportRequirementRepository;
+    private final SubmissionReportRequirementRepository submissionReportRequirementRepository;
+    private final ClubRepository clubRepository;
+    private final EventRepository eventRepository;
     private final RoleService roleService;
     private final ReportMapper reportMapper;
 
@@ -139,6 +152,79 @@ public class ReportServiceImpl implements ReportServiceInterface {
         reportRepository.save(report);
 
         log.info("Staff {} has {} ClubReportRequirement for report {}", userId, clubReportRequirementStatus, request.getReportId());
+    }
+
+    /**
+     * Create report requirement for multiple clubs (for staff only)
+     */
+    @Override
+    @Transactional
+    public ReportRequirementResponse createReportRequirement(CreateReportRequirementRequest request, Long userId) {
+        // Check staff permission
+        if (!roleService.isStaff(userId)) {
+            throw new ForbiddenException("Only staff can create report requirements");
+        }
+
+        // Validate and get event if provided
+        Event event = null;
+        if (request.getEventId() != null) {
+            event = eventRepository.findById(request.getEventId())
+                    .orElseThrow(() -> new NotFoundException("Event not found with ID: " + request.getEventId()));
+        }
+
+        // Create SubmissionReportRequirement
+        SubmissionReportRequirement submissionRequirement = SubmissionReportRequirement.builder()
+                .title(request.getTitle())
+                .description(request.getDescription())
+                .dueDate(request.getDueDate())
+                .reportType(request.getReportType())
+                .templateUrl(request.getTemplateUrl())
+                .event(event)
+                .build();
+
+        SubmissionReportRequirement savedSubmissionRequirement = submissionReportRequirementRepository.save(submissionRequirement);
+
+        // Validate and get all clubs
+        List<Club> clubs = clubRepository.findAllById(request.getClubIds());
+        if (clubs.size() != request.getClubIds().size()) {
+            throw new NotFoundException("One or more clubs not found");
+        }
+
+        // Create ClubReportRequirement for each club
+        List<ReportRequirementResponse.ClubRequirementInfo> clubRequirementInfos = new ArrayList<>();
+        for (Club club : clubs) {
+            ClubReportRequirement clubRequirement = ClubReportRequirement.builder()
+                    .club(club)
+                    .submissionReportRequirement(savedSubmissionRequirement)
+                    .status(ClubReportRequirementStatus.PENDING)
+                    .note(null)
+                    .build();
+
+            ClubReportRequirement savedClubRequirement = clubReportRequirementRepository.save(clubRequirement);
+
+            clubRequirementInfos.add(ReportRequirementResponse.ClubRequirementInfo.builder()
+                    .id(savedClubRequirement.getId())
+                    .clubId(club.getId())
+                    .clubName(club.getClubName())
+                    .clubCode(club.getClubCode())
+                    .status(savedClubRequirement.getStatus().name())
+                    .note(savedClubRequirement.getNote())
+                    .build());
+        }
+
+        log.info("Staff {} has created report requirement {} for {} clubs", userId, savedSubmissionRequirement.getId(), clubs.size());
+
+        return ReportRequirementResponse.builder()
+                .id(savedSubmissionRequirement.getId())
+                .title(savedSubmissionRequirement.getTitle())
+                .description(savedSubmissionRequirement.getDescription())
+                .dueDate(savedSubmissionRequirement.getDueDate())
+                .reportType(savedSubmissionRequirement.getReportType())
+                .templateUrl(savedSubmissionRequirement.getTemplateUrl())
+                .createdAt(savedSubmissionRequirement.getCreatedAt())
+                .updatedAt(savedSubmissionRequirement.getUpdatedAt())
+                .clubRequirements(clubRequirementInfos)
+                .build();
     }
 }
 
