@@ -141,7 +141,7 @@ public class ClubTeamVisibilityService {
         Long semesterId = currentSemester.getId();
         
         // Kiểm tra user có phải CLUB_PRESIDENT của kì hiện tại không
-        boolean isPresident = clubMemberShipRepository.isClubPresidentInSemester(
+        boolean isPresident = roleMembershipRepository.isClubPresidentInCurrentSemester(
                 currentUser.getId(), 
                 clubId,
                 semesterId

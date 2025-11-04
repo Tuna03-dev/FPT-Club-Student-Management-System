@@ -54,5 +54,29 @@ public interface ReportRepository extends JpaRepository<Report, Long> {
     @Query("SELECT r FROM Report r " +
            "WHERE r.reportRequirement.id = :requirementId")
     List<Report> findAllByReportRequirementId(@Param("requirementId") Long requirementId);
+
+    @Query("SELECT r FROM Report r " +
+           "LEFT JOIN FETCH r.club " +
+           "LEFT JOIN FETCH r.semester " +
+           "LEFT JOIN FETCH r.createdBy " +
+           "LEFT JOIN FETCH r.reportRequirement " +
+           "WHERE r.club.id = :clubId " +
+           "AND (:status IS NULL OR r.status = :status) " +
+           "ORDER BY r.createdAt DESC")
+    List<Report> findByClubIdAndStatus(@Param("clubId") Long clubId, 
+                                       @Param("status") ReportStatus status);
+
+    @Query("SELECT r FROM Report r " +
+           "LEFT JOIN FETCH r.club " +
+           "LEFT JOIN FETCH r.semester " +
+           "LEFT JOIN FETCH r.createdBy " +
+           "LEFT JOIN FETCH r.reportRequirement " +
+           "WHERE r.club.id = :clubId " +
+           "AND r.createdBy.id = :userId " +
+           "AND (:status IS NULL OR r.status = :status) " +
+           "ORDER BY r.createdAt DESC")
+    List<Report> findByClubIdAndUserIdAndStatus(@Param("clubId") Long clubId,
+                                                 @Param("userId") Long userId,
+                                                 @Param("status") ReportStatus status);
 }
 

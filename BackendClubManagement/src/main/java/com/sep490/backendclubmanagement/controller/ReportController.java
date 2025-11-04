@@ -2,8 +2,11 @@ package com.sep490.backendclubmanagement.controller;
 
 import com.sep490.backendclubmanagement.dto.ApiResponse;
 import com.sep490.backendclubmanagement.dto.request.CreateReportRequirementRequest;
+import com.sep490.backendclubmanagement.dto.request.CreateReportRequest;
 import com.sep490.backendclubmanagement.dto.request.ReportFilterRequest;
 import com.sep490.backendclubmanagement.dto.request.ReportReviewRequest;
+import com.sep490.backendclubmanagement.dto.request.SubmitReportRequest;
+import com.sep490.backendclubmanagement.dto.request.UpdateReportRequest;
 import com.sep490.backendclubmanagement.dto.response.PageResponse;
 import com.sep490.backendclubmanagement.dto.response.ReportDetailResponse;
 import com.sep490.backendclubmanagement.dto.response.ReportListItemResponse;
@@ -13,6 +16,8 @@ import com.sep490.backendclubmanagement.util.SecurityUtils;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/reports")
@@ -62,6 +67,67 @@ public class ReportController {
     ) {
         Long userId = SecurityUtils.getCurrentUserId();
         ReportRequirementResponse data = reportService.createReportRequirement(request, userId);
+        return ApiResponse.success(data);
+    }
+
+    /**
+     * Create a report (draft for team officer, can submit for club president)
+     */
+    @PostMapping("/club")
+    public ApiResponse<ReportDetailResponse> createReport(
+            @RequestBody @Valid CreateReportRequest request
+    ) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        ReportDetailResponse data = reportService.createReport(request, userId);
+        return ApiResponse.success(data);
+    }
+
+    /**
+     * Update a draft report
+     */
+    @PutMapping("/club/{reportId}")
+    public ApiResponse<ReportDetailResponse> updateReport(
+            @PathVariable Long reportId,
+            @RequestBody @Valid UpdateReportRequest request
+    ) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        ReportDetailResponse data = reportService.updateReport(reportId, request, userId);
+        return ApiResponse.success(data);
+    }
+
+    /**
+     * Submit a draft report (club president only)
+     */
+    @PostMapping("/club/submit")
+    public ApiResponse<ReportDetailResponse> submitReport(
+            @RequestBody @Valid SubmitReportRequest request
+    ) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        ReportDetailResponse data = reportService.submitReport(request, userId);
+        return ApiResponse.success(data);
+    }
+
+    /**
+     * Get all reports for a club (club president can see all, team officer can see their own)
+     */
+    @GetMapping("/club/{clubId}")
+    public ApiResponse<List<ReportListItemResponse>> getClubReports(
+            @PathVariable Long clubId
+    ) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        List<ReportListItemResponse> data = reportService.getClubReports(clubId, userId);
+        return ApiResponse.success(data);
+    }
+
+    /**
+     * Get my draft reports for a club
+     */
+    @GetMapping("/club/{clubId}/drafts")
+    public ApiResponse<List<ReportListItemResponse>> getMyDraftReports(
+            @PathVariable Long clubId
+    ) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        List<ReportListItemResponse> data = reportService.getMyDraftReports(clubId, userId);
         return ApiResponse.success(data);
     }
 }

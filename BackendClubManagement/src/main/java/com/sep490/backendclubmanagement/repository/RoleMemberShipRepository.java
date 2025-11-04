@@ -326,5 +326,47 @@ SELECT CASE WHEN EXISTS (
            "WHERE cms.user_id = :userId AND sr.role_name = 'CLUB_PRESIDENT'",
            nativeQuery = true)
     List<Long> findPresidentClubIdsByUserId(@Param("userId") Long userId);
+
+    /**
+     * Kiểm tra user có phải CLUB_PRESIDENT trong kỳ hiện tại và đang active không
+     */
+    @Query("""
+        SELECT CASE WHEN COUNT(rm) > 0 THEN true ELSE false END
+        FROM RoleMemberShip rm
+        JOIN rm.clubMemberShip cm
+        LEFT JOIN rm.clubRole cr
+        WHERE cm.user.id = :userId
+          AND cm.club.id = :clubId
+          AND rm.semester.id = :semesterId
+          AND COALESCE(rm.isActive, TRUE) = TRUE
+          AND rm.team IS NULL
+          AND UPPER(TRIM(COALESCE(cr.roleCode, ''))) = 'CLUB_PRESIDENT'
+    """)
+    boolean isClubPresidentInCurrentSemester(@Param("userId") Long userId,
+                                             @Param("clubId") Long clubId,
+                                             @Param("semesterId") Long semesterId);
+
+    /**
+     * Kiểm tra user có phải TEAM_OFFICER (cán bộ ban) trong kỳ hiện tại và đang active không
+     * Team officer là người có role CLUB_OFFICER hoặc TEAM_OFFICER thuộc một team
+     */
+    @Query("""
+        SELECT CASE WHEN COUNT(rm) > 0 THEN true ELSE false END
+        FROM RoleMemberShip rm
+        JOIN rm.clubMemberShip cm
+        LEFT JOIN rm.clubRole cr
+        WHERE cm.user.id = :userId
+          AND cm.club.id = :clubId
+          AND rm.semester.id = :semesterId
+          AND COALESCE(rm.isActive, TRUE) = TRUE
+          AND rm.team IS NOT NULL
+          AND (
+            UPPER(TRIM(COALESCE(cr.roleCode, ''))) IN ('CLUB_OFFICER', 'TEAM_OFFICER', 'OFFICER')
+            OR UPPER(TRIM(COALESCE(cr.roleName, ''))) LIKE '%OFFICER%'
+          )
+    """)
+    boolean isTeamOfficerInCurrentSemester(@Param("userId") Long userId,
+                                           @Param("clubId") Long clubId,
+                                           @Param("semesterId") Long semesterId);
 }
 
