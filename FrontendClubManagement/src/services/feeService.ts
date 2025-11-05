@@ -38,12 +38,7 @@ export const feeService = {
     return axiosClient.patch<Fee>(url, { isLocked });
   },
 
-  /**
-   * Generate PayOS payment QR code for a specific member and fee
-   * @param clubId Club ID
-   * @param feeId Fee ID
-   * @param userId User/Member ID who will pay
-   */
+  
   async generatePaymentQR(
     clubId: number,
     feeId: number,
@@ -54,6 +49,15 @@ export const feeService = {
       params: { userId },
     });
   },
+
+  async getUnpaidFees(clubId: number, userId: number): Promise<ApiResponse<Fee[]>> {
+    const url = `/clubs/${clubId}/fees/unpaid`;
+    return axiosClient.get<Fee[]>(url, { params: { userId } });
+  },
+  async getPaidFees(clubId: number, userId: number): Promise<ApiResponse<Fee[]>> {
+    const url = `/clubs/${clubId}/fees/paid`;
+    return axiosClient.get<Fee[]>(url, { params: { userId } });
+}
 };
 
 export default feeService;

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { toast } from "sonner";
 import FeeCard from "@/components/features/finance/FeeCard";
@@ -12,10 +12,8 @@ import feeService from "@/services/feeService";
 import { authService } from "@/services/authService";
 import type { Fee } from "@/types/fee";
 import { calculatePaymentStatus } from "@/utils/feeUtils";
-import {
-  useWebSocket,
-  type PaymentWebSocketPayload,
-} from "@/hooks/useWebSocket";
+import { useWebSocket } from "@/hooks/useWebSocket";
+import PaymentSuccessDialog from "@/components/features/finance/PaymentSuccessDialog";
 
 // Note: mock data removed — this page now expects real API data from `feeService.getFees`.
 
@@ -49,7 +47,13 @@ export default function Payment() {
   const [generatingQR, setGeneratingQR] = useState(false);
   const token = localStorage.getItem("accessToken");
   const { isConnected, subscribeToUserQueue } = useWebSocket(token);
-
+  const paymentTimeoutRef = useRef<number | null>(null);
+  const pollIntervalRef = useRef<number | null>(null);
+  const seenMessageIdsRef = useRef<Set<string>>(new Set());
+  const [showSuccessDialog, setShowSuccessDialog] = useState(false);
+  const [successFeeName, setSuccessFeeName] = useState<string | undefined>(
+    undefined
+  );
 
   const fetchFees = useCallback(async () => {
     if (!numericClubId || numericClubId <= 0) {
@@ -59,30 +63,44 @@ export default function Payment() {
       return;
     }
 
+    const currentUser = authService.getCurrentUser();
+    if (!currentUser || !currentUser.id) {
+      setFees([]);
+      setLoading(false);
+      setError("Vui lòng đăng nhập để xem các khoản phí");
+      return;
+    }
+
     try {
       setLoading(true);
       setError(null);
 
-      const response = await feeService.getFees(numericClubId);
+      // Fetch cả unpaid và paid fees song song
+      const [unpaidResponse, paidResponse] = await Promise.all([
+        feeService.getUnpaidFees(numericClubId, currentUser.id),
+        feeService.getPaidFees(numericClubId, currentUser.id),
+      ]);
 
-      if (response.code === 200 && response.data) {
-        // Transform Fee[] to MemberFee[] with payment status
-        // For now, assume all are unpaid (pending/overdue)
-        // TODO: Get actual payment status from API
-        const memberFees = response.data.map((fee) =>
-          transformFeeToMemberFee(fee, false)
-        );
-        setFees(memberFees);
-      } else {
-        throw new Error(response.message || "Không thể tải danh sách phí");
-      }
+      const unpaidFees =
+        unpaidResponse.code === 200 && unpaidResponse.data
+          ? unpaidResponse.data.map((fee) =>
+              transformFeeToMemberFee(fee, false)
+            )
+          : [];
+
+      const paidFees =
+        paidResponse.code === 200 && paidResponse.data
+          ? paidResponse.data.map((fee) => transformFeeToMemberFee(fee, true))
+          : [];
+
+      // Combine cả 2 lists
+      setFees([...unpaidFees, ...paidFees]);
     } catch (err) {
       console.error("Error fetching fees:", err);
       const errorMessage =
         err instanceof Error ? err.message : "Có lỗi khi tải danh sách phí";
       setError(errorMessage);
       toast.error(errorMessage);
-      // No mock fallback; keep fees empty so UI reflects real data only
       setFees([]);
     } finally {
       setLoading(false);
@@ -122,6 +140,7 @@ export default function Payment() {
           // Use QR code from PayOS response
           const qrData = response.data.qrCode || response.data.paymentLink;
           setOrderCode(response.data.orderCode);
+          setSuccessFeeName(fee.title);
           if (qrData) {
             setQrCodeData(qrData);
             setIsQRDialogOpen(true);
@@ -164,6 +183,16 @@ export default function Payment() {
     setIsQRDialogOpen(false);
     setSelectedFee(null);
     setQrCodeData(null);
+    setOrderCode(undefined);
+    // clear timers
+    if (paymentTimeoutRef.current) {
+      window.clearTimeout(paymentTimeoutRef.current);
+      paymentTimeoutRef.current = null;
+    }
+    if (pollIntervalRef.current) {
+      window.clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
   }, []);
 
   // Memoized filtered fees
@@ -180,27 +209,83 @@ export default function Payment() {
     [fees]
   );
 
+  // Subscribe only while we are waiting for a specific payment (QR dialog open)
   useEffect(() => {
-    if (!isConnected) return;
+    if (!isConnected || !isQRDialogOpen || !orderCode) return;
 
-    // Subscribe to personal queue for payment notifications
+    const seen = seenMessageIdsRef.current;
+
+    type UnknownPayload = {
+      orderCode?: number;
+      transactionCode?: string;
+      message?: string;
+      feeName?: string;
+      [k: string]: unknown;
+    };
+
     const unsubscribe = subscribeToUserQueue((message) => {
-      if (message.type === "PAYMENT") {
-        const payload = message.payload as PaymentWebSocketPayload;
+      try {
+        if (message.type !== "PAYMENT") return;
+        const payload = message.payload as UnknownPayload;
+
+        const msgId =
+          (message as { messageId?: string }).messageId ||
+          (payload &&
+            payload.orderCode &&
+            `${payload.orderCode}-${message.action}`);
+        if (msgId && seen.has(msgId)) return;
+        if (msgId) seen.add(msgId);
+
+        if (!payload || payload.orderCode !== orderCode) return;
 
         if (message.action === "SUCCESS") {
-          toast.success(
-            `Thanh toán thành công! Mã GD: ${payload.transactionCode}`
-          );
-          // Refresh payment list
+          // show success dialog instead of toast
+          const feeName =
+            successFeeName || (payload as UnknownPayload).feeName || undefined;
+          setSuccessFeeName(feeName);
+          setShowSuccessDialog(true);
+          fetchFees();
+          handleCloseDialog();
         } else if (message.action === "FAILED") {
-          toast.error(payload.message);
+          toast.error(payload.message || "Thanh toán không thành công");
+          fetchFees();
         }
+      } catch (err) {
+        console.error("Error handling WS payment message:", err);
       }
     });
 
-    return unsubscribe;
-  }, [isConnected]);
+    // polling fallback to refresh status every 5s while waiting
+    pollIntervalRef.current = window.setInterval(() => {
+      fetchFees();
+    }, 15000);
+
+    // timeout after 3 minutes
+    paymentTimeoutRef.current = window.setTimeout(() => {
+      toast.error("Thời gian chờ thanh toán đã hết. Vui lòng thử lại.");
+      handleCloseDialog();
+    }, 3 * 60 * 1000);
+
+    return () => {
+      unsubscribe();
+      if (pollIntervalRef.current) {
+        window.clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
+      if (paymentTimeoutRef.current) {
+        window.clearTimeout(paymentTimeoutRef.current);
+        paymentTimeoutRef.current = null;
+      }
+    };
+  }, [
+    isConnected,
+    isQRDialogOpen,
+    orderCode,
+    subscribeToUserQueue,
+    fetchFees,
+    handleCloseDialog,
+    successFeeName,
+  ]);
 
   return (
     <div className="container max-w-6xl py-8 px-4">
@@ -289,6 +374,11 @@ export default function Payment() {
         onClose={handleCloseDialog}
         generateQRData={generateQRData}
         orderCode={orderCode}
+      />
+      <PaymentSuccessDialog
+        open={showSuccessDialog}
+        onClose={() => setShowSuccessDialog(false)}
+        feeName={successFeeName}
       />
     </div>
   );

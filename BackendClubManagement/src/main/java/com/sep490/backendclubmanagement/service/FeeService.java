@@ -50,6 +50,33 @@ public class FeeService {
     @Value("${app.frontend.url:http://localhost:5173}")
     private String frontendUrl;
 
+
+    public List<FeeDetailResponse> getPaidFeesByUser(Long clubId, Long userId) {
+        List<Fee> fees = feeRepository.findPaidFeesByClubIdAndUserId(clubId, userId);
+        return fees.stream()
+                .map(fee -> {
+                    FeeDetailResponse response = feeMapper.toFeeDetailResponse(fee);
+
+                    // Tìm transaction của user này cho fee này
+                    IncomeTransaction userTransaction = fee.getIncomeTransactions().stream()
+                            .filter(t -> t.getUser().getId().equals(userId)
+                                    && t.getStatus() == TransactionStatus.SUCCESS)
+                            .findFirst()
+                            .orElse(null);
+
+                    // Set thông tin thanh toán
+                    if (userTransaction != null) {
+                        response.setPaidDate(userTransaction.getTransactionDate());
+                        response.setTransactionReference(userTransaction.getReference());
+                    }
+
+                    return response;
+                })
+                .collect(Collectors.toList());
+    }
+
+
+
     @Transactional
     public FeeDetailResponse createFee(Long clubId, CreateFeeRequest request) throws AppException {
         Club club = clubRepository.findById(clubId)
@@ -442,6 +469,14 @@ public class FeeService {
         }
 
         throw new IllegalArgumentException("Unrecognized datetime format: " + dateTimeStr);
+    }
+
+    /**
+     * Get unpaid fees for a user in a club
+     */
+    public List<FeeDetailResponse> getUnpaidFeesByUser(Long clubId, Long userId) {
+        List<Fee> fees = feeRepository.findUnpaidFeesByClubIdAndUserId(clubId, userId);
+        return fees.stream().map(feeMapper::toFeeDetailResponse).collect(Collectors.toList());
     }
 }
 

@@ -4,6 +4,7 @@ import com.sep490.backendclubmanagement.entity.FeeType;
 import lombok.Data;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Data
 public class FeeDetailResponse {
@@ -17,4 +18,6 @@ public class FeeDetailResponse {
     private Boolean isLocked;
     private Integer paidMembers;
     private Integer totalMembers;
+    private LocalDateTime paidDate;
+    private String transactionReference;
 }
