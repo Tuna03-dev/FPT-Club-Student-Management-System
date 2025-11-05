@@ -89,5 +89,16 @@ public interface ReportServiceInterface {
      * @return List of draft report list item responses
      */
     List<ReportListItemResponse> getMyDraftReports(Long clubId, Long userId);
+
+    /**
+     * Get all report requirements with filters and pagination (for staff only)
+     * @param request Filter request containing reportType, clubId, keyword, and pagination
+     * @param userId Current user ID
+     * @return Page response containing list of report requirements
+     */
+    PageResponse<ReportRequirementResponse> getAllReportRequirements(
+            com.sep490.backendclubmanagement.dto.request.ReportRequirementFilterRequest request,
+            Long userId
+    );
 }
 

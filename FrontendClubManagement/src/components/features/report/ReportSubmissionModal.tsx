@@ -19,7 +19,6 @@ import {
   AlertCircle,
   Upload,
   X,
-  CheckCircle,
   Clock,
   FileText,
   Search,
@@ -359,10 +358,12 @@ export function ReportSubmissionModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto p-0">
+      <DialogContent className="!max-w-[calc(100%-2rem)] sm:!max-w-5xl max-h-[90vh] overflow-y-auto p-0">
         <div className="sticky top-0 bg-background border-b z-10">
           <DialogHeader className="p-6 pb-4">
-            <DialogTitle className="text-2xl">Nộp báo cáo mới</DialogTitle>
+            <DialogTitle className="text-2xl">
+              Yêu cầu nộp báo cáo mới
+            </DialogTitle>
             <DialogDescription>
               Tạo báo cáo định kỳ hoặc báo cáo sau sự kiện cho nhà trường
             </DialogDescription>
@@ -739,20 +740,11 @@ export function ReportSubmissionModal({
               Hủy
             </Button>
             <Button
-              type="button"
-              variant="outline"
-              onClick={handleDraftSave}
-              disabled={isLoading}
-              className="bg-transparent"
-            >
-              Lưu bản nháp
-            </Button>
-            <Button
               type="submit"
               disabled={isLoading}
               className="bg-primary text-primary-foreground hover:bg-primary/90"
             >
-              {isLoading ? "Đang nộp..." : "Nộp báo cáo"}
+              {isLoading ? "Đang gửi..." : "Gửi yêu cầu"}
             </Button>
           </div>
         </form>

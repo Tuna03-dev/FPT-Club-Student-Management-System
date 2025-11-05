@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -19,6 +20,17 @@ public interface ClubReportRequirementRepository extends JpaRepository<ClubRepor
            "AND crr.submissionReportRequirement.id = :submissionReportRequirementId")
     Optional<ClubReportRequirement> findByClubIdAndSubmissionReportRequirementId(
             @Param("clubId") Long clubId,
+            @Param("submissionReportRequirementId") Long submissionReportRequirementId
+    );
+
+    /**
+     * Find all ClubReportRequirements by submissionReportRequirementId
+     * Fetch club eagerly to avoid LazyInitializationException
+     */
+    @Query("SELECT crr FROM ClubReportRequirement crr " +
+           "JOIN FETCH crr.club " +
+           "WHERE crr.submissionReportRequirement.id = :submissionReportRequirementId")
+    List<ClubReportRequirement> findBySubmissionReportRequirementId(
             @Param("submissionReportRequirementId") Long submissionReportRequirementId
     );
 }

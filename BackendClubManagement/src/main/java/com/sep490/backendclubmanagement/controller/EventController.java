@@ -117,4 +117,13 @@ public class EventController {
         eventManagementService.deleteMyDraftEvent(eventId, userId);
         return ApiResponse.success();
     }
+
+    /**
+     * Lấy danh sách events chưa được yêu cầu nộp báo cáo
+     * Trả về: id event, tên event, id club, tên club
+     */
+    @GetMapping("/without-report-requirement")
+    public ApiResponse<List<EventWithoutReportRequirementDto>> getEventsWithoutReportRequirement() {
+        return ApiResponse.success(eventService.getEventsWithoutReportRequirement());
+    }
 }

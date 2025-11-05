@@ -3,6 +3,7 @@ package com.sep490.backendclubmanagement.service;
 import com.sep490.backendclubmanagement.dto.request.CreateReportRequirementRequest;
 import com.sep490.backendclubmanagement.dto.request.CreateReportRequest;
 import com.sep490.backendclubmanagement.dto.request.ReportFilterRequest;
+import com.sep490.backendclubmanagement.dto.request.ReportRequirementFilterRequest;
 import com.sep490.backendclubmanagement.dto.request.ReportReviewRequest;
 import com.sep490.backendclubmanagement.dto.request.SubmitReportRequest;
 import com.sep490.backendclubmanagement.dto.request.UpdateReportRequest;
@@ -482,6 +483,54 @@ public class ReportServiceImpl implements ReportServiceInterface {
         return draftReports.stream()
                 .map(reportMapper::toListItem)
                 .toList();
+    }
+
+    /**
+     * Get all report requirements with filters and pagination (for staff only)
+     */
+    @Override
+    public PageResponse<ReportRequirementResponse> getAllReportRequirements(
+            ReportRequirementFilterRequest request,
+            Long userId
+    ) {
+        // Check staff permission
+        if (!roleService.isStaff(userId)) {
+            throw new ForbiddenException("Only staff can view report requirements");
+        }
+
+        Pageable pageable = request.getPageable("createdAt,desc");
+        
+        Page<SubmissionReportRequirement> requirementPage = submissionReportRequirementRepository.findAllWithFilters(
+                request.getReportType(),
+                request.getClubId(),
+                request.getKeyword(),
+                pageable
+        );
+
+        // Map to response with club requirements
+        Page<ReportRequirementResponse> responsePage = requirementPage.map(requirement -> {
+            ReportRequirementResponse response = submissionReportRequirementMapper.toDto(requirement);
+            
+            // Load club requirements for this submission requirement
+            List<ClubReportRequirement> clubRequirements = clubReportRequirementRepository
+                    .findBySubmissionReportRequirementId(requirement.getId());
+            
+            List<ReportRequirementResponse.ClubRequirementInfo> clubRequirementInfos = clubRequirements.stream()
+                    .map(crr -> ReportRequirementResponse.ClubRequirementInfo.builder()
+                            .id(crr.getId())
+                            .clubId(crr.getClub().getId())
+                            .clubName(crr.getClub().getClubName())
+                            .clubCode(crr.getClub().getClubCode())
+                            .status(crr.getStatus().name())
+                            .note(crr.getNote())
+                            .build())
+                    .toList();
+            
+            response.setClubRequirements(clubRequirementInfos);
+            return response;
+        });
+
+        return PageResponse.of(responsePage);
     }
 }
 

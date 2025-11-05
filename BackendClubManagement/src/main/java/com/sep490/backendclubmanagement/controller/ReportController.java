@@ -4,6 +4,7 @@ import com.sep490.backendclubmanagement.dto.ApiResponse;
 import com.sep490.backendclubmanagement.dto.request.CreateReportRequirementRequest;
 import com.sep490.backendclubmanagement.dto.request.CreateReportRequest;
 import com.sep490.backendclubmanagement.dto.request.ReportFilterRequest;
+import com.sep490.backendclubmanagement.dto.request.ReportRequirementFilterRequest;
 import com.sep490.backendclubmanagement.dto.request.ReportReviewRequest;
 import com.sep490.backendclubmanagement.dto.request.SubmitReportRequest;
 import com.sep490.backendclubmanagement.dto.request.UpdateReportRequest;
@@ -56,6 +57,18 @@ public class ReportController {
         Long userId = SecurityUtils.getCurrentUserId();
         reportService.reviewReport(request, userId);
         return ApiResponse.success();
+    }
+
+    /**
+     * Get all report requirements with filters and pagination (for staff only)
+     */
+    @PostMapping("/staff/requirements/filter")
+    public ApiResponse<PageResponse<ReportRequirementResponse>> getAllReportRequirements(
+            @RequestBody @Valid ReportRequirementFilterRequest request
+    ) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        PageResponse<ReportRequirementResponse> data = reportService.getAllReportRequirements(request, userId);
+        return ApiResponse.success(data);
     }
 
     /**

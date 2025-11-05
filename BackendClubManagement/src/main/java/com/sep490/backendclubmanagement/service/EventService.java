@@ -5,6 +5,7 @@ import com.sep490.backendclubmanagement.dto.response.ClubDto;
 import com.sep490.backendclubmanagement.dto.response.EventData;
 import com.sep490.backendclubmanagement.dto.response.EventResponse;
 import com.sep490.backendclubmanagement.dto.response.EventTypesDto;
+import com.sep490.backendclubmanagement.dto.response.EventWithoutReportRequirementDto;
 import com.sep490.backendclubmanagement.entity.Club;
 import com.sep490.backendclubmanagement.entity.Event;
 import com.sep490.backendclubmanagement.entity.EventType;
@@ -118,5 +119,13 @@ public class EventService {
                     return dto;
                 })
                 .toList();
+    }
+
+    /**
+     * Lấy danh sách events chưa được yêu cầu nộp báo cáo
+     * @return Danh sách events với id, tên event, id và tên club
+     */
+    public List<EventWithoutReportRequirementDto> getEventsWithoutReportRequirement() {
+        return eventRepository.findEventsWithoutReportRequirement();
     }
 }
