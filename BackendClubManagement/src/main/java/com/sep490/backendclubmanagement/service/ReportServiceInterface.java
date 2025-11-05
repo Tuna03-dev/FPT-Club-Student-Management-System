@@ -119,5 +119,13 @@ public interface ReportServiceInterface {
      * @return Report detail response if exists, null otherwise
      */
     ReportDetailResponse getClubReportByRequirement(Long requirementId, Long clubId, Long userId);
+
+    /**
+     * Get all report requirements for a club (for club members)
+     * @param clubId Club ID
+     * @param userId Current user ID
+     * @return List of report requirement responses assigned to the club
+     */
+    List<ReportRequirementResponse> getClubReportRequirements(Long clubId, Long userId);
 }
 

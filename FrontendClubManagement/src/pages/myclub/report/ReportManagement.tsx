@@ -1,7 +1,12 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { getClubReportRequirements } from "@/services/reportService";
+import type { ReportRequirementResponse } from "@/types/dto/reportRequirement.dto";
+import { mapBackendToFrontendReportType } from "@/types/dto/reportRequirement.dto";
+import { toast } from "sonner";
 import {
   Card,
   CardContent,
@@ -104,6 +109,10 @@ const statusColors: Record<SubmissionStatus, string> = {
 };
 
 export function ClubReportManagement() {
+  const params = useParams();
+  const clubIdParam = params.clubId;
+  const clubId = clubIdParam ? Number(clubIdParam) : undefined;
+
   const [activeTab, setActiveTab] = useState<
     "requests" | "submissions" | "approval"
   >("requests");
@@ -122,8 +131,68 @@ export function ClubReportManagement() {
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [draftTitle, setDraftTitle] = useState("");
   const [draftContent, setDraftContent] = useState("");
+  const [reportRequests, setReportRequests] = useState<ReportRequest[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const [reportRequests] = useState<ReportRequest[]>([
+  // Fetch report requirements from API
+  useEffect(() => {
+    const fetchReportRequirements = async () => {
+      if (!clubId) {
+        setError("Club ID not found");
+        return;
+      }
+
+      try {
+        setLoading(true);
+        setError(null);
+        const requirements = await getClubReportRequirements(clubId);
+        
+        // Map API response to ReportRequest format
+        const mappedRequests: ReportRequest[] = requirements.map((req) => {
+          const clubRequirement = req.clubRequirements?.[0];
+          const reportType = mapBackendToFrontendReportType(req.reportType);
+          
+          // Extract required details from description (split by newlines or bullet points)
+          const requiredDetails = req.description
+            ? req.description
+                .split(/\r?\n|•|\u2022|-/)
+                .map((s) => s.trim())
+                .filter((s) => s.length > 0)
+            : [];
+
+          return {
+            request_id: req.id.toString(),
+            request_type: reportType === "post-event" ? "post_event" : reportType,
+            title: req.title,
+            description: req.description || "",
+            deadline: req.dueDate,
+            created_by: req.createdBy?.fullName || "Phòng Quản lý Sinh viên",
+            created_at: req.createdAt,
+            required_details: requiredDetails.length > 0 
+              ? requiredDetails 
+              : ["Báo cáo chi tiết về hoạt động của câu lạc bộ"],
+          };
+        });
+
+        setReportRequests(mappedRequests);
+      } catch (err) {
+        console.error("Error fetching report requirements:", err);
+        const errorMessage = err instanceof Error ? err.message : "Không thể tải danh sách yêu cầu nộp báo cáo";
+        setError(errorMessage);
+        toast.error(errorMessage);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (activeTab === "requests") {
+      fetchReportRequirements();
+    }
+  }, [clubId, activeTab]);
+
+  // Mock data for submissions (to be replaced later)
+  const [mockReportRequests] = useState<ReportRequest[]>([
     {
       request_id: "1",
       request_type: "periodic",
@@ -494,9 +563,25 @@ export function ClubReportManagement() {
               </Select>
             </div>
 
+            {/* Loading State */}
+            {loading && (
+              <div className="text-center py-12">
+                <p className="text-muted-foreground">Đang tải danh sách yêu cầu...</p>
+              </div>
+            )}
+
+            {/* Error State */}
+            {error && !loading && (
+              <div className="text-center py-12">
+                <AlertCircle className="h-12 w-12 mx-auto mb-4 text-red-500" />
+                <p className="text-red-600">{error}</p>
+              </div>
+            )}
+
             {/* Request Cards */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {filteredRequests.map((request) => {
+            {!loading && !error && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {filteredRequests.map((request) => {
                 const submissionStatus = getSubmissionStatus(
                   request.request_id
                 );
@@ -634,9 +719,10 @@ export function ClubReportManagement() {
                   </Card>
                 );
               })}
-            </div>
+              </div>
+            )}
 
-            {filteredRequests.length === 0 && (
+            {!loading && !error && filteredRequests.length === 0 && (
               <div className="text-center py-12">
                 <FileText className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
                 <p className="text-muted-foreground">

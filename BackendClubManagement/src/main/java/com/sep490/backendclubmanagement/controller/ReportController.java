@@ -164,6 +164,18 @@ public class ReportController {
     }
 
     /**
+     * Get all report requirements for a club (for club members)
+     */
+    @GetMapping("/club/{clubId}/requirements")
+    public ApiResponse<List<ReportRequirementResponse>> getClubReportRequirements(
+            @PathVariable Long clubId
+    ) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        List<ReportRequirementResponse> data = reportService.getClubReportRequirements(clubId, userId);
+        return ApiResponse.success(data);
+    }
+
+    /**
      * Get list of clubs that need to submit reports for a specific report requirement (for staff only)
      */
     @GetMapping("/staff/requirements/{requirementId}/clubs")

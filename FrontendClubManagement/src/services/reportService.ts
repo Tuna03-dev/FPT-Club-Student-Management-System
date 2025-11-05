@@ -130,3 +130,18 @@ export async function getClubReportByRequirement(
   return response.data ?? null;
 }
 
+/**
+ * Get all report requirements for a club (for club members)
+ */
+export async function getClubReportRequirements(
+  clubId: number
+): Promise<ReportRequirementResponse[]> {
+  const response = await axiosClient.get<ReportRequirementResponse[]>(
+    `/reports/club/${clubId}/requirements`
+  );
+  if (!response.data) {
+    throw new Error("Failed to get club report requirements");
+  }
+  return response.data;
+}
+

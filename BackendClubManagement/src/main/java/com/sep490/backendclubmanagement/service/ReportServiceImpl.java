@@ -12,6 +12,7 @@ import com.sep490.backendclubmanagement.dto.response.ReportDetailResponse;
 import com.sep490.backendclubmanagement.dto.response.ReportListItemResponse;
 import com.sep490.backendclubmanagement.dto.response.ReportRequirementResponse;
 import com.sep490.backendclubmanagement.entity.Club;
+import com.sep490.backendclubmanagement.entity.ClubMemberShipStatus;
 import com.sep490.backendclubmanagement.entity.ClubReportRequirement;
 import com.sep490.backendclubmanagement.entity.ClubReportRequirementStatus;
 import com.sep490.backendclubmanagement.entity.Event;
@@ -24,6 +25,7 @@ import com.sep490.backendclubmanagement.mapper.ReportMapper;
 import com.sep490.backendclubmanagement.mapper.SubmissionReportRequirementMapper;
 import com.sep490.backendclubmanagement.entity.Semester;
 import com.sep490.backendclubmanagement.entity.User;
+import com.sep490.backendclubmanagement.repository.ClubMemberShipRepository;
 import com.sep490.backendclubmanagement.repository.ClubReportRequirementRepository;
 import com.sep490.backendclubmanagement.repository.ClubRepository;
 import com.sep490.backendclubmanagement.repository.EventRepository;
@@ -54,6 +56,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
     private final ClubReportRequirementRepository clubReportRequirementRepository;
     private final SubmissionReportRequirementRepository submissionReportRequirementRepository;
     private final ClubRepository clubRepository;
+    private final ClubMemberShipRepository clubMemberShipRepository;
     private final EventRepository eventRepository;
     private final RoleService roleService;
     private final ReportMapper reportMapper;
@@ -608,6 +611,44 @@ public class ReportServiceImpl implements ReportServiceInterface {
 
         Report report = reportOptional.get();
         return reportMapper.toDetail(report);
+    }
+
+    /**
+     * Get all report requirements for a club (for club members)
+     */
+    @Override
+    public List<ReportRequirementResponse> getClubReportRequirements(Long clubId, Long userId) {
+        // Validate club exists
+        Club club = clubRepository.findById(clubId)
+                .orElseThrow(() -> new NotFoundException("Club not found with ID: " + clubId));
+
+        // Check if user is a member of this club - use existsByUserIdAndClubIdAndStatus
+        if (!clubMemberShipRepository.existsByUserIdAndClubIdAndStatus(userId, clubId, ClubMemberShipStatus.ACTIVE)) {
+            throw new ForbiddenException("You are not a member of this club");
+        }
+
+        // Get all club report requirements for this club
+        List<ClubReportRequirement> clubRequirements = clubReportRequirementRepository.findByClubId(clubId);
+
+        // Map to response
+        return clubRequirements.stream()
+                .map(crr -> {
+                    ReportRequirementResponse response = submissionReportRequirementMapper.toDto(crr.getSubmissionReportRequirement());
+                    
+                    // Add the club requirement info for this specific club
+                    ReportRequirementResponse.ClubRequirementInfo clubRequirementInfo = ReportRequirementResponse.ClubRequirementInfo.builder()
+                            .id(crr.getId())
+                            .clubId(crr.getClub().getId())
+                            .clubName(crr.getClub().getClubName())
+                            .clubCode(crr.getClub().getClubCode())
+                            .status(crr.getStatus().name())
+                            .note(crr.getNote())
+                            .build();
+                    
+                    response.setClubRequirements(List.of(clubRequirementInfo));
+                    return response;
+                })
+                .toList();
     }
 }
 

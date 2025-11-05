@@ -33,5 +33,17 @@ public interface ClubReportRequirementRepository extends JpaRepository<ClubRepor
     List<ClubReportRequirement> findBySubmissionReportRequirementId(
             @Param("submissionReportRequirementId") Long submissionReportRequirementId
     );
+
+    /**
+     * Find all ClubReportRequirements by clubId
+     * Fetch submissionReportRequirement eagerly to avoid LazyInitializationException
+     */
+    @Query("SELECT crr FROM ClubReportRequirement crr " +
+           "JOIN FETCH crr.submissionReportRequirement " +
+           "WHERE crr.club.id = :clubId " +
+           "ORDER BY crr.submissionReportRequirement.dueDate DESC")
+    List<ClubReportRequirement> findByClubId(
+            @Param("clubId") Long clubId
+    );
 }
 
