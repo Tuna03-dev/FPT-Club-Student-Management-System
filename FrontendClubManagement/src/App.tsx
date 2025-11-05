@@ -7,7 +7,7 @@ function App() {
     <>
       <RouterProvider router={router} />
       <Toaster
-        position="top-center"
+        position="top-right"
         richColors
         closeButton
         toastOptions={{

@@ -77,6 +77,40 @@ export async function getEventsByClubId(clubId: number): Promise<EventData[]> {
   return res.data ?? [];
 }
 
+/**
+ * Staff: Lấy tất cả events (không cần check membership)
+ */
+export async function getStaffAllEvents(): Promise<EventData[]> {
+  const res = await axiosClient.get<EventData[]>("/events/staff/all");
+  return res.data ?? [];
+}
+
+/**
+ * Staff: Lấy events theo clubId (không cần check membership)
+ */
+export async function getStaffEventsByClubId(clubId: number): Promise<EventData[]> {
+  const res = await axiosClient.get<EventData[]>(`/events/staff/club/${clubId}`);
+  return res.data ?? [];
+}
+
+// ===== Staff Cancelled Events =====
+export async function getStaffCancelledEvents(clubId?: number): Promise<EventData[]> {
+  const res = await axiosClient.get<EventData[]>(`/events/staff/cancelled`, { params: clubId ? { clubId } : undefined });
+  return res.data ?? [];
+}
+
+export async function cancelClubEventByStaff(eventId: number, reason?: string): Promise<void> {
+  await axiosClient.post<void>(`/events/${eventId}/cancel`, undefined, { params: reason ? { reason } : undefined });
+}
+
+export async function restoreCancelledEventByStaff(eventId: number): Promise<void> {
+  await axiosClient.post<void>(`/events/${eventId}/restore`);
+}
+
+export async function deleteCancelledEventByStaff(eventId: number): Promise<void> {
+  await axiosClient.delete<void>(`/events/${eventId}/staff-hard-delete`);
+}
+
 export type EventStatusFilter = "all" | "upcoming" | "ongoing" | "completed";
 
 export function computeEventStatus(nowIso: string, startIso: string, endIso: string): EventStatusFilter {
@@ -207,8 +241,65 @@ export interface MyDraftEventDto {
   requestStatus: string; // RequestStatus enum name
 }
 
-export async function getMyDraftEvents(): Promise<MyDraftEventDto[]> {
-  const res = await axiosClient.get<MyDraftEventDto[]>("/events/my-draft-events");
+export async function getMyDraftEvents(clubId?: number): Promise<MyDraftEventDto[]> {
+  const params = clubId ? { clubId } : undefined;
+  const res = await axiosClient.get<MyDraftEventDto[]>("/events/my-draft-events", { params });
   return res.data ?? [];
 }
+
+// ===== Event Registration =====
+export async function registerForEvent(eventId: number): Promise<void> {
+  await axiosClient.post<void>(`/events/${eventId}/register`);
+}
+
+export async function cancelEventRegistration(eventId: number): Promise<void> {
+  await axiosClient.delete<void>(`/events/${eventId}/register`);
+}
+
+export async function getRegistrationStatus(eventId: number): Promise<boolean> {
+  const res = await axiosClient.get<boolean>(`/events/${eventId}/registration-status`);
+  return res.data ?? false;
+}
+
+export async function getEventRegistrationCount(eventId: number): Promise<number> {
+  const res = await axiosClient.get<number>(`/events/${eventId}/registration-count`);
+  return res.data ?? 0;
+}
+
+// ===== Event Attendance =====
+export interface EventRegistrationDto {
+  id: number;
+  userId: number;
+  fullName: string;
+  studentCode: string;
+  email: string;
+  avatarUrl?: string;
+  registrationTime: string; // ISO
+  attendanceStatus?: string; // "REGISTERED" | "PRESENT" | "ABSENT"
+  checkInTime?: string; // ISO
+  notes?: string;
+}
+
+export async function getEventRegistrations(eventId: number, keyword?: string): Promise<EventRegistrationDto[]> {
+  const res = await axiosClient.get<EventRegistrationDto[]>(`/events/${eventId}/registrations`, {
+    params: keyword ? { keyword } : undefined,
+  });
+  return res.data ?? [];
+}
+
+export interface BatchMarkAttendanceItem {
+  userId: number;
+  attendanceStatus: "PRESENT" | "ABSENT";
+  notes?: string;
+}
+
+export interface BatchMarkAttendanceRequest {
+  eventId: number;
+  attendances: BatchMarkAttendanceItem[];
+}
+
+export async function batchMarkAttendance(payload: BatchMarkAttendanceRequest): Promise<void> {
+  await axiosClient.post<void>("/events/batch-mark-attendance", payload);
+}
+
 
