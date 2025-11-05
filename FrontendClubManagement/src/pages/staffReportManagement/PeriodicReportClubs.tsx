@@ -2,9 +2,28 @@ import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Eye, ArrowLeft, Search } from "lucide-react";
+import {
+  Eye,
+  ArrowLeft,
+  Search,
+  Calendar,
+  User,
+  FileText,
+  Users,
+} from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { ClubReportModal } from "@/components/features/report/ClubReportModal";
+import {
+  getClubsByReportRequirement,
+  getClubReportByRequirement,
+  getAllReportRequirements,
+} from "@/services/reportService";
+import type {
+  ClubRequirementInfo,
+  ReportRequirementResponse,
+  ReportDetailResponse,
+} from "@/types/dto/reportRequirement.dto";
+import { toast } from "sonner";
 
 type ReportStatus =
   | "draft"
@@ -13,6 +32,24 @@ type ReportStatus =
   | "rejected"
   | "needs-review"
   | "not-submitted";
+
+// Helper function to map backend status to frontend status
+function mapBackendStatusToFrontend(backendStatus: string): ReportStatus {
+  switch (backendStatus) {
+    case "PENDING":
+      return "not-submitted";
+    case "SUBMITTED":
+      return "submitted";
+    case "APPROVED":
+      return "approved";
+    case "REJECTED":
+      return "rejected";
+    case "DRAFT":
+      return "draft";
+    default:
+      return "not-submitted";
+  }
+}
 
 interface Report {
   id: string;
@@ -46,76 +83,9 @@ interface ClubWithReport extends Club {
   reportStatus: ReportStatus;
   hasReport: boolean;
   report?: Report;
+  clubRequirementId: number;
+  clubId: number;
 }
-
-// Mock clubs - should be moved to a shared file or fetched from API
-const mockClubs: Club[] = [
-  {
-    id: "club-1",
-    name: "CLB Lập trình",
-    code: "CP",
-    avatar: "/public/images/club-1.jpg",
-    description: "Câu lạc bộ lập trình và công nghệ",
-  },
-  {
-    id: "club-2",
-    name: "CLB Kỹ năng mềm",
-    code: "SS",
-    avatar: "/public/images/club-2.jpg",
-    description: "Câu lạc bộ phát triển kỹ năng mềm",
-  },
-  {
-    id: "club-3",
-    name: "CLB Tình nguyện",
-    code: "VOL",
-    avatar: "/public/images/club-3.jpg",
-    description: "Câu lạc bộ tình nguyện viên",
-  },
-  {
-    id: "club-4",
-    name: "CLB Thể thao",
-    code: "SP",
-    avatar: "/public/images/club-4.jpg",
-    description: "Câu lạc bộ thể thao và sức khỏe",
-  },
-  {
-    id: "club-5",
-    name: "CLB Nghệ thuật",
-    code: "ART",
-    avatar: "/public/images/club-5.jpg",
-    description: "Câu lạc bộ nghệ thuật và sáng tạo",
-  },
-];
-
-// Mock reports - should be fetched from API based on reportId
-const mockReports: Report[] = [
-  {
-    id: "req-1",
-    title: "Báo cáo hoạt động tháng 11/2024",
-    type: "periodic",
-    status: "submitted",
-    submittedBy: "Lê Văn C",
-    submittedByAvatar: "/male-user-avatar.png",
-    department: "Phòng Sự vụ",
-    createdAt: "2024-10-25",
-    dueDate: "2024-11-15",
-    content: "Báo cáo chi tiết các hoạt động...",
-    clubId: "club-1",
-  },
-  {
-    id: "req-3",
-    title: "Báo cáo hoạt động tháng 10/2024",
-    type: "periodic",
-    status: "needs-review",
-    submittedBy: "Phạm Thị D",
-    submittedByAvatar: "/diverse-user-avatars.png",
-    department: "CLB Kỹ năng mềm",
-    createdAt: "2024-10-20",
-    dueDate: "2024-10-31",
-    content: "Báo cáo các hoạt động giao lưu...",
-    clubId: "club-2",
-  },
-];
 
 export function PeriodicReportClubs() {
   const { reportId } = useParams<{ reportId: string }>();
@@ -124,43 +94,75 @@ export function PeriodicReportClubs() {
   const [selectedReport, setSelectedReport] = useState<Report | null>(null);
   const [selectedClub, setSelectedClub] = useState<Club | null>(null);
   const [isClubReportModalOpen, setIsClubReportModalOpen] = useState(false);
-  const [periodicReport, setPeriodicReport] = useState<Report | null>(null);
+  const [periodicReport, setPeriodicReport] =
+    useState<ReportRequirementResponse | null>(null);
   const [clubsWithReports, setClubsWithReports] = useState<ClubWithReport[]>(
     []
   );
+  const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingReport, setIsLoadingReport] = useState(false);
 
+  // Fetch report requirement details and clubs
   useEffect(() => {
-    // Fetch periodic report by ID
-    // For now using mock data
-    const report = mockReports.find((r) => r.id === reportId);
-    if (report && report.type === "periodic") {
-      setPeriodicReport(report);
-    } else {
-      // If report not found or not periodic, redirect back
-      navigate("/staff/report");
-    }
+    const fetchData = async () => {
+      if (!reportId) {
+        navigate("/staff/report");
+        return;
+      }
+
+      setIsLoading(true);
+      try {
+        const requirementId = parseInt(reportId);
+
+        // Fetch report requirement details
+        const requirementsResponse = await getAllReportRequirements({
+          page: 1,
+          size: 1000, // Get all to find the one we need
+        });
+
+        const requirement = requirementsResponse.content.find(
+          (r) => r.id === requirementId
+        );
+
+        if (!requirement) {
+          toast.error("Không tìm thấy yêu cầu báo cáo");
+          navigate("/staff/report");
+          return;
+        }
+
+        setPeriodicReport(requirement);
+
+        // Fetch clubs for this requirement
+        const clubs = await getClubsByReportRequirement(requirementId);
+
+        // Map to ClubWithReport format
+        const clubsWithReportsData: ClubWithReport[] = clubs.map((club) => ({
+          id: club.clubId.toString(),
+          name: club.clubName,
+          code: club.clubCode,
+          avatar: "",
+          description: "",
+          reportStatus: mapBackendStatusToFrontend(club.status),
+          hasReport:
+            club.status === "SUBMITTED" ||
+            club.status === "APPROVED" ||
+            club.status === "REJECTED",
+          clubRequirementId: club.id,
+          clubId: club.clubId,
+        }));
+
+        setClubsWithReports(clubsWithReportsData);
+      } catch (error: any) {
+        console.error("Error fetching data:", error);
+        toast.error(error.message || "Không thể tải dữ liệu");
+        navigate("/staff/report");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchData();
   }, [reportId, navigate]);
-
-  useEffect(() => {
-    if (!periodicReport) return;
-
-    // Get club reports for this periodic report
-    const clubReports = mockReports.filter(
-      (r) => r.type === "periodic" && r.clubId
-    );
-
-    const clubs: ClubWithReport[] = mockClubs.map((club) => {
-      const clubReport = clubReports.find((r) => r.clubId === club.id);
-      return {
-        ...club,
-        reportStatus: clubReport?.status || "not-submitted",
-        hasReport: !!clubReport,
-        report: clubReport,
-      };
-    });
-
-    setClubsWithReports(clubs);
-  }, [periodicReport]);
 
   const filteredClubs = clubsWithReports.filter((club) => {
     const matchesSearch =
@@ -234,6 +236,46 @@ export function PeriodicReportClubs() {
     }
   };
 
+  const formatDate = (dateString: string) => {
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString("vi-VN", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      });
+    } catch {
+      return dateString;
+    }
+  };
+
+  const getReportTypeLabel = (reportType?: string) => {
+    switch (reportType) {
+      case "SEMESTER":
+        return "Báo cáo định kỳ";
+      case "EVENT":
+        return "Báo cáo sau sự kiện";
+      case "OTHER":
+        return "Loại khác";
+      default:
+        return "Không xác định";
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background p-4 md:p-8">
+        <div className="max-w-6xl mx-auto space-y-6">
+          <Card>
+            <CardContent className="p-8 text-center text-muted-foreground">
+              Đang tải...
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
   if (!periodicReport) {
     return null;
   }
@@ -261,6 +303,84 @@ export function PeriodicReportClubs() {
             </div>
           </div>
         </div>
+
+        {/* Report Requirement Info Card */}
+        <Card>
+          <CardContent className="p-6">
+            <div className="space-y-4">
+              {/* Description */}
+              {periodicReport.description && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                    <FileText className="h-4 w-4" />
+                    <span>Mô tả yêu cầu</span>
+                  </div>
+                  <p className="text-sm text-foreground bg-secondary/50 p-3 rounded-lg whitespace-pre-wrap">
+                    {periodicReport.description}
+                  </p>
+                </div>
+              )}
+
+              {/* Info Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 pt-2">
+                {/* Created By */}
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                    <User className="h-3.5 w-3.5" />
+                    <span>Người tạo</span>
+                  </div>
+                  <p className="text-sm font-semibold text-foreground">
+                    {periodicReport.createdBy?.fullName || "N/A"}
+                  </p>
+                </div>
+
+                {/* Created Date */}
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                    <Calendar className="h-3.5 w-3.5" />
+                    <span>Ngày tạo</span>
+                  </div>
+                  <p className="text-sm font-semibold text-foreground">
+                    {formatDate(periodicReport.createdAt)}
+                  </p>
+                </div>
+
+                {/* Due Date */}
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                    <Calendar className="h-3.5 w-3.5" />
+                    <span>Hạn chót</span>
+                  </div>
+                  <p className="text-sm font-semibold text-foreground">
+                    {formatDate(periodicReport.dueDate)}
+                  </p>
+                </div>
+
+                {/* Report Type */}
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                    <FileText className="h-3.5 w-3.5" />
+                    <span>Loại báo cáo</span>
+                  </div>
+                  <p className="text-sm font-semibold text-foreground">
+                    {getReportTypeLabel(periodicReport.reportType)}
+                  </p>
+                </div>
+              </div>
+
+              {/* Club Count */}
+              <div className="flex items-center gap-2 pt-2 border-t">
+                <Users className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm text-muted-foreground">
+                  Tổng số câu lạc bộ cần nộp báo cáo:
+                </span>
+                <span className="text-sm font-semibold text-foreground">
+                  {clubsWithReports.length}
+                </span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Search */}
         <div className="flex items-center bg-secondary rounded-lg px-4 py-2">
@@ -292,7 +412,7 @@ export function PeriodicReportClubs() {
                       <div className="flex items-center gap-2.5 flex-1 min-w-0">
                         <div className="w-9 h-9 rounded-full bg-secondary flex-shrink-0 flex items-center justify-center">
                           <span className="text-xs font-semibold">
-                            {club.code}
+                            {club.avatar}
                           </span>
                         </div>
                         <div className="flex-1 min-w-0">
@@ -318,15 +438,87 @@ export function PeriodicReportClubs() {
                         <Button
                           size="sm"
                           variant="ghost"
-                          onClick={() => {
-                            if (club.report) {
-                              setSelectedReport(club.report);
-                              setSelectedClub(club);
-                              setIsClubReportModalOpen(true);
+                          onClick={async () => {
+                            if (!reportId || !club.hasReport) return;
+
+                            setIsLoadingReport(true);
+                            try {
+                              const requirementId = parseInt(reportId);
+                              const reportDetail =
+                                await getClubReportByRequirement(
+                                  requirementId,
+                                  club.clubId
+                                );
+
+                              if (reportDetail) {
+                                // Convert ReportDetailResponse to Report format for modal
+                                const reportForModal: Report = {
+                                  id: reportDetail.id.toString(),
+                                  title: reportDetail.reportTitle,
+                                  type: "periodic",
+                                  status: mapBackendStatusToFrontend(
+                                    reportDetail.status
+                                  ),
+                                  submittedBy:
+                                    reportDetail.createdBy?.fullName || "N/A",
+                                  submittedByAvatar: "",
+                                  department: reportDetail.club?.clubName || "",
+                                  createdAt: reportDetail.submittedDate
+                                    ? new Date(
+                                        reportDetail.submittedDate
+                                      ).toLocaleDateString("vi-VN")
+                                    : reportDetail.createdAt
+                                    ? new Date(
+                                        reportDetail.createdAt
+                                      ).toLocaleDateString("vi-VN")
+                                    : "",
+                                  dueDate: reportDetail.reportRequirement
+                                    ?.dueDate
+                                    ? new Date(
+                                        reportDetail.reportRequirement.dueDate
+                                      ).toLocaleDateString("vi-VN")
+                                    : "",
+                                  content: reportDetail.content || "",
+                                  fileUrl: reportDetail.fileUrl,
+                                  reviewer: reportDetail.reviewedDate
+                                    ? "Staff"
+                                    : undefined,
+                                  reviewDate: reportDetail.reviewedDate
+                                    ? new Date(
+                                        reportDetail.reviewedDate
+                                      ).toLocaleDateString("vi-VN")
+                                    : undefined,
+                                  approvalNotes:
+                                    reportDetail.status === "APPROVED"
+                                      ? reportDetail.reviewerFeedback
+                                      : undefined,
+                                  rejectionReason:
+                                    reportDetail.status === "REJECTED"
+                                      ? reportDetail.reviewerFeedback
+                                      : undefined,
+                                  clubId: club.id,
+                                };
+
+                                setSelectedReport(reportForModal);
+                                setSelectedClub(club);
+                                setIsClubReportModalOpen(true);
+                              } else {
+                                toast.error("Không tìm thấy báo cáo");
+                              }
+                            } catch (error: any) {
+                              console.error(
+                                "Error fetching report detail:",
+                                error
+                              );
+                              toast.error(
+                                error.message || "Không thể tải báo cáo"
+                              );
+                            } finally {
+                              setIsLoadingReport(false);
                             }
                           }}
                           className="gap-2"
-                          disabled={!club.report}
+                          disabled={!club.hasReport || isLoadingReport}
                         >
                           <Eye className="h-4 w-4" />
                           <span className="hidden md:inline">Xem báo cáo</span>

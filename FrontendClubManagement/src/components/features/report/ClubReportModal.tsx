@@ -20,6 +20,7 @@ import {
   AlertCircle,
   ThumbsUp,
   ThumbsDown,
+  FileText,
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -57,6 +58,7 @@ interface Report {
   approvalNotes?: string;
   rejectionReason?: string;
   clubId?: string;
+  fileUrl?: string;
 }
 
 interface ClubReportModalProps {
@@ -72,11 +74,15 @@ const statusConfig: Record<
   ReportStatus,
   { label: string; color: string; icon: any }
 > = {
-  draft: { label: "Sự kiện", color: "bg-gray-100 text-gray-700", icon: null },
+  draft: { 
+    label: "Bản nháp", 
+    color: "bg-gray-100 text-gray-700", 
+    icon: null 
+  },
   submitted: {
-    label: "Phòng Sự vụ",
+    label: "Đã nộp",
     color: "bg-blue-100 text-blue-700",
-    icon: null,
+    icon: <CheckCircle className="h-4 w-4" />,
   },
   "needs-review": {
     label: "Cần xem xét",
@@ -84,7 +90,7 @@ const statusConfig: Record<
     icon: <AlertCircle className="h-4 w-4" />,
   },
   approved: {
-    label: "Đã nộp",
+    label: "Đã phê duyệt",
     color: "bg-green-100 text-green-700",
     icon: <CheckCircle className="h-4 w-4" />,
   },
@@ -206,13 +212,56 @@ export function ClubReportModal({
             <Card>
               <CardContent className="p-4">
                 <div className="bg-muted/30 p-4 rounded-lg">
-                  <p className="text-sm leading-relaxed whitespace-pre-wrap text-foreground">
-                    {report.content}
-                  </p>
+                  {report.content ? (
+                    <p className="text-sm leading-relaxed whitespace-pre-wrap text-foreground">
+                      {report.content}
+                    </p>
+                  ) : (
+                    <p className="text-sm text-muted-foreground italic">
+                      Không có nội dung văn bản
+                    </p>
+                  )}
                 </div>
               </CardContent>
             </Card>
           </div>
+
+          {/* File Attachment */}
+          {report.fileUrl && (
+            <div>
+              <h4 className="font-semibold mb-3 flex items-center gap-2">
+                <Download className="h-4 w-4" />
+                Tệp đính kèm
+              </h4>
+              <Card>
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded bg-secondary flex items-center justify-center">
+                        <FileText className="h-5 w-5 text-muted-foreground" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-foreground">
+                          Tệp báo cáo
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {report.fileUrl.split("/").pop() || "Tệp đính kèm"}
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => window.open(report.fileUrl, "_blank")}
+                    >
+                      <Download className="h-4 w-4 mr-2" />
+                      Tải xuống
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
 
           {/* Report Review */}
           {report.reviewer && (

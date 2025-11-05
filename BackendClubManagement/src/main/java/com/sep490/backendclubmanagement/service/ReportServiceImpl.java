@@ -38,10 +38,12 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -59,6 +61,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
     private final RoleMemberShipRepository roleMemberShipRepository;
     private final SemesterRepository semesterRepository;
     private final UserRepository userRepository;
+    private final CloudinaryService cloudinaryService;
 
     /**
      * Get all reports with filters and pagination (for staff only)
@@ -173,7 +176,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
      */
     @Override
     @Transactional
-    public ReportRequirementResponse createReportRequirement(CreateReportRequirementRequest request, Long userId) {
+    public ReportRequirementResponse createReportRequirement(CreateReportRequirementRequest request, MultipartFile file, Long userId) {
         // Check staff permission
         if (!roleService.isStaff(userId)) {
             throw new ForbiddenException("Only staff can create report requirements");
@@ -190,13 +193,26 @@ public class ReportServiceImpl implements ReportServiceInterface {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new NotFoundException("User not found with ID: " + userId));
 
+        // Upload file if provided and get URL
+        String templateUrl = request.getTemplateUrl();
+        if (file != null && !file.isEmpty()) {
+            try {
+                CloudinaryService.UploadResult uploadResult = cloudinaryService.uploadFile(file);
+                templateUrl = uploadResult.url();
+                log.info("Uploaded template file for report requirement: {}", templateUrl);
+            } catch (Exception e) {
+                log.error("Failed to upload template file: {}", e.getMessage(), e);
+                throw new RuntimeException("Failed to upload template file: " + e.getMessage(), e);
+            }
+        }
+
         // Create SubmissionReportRequirement
         SubmissionReportRequirement submissionRequirement = SubmissionReportRequirement.builder()
                 .title(request.getTitle())
                 .description(request.getDescription())
                 .dueDate(request.getDueDate())
                 .reportType(request.getReportType())
-                .templateUrl(request.getTemplateUrl())
+                .templateUrl(templateUrl)
                 .event(event)
                 .createdBy(user)
                 .build();
@@ -531,6 +547,67 @@ public class ReportServiceImpl implements ReportServiceInterface {
         });
 
         return PageResponse.of(responsePage);
+    }
+
+    /**
+     * Get list of clubs that need to submit reports for a specific report requirement (for staff only)
+     */
+    @Override
+    public List<ReportRequirementResponse.ClubRequirementInfo> getClubsByReportRequirement(Long requirementId, Long userId) {
+        // Check staff permission
+        if (!roleService.isStaff(userId)) {
+            throw new ForbiddenException("Only staff can view clubs for report requirements");
+        }
+
+        // Validate submission report requirement exists
+        SubmissionReportRequirement requirement = submissionReportRequirementRepository.findById(requirementId)
+                .orElseThrow(() -> new NotFoundException("Report requirement not found with ID: " + requirementId));
+
+        // Get all club requirements for this submission requirement
+        List<ClubReportRequirement> clubRequirements = clubReportRequirementRepository
+                .findBySubmissionReportRequirementId(requirementId);
+
+        // Map to response
+        return clubRequirements.stream()
+                .map(crr -> ReportRequirementResponse.ClubRequirementInfo.builder()
+                        .id(crr.getId())
+                        .clubId(crr.getClub().getId())
+                        .clubName(crr.getClub().getClubName())
+                        .clubCode(crr.getClub().getClubCode())
+                        .status(crr.getStatus().name())
+                        .note(crr.getNote())
+                        .build())
+                .toList();
+    }
+
+    /**
+     * Get report of a specific club for a specific report requirement (for staff only)
+     */
+    @Override
+    public ReportDetailResponse getClubReportByRequirement(Long requirementId, Long clubId, Long userId) {
+        // Check staff permission
+        if (!roleService.isStaff(userId)) {
+            throw new ForbiddenException("Only staff can view club reports");
+        }
+
+        // Validate submission report requirement exists
+        SubmissionReportRequirement requirement = submissionReportRequirementRepository.findById(requirementId)
+                .orElseThrow(() -> new NotFoundException("Report requirement not found with ID: " + requirementId));
+
+        // Validate club exists
+        Club club = clubRepository.findById(clubId)
+                .orElseThrow(() -> new NotFoundException("Club not found with ID: " + clubId));
+
+        // Find report by clubId and requirementId
+        Optional<Report> reportOptional = reportRepository.findByClubIdAndReportRequirementId(clubId, requirementId);
+
+        // Return null if report doesn't exist (club hasn't submitted report yet)
+        if (reportOptional.isEmpty()) {
+            return null;
+        }
+
+        Report report = reportOptional.get();
+        return reportMapper.toDetail(report);
     }
 }
 

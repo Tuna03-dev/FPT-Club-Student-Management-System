@@ -52,6 +52,46 @@ export interface ClubRequirementInfo {
   note?: string;
 }
 
+// Report Detail Response
+export interface ReportDetailResponse {
+  id: number;
+  reportTitle: string;
+  content?: string;
+  fileUrl?: string;
+  status: string; // DRAFT, SUBMITTED, APPROVED, REJECTED
+  submittedDate?: string;
+  reviewedDate?: string;
+  reviewerFeedback?: string;
+  createdAt: string;
+  updatedAt: string;
+  club?: ClubInfo;
+  semester?: SemesterInfo;
+  createdBy?: UserInfo;
+  reportRequirement?: ReportRequirementInfo;
+}
+
+export interface ClubInfo {
+  id: number;
+  clubName: string;
+  clubCode: string;
+}
+
+export interface SemesterInfo {
+  id: number;
+  semesterName: string;
+  semesterCode: string;
+}
+
+export interface ReportRequirementInfo {
+  id: number;
+  title: string;
+  description?: string;
+  dueDate: string;
+  reportType?: ReportType;
+  templateUrl?: string;
+  createdBy?: UserInfo;
+}
+
 // Frontend mapping types
 export type FrontendReportType = "periodic" | "post-event" | "other";
 

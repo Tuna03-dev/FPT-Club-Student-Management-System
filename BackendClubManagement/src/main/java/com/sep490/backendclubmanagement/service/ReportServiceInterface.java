@@ -10,6 +10,7 @@ import com.sep490.backendclubmanagement.dto.response.PageResponse;
 import com.sep490.backendclubmanagement.dto.response.ReportDetailResponse;
 import com.sep490.backendclubmanagement.dto.response.ReportListItemResponse;
 import com.sep490.backendclubmanagement.dto.response.ReportRequirementResponse;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -44,10 +45,11 @@ public interface ReportServiceInterface {
     /**
      * Create report requirement for multiple clubs (for staff only)
      * @param request Create request containing requirement details and list of club IDs
+     * @param file Optional template file to upload
      * @param userId Current user ID
      * @return Created report requirement response with club requirements
      */
-    ReportRequirementResponse createReportRequirement(CreateReportRequirementRequest request, Long userId);
+    ReportRequirementResponse createReportRequirement(CreateReportRequirementRequest request, MultipartFile file, Long userId);
 
     /**
      * Create a report (draft for team officer, can submit for club president)
@@ -100,5 +102,22 @@ public interface ReportServiceInterface {
             com.sep490.backendclubmanagement.dto.request.ReportRequirementFilterRequest request,
             Long userId
     );
+
+    /**
+     * Get list of clubs that need to submit reports for a specific report requirement (for staff only)
+     * @param requirementId Submission report requirement ID
+     * @param userId Current user ID
+     * @return List of club requirement info containing club details and status
+     */
+    List<ReportRequirementResponse.ClubRequirementInfo> getClubsByReportRequirement(Long requirementId, Long userId);
+
+    /**
+     * Get report of a specific club for a specific report requirement (for staff only)
+     * @param requirementId Submission report requirement ID
+     * @param clubId Club ID
+     * @param userId Current user ID
+     * @return Report detail response if exists, null otherwise
+     */
+    ReportDetailResponse getClubReportByRequirement(Long requirementId, Long clubId, Long userId);
 }
 

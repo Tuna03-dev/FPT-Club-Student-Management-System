@@ -1,5 +1,6 @@
 package com.sep490.backendclubmanagement.controller;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sep490.backendclubmanagement.dto.ApiResponse;
 import com.sep490.backendclubmanagement.dto.request.CreateReportRequirementRequest;
 import com.sep490.backendclubmanagement.dto.request.CreateReportRequest;
@@ -17,6 +18,7 @@ import com.sep490.backendclubmanagement.util.SecurityUtils;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -26,6 +28,7 @@ import java.util.List;
 public class ReportController {
 
     private final ReportServiceInterface reportService;
+    private final ObjectMapper objectMapper;
 
     /**
      * Get all reports with filters and pagination (for staff only)
@@ -73,13 +76,29 @@ public class ReportController {
 
     /**
      * Create report requirement for multiple clubs (for staff only)
+     * JSON endpoint (without file upload)
      */
-    @PostMapping("/staff/requirements")
+    @PostMapping(value = "/staff/requirements", consumes = "application/json")
     public ApiResponse<ReportRequirementResponse> createReportRequirement(
             @RequestBody @Valid CreateReportRequirementRequest request
     ) {
         Long userId = SecurityUtils.getCurrentUserId();
-        ReportRequirementResponse data = reportService.createReportRequirement(request, userId);
+        ReportRequirementResponse data = reportService.createReportRequirement(request, null, userId);
+        return ApiResponse.success(data);
+    }
+
+    /**
+     * Create report requirement for multiple clubs with file upload (for staff only)
+     * Multipart/form-data endpoint
+     */
+    @PostMapping(value = "/staff/requirements", consumes = "multipart/form-data")
+    public ApiResponse<ReportRequirementResponse> createReportRequirementWithFile(
+            @RequestPart("request") String requestJson,
+            @RequestPart(value = "file", required = false) MultipartFile file
+    ) throws Exception {
+        Long userId = SecurityUtils.getCurrentUserId();
+        CreateReportRequirementRequest request = objectMapper.readValue(requestJson, CreateReportRequirementRequest.class);
+        ReportRequirementResponse data = reportService.createReportRequirement(request, file, userId);
         return ApiResponse.success(data);
     }
 
@@ -141,6 +160,32 @@ public class ReportController {
     ) {
         Long userId = SecurityUtils.getCurrentUserId();
         List<ReportListItemResponse> data = reportService.getMyDraftReports(clubId, userId);
+        return ApiResponse.success(data);
+    }
+
+    /**
+     * Get list of clubs that need to submit reports for a specific report requirement (for staff only)
+     */
+    @GetMapping("/staff/requirements/{requirementId}/clubs")
+    public ApiResponse<List<ReportRequirementResponse.ClubRequirementInfo>> getClubsByReportRequirement(
+            @PathVariable Long requirementId
+    ) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        List<ReportRequirementResponse.ClubRequirementInfo> data = reportService.getClubsByReportRequirement(requirementId, userId);
+        return ApiResponse.success(data);
+    }
+
+    /**
+     * Get report of a specific club for a specific report requirement (for staff only)
+     * Returns null if club hasn't submitted report yet
+     */
+    @GetMapping("/staff/requirements/{requirementId}/clubs/{clubId}/report")
+    public ApiResponse<ReportDetailResponse> getClubReportByRequirement(
+            @PathVariable Long requirementId,
+            @PathVariable Long clubId
+    ) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        ReportDetailResponse data = reportService.getClubReportByRequirement(requirementId, clubId, userId);
         return ApiResponse.success(data);
     }
 }

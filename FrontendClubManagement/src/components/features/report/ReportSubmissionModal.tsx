@@ -12,6 +12,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -52,6 +53,7 @@ export interface SubmissionFormData {
     name: string;
     size: number;
     type: string;
+    file?: File; // Store actual File object for upload
   }>;
   saveAsDraft?: boolean;
 }
@@ -131,9 +133,10 @@ export function ReportSubmissionModal({
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [attachedFiles, setAttachedFiles] = useState<
-    Array<{ id: string; name: string; size: number; type: string }>
+    Array<{ id: string; name: string; size: number; type: string; file?: File }>
   >([]);
-  const [contentWarnings, setContentWarnings] = useState<string[]>([]);
+  const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
 
   // Events and clubs data
   const [events, setEvents] = useState<EventData[]>([]);
@@ -198,8 +201,6 @@ export function ReportSubmissionModal({
 
     if (!formData.content.trim()) {
       newErrors.content = "Nội dung báo cáo không được để trống";
-    } else if (formData.content.length < 50) {
-      newErrors.content = "Nội dung báo cáo phải có ít nhất 50 ký tự";
     }
 
     if (formData.type === "post-event" && !formData.selectedEventId) {
@@ -212,15 +213,6 @@ export function ReportSubmissionModal({
     ) {
       newErrors.selectedClubIds = "Vui lòng chọn ít nhất một câu lạc bộ";
     }
-
-    // Check for required fields in template
-    const warnings: string[] = [];
-    template.requiredFields.forEach((field) => {
-      if (!formData.content.toLowerCase().includes(field.toLowerCase())) {
-        warnings.push(`Báo cáo có thể thiếu: ${field}`);
-      }
-    });
-    setContentWarnings(warnings);
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -260,6 +252,7 @@ export function ReportSubmissionModal({
       name: file.name,
       size: file.size,
       type: file.type,
+      file: file, // Store actual File object
     };
 
     setAttachedFiles([newFile]);
@@ -287,20 +280,35 @@ export function ReportSubmissionModal({
       return;
     }
 
+    // Show confirmation dialog instead of submitting directly
+    setShowSubmitConfirm(true);
+  };
+
+  const handleConfirmSubmit = () => {
+    setShowSubmitConfirm(false);
     onSubmit(formData);
   };
 
-  const handleDraftSave = () => {
-    // Allow saving with minimal validation
-    if (!formData.title.trim()) {
-      alert("Vui lòng điền tiêu đề trước khi lưu bản nháp");
-      return;
-    }
+  const handleCancelClick = () => {
+    // Check if form has any data entered
+    const hasData =
+      formData.title.trim() ||
+      formData.content.trim() ||
+      formData.dueDate ||
+      attachedFiles.length > 0;
 
-    onSubmit({
-      ...formData,
-      saveAsDraft: true,
-    });
+    if (hasData) {
+      // Show confirmation dialog if form has data
+      setShowCancelConfirm(true);
+    } else {
+      // Close directly if form is empty
+      onOpenChange(false);
+    }
+  };
+
+  const handleConfirmCancel = () => {
+    setShowCancelConfirm(false);
+    onOpenChange(false);
   };
 
   const filteredEvents = events.filter(
@@ -350,15 +358,15 @@ export function ReportSubmissionModal({
       });
       setAttachedFiles([]);
       setErrors({});
-      setContentWarnings([]);
       setEventSearchQuery("");
       setClubSearchQuery("");
     }
   }, [open]);
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="!max-w-[calc(100%-2rem)] sm:!max-w-5xl max-h-[90vh] overflow-y-auto p-0">
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="!max-w-[calc(100%-2rem)] sm:!max-w-5xl max-h-[90vh] overflow-y-auto p-0">
         <div className="sticky top-0 bg-background border-b z-10">
           <DialogHeader className="p-6 pb-4">
             <DialogTitle className="text-2xl">
@@ -638,28 +646,6 @@ export function ReportSubmissionModal({
                 </p>
               )}
             </div>
-
-            {/* Content Warnings */}
-            {contentWarnings.length > 0 && (
-              <Card className="bg-yellow-50 border-yellow-200">
-                <CardContent className="pt-4">
-                  <div className="text-sm space-y-2">
-                    <p className="font-medium text-yellow-900">Lưu ý:</p>
-                    <ul className="space-y-1">
-                      {contentWarnings.map((warning, idx) => (
-                        <li
-                          key={idx}
-                          className="text-yellow-800 text-xs flex items-start gap-2"
-                        >
-                          <AlertCircle className="h-3 w-3 mt-0.5 flex-shrink-0" />
-                          {warning}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
           </div>
 
           {/* File Attachments */}
@@ -733,7 +719,7 @@ export function ReportSubmissionModal({
             <Button
               type="button"
               variant="outline"
-              onClick={() => onOpenChange(false)}
+              onClick={handleCancelClick}
               disabled={isLoading}
               className="bg-transparent"
             >
@@ -748,7 +734,85 @@ export function ReportSubmissionModal({
             </Button>
           </div>
         </form>
-      </DialogContent>
-    </Dialog>
+        </DialogContent>
+      </Dialog>
+
+      {/* Submit Confirmation Dialog */}
+      <Dialog open={showSubmitConfirm} onOpenChange={setShowSubmitConfirm}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Xác nhận gửi yêu cầu</DialogTitle>
+            <DialogDescription>
+              Bạn có chắc chắn muốn gửi yêu cầu nộp báo cáo này không?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="p-4 rounded-lg bg-primary/10 border border-primary/30">
+              <p className="text-sm font-medium">Thông tin yêu cầu:</p>
+              <ul className="text-sm text-muted-foreground mt-2 space-y-1">
+                <li>• Tiêu đề: {formData.title || "Chưa có"}</li>
+                <li>• Loại báo cáo: {REPORT_TYPES.find(t => t.value === formData.type)?.label}</li>
+                <li>• Ngày hạn chót: {formData.dueDate || "Chưa có"}</li>
+                {formData.type === "post-event" && formData.selectedEventId && (
+                  <li>• Sự kiện: {events.find(e => e.id === formData.selectedEventId)?.title}</li>
+                )}
+                {formData.type === "other" && formData.selectedClubIds && (
+                  <li>• Số CLB: {formData.selectedClubIds.length}</li>
+                )}
+              </ul>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowSubmitConfirm(false)}
+              disabled={isLoading}
+            >
+              Hủy
+            </Button>
+            <Button
+              onClick={handleConfirmSubmit}
+              disabled={isLoading}
+              className="bg-primary text-primary-foreground hover:bg-primary/90"
+            >
+              {isLoading ? "Đang gửi..." : "Xác nhận gửi"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cancel Confirmation Dialog */}
+      <Dialog open={showCancelConfirm} onOpenChange={setShowCancelConfirm}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Xác nhận hủy</DialogTitle>
+            <DialogDescription>
+              Bạn có chắc chắn muốn hủy tạo yêu cầu nộp báo cáo không?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="p-4 rounded-lg bg-destructive/10 border border-destructive/30">
+              <p className="text-sm text-destructive font-medium">
+                ⚠️ Lưu ý: Tất cả thông tin đã nhập sẽ bị mất và không thể khôi phục.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowCancelConfirm(false)}
+            >
+              Quay lại
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleConfirmCancel}
+            >
+              Xác nhận hủy
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

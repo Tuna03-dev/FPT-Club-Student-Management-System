@@ -12,9 +12,6 @@ import {
 import {
   Plus,
   Eye,
-  CheckCircle2,
-  Clock,
-  AlertCircle,
   Search,
 } from "lucide-react";
 import {
@@ -23,11 +20,11 @@ import {
 } from "@/components/features/report/ReportSubmissionModal";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { getAllReportRequirements } from "@/services/reportService";
+import { getAllReportRequirements, createReportRequirement, getAllClubsForReport } from "@/services/reportService";
 import type {
   ReportRequirementResponse,
   ReportType,
-  FrontendReportType,
+  CreateReportRequirementRequest,
 } from "@/types/dto/reportRequirement.dto";
 import {
   mapBackendToFrontendReportType,
@@ -132,9 +129,68 @@ export function StaffReportManagement() {
   }, [fetchReportRequirements]);
 
   const handleSubmitReport = async (formData: SubmissionFormData) => {
-    // Reload list after successful creation
-    await fetchReportRequirements();
-    setIsSubmitDialogOpen(false);
+    setIsSubmitting(true);
+    try {
+      // Get file from attachments if available
+      const file = formData.attachments && formData.attachments.length > 0 
+        ? formData.attachments[0].file 
+        : undefined;
+
+      // Determine club IDs based on report type
+      let clubIds: number[] = [];
+      
+      if (formData.type === "periodic") {
+        // For periodic reports, get all clubs
+        const allClubs = await getAllClubsForReport();
+        clubIds = allClubs.map((club) => club.id);
+      } else if (formData.type === "post-event") {
+        // For post-event reports, get clubs from the selected event
+        // Note: This would require getting clubs from event, but for now we'll use all clubs
+        // TODO: Get clubs from selected event
+        if (!formData.selectedEventId) {
+          toast.error("Vui lòng chọn sự kiện");
+          return;
+        }
+        // For now, use all clubs - this should be updated to get clubs from event
+        const allClubs = await getAllClubsForReport();
+        clubIds = allClubs.map((club) => club.id);
+      } else if (formData.type === "other") {
+        // For other reports, use selected clubs
+        if (!formData.selectedClubIds || formData.selectedClubIds.length === 0) {
+          toast.error("Vui lòng chọn ít nhất một câu lạc bộ");
+          return;
+        }
+        clubIds = formData.selectedClubIds;
+      }
+
+      // Map frontend report type to backend
+      const backendReportType = mapFrontendToBackendReportType(formData.type);
+
+      // Build request
+      const request: CreateReportRequirementRequest = {
+        title: formData.title,
+        description: formData.content,
+        dueDate: formData.dueDate,
+        reportType: backendReportType,
+        clubIds: clubIds,
+        eventId: formData.selectedEventId,
+        templateUrl: undefined, // Will be set from uploaded file
+      };
+
+      // Create report requirement with file
+      await createReportRequirement(request, file);
+      
+      toast.success("Tạo yêu cầu báo cáo thành công!");
+      
+      // Reload list after successful creation
+      await fetchReportRequirements();
+      setIsSubmitDialogOpen(false);
+    } catch (error: any) {
+      console.error("Error creating report requirement:", error);
+      toast.error(error.message || "Không thể tạo yêu cầu báo cáo");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handlePeriodicReportView = (report: ReportRequirementDisplay) => {
