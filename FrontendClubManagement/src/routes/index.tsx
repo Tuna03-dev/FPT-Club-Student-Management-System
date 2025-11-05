@@ -35,6 +35,7 @@ import TeamNewsEditor from "@/pages/news/TeamNewsEditor";
 import Payment from "@/pages/myclub/payments/MemberPaymentPage";
 import { StaffReportManagement } from "@/pages/staffReportManagement/StaffReport";
 import { PeriodicReportClubs } from "@/pages/staffReportManagement/PeriodicReportClubs";
+import { ClubReportManagement } from "@/pages/myclub/report/ReportManagement";
 export const router = createBrowserRouter([
   {
     path: "/",
@@ -162,6 +163,7 @@ export const router = createBrowserRouter([
       { path: "notifications", element: <Notifications /> },
       { path: "settings", element: <Settings /> },
       { path: "teams/:teamId", element: <TeamDetailPage /> },
+      { path: "reports", element: <ClubReportManagement /> },
 
       { path: "myclub", element: <Navigate to="." replace /> },
       { path: "teams/:teamId/news-drafts", element: <TeamNewsDrafts /> },
