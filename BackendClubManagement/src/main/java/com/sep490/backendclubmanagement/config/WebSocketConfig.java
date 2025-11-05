@@ -2,6 +2,7 @@ package com.sep490.backendclubmanagement.config;
 
 import com.sep490.backendclubmanagement.util.JwtUtil;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
@@ -19,6 +20,7 @@ import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBr
 import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
 import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
 
+@Slf4j
 @Configuration
 @EnableWebSocketMessageBroker
 @RequiredArgsConstructor
@@ -29,7 +31,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void configureMessageBroker(MessageBrokerRegistry config) {
-        config.enableSimpleBroker("/topic", "/queue", "/user");
+        config.enableSimpleBroker("/topic", "/queue");
         config.setApplicationDestinationPrefixes("/app");
         config.setUserDestinationPrefix("/user");
     }
@@ -58,8 +60,11 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                         if (jwtUtil.validateToken(jwt, userDetails)) {
                             UsernamePasswordAuthenticationToken authentication =
                                     new UsernamePasswordAuthenticationToken(
-                                            userDetails, null, userDetails.getAuthorities());
-                            SecurityContextHolder.getContext().setAuthentication(authentication);
+                                            username,
+                                            null,
+                                            userDetails.getAuthorities()
+                                    );
+
                             accessor.setUser(authentication);
                         }
                     }
@@ -69,3 +74,6 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         });
     }
 }
+
+
+

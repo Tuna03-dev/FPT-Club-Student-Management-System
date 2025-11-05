@@ -6,6 +6,7 @@ import com.sep490.backendclubmanagement.dto.request.PayOSWebhookRequest;
 import com.sep490.backendclubmanagement.dto.request.UpdateFeeRequest;
 import com.sep490.backendclubmanagement.dto.response.FeeDetailResponse;
 import com.sep490.backendclubmanagement.dto.response.PayOSCreatePaymentResponse;
+import com.sep490.backendclubmanagement.dto.websocket.PaymentWebSocketPayload;
 import com.sep490.backendclubmanagement.entity.*;
 import com.sep490.backendclubmanagement.exception.AppException;
 import com.sep490.backendclubmanagement.exception.ErrorCode;
@@ -44,7 +45,7 @@ public class FeeService {
     private final IncomeTransactionRepository incomeTransactionRepository;
     private final ClubWalletRepository clubWalletRepository;
     private final PayOSPaymentRepository payOSPaymentRepository;
-
+    private final WebSocketService webSocketService;
 
     @Value("${app.frontend.url:http://localhost:5173}")
     private String frontendUrl;
@@ -411,6 +412,18 @@ public class FeeService {
 
         log.info("[PayOS] Giao dịch thành công | user={} | fee={} | amount={} | orderCode={}",
                 user.getFullName(), fee.getTitle(), fee.getAmount(), orderCode);
+
+        PaymentWebSocketPayload payload = PaymentWebSocketPayload.builder()
+                .userId(user.getId())
+                .feeId(fee.getId())
+                .amount(fee.getAmount())
+                .orderCode(orderCode)
+                .status("SUCCESS")
+                .transactionCode(webhookRequest.getData().getTransactionCode())
+                .message("Thanh toán khoản phí thành công")
+                .build();
+
+        webSocketService.sendPaymentSuccess(user.getEmail(), payload);
     }
 
     private LocalDateTime parseDateTime(String dateTimeStr) {

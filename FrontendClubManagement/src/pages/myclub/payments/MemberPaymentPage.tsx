@@ -12,7 +12,10 @@ import feeService from "@/services/feeService";
 import { authService } from "@/services/authService";
 import type { Fee } from "@/types/fee";
 import { calculatePaymentStatus } from "@/utils/feeUtils";
-
+import {
+  useWebSocket,
+  type PaymentWebSocketPayload,
+} from "@/hooks/useWebSocket";
 
 // Note: mock data removed — this page now expects real API data from `feeService.getFees`.
 
@@ -44,12 +47,10 @@ export default function Payment() {
   const [qrCodeData, setQrCodeData] = useState<string | null>(null);
   const [orderCode, setOrderCode] = useState<number | undefined>(undefined);
   const [generatingQR, setGeneratingQR] = useState(false);
+  const token = localStorage.getItem("accessToken");
+  const { isConnected, subscribeToUserQueue } = useWebSocket(token);
 
-  /**
-   * Fetch fees from API
-   * TODO: Replace with actual endpoint that returns member's fees with payment status
-   * Example: GET /api/clubs/{clubId}/members/me/fees
-   */
+
   const fetchFees = useCallback(async () => {
     if (!numericClubId || numericClubId <= 0) {
       setFees([]);
@@ -178,6 +179,28 @@ export default function Payment() {
     () => fees.filter((f) => f.paymentStatus === "paid"),
     [fees]
   );
+
+  useEffect(() => {
+    if (!isConnected) return;
+
+    // Subscribe to personal queue for payment notifications
+    const unsubscribe = subscribeToUserQueue((message) => {
+      if (message.type === "PAYMENT") {
+        const payload = message.payload as PaymentWebSocketPayload;
+
+        if (message.action === "SUCCESS") {
+          toast.success(
+            `Thanh toán thành công! Mã GD: ${payload.transactionCode}`
+          );
+          // Refresh payment list
+        } else if (message.action === "FAILED") {
+          toast.error(payload.message);
+        }
+      }
+    });
+
+    return unsubscribe;
+  }, [isConnected]);
 
   return (
     <div className="container max-w-6xl py-8 px-4">

@@ -11,7 +11,7 @@ import java.math.BigDecimal;
 @NoArgsConstructor
 @AllArgsConstructor
 public class PaymentWebSocketPayload {
-    private String orderCode;
+    private Long orderCode;
     private String transactionCode;
     private BigDecimal amount;
     private String status;
@@ -19,3 +19,6 @@ public class PaymentWebSocketPayload {
     private Long userId;
     private Long feeId;
 }
+
+
+
