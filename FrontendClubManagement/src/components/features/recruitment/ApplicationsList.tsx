@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -243,7 +243,6 @@ export function ApplicationsList({
     setNotes("");
   };
 
-
   return (
     <>
       <div className="space-y-6">
@@ -408,7 +407,7 @@ export function ApplicationsList({
                           <MessageSquare className="h-3 w-3" />
                           {application.status === "interview"
                             ? "Thông tin PV:"
-                            : "Ghi chú:"}
+                            : "Phản hồi:"}
                         </div>
                         <div className="text-xs bg-blue-50 rounded p-2 line-clamp-2">
                           {application.notes}
@@ -424,76 +423,8 @@ export function ApplicationsList({
                         className="bg-transparent"
                       >
                         <Eye className="h-4 w-4 mr-1" />
-                        Xem
+                        Xem chi tiết
                       </Button>
-                      {application.status === "under_review" && (
-                        <>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() =>
-                              handleStatusChange(
-                                application.application_id,
-                                application.user_name,
-                                "interview"
-                              )
-                            }
-                            className="bg-transparent text-purple-600 border-purple-200 "
-                            title="Mời phỏng vấn"
-                          >
-                            <Calendar className="h-4 w-4" /> Phỏng vấn
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() =>
-                              handleStatusChange(
-                                application.application_id,
-                                application.user_name,
-                                "rejected"
-                              )
-                            }
-                            className="bg-transparent text-red-600 border-red-200 "
-                            title="Từ chối"
-                          >
-                            <XCircle className="h-4 w-4" /> Từ chối
-                          </Button>
-                        </>
-                      )}
-                      {application.status === "interview" && (
-                        <>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() =>
-                              handleStatusChange(
-                                application.application_id,
-                                application.user_name,
-                                "accepted"
-                              )
-                            }
-                            className="bg-transparent text-green-600 border-green-200 hover:bg-green-50"
-                            title="Chấp nhận"
-                          >
-                            <CheckCircle className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() =>
-                              handleStatusChange(
-                                application.application_id,
-                                application.user_name,
-                                "rejected"
-                              )
-                            }
-                            className="bg-transparent text-red-600 border-red-200 hover:bg-red-50"
-                            title="Từ chối"
-                          >
-                            <XCircle className="h-4 w-4" /> Từ chối
-                          </Button>
-                        </>
-                      )}
                     </div>
                   </div>
                 </CardContent>
@@ -519,21 +450,12 @@ export function ApplicationsList({
               <div>
                 Hiển thị{" "}
                 <span className="font-semibold">
-                  {Math.min(
-                    currentPage * 10 + 1,
-                    totalElements
-                  )}{" "}
-                  -{" "}
-                  {Math.min(
-                    (currentPage + 1) * 10,
-                    totalElements
-                  )}
+                  {Math.min(currentPage * 10 + 1, totalElements)} -{" "}
+                  {Math.min((currentPage + 1) * 10, totalElements)}
                 </span>{" "}
                 trong tổng số{" "}
-                <span className="font-semibold">
-                  {totalElements}
-                </span>{" "}
-                đơn ứng tuyển
+                <span className="font-semibold">{totalElements}</span> đơn ứng
+                tuyển
               </div>
               <div>
                 Trang {currentPage + 1} / {totalPages}
@@ -589,49 +511,44 @@ export function ApplicationsList({
                   )}
 
                   {/* Pages around current page */}
-                  {Array.from(
-                    { length: Math.min(5, totalPages) },
-                    (_, i) => {
-                      let pageNum;
-                      if (totalPages <= 5) {
-                        pageNum = i;
-                      } else if (currentPage <= 2) {
-                        pageNum = i;
-                      } else if (currentPage >= totalPages - 3) {
-                        pageNum = totalPages - 5 + i;
-                      } else {
-                        pageNum = currentPage - 2 + i;
-                      }
-
-                      if (pageNum < 0 || pageNum >= totalPages)
-                        return null;
-                      if (currentPage > 2 && pageNum === 0)
-                        return null;
-                      if (
-                        currentPage < totalPages - 3 &&
-                        pageNum === totalPages - 1
-                      )
-                        return null;
-
-                      return (
-                        <PaginationItem key={pageNum}>
-                          <PaginationLink
-                            onClick={() => {
-                              onPageChange(pageNum);
-                              window.scrollTo({
-                                top: 0,
-                                behavior: "smooth",
-                              });
-                            }}
-                            isActive={currentPage === pageNum}
-                            className="cursor-pointer"
-                          >
-                            {pageNum + 1}
-                          </PaginationLink>
-                        </PaginationItem>
-                      );
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    let pageNum;
+                    if (totalPages <= 5) {
+                      pageNum = i;
+                    } else if (currentPage <= 2) {
+                      pageNum = i;
+                    } else if (currentPage >= totalPages - 3) {
+                      pageNum = totalPages - 5 + i;
+                    } else {
+                      pageNum = currentPage - 2 + i;
                     }
-                  )}
+
+                    if (pageNum < 0 || pageNum >= totalPages) return null;
+                    if (currentPage > 2 && pageNum === 0) return null;
+                    if (
+                      currentPage < totalPages - 3 &&
+                      pageNum === totalPages - 1
+                    )
+                      return null;
+
+                    return (
+                      <PaginationItem key={pageNum}>
+                        <PaginationLink
+                          onClick={() => {
+                            onPageChange(pageNum);
+                            window.scrollTo({
+                              top: 0,
+                              behavior: "smooth",
+                            });
+                          }}
+                          isActive={currentPage === pageNum}
+                          className="cursor-pointer"
+                        >
+                          {pageNum + 1}
+                        </PaginationLink>
+                      </PaginationItem>
+                    );
+                  })}
 
                   {/* Last page */}
                   {currentPage < totalPages - 3 && (
@@ -751,7 +668,7 @@ export function ApplicationsList({
                       <MessageSquare className="h-4 w-4" />
                       {selectedApplication.status === "interview"
                         ? "Thông tin phỏng vấn"
-                        : "Ghi chú đánh giá"}
+                        : "Phản hồi đánh giá"}
                     </h4>
                     <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                       <p className="text-sm text-gray-700 whitespace-pre-wrap">
@@ -892,8 +809,8 @@ export function ApplicationsList({
                   >
                     <MessageSquare className="h-4 w-4 mr-2" />
                     {selectedApplication.notes
-                      ? "Chỉnh sửa ghi chú"
-                      : "Thêm ghi chú"}
+                      ? "Chỉnh sửa Phản hồi"
+                      : "Thêm Phản hồi"}
                   </Button>
                   <Button
                     variant="outline"
@@ -931,17 +848,22 @@ export function ApplicationsList({
             {statusChangeDialog?.newStatus === "interview" ? (
               <div className="space-y-2">
                 <div>
-                  <Label htmlFor="interviewDatetime">Ngày giờ phỏng vấn <span className="text-red-500">*</span></Label>
+                  <Label htmlFor="interviewDatetime">
+                    Ngày giờ phỏng vấn <span className="text-red-500">*</span>
+                  </Label>
                   <Input
                     id="interviewDatetime"
                     type="datetime-local"
                     value={interviewDatetime}
                     onChange={(e) => setInterviewDatetime(e.target.value)}
+                    min={new Date().toISOString().slice(0, 16)}
                     required
                   />
                 </div>
                 <div>
-                  <Label htmlFor="interviewLocation">Địa điểm <span className="text-red-500">*</span></Label>
+                  <Label htmlFor="interviewLocation">
+                    Địa điểm <span className="text-red-500">*</span>
+                  </Label>
                   <Input
                     id="interviewLocation"
                     placeholder="Nhập địa điểm (offline/online)"
@@ -960,7 +882,9 @@ export function ApplicationsList({
                   />
                 </div>
                 <div>
-                  <Label htmlFor="interviewNote">Yêu cầu chuẩn bị (nếu có)</Label>
+                  <Label htmlFor="interviewNote">
+                    Yêu cầu chuẩn bị (nếu có)
+                  </Label>
                   <Textarea
                     id="interviewNote"
                     placeholder="Ví dụ: chuẩn bị CV, bài test..."
@@ -970,13 +894,20 @@ export function ApplicationsList({
                   />
                 </div>
                 {/* Hiển thị lỗi nếu thiếu bắt buộc */}
-                {(!interviewDatetime.trim() || !interviewLocation.trim()) && (
-                  <p className="text-sm text-red-500">Vui lòng nhập đủ ngày giờ và địa điểm phỏng vấn</p>
+                {(!interviewDatetime.trim() ||
+                  !interviewLocation.trim() ||
+                  (interviewDatetime.trim() &&
+                    new Date(interviewDatetime) <= new Date())) && (
+                  <p className="text-sm text-red-500">
+                    {!interviewDatetime.trim() || !interviewLocation.trim()
+                      ? "Vui lòng nhập đủ ngày giờ và địa điểm phỏng vấn"
+                      : "Thời gian phỏng vấn phải lớn hơn thời gian hiện tại"}
+                  </p>
                 )}
               </div>
             ) : (
-              <div className='space-y-2'>
-                <Label htmlFor="notes">Ghi chú (tùy chọn)</Label>
+              <div className="space-y-2">
+                <Label htmlFor="notes">Phản hồi (tùy chọn)</Label>
                 <Textarea
                   id="notes"
                   value={notes}
@@ -994,8 +925,13 @@ export function ApplicationsList({
             <Button
               onClick={handleConfirmStatusChange}
               disabled={
-                statusChangeDialog?.newStatus === "interview" &&
-                (!interviewDatetime.trim() || !interviewLocation.trim())
+                !!(
+                  statusChangeDialog?.newStatus === "interview" &&
+                  (!interviewDatetime.trim() ||
+                    !interviewLocation.trim() ||
+                    (interviewDatetime.trim() &&
+                      new Date(interviewDatetime) <= new Date()))
+                )
               }
               className={
                 statusChangeDialog?.newStatus === "interview"
@@ -1024,12 +960,14 @@ export function ApplicationsList({
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>
-              {notesDialog?.currentNotes ? "Chỉnh sửa ghi chú" : "Thêm ghi chú"}
+              {notesDialog?.currentNotes
+                ? "Chỉnh sửa Phản hồi"
+                : "Thêm Phản hồi"}
             </DialogTitle>
             <DialogDescription>
               {notesDialog?.currentStatus === "interview"
                 ? "Cập nhật thông tin phỏng vấn cho "
-                : "Thêm ghi chú đánh giá cho "}
+                : "Thêm Phản hồi đánh giá cho "}
               <strong>{notesDialog?.applicationName}</strong>
             </DialogDescription>
           </DialogHeader>
@@ -1040,7 +978,7 @@ export function ApplicationsList({
                 <MessageSquare className="h-4 w-4" />
                 {notesDialog?.currentStatus === "interview"
                   ? "Thông tin về cuộc phỏng vấn"
-                  : "Ghi chú"}
+                  : "Phản hồi"}
               </Label>
               <Textarea
                 id="notes-edit"
@@ -1048,10 +986,10 @@ export function ApplicationsList({
                   notesDialog?.currentStatus === "interview"
                     ? "Nhập thông tin về cuộc phỏng vấn (ngày giờ, địa điểm, link meeting, yêu cầu chuẩn bị...)..."
                     : notesDialog?.currentStatus === "accepted"
-                    ? "Ghi chú về việc chấp nhận đơn..."
+                    ? "Phản hồi về việc chấp nhận đơn..."
                     : notesDialog?.currentStatus === "rejected"
-                    ? "Lý do từ chối hoặc ghi chú..."
-                    : "Ghi chú đánh giá..."
+                    ? "Lý do từ chối hoặc Phản hồi..."
+                    : "Phản hồi đánh giá..."
                 }
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
@@ -1060,7 +998,7 @@ export function ApplicationsList({
               <p className="text-xs text-muted-foreground">
                 {notes.trim()
                   ? `${notes.trim().length} ký tự`
-                  : "Để trống để xóa ghi chú"}
+                  : "Để trống để xóa Phản hồi"}
               </p>
             </div>
           </div>
@@ -1073,7 +1011,7 @@ export function ApplicationsList({
               onClick={handleSaveNotes}
               className="bg-blue-600 hover:bg-blue-700"
             >
-              {notesDialog?.currentNotes ? "Cập nhật" : "Lưu ghi chú"}
+              {notesDialog?.currentNotes ? "Cập nhật" : "Lưu Phản hồi"}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -21,8 +21,8 @@ public class News extends BaseEntity {
     @Column(name = "title", nullable = false, length = 500)
     private String title;
 
-    @Column(name = "is_spotlight")
-    private boolean isSpotlight = false;
+    @Column(name="is_spotlight")
+    private Boolean isSpotlight = false;
 
     @Column(name = "content", nullable = false, columnDefinition = "TEXT")
     private String content;
@@ -42,7 +42,7 @@ public class News extends BaseEntity {
     private User createdBy;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "club_id", nullable = false)
+    @JoinColumn(name = "club_id", nullable = true)
     private Club club;
 
     @OneToOne(mappedBy = "news", cascade = CascadeType.ALL)

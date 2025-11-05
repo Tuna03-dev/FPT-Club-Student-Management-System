@@ -41,15 +41,21 @@ public class HomepageService {
 
         // 🔹 STEP 4: Tin tức mới nhất (4)
         List<LatestNewsDTO> latestNews = newsRepository.findLatestNews(PageRequest.of(0, 4));
-
+        newsRepository.findTopByIsDraftFalseOrderByCreatedAtDesc().ifPresent(latest -> {
+            newsRepository.clearAllSpotlight();
+            newsRepository.markSpotlight(latest.getId());
+        });
         // 🔹 STEP 5: Spotlight (1 tin nổi bật nhất)
         SpotlightDTO spotlight = newsRepository.findTopByIsSpotlightTrueOrderByCreatedAtDesc()
                 .map(news -> SpotlightDTO.builder()
                         .type(news.getNewsType())
                         .title(news.getTitle())
-                        .description(news.getContent().length() > 150
-                                ? news.getContent().substring(0, 150) + "..."
-                                : news.getContent())
+                        .description(
+                                news.getContent() == null ? "" :
+                                        (news.getContent().length() > 150
+                                                ? news.getContent().substring(0, 150) + "..."
+                                                : news.getContent())
+                        )
                         .imageUrl(news.getThumbnailUrl())
                         .callToActionText("Read more")
                         .callToActionLink("/news/" + news.getId())

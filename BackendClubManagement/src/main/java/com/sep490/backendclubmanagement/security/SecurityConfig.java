@@ -28,11 +28,11 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 public class SecurityConfig {
     
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
-    private final UserDetailsService userDetailsService;
     private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
     private final CustomAccessDeniedHandler customAccessDeniedHandler;
 
     private final String[] PUBLIC_URL = {
+//            "/api/**",
             "/api/auth/google",
             "/api/auth/refreshToken",
             "/api/v1/auth/**",
@@ -45,13 +45,16 @@ public class SecurityConfig {
             "/api/my-club/**",
             "/api/management/**",
             "/api/posts/**",
+            "/api/comments/**",
+            "/api/posts/**",
             "/api/clubs/**",
             "/api/events/get-all-by-filter",
             "/api/events/get-all-event-types",
             "/api/events/{id}",
             "/api/events/get-all-club",
             "/api/news/get-all-by-filter",
-            "/api/news/{id}"
+            "/api/news/{id}",
+            "/api/pay-os/webhook"
 
     };
 

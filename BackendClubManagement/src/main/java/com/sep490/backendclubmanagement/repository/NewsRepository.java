@@ -10,7 +10,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
-
+import com.sep490.backendclubmanagement.entity.Club;
+import org.springframework.data.jpa.repository.Modifying;
 import java.util.List;
 import java.util.Optional;
 
@@ -25,17 +26,29 @@ public interface NewsRepository extends JpaRepository<News, Long> {
             "ORDER BY n.createdAt DESC")
     List<LatestNewsDTO> findLatestNews(Pageable pageable);
 
+    // Lấy tin non-draft mới nhất
+    Optional<News> findTopByIsDraftFalseOrderByCreatedAtDesc();
+
     // Lấy tin spotlight mới nhất
     Optional<News> findTopByIsSpotlightTrueOrderByCreatedAtDesc();
 
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("UPDATE News n SET n.isSpotlight = false WHERE n.isSpotlight = true")
+    int clearAllSpotlight();
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("UPDATE News n SET n.isSpotlight = true WHERE n.id = :id")
+    int markSpotlight(@Param("id") Long id);
+
+    // Dành cho phần quản trị: lọc/tìm kiếm tin tức (native) - GIỮ NGUYÊN
     @Query(value = """
                                      SELECT DISTINCT e.*
                                          FROM news e
                                          LEFT JOIN clubs c ON e.club_id = c.id
-                                         WHERE\s
+                                         WHERE
                                              (:#{#request.clubId} IS NULL OR e.club_id = :#{#request.clubId})
                                             AND e.is_draft = false
-          """, nativeQuery = true,countProjection = "e.id")
+          """, nativeQuery = true, countProjection = "e.id")
     Page<News> getAllNewsByFilter(NewsRequest request, Pageable pageable);
 
     // Activity theo tác giả (JPQL) — phục vụ ClubManagementService
@@ -45,4 +58,16 @@ public interface NewsRepository extends JpaRepository<News, Long> {
             "WHERE u.id IN :authorIds " +
             "ORDER BY n.createdAt DESC")
     List<ActivityDTO> findActivitiesByAuthorIds(@Param("authorIds") List<Long> authorIds);
+
+    List<News> findByIsDraftFalseOrderByCreatedAtDesc();
+    List<News> findByClubAndIsDraftFalseOrderByCreatedAtDesc(Club club);
+    Page<News> findByIsDraftTrueAndCreatedBy_Id(Long userId, Pageable pageable);
+
+    @Query("""
+      SELECT n FROM News n
+      WHERE n.createdBy.id = :authorId
+        AND n.isDraft = true
+      ORDER BY n.updatedAt DESC
+    """)
+    Page<News> findDraftsByAuthor(@Param("authorId") Long authorId, Pageable pageable);
 }

@@ -109,9 +109,8 @@ public class RecruitmentController {
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 
-    // Applications - Note: Put specific paths before path variables to avoid routing conflicts
     
-    // Submit application (specific path, must come before /{applicationId})
+    // Submit application
     @PostMapping(path = "/applications/submit", consumes = "multipart/form-data")
     public ResponseEntity<ApiResponse<RecruitmentApplicationData>> submit(
             Authentication authentication,
@@ -127,7 +126,7 @@ public class RecruitmentController {
         return ResponseEntity.ok(ApiResponse.success(data));
     }
 
-    // Review application (specific path, must come before /{applicationId})
+    // Review application
     @PostMapping("/applications/review")
     public ResponseEntity<ApiResponse<RecruitmentApplicationData>> review(
             Authentication authentication,
@@ -163,7 +162,7 @@ public class RecruitmentController {
         return ResponseEntity.ok(ApiResponse.success(data));
     }
 
-    // Get application by ID (path variable, should come after specific paths)
+    // Get application by ID
     @GetMapping("/applications/{applicationId}")
     public ResponseEntity<ApiResponse<RecruitmentApplicationData>> getApplication(
             Authentication authentication,

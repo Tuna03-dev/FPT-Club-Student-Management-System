@@ -37,8 +37,12 @@ export default function MyClubRedirect() {
           return;
         }
         nav("/myclub/select", { replace: true });
-      } catch (e: any) {
-        setErr(e?.message || "Có lỗi khi tải danh sách CLB.");
+      } catch (e: unknown) {
+        if (e instanceof Error) {
+          setErr(e.message);
+        } else {
+          setErr("Có lỗi khi tải danh sách CLB.");
+        }
       }
     })();
   }, [nav]);

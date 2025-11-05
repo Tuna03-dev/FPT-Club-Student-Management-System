@@ -35,7 +35,6 @@ export interface RecruitmentData {
   description: string;
   startDate: string; // ISO string
   endDate: string; // ISO string
-  maxApplicants?: number;
   status: "DRAFT" | "OPEN" | "CLOSED" | "CANCELLED";
   requirements?: string;
   clubId: number;
@@ -105,7 +104,6 @@ export interface RecruitmentCreateRequest {
   description: string;
   startDate: string; // ISO datetime string
   endDate: string; // ISO datetime string
-  maxApplicants?: number;
   requirements?: string;
   status?: "DRAFT" | "OPEN"; // Status of recruitment
   questions?: RecruitmentQuestionRequest[];
