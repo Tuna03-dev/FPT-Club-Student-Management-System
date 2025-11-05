@@ -47,6 +47,7 @@ interface EventCalendarProps {
 export function EventCalendar({ clubId }: EventCalendarProps) {
   const [currentDate, setCurrentDate] = useState(new Date())
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null)
+  const [selectedReadOnly, setSelectedReadOnly] = useState<boolean>(false)
   const [events, setEvents] = useState<Event[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -613,6 +614,17 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
                     <div className="w-4 h-4 rounded bg-red-500"></div>
                     <span className="text-sm text-foreground">Đã kết thúc</span>
                   </div>
+              {(() => {
+                const user = authService.getCurrentUser()
+                const showPending = !!user && ["CLUB_PRESIDENT", "CLUB_OFFICER"].includes(user.systemRole)
+                if (!showPending) return null
+                return (
+                  <div className="flex items-center gap-3">
+                    <div className="w-4 h-4 rounded bg-gray-400"></div>
+                    <span className="text-sm text-foreground">Chờ duyệt</span>
+                  </div>
+                )
+              })()}
             </div>
             
             
@@ -730,7 +742,28 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
                       // Debug: check console to verify values
                       console.log("Debug approve buttons:", { userRole: roleUpper, reqStatus: req.status, reqStatusUpper, isStaffActionable, showActions })
                       return (
-                      <div key={req.requestEventId} className="rounded-md border bg-amber-50 px-4 py-3">
+                      <div
+                        key={req.requestEventId}
+                        className="rounded-md border bg-amber-50 px-4 py-3 cursor-pointer"
+                        onClick={() => {
+                          if (!req.event) return
+                          const mapped: Event = {
+                            id: String(req.event.id),
+                            title: req.event.title,
+                            description: req.description ?? "",
+                            startDate: new Date(req.event.startTime),
+                            endDate: new Date(req.event.endTime),
+                            location: req.event.location ?? "",
+                            attendees: 0,
+                            status: determineEventStatus(new Date(req.event.startTime), new Date(req.event.endTime)),
+                            images: [],
+                            isMyDraft: true,
+                            requestStatus: req.status,
+                          }
+                          setSelectedEvent(mapped)
+                          setSelectedReadOnly(true)
+                        }}
+                      >
                         <div className="font-semibold text-foreground">{req.requestTitle}</div>
                         <div className="text-xs text-muted-foreground">Tạo bởi: {req.createdBy?.fullName ?? "N/A"}</div>
                         {(() => {
@@ -757,7 +790,8 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
                               size="sm"
                               variant="secondary"
                               className="bg-emerald-50 text-emerald-600 hover:bg-emerald-100"
-                              onClick={async () => {
+                              onClick={async (e) => {
+                                e.stopPropagation()
                                 const userNow = authService.getCurrentUser()
                                 if (!userNow) return
                                 try {
@@ -784,7 +818,8 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
                               size="sm"
                               variant="secondary"
                               className="bg-rose-50 text-rose-600 hover:bg-rose-100"
-                              onClick={async () => {
+                              onClick={async (e) => {
+                                e.stopPropagation()
                                 const userNow = authService.getCurrentUser()
                                 if (!userNow) return
                                 try {
@@ -862,7 +897,7 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
         <EventDetailModal
           event={selectedEvent}
           clubId={clubId}
-          onClose={() => setSelectedEvent(null)}
+          onClose={() => { setSelectedEvent(null); setSelectedReadOnly(false) }}
           onUpdated={(upd: Event) => {
             setEvents(prev => prev.map(e => e.id === upd.id ? { ...e, ...upd } : e))
             setSelectedEvent(upd)
@@ -870,6 +905,7 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
           onDeleted={(id) => {
             setEvents(prev => prev.filter(e => e.id !== id))
           }}
+          readOnly={selectedReadOnly}
         />
       )}
     </>
