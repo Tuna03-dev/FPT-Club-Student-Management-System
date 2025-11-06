@@ -16,6 +16,7 @@ import com.sep490.backendclubmanagement.service.SystemRoleService;
 import com.sep490.backendclubmanagement.service.TokenBlacklistService;
 import com.sep490.backendclubmanagement.service.UserService;
 import com.sep490.backendclubmanagement.service.RefreshTokenService;
+import com.sep490.backendclubmanagement.service.ClubManagementService;
 import com.sep490.backendclubmanagement.util.JwtUtil;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -48,6 +49,7 @@ public class AuthController {
     private final SystemRoleService systemRoleService;
     private final TokenBlacklistService tokenBlacklistService;
     private final RefreshTokenService refreshTokenService;
+    private final ClubManagementService clubManagementService;
 
     @Value("${google.client-id}")
     private String googleClientId;
@@ -145,12 +147,17 @@ public class AuthController {
             log.error("Failed to set refresh token cookie for user: {}", user.getEmail(), e);
         }
 
+        // Lấy club roles của user
+        List<com.sep490.backendclubmanagement.dto.response.ClubRoleInfo> clubRoleList = 
+                clubManagementService.getUserClubRoles(user.getId());
+
         AuthenticationResponse.UserInfo userInfo = AuthenticationResponse.UserInfo.builder()
                 .id(user.getId())
                 .email(user.getEmail())
                 .fullName(user.getFullName())
                 .avatarUrl(user.getAvatarUrl())
                 .systemRole(user.getSystemRole().getRoleName())
+                .clubRoleList(clubRoleList)
                 .build();
 
         AuthenticationResponse auth = AuthenticationResponse.builder()
@@ -266,12 +273,17 @@ public class AuthController {
                 log.error("Failed to set new refresh token cookie for user: {}", email, e);
             }
 
+            // Lấy club roles của user
+            List<com.sep490.backendclubmanagement.dto.response.ClubRoleInfo> clubRoleList = 
+                    clubManagementService.getUserClubRoles(user.getId());
+
             AuthenticationResponse.UserInfo userInfo = AuthenticationResponse.UserInfo.builder()
                     .id(user.getId())
                     .email(email)
                     .fullName(user.getFullName())
                     .avatarUrl(user.getAvatarUrl())
                     .systemRole(systemRole)
+                    .clubRoleList(clubRoleList)
                     .build();
 
             AuthenticationResponse auth = AuthenticationResponse.builder()
@@ -349,6 +361,36 @@ public class AuthController {
             return ApiResponse.success("Logout successful");
         } catch (Exception e) {
             log.error("Error during logout: {}", e.getMessage(), e);
+            return ApiResponse.error(ErrorCode.INTERNAL_SERVER_ERROR, null);
+        }
+    }
+
+    /**
+     * API endpoint để refresh club roles của user hiện tại
+     * Dùng khi cần cập nhật role data trong localStorage
+     */
+    @GetMapping("/my-roles")
+    public ApiResponse<List<com.sep490.backendclubmanagement.dto.response.ClubRoleInfo>> getMyRoles() {
+        try {
+            // Lấy user hiện tại từ SecurityContext
+            var auth = SecurityContextHolder.getContext().getAuthentication();
+            if (auth == null || !auth.isAuthenticated()) {
+                return ApiResponse.error(ErrorCode.UNAUTHORIZED, null);
+            }
+
+            String email = auth.getName();
+            Optional<User> userOpt = userService.findByEmail(email);
+            if (userOpt.isEmpty()) {
+                return ApiResponse.error(ErrorCode.UNAUTHORIZED, null);
+            }
+
+            User user = userOpt.get();
+            List<com.sep490.backendclubmanagement.dto.response.ClubRoleInfo> clubRoleList = 
+                    clubManagementService.getUserClubRoles(user.getId());
+
+            return ApiResponse.success(clubRoleList);
+        } catch (Exception e) {
+            log.error("Error getting user roles: {}", e.getMessage(), e);
             return ApiResponse.error(ErrorCode.INTERNAL_SERVER_ERROR, null);
         }
     }

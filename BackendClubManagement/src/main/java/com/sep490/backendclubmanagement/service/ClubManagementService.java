@@ -5,15 +5,18 @@ import com.sep490.backendclubmanagement.entity.*;
 import com.sep490.backendclubmanagement.exception.ResourceNotFoundException;
 import com.sep490.backendclubmanagement.repository.*;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ClubManagementService {
@@ -133,5 +136,77 @@ public class ClubManagementService {
         if (!isMember) {
             throw new ResourceNotFoundException("User is not a member of this club in the current semester.");
         }
+    }
+
+    /**
+     * Lấy danh sách club roles của user trong semester hiện tại
+     * Dùng cho authentication response
+     */
+    @Transactional(readOnly = true)
+    public List<ClubRoleInfo> getUserClubRoles(Long userId) {
+        Semester currentSemester = semesterRepository.findCurrentSemester()
+                .orElseThrow(() -> new ResourceNotFoundException("Current semester not found."));
+
+        // Lấy danh sách clubs mà user tham gia
+        List<MyClubDTO> clubs = clubMembershipRepository
+                .findClubsByUserIdAndSemesterId(userId, currentSemester.getId());
+
+        List<ClubRoleInfo> clubRoleInfos = new ArrayList<>();
+
+        for (MyClubDTO club : clubs) {
+            // Lấy ClubMemberShip của user trong club này (chỉ ACTIVE)
+            ClubMemberShip clubMemberShip = clubMembershipRepository
+                    .findByClubIdAndUserId(club.getClubId(), userId);
+
+            if (clubMemberShip == null) {
+                continue;
+            }
+            
+            // Chỉ xử lý nếu status là ACTIVE
+            if (clubMemberShip.getStatus() != ClubMemberShipStatus.ACTIVE) {
+                continue;
+            }
+
+            // Lấy danh sách role memberships của user trong club này
+            // Sử dụng query với fetch join để load team và clubRole cùng lúc, tránh lazy loading issues
+            List<RoleMemberShip> roleMemberships = roleMembershipRepository
+                    .findByClubMemberShipIdAndSemesterIdAndIsActiveWithFetch(
+                            clubMemberShip.getId(),
+                            currentSemester.getId(),
+                            true
+                    );
+
+            // Nếu không có role membership, thêm role mặc định "thành viên"
+            if (roleMemberships.isEmpty()) {
+                clubRoleInfos.add(ClubRoleInfo.builder()
+                        .clubId(club.getClubId())
+                        .clubName(club.getClubName())
+                        .clubRole("thành viên")
+                        .systemRole("MEMBER")
+                        .build());
+            } else {
+                // Lấy tất cả roles của user trong club này
+                for (RoleMemberShip rm : roleMemberships) {
+                    // Với fetch join, team và clubRole đã được load
+                    Long teamId = rm.getTeam() != null ? rm.getTeam().getId() : null;
+                    Long clubRoleId = rm.getClubRole() != null ? rm.getClubRole().getId() : null;
+                    String clubRoleName = rm.getClubRole() != null ? rm.getClubRole().getRoleName() : null;
+                    String clubRoleCode = rm.getClubRole() != null ? rm.getClubRole().getRoleCode() : null;
+                    
+                    // Nếu có clubRole thì thêm vào kết quả (bất kể có team hay không)
+                    // Vì clubRole là role ở cấp độ club, còn team chỉ là thông tin bổ sung
+                    if (clubRoleId != null) {
+                        clubRoleInfos.add(ClubRoleInfo.builder()
+                                .clubId(club.getClubId())
+                                .clubName(club.getClubName())
+                                .clubRole(clubRoleName)
+                                .systemRole(clubRoleCode)
+                                .build());
+                    }
+                }
+            }
+        }
+
+        return clubRoleInfos;
     }
 }

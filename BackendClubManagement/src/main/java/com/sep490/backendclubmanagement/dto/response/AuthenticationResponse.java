@@ -5,6 +5,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
+
 @Data
 @Builder
 @NoArgsConstructor
@@ -24,6 +26,7 @@ public class AuthenticationResponse {
         private String fullName;
         private String avatarUrl;
         private String systemRole;
+        private List<ClubRoleInfo> clubRoleList; // Danh sách club roles của user
     }
 }
 
