@@ -38,6 +38,7 @@ public class ReportRequirementResponse {
         private String clubCode;
         private String status;
         private String note;
+        private ReportInfo report;
     }
 
     @Data
@@ -49,6 +50,19 @@ public class ReportRequirementResponse {
         private String fullName;
         private String email;
         private String studentCode;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class ReportInfo {
+        private Long id;
+        private String reportTitle;
+        private String status;
+        private LocalDateTime submittedDate;
+        private LocalDateTime createdAt;
+        private LocalDateTime updatedAt;
     }
 }
 

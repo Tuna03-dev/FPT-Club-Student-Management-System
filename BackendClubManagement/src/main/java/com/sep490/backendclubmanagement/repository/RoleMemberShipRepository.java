@@ -334,13 +334,13 @@ SELECT CASE WHEN EXISTS (
         SELECT CASE WHEN COUNT(rm) > 0 THEN true ELSE false END
         FROM RoleMemberShip rm
         JOIN rm.clubMemberShip cm
-        LEFT JOIN rm.clubRole cr
+        JOIN rm.clubRole cr
         WHERE cm.user.id = :userId
           AND cm.club.id = :clubId
+          AND cm.status = 'ACTIVE'
           AND rm.semester.id = :semesterId
           AND COALESCE(rm.isActive, TRUE) = TRUE
-          AND rm.team IS NULL
-          AND UPPER(TRIM(COALESCE(cr.roleCode, ''))) = 'CLUB_PRESIDENT'
+          AND UPPER(TRIM(cr.roleCode)) = 'CLUB_PRESIDENT'
     """)
     boolean isClubPresidentInCurrentSemester(@Param("userId") Long userId,
                                              @Param("clubId") Long clubId,

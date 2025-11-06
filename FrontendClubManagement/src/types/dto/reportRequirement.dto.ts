@@ -50,6 +50,16 @@ export interface ClubRequirementInfo {
   clubCode: string;
   status: string;
   note?: string;
+  report?: ReportInfo;
+}
+
+export interface ReportInfo {
+  id: number;
+  reportTitle: string;
+  status?: string;
+  submittedDate?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 // Report Detail Response

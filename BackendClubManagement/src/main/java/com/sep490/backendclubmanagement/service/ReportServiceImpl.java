@@ -729,6 +729,26 @@ public class ReportServiceImpl implements ReportServiceInterface {
                 .map(crr -> {
                     ReportRequirementResponse response = submissionReportRequirementMapper.toDto(crr.getSubmissionReportRequirement());
                     
+                    // Find report for this club and requirement
+                    Optional<Report> reportOpt = reportRepository.findByClubIdAndReportRequirementId(
+                            clubId,
+                            crr.getSubmissionReportRequirement().getId()
+                    );
+                    
+                    // Build report info if exists
+                    ReportRequirementResponse.ReportInfo reportInfo = null;
+                    if (reportOpt.isPresent()) {
+                        Report report = reportOpt.get();
+                        reportInfo = ReportRequirementResponse.ReportInfo.builder()
+                                .id(report.getId())
+                                .reportTitle(report.getReportTitle())
+                                .status(report.getStatus() != null ? report.getStatus().name() : null)
+                                .submittedDate(report.getSubmittedDate())
+                                .createdAt(report.getCreatedAt())
+                                .updatedAt(report.getUpdatedAt())
+                                .build();
+                    }
+                    
                     // Add the club requirement info for this specific club
                     ReportRequirementResponse.ClubRequirementInfo clubRequirementInfo = ReportRequirementResponse.ClubRequirementInfo.builder()
                             .id(crr.getId())
@@ -737,6 +757,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
                             .clubCode(crr.getClub().getClubCode())
                             .status(crr.getStatus().name())
                             .note(crr.getNote())
+                            .report(reportInfo)
                             .build();
                     
                     response.setClubRequirements(List.of(clubRequirementInfo));
