@@ -2,35 +2,40 @@
 import { useEffect, useState } from "react";
 import { axiosClient } from "@/api/axiosClient";
 
-type MyRoleResp = {
+type ApiResponse<T> = {
+  code?: number;
+  message?: string;
+  data?: T;
+  result?: T;
+};
+
+type MyTeamRoleResponse = {
   member: boolean;
   myRoles?: string[];
 };
 
-function stripAccents(s: string) {
-  return (s || "")
-    .normalize("NFD")
-    // fallback cho môi trường không hỗ trợ \p{Diacritic}
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .trim();
+const norm = (s: string) =>
+  (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+
+function isLeadByNames(roles: string[] = []) {
+  const r = roles.map(norm);
+  return (
+    r.some((x) => x.includes("truong ban")) ||
+    r.some((x) => x.includes("trưởng ban")) ||
+    r.some((x) => x.includes("pho ban")) ||
+    r.some((x) => x.includes("phó ban")) ||
+    r.some((x) => x.includes("team lead")) ||
+    r.some((x) => x.includes("lead")) ||
+    r.some((x) => x.includes("head")) ||
+    r.some((x) => x.includes("officer"))
+  );
 }
 
-function isLeadByText(roles: string[] = []) {
-  const keys = [
-    "lead",
-    "head",
-    "officer",
-    "truong ban",
-    "trưởng ban",
-    "pho ban",
-    "phó ban",
-    "team lead",
-  ].map(stripAccents);
-  return roles.some((r) => {
-    const rr = stripAccents(r);
-    return keys.some((k) => rr.includes(k));
-  });
+/** unwrap backend {data:{...}} or {result:{...}} or raw object */
+function unwrap<T>(raw: any): T {
+  if (raw?.data != null) return raw.data as T;
+  if (raw?.result != null) return raw.result as T;
+  return raw as T;
 }
 
 export function useTeamLeadGuard(clubId?: number, teamId?: number) {
@@ -39,11 +44,13 @@ export function useTeamLeadGuard(clubId?: number, teamId?: number) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    const controller = new AbortController();
     let cancelled = false;
-    async function run() {
-      setLoading(true);
-      setError(null);
+
+    (async () => {
       setAllowed(null);
+      setError(null);
+      setLoading(true);
 
       if (!clubId || !teamId || isNaN(clubId) || isNaN(teamId)) {
         if (!cancelled) {
@@ -55,32 +62,35 @@ export function useTeamLeadGuard(clubId?: number, teamId?: number) {
       }
 
       try {
-        const api = await axiosClient.get<MyRoleResp>(
-          `/clubs/${clubId}/teams/${teamId}/my-role`
+        const res = await axiosClient.get<ApiResponse<MyTeamRoleResponse> | MyTeamRoleResponse>(
+          `/clubs/${clubId}/teams/${teamId}/my-role`,
+          { signal: controller.signal }
         );
-        const payload = api.data;
+
+        const payload = unwrap<MyTeamRoleResponse>((res as any).data ?? res);
         if (!payload) throw new Error("Không nhận được dữ liệu quyền.");
 
         const isMember = !!payload.member;
-        const roles = payload.myRoles || [];
-        const leadByText = isLeadByText(roles);
+        const isTeamLeader = isLeadByNames(payload.myRoles ?? []);
 
-        const ok = isMember && leadByText; // bắt buộc là thành viên & có vai trò lead/deputy
-        if (!cancelled) {
-          setAllowed(ok);
-        }
+        // Quyền:
+        // Trưởng ban / Phó ban: phải thuộc team này
+        const ok = isMember && isTeamLeader;
+
+        if (!cancelled) setAllowed(ok);
       } catch (e: any) {
         if (!cancelled) {
           setAllowed(false);
-          setError(e?.message || "Không kiểm tra được quyền truy cập.");
+          setError(e?.message || "Không kiểm tra được quyền.");
         }
       } finally {
         if (!cancelled) setLoading(false);
       }
-    }
-    run();
+    })();
+
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, [clubId, teamId]);
 
