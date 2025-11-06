@@ -417,5 +417,55 @@ WHERE c.user.id = :userId
            "WHERE cms.user_id = :userId AND sr.role_name = 'CLUB_PRESIDENT'",
            nativeQuery = true)
     List<Long> findPresidentClubIdsByUserId(@Param("userId") Long userId);
+
+
+
+//tao phong ban
+
+    @Query(value = """
+        SELECT DISTINCT cm.user_id
+        FROM role_memberships rm
+        JOIN club_memberships cm ON rm.club_membership_id = cm.id
+        WHERE cm.club_id = :clubId
+          AND rm.semester_id = :semesterId
+          AND rm.is_active = TRUE
+          AND rm.team_id IS NOT NULL
+          AND cm.user_id IN (:userIds)
+        """, nativeQuery = true)
+    List<Long> findExistingTeamMembersInSemester(
+            @Param("clubId") Long clubId,
+            @Param("semesterId") Long semesterId,
+            @Param("userIds") List<Long> userIds
+    );
+    @Query("""
+SELECT cm.user.id
+FROM ClubMemberShip cm
+LEFT JOIN RoleMemberShip rm 
+  ON rm.clubMemberShip.id = cm.id 
+  AND rm.semester.id = :semesterId
+WHERE cm.club.id = :clubId
+  AND (rm.team.id IS NULL OR rm.isActive = FALSE)
+""")
+    List<Long> findAvailableMemberUserIds(@Param("clubId") Long clubId,
+                                          @Param("semesterId") Long semesterId);
+
+    @Query("""
+    SELECT DISTINCT COALESCE(cr.roleName, 'Thành viên')
+    FROM RoleMemberShip rm
+    LEFT JOIN rm.clubRole cr
+    JOIN rm.clubMemberShip cm
+    WHERE cm.user.id = :userId
+      AND cm.club.id = :clubId
+      AND rm.team IS NULL
+      AND (:semesterId IS NULL OR rm.semester.id = :semesterId)
+      AND COALESCE(rm.isActive, TRUE) = TRUE
+""")
+    List<String> findMyClubRoleNames(@Param("userId") Long userId,
+                                     @Param("clubId") Long clubId,
+                                     @Param("semesterId") Long semesterId);
+
+
+
 }
+
 
