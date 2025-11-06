@@ -47,6 +47,8 @@ function mapBackendStatusToFrontend(backendStatus: string): ReportStatus {
       return "rejected";
     case "DRAFT":
       return "draft";
+    case "UPDATED":
+      return "draft"; // UPDATED maps to draft in frontend for display
     default:
       return "not-submitted";
   }
@@ -535,11 +537,14 @@ export function PeriodicReportClubs() {
                                       ).toLocaleDateString("vi-VN")
                                     : undefined,
                                   approvalNotes:
-                                    reportDetail.status === "APPROVED"
+                                    reportDetail.status !== "REJECTED" &&
+                                    reportDetail.reviewerFeedback &&
+                                    reportDetail.reviewedDate
                                       ? reportDetail.reviewerFeedback
                                       : undefined,
                                   rejectionReason:
-                                    reportDetail.status === "REJECTED"
+                                    reportDetail.status === "REJECTED" &&
+                                    reportDetail.reviewerFeedback
                                       ? reportDetail.reviewerFeedback
                                       : undefined,
                                   clubId: club.id,

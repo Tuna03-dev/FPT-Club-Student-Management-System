@@ -68,7 +68,7 @@ export interface ReportDetailResponse {
   reportTitle: string;
   content?: string;
   fileUrl?: string;
-  status: string; // DRAFT, SUBMITTED, APPROVED, REJECTED
+  status: string; // DRAFT, UPDATED, SUBMITTED, REJECTED
   submittedDate?: string;
   reviewedDate?: string;
   reviewerFeedback?: string;

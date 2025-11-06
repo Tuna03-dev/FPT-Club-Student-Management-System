@@ -26,6 +26,7 @@ import { Textarea } from "@/components/ui/textarea";
 
 type ReportStatus =
   | "draft"
+  | "updated"
   | "submitted"
   | "approved"
   | "rejected"
@@ -78,6 +79,11 @@ const statusConfig: Record<
     label: "Bản nháp", 
     color: "bg-gray-100 text-gray-700", 
     icon: null 
+  },
+  updated: {
+    label: "Đã cập nhật",
+    color: "bg-yellow-100 text-yellow-700",
+    icon: <AlertCircle className="h-4 w-4" />,
   },
   submitted: {
     label: "Đã nộp",

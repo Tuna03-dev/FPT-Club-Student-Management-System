@@ -130,8 +130,8 @@ public class ReportServiceImpl implements ReportServiceInterface {
 
         // Validate status - convert ReportStatus to ClubReportRequirementStatus
         ClubReportRequirementStatus clubReportRequirementStatus;
-        if (request.getStatus() == ReportStatus.APPROVED) {
-            clubReportRequirementStatus = ClubReportRequirementStatus.APPROVED;
+        if (request.getStatus() == ReportStatus.SUBMITTED) {
+            clubReportRequirementStatus = ClubReportRequirementStatus.SUBMITTED;
         } else if (request.getStatus() == ReportStatus.REJECTED) {
             clubReportRequirementStatus = ClubReportRequirementStatus.REJECTED;
         } else {
@@ -285,12 +285,12 @@ public class ReportServiceImpl implements ReportServiceInterface {
                 .orElseThrow(() -> new NotFoundException("User not found with ID: " + userId));
 
         // Check if user is team officer or club president in current semester and active
-        boolean isTeamOfficer = roleMemberShipRepository.isTeamOfficerInCurrentSemester(
+        boolean isClubOfficerOrTeamOfficer = roleMemberShipRepository.isClubOfficerOrTeamOfficerInCurrentSemester(
                 userId, request.getClubId(), currentSemester.getId());
         boolean isClubPresident = roleMemberShipRepository.isClubPresidentInCurrentSemester(
                 userId, request.getClubId(), currentSemester.getId());
 
-        if (!isTeamOfficer && !isClubPresident) {
+        if (!isClubOfficerOrTeamOfficer && !isClubPresident) {
             throw new ForbiddenException(
                     "Chỉ cán bộ ban (team officer) hoặc chủ nhiệm câu lạc bộ (club president) " +
                     "trong kỳ hiện tại và đang hoạt động mới có quyền tạo báo cáo."
@@ -475,16 +475,16 @@ public class ReportServiceImpl implements ReportServiceInterface {
 
         // Check if user is club president or team officer
         boolean isClubPresident = false;
-        boolean isTeamOfficer = false;
+        boolean isClubOfficerOrTeamOfficer = false;
 
         if (currentSemester != null) {
             isClubPresident = roleMemberShipRepository.isClubPresidentInCurrentSemester(
                     userId, clubId, currentSemester.getId());
-            isTeamOfficer = roleMemberShipRepository.isTeamOfficerInCurrentSemester(
+            isClubOfficerOrTeamOfficer = roleMemberShipRepository.isClubOfficerOrTeamOfficerInCurrentSemester(
                     userId, clubId, currentSemester.getId());
         }
 
-        if (!isClubPresident && !isTeamOfficer) {
+        if (!isClubPresident && !isClubOfficerOrTeamOfficer) {
             throw new ForbiddenException(
                     "Chỉ cán bộ ban (team officer) hoặc chủ nhiệm câu lạc bộ (club president) " +
                     "trong kỳ hiện tại và đang hoạt động mới có quyền xem báo cáo."
@@ -520,16 +520,16 @@ public class ReportServiceImpl implements ReportServiceInterface {
 
         // Check if user is team officer or club president
         boolean isClubPresident = false;
-        boolean isTeamOfficer = false;
+        boolean isClubOfficerOrTeamOfficer = false;
 
         if (currentSemester != null) {
             isClubPresident = roleMemberShipRepository.isClubPresidentInCurrentSemester(
                     userId, clubId, currentSemester.getId());
-            isTeamOfficer = roleMemberShipRepository.isTeamOfficerInCurrentSemester(
+            isClubOfficerOrTeamOfficer = roleMemberShipRepository.isClubOfficerOrTeamOfficerInCurrentSemester(
                     userId, clubId, currentSemester.getId());
         }
 
-        if (!isClubPresident && !isTeamOfficer) {
+        if (!isClubPresident && !isClubOfficerOrTeamOfficer) {
             throw new ForbiddenException(
                     "Chỉ cán bộ ban (team officer) hoặc chủ nhiệm câu lạc bộ (club president) " +
                     "trong kỳ hiện tại và đang hoạt động mới có quyền xem báo cáo nháp."
@@ -706,15 +706,14 @@ public class ReportServiceImpl implements ReportServiceInterface {
                 .orElse(null);
 
         // Check if user is CLUB_OFFICER (system role) or TEAM_OFFICER (in current semester)
-        boolean isClubOfficer = roleService.isClubOfficer(userId);
-        boolean isTeamOfficer = false;
+        boolean isClubOfficerOrTeamOfficer = false;
 
         if (currentSemester != null) {
-            isTeamOfficer = roleMemberShipRepository.isTeamOfficerInCurrentSemester(
+            isClubOfficerOrTeamOfficer = roleMemberShipRepository.isClubOfficerOrTeamOfficerInCurrentSemester(
                     userId, clubId, currentSemester.getId());
         }
 
-        if (!isClubOfficer && !isTeamOfficer) {
+        if (!isClubOfficerOrTeamOfficer) {
             throw new ForbiddenException(
                     "Chỉ cán bộ câu lạc bộ (CLUB_OFFICER) hoặc cán bộ ban (TEAM_OFFICER) " +
                     "trong kỳ hiện tại và đang hoạt động mới có quyền xem danh sách yêu cầu báo cáo."
@@ -784,15 +783,14 @@ public class ReportServiceImpl implements ReportServiceInterface {
                 .orElse(null);
 
         // Check if user is CLUB_OFFICER (system role) or TEAM_OFFICER (in current semester)
-        boolean isClubOfficer = roleService.isClubOfficer(userId);
-        boolean isTeamOfficer = false;
+        boolean isClubOfficerOrTeamOfficer = false;
 
         if (currentSemester != null) {
-            isTeamOfficer = roleMemberShipRepository.isTeamOfficerInCurrentSemester(
+            isClubOfficerOrTeamOfficer = roleMemberShipRepository.isClubOfficerOrTeamOfficerInCurrentSemester(
                     userId, clubId, currentSemester.getId());
         }
 
-        if (!isClubOfficer && !isTeamOfficer) {
+        if (!isClubOfficerOrTeamOfficer) {
             throw new ForbiddenException(
                     "Chỉ cán bộ câu lạc bộ (CLUB_OFFICER) hoặc cán bộ ban (TEAM_OFFICER) " +
                     "trong kỳ hiện tại và đang hoạt động mới có quyền xem chi tiết báo cáo."

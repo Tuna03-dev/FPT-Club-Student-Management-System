@@ -18,6 +18,7 @@ import {
   type ReportDetailResponse,
 } from "@/types/dto/reportRequirement.dto";
 import { toast } from "sonner";
+import { useClubPermissions } from "@/hooks/useClubPermissions";
 import {
   Card,
   CardContent,
@@ -148,18 +149,18 @@ const requirementStatusColors: Record<string, string> = {
   RESUBMITTED: "bg-blue-100 text-blue-700",
 };
 
-// Report status labels and colors (from ReportStatus enum: DRAFT, SUBMITTED, APPROVED, REJECTED)
+// Report status labels and colors (from ReportStatus enum: DRAFT, UPDATED, SUBMITTED, REJECTED)
 const reportStatusLabels: Record<string, string> = {
   DRAFT: "Bản nháp",
+  UPDATED: "Đã cập nhật",
   SUBMITTED: "Đã nộp",
-  APPROVED: "Đã phê duyệt",
   REJECTED: "Bị từ chối",
 };
 
 const reportStatusColors: Record<string, string> = {
   DRAFT: "bg-gray-100 text-gray-700",
+  UPDATED: "bg-yellow-100 text-yellow-700",
   SUBMITTED: "bg-blue-100 text-blue-700",
-  APPROVED: "bg-green-100 text-green-700",
   REJECTED: "bg-red-100 text-red-700",
 };
 
@@ -167,6 +168,7 @@ export function ClubReportManagement() {
   const params = useParams();
   const clubIdParam = params.clubId;
   const clubId = clubIdParam ? Number(clubIdParam) : undefined;
+  const { isClubPresident } = useClubPermissions(clubId);
 
   // Helper function to map API response to ReportRequest format
   const mapRequirementToReportRequest = (req: any): ReportRequest => {
@@ -917,12 +919,17 @@ export function ClubReportManagement() {
                                 disabled={loadingReportDetailId === request.request_id}
                               >
                                 <Eye className="h-4 w-4 mr-1" />
-                                {loadingReportDetailId === request.request_id
-                                  ? "Đang tải..."
-                                  : request.report?.status?.toUpperCase() ===
-                                    "DRAFT"
-                                  ? "Xem bản nháp"
-                                  : "Xem báo cáo"}
+                                {(() => {
+                                  if (loadingReportDetailId === request.request_id) {
+                                    return "Đang tải...";
+                                  }
+                                  // Kiểm tra nếu báo cáo ở trạng thái DRAFT
+                                  const reportStatus = request.report?.status?.toUpperCase();
+                                  const isDraft = 
+                                    reportStatus === "DRAFT" || 
+                                    (request.report && request.status === "UNSUBMITTED");
+                                  return isDraft ? "Xem bản nháp" : "Xem báo cáo";
+                                })()}
                               </Button>
                             ) : (
                               <Button
@@ -1414,8 +1421,9 @@ export function ClubReportManagement() {
                 </div>
               )}
 
-              {selectedReportDetail.status?.toUpperCase() === "APPROVED" &&
-                selectedReportDetail.reviewerFeedback && (
+              {selectedReportDetail.status?.toUpperCase() === "SUBMITTED" &&
+                selectedReportDetail.reviewerFeedback &&
+                selectedReportDetail.reviewedDate && (
                   <div>
                     <h4 className="font-semibold mb-2 text-green-700">
                       Phản hồi phê duyệt
@@ -1423,14 +1431,12 @@ export function ClubReportManagement() {
                     <div className="bg-green-50 border border-green-200 rounded p-4 text-sm">
                       {selectedReportDetail.reviewerFeedback}
                     </div>
-                    {selectedReportDetail.reviewedDate && (
-                      <p className="text-xs text-muted-foreground mt-2">
-                        Ngày phê duyệt:{" "}
-                        {new Date(
-                          selectedReportDetail.reviewedDate
-                        ).toLocaleDateString("vi-VN")}
-                      </p>
-                    )}
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Ngày phê duyệt:{" "}
+                      {new Date(
+                        selectedReportDetail.reviewedDate
+                      ).toLocaleDateString("vi-VN")}
+                    </p>
                   </div>
                 )}
 
@@ -1451,6 +1457,113 @@ export function ClubReportManagement() {
                         ).toLocaleDateString("vi-VN")}
                       </p>
                     )}
+                  </div>
+                )}
+
+              {/* Action buttons for DRAFT status when user is club president */}
+              {selectedReportDetail.status?.toUpperCase() === "DRAFT" &&
+                isClubPresident && (
+                  <div className="flex gap-2 justify-end pt-4 border-t">
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        // Set up edit dialog
+                        setDraftTitle(selectedReportDetail.reportTitle);
+                        setDraftContent(selectedReportDetail.content || "");
+                        setDraftFileUrl(selectedReportDetail.fileUrl || "");
+                        setEditingReportId(selectedReportDetail.id);
+                        // Find the request for this report
+                        const requirementId =
+                          selectedReportDetail.reportRequirement?.id;
+                        if (requirementId) {
+                          const request = reportRequests.find(
+                            (r) => r.request_id === requirementId.toString()
+                          );
+                          if (request) {
+                            setSelectedRequest(request);
+                          }
+                        }
+                        setShowDetailModal(false);
+                        setShowEditDialog(true);
+                      }}
+                      className="bg-transparent"
+                    >
+                      <FileText className="h-4 w-4 mr-2" />
+                      Chỉnh sửa
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={async () => {
+                        if (
+                          !confirm(
+                            "Bạn có chắc chắn muốn từ chối bản nháp này? Bản nháp sẽ bị xóa."
+                          )
+                        ) {
+                          return;
+                        }
+                        try {
+                          // Note: There's no delete API yet, so we'll just show a message
+                          // In the future, this could call a delete API
+                          toast.info(
+                            "Chức năng xóa bản nháp đang được phát triển"
+                          );
+                          setShowDetailModal(false);
+                          setSelectedReportDetail(null);
+                        } catch (err) {
+                          console.error("Error rejecting draft:", err);
+                          toast.error("Không thể từ chối bản nháp");
+                        }
+                      }}
+                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                    >
+                      <XCircle className="h-4 w-4 mr-2" />
+                      Từ chối
+                    </Button>
+                    <Button
+                      onClick={async () => {
+                        if (!selectedReportDetail.id) {
+                          toast.error("Không tìm thấy thông tin báo cáo");
+                          return;
+                        }
+
+                        try {
+                          setSubmitting(true);
+                          const submitRequest: SubmitReportRequest = {
+                            reportId: selectedReportDetail.id,
+                          };
+
+                          await submitReport(submitRequest);
+                          toast.success("Báo cáo đã được chấp nhận và nộp thành công");
+                          setShowDetailModal(false);
+                          setSelectedReportDetail(null);
+
+                          // Refresh report requirements to update status
+                          if (clubId && activeTab === "requests") {
+                            const requirements =
+                              await getClubReportRequirementsForOfficer(clubId);
+                            const mappedRequests: ReportRequest[] =
+                              requirements.map((req) =>
+                                mapRequirementToReportRequest(req)
+                              );
+                            setReportRequests(mappedRequests);
+                          }
+                        } catch (err) {
+                          console.error("Error submitting report:", err);
+                          const errorMessage =
+                            err instanceof Error
+                              ? err.message
+                              : "Không thể nộp báo cáo";
+                          toast.error(errorMessage);
+                        } finally {
+                          setSubmitting(false);
+                        }
+                      }}
+                      className="bg-green-600 hover:bg-green-700 text-white"
+                      disabled={submitting}
+                    >
+                      <CheckCircle className="h-4 w-4 mr-2" />
+                      {submitting ? "Đang nộp..." : "Chấp nhận và nộp"}
+                    </Button>
                   </div>
                 )}
             </CardContent>
