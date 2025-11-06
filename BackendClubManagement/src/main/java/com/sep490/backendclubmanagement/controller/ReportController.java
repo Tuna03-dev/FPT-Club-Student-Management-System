@@ -176,6 +176,32 @@ public class ReportController {
     }
 
     /**
+     * Get all report requirements for a club (for CLUB_OFFICER or TEAM_OFFICER)
+     */
+    @GetMapping("/club/{clubId}/requirements/officer")
+    public ApiResponse<List<ReportRequirementResponse>> getClubReportRequirementsForOfficer(
+            @PathVariable Long clubId
+    ) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        List<ReportRequirementResponse> data = reportService.getClubReportRequirementsForOfficer(clubId, userId);
+        return ApiResponse.success(data);
+    }
+
+    /**
+     * Get report of a specific club for a specific report requirement (for CLUB_OFFICER or TEAM_OFFICER)
+     * Returns null if club hasn't submitted report yet
+     */
+    @GetMapping("/club/{clubId}/requirements/{requirementId}/report")
+    public ApiResponse<ReportDetailResponse> getClubReportByRequirementForOfficer(
+            @PathVariable Long requirementId,
+            @PathVariable Long clubId
+    ) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        ReportDetailResponse data = reportService.getClubReportByRequirementForOfficer(requirementId, clubId, userId);
+        return ApiResponse.success(data);
+    }
+
+    /**
      * Get list of clubs that need to submit reports for a specific report requirement (for staff only)
      */
     @GetMapping("/staff/requirements/{requirementId}/clubs")

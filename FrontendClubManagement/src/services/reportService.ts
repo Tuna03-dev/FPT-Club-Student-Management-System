@@ -145,3 +145,99 @@ export async function getClubReportRequirements(
   return response.data;
 }
 
+/**
+ * Get all report requirements for a club (for CLUB_OFFICER or TEAM_OFFICER)
+ */
+export async function getClubReportRequirementsForOfficer(
+  clubId: number
+): Promise<ReportRequirementResponse[]> {
+  const response = await axiosClient.get<ReportRequirementResponse[]>(
+    `/reports/club/${clubId}/requirements/officer`
+  );
+  if (!response.data) {
+    throw new Error("Failed to get club report requirements for officer");
+  }
+  return response.data;
+}
+
+/**
+ * Get report of a specific club for a specific report requirement (for CLUB_OFFICER or TEAM_OFFICER)
+ * Returns null if club hasn't submitted report yet
+ */
+export async function getClubReportByRequirementForOfficer(
+  requirementId: number,
+  clubId: number
+): Promise<ReportDetailResponse | null> {
+  const response = await axiosClient.get<ReportDetailResponse | null>(
+    `/reports/club/${clubId}/requirements/${requirementId}/report`
+  );
+  return response.data ?? null;
+}
+
+/**
+ * Create a report (draft for team officer, can submit for club president)
+ */
+export interface CreateReportRequest {
+  reportTitle: string;
+  content?: string;
+  fileUrl?: string;
+  clubId: number;
+  reportRequirementId: number;
+}
+
+export async function createReport(
+  request: CreateReportRequest
+): Promise<ReportDetailResponse> {
+  const response = await axiosClient.post<ReportDetailResponse>(
+    "/reports/club",
+    request
+  );
+  if (!response.data) {
+    throw new Error("Failed to create report");
+  }
+  return response.data;
+}
+
+/**
+ * Update a draft report
+ */
+export interface UpdateReportRequest {
+  reportTitle: string;
+  content?: string;
+  fileUrl?: string;
+}
+
+export async function updateReport(
+  reportId: number,
+  request: UpdateReportRequest
+): Promise<ReportDetailResponse> {
+  const response = await axiosClient.put<ReportDetailResponse>(
+    `/reports/club/${reportId}`,
+    request
+  );
+  if (!response.data) {
+    throw new Error("Failed to update report");
+  }
+  return response.data;
+}
+
+/**
+ * Submit a draft report (club president only)
+ */
+export interface SubmitReportRequest {
+  reportId: number;
+}
+
+export async function submitReport(
+  request: SubmitReportRequest
+): Promise<ReportDetailResponse> {
+  const response = await axiosClient.post<ReportDetailResponse>(
+    "/reports/club/submit",
+    request
+  );
+  if (!response.data) {
+    throw new Error("Failed to submit report");
+  }
+  return response.data;
+}
+

@@ -127,5 +127,22 @@ public interface ReportServiceInterface {
      * @return List of report requirement responses assigned to the club
      */
     List<ReportRequirementResponse> getClubReportRequirements(Long clubId, Long userId);
+
+    /**
+     * Get all report requirements for a club (for CLUB_OFFICER or TEAM_OFFICER)
+     * @param clubId Club ID
+     * @param userId Current user ID
+     * @return List of report requirement responses assigned to the club
+     */
+    List<ReportRequirementResponse> getClubReportRequirementsForOfficer(Long clubId, Long userId);
+
+    /**
+     * Get report of a specific club for a specific report requirement (for CLUB_OFFICER or TEAM_OFFICER)
+     * @param requirementId Submission report requirement ID
+     * @param clubId Club ID
+     * @param userId Current user ID
+     * @return Report detail response if exists, null otherwise
+     */
+    ReportDetailResponse getClubReportByRequirementForOfficer(Long requirementId, Long clubId, Long userId);
 }
 

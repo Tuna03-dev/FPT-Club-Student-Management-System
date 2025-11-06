@@ -234,7 +234,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
             ClubReportRequirement clubRequirement = ClubReportRequirement.builder()
                     .club(club)
                     .submissionReportRequirement(savedSubmissionRequirement)
-                    .status(ClubReportRequirementStatus.PENDING)
+                    .status(ClubReportRequirementStatus.UNSUBMITTED)
                     .note(null)
                     .build();
 
@@ -649,6 +649,104 @@ public class ReportServiceImpl implements ReportServiceInterface {
                     return response;
                 })
                 .toList();
+    }
+
+    /**
+     * Get all report requirements for a club (for CLUB_OFFICER or TEAM_OFFICER)
+     */
+    @Override
+    public List<ReportRequirementResponse> getClubReportRequirementsForOfficer(Long clubId, Long userId) {
+        // Validate club exists
+        Club club = clubRepository.findById(clubId)
+                .orElseThrow(() -> new NotFoundException("Club not found with ID: " + clubId));
+
+        // Get current semester
+        Semester currentSemester = semesterRepository.findCurrentSemester()
+                .orElse(null);
+
+        // Check if user is CLUB_OFFICER (system role) or TEAM_OFFICER (in current semester)
+        boolean isClubOfficer = roleService.isClubOfficer(userId);
+        boolean isTeamOfficer = false;
+
+        if (currentSemester != null) {
+            isTeamOfficer = roleMemberShipRepository.isTeamOfficerInCurrentSemester(
+                    userId, clubId, currentSemester.getId());
+        }
+
+        if (!isClubOfficer && !isTeamOfficer) {
+            throw new ForbiddenException(
+                    "Chỉ cán bộ câu lạc bộ (CLUB_OFFICER) hoặc cán bộ ban (TEAM_OFFICER) " +
+                    "trong kỳ hiện tại và đang hoạt động mới có quyền xem danh sách yêu cầu báo cáo."
+            );
+        }
+
+        // Get all club report requirements for this club
+        List<ClubReportRequirement> clubRequirements = clubReportRequirementRepository.findByClubId(clubId);
+
+        // Map to response
+        return clubRequirements.stream()
+                .map(crr -> {
+                    ReportRequirementResponse response = submissionReportRequirementMapper.toDto(crr.getSubmissionReportRequirement());
+                    
+                    // Add the club requirement info for this specific club
+                    ReportRequirementResponse.ClubRequirementInfo clubRequirementInfo = ReportRequirementResponse.ClubRequirementInfo.builder()
+                            .id(crr.getId())
+                            .clubId(crr.getClub().getId())
+                            .clubName(crr.getClub().getClubName())
+                            .clubCode(crr.getClub().getClubCode())
+                            .status(crr.getStatus().name())
+                            .note(crr.getNote())
+                            .build();
+                    
+                    response.setClubRequirements(List.of(clubRequirementInfo));
+                    return response;
+                })
+                .toList();
+    }
+
+    /**
+     * Get report of a specific club for a specific report requirement (for CLUB_OFFICER or TEAM_OFFICER)
+     */
+    @Override
+    public ReportDetailResponse getClubReportByRequirementForOfficer(Long requirementId, Long clubId, Long userId) {
+        // Validate club exists
+        Club club = clubRepository.findById(clubId)
+                .orElseThrow(() -> new NotFoundException("Club not found with ID: " + clubId));
+
+        // Validate submission report requirement exists
+        SubmissionReportRequirement requirement = submissionReportRequirementRepository.findById(requirementId)
+                .orElseThrow(() -> new NotFoundException("Report requirement not found with ID: " + requirementId));
+
+        // Get current semester
+        Semester currentSemester = semesterRepository.findCurrentSemester()
+                .orElse(null);
+
+        // Check if user is CLUB_OFFICER (system role) or TEAM_OFFICER (in current semester)
+        boolean isClubOfficer = roleService.isClubOfficer(userId);
+        boolean isTeamOfficer = false;
+
+        if (currentSemester != null) {
+            isTeamOfficer = roleMemberShipRepository.isTeamOfficerInCurrentSemester(
+                    userId, clubId, currentSemester.getId());
+        }
+
+        if (!isClubOfficer && !isTeamOfficer) {
+            throw new ForbiddenException(
+                    "Chỉ cán bộ câu lạc bộ (CLUB_OFFICER) hoặc cán bộ ban (TEAM_OFFICER) " +
+                    "trong kỳ hiện tại và đang hoạt động mới có quyền xem chi tiết báo cáo."
+            );
+        }
+
+        // Find report by clubId and requirementId
+        Optional<Report> reportOptional = reportRepository.findByClubIdAndReportRequirementId(clubId, requirementId);
+
+        // Return null if report doesn't exist (club hasn't submitted report yet)
+        if (reportOptional.isEmpty()) {
+            return null;
+        }
+
+        Report report = reportOptional.get();
+        return reportMapper.toDetail(report);
     }
 }
 

@@ -1,9 +1,9 @@
 package com.sep490.backendclubmanagement.entity;
 
 public enum ClubReportRequirementStatus {
-    PENDING,
+    UNSUBMITTED,
     APPROVED,
     REJECTED,
-    SUBMITTED
-
+    SUBMITTED,
+    RESUBMITTED,
 }

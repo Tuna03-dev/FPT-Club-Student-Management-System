@@ -3,8 +3,16 @@
 import { useState, useMemo, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { getClubReportRequirements } from "@/services/reportService";
-import type { ReportRequirementResponse } from "@/types/dto/reportRequirement.dto";
+import { 
+  getClubReportRequirementsForOfficer, 
+  getClubReportByRequirementForOfficer,
+  createReport,
+  updateReport,
+  submitReport,
+  type CreateReportRequest,
+  type UpdateReportRequest,
+  type SubmitReportRequest
+} from "@/services/reportService";
 import { mapBackendToFrontendReportType } from "@/types/dto/reportRequirement.dto";
 import { toast } from "sonner";
 import {
@@ -32,11 +40,11 @@ import {
   CheckCircle,
   XCircle,
   Eye,
-  Clock,
   AlertCircle,
   Calendar,
   Users,
   CheckCheck,
+  ExternalLink,
 } from "lucide-react";
 
 type ReportType = "periodic" | "post_event";
@@ -56,6 +64,8 @@ interface ReportRequest {
   created_by: string;
   created_at: string;
   required_details: string[];
+  templateUrl?: string;
+  status?: string; // UNSUBMITTED, SUBMITTED, APPROVED, REJECTED, RESUBMITTED
 }
 
 interface ReportSubmission {
@@ -108,6 +118,23 @@ const statusColors: Record<SubmissionStatus, string> = {
   submitted: "bg-blue-100 text-blue-700",
 };
 
+// Status labels for ClubReportRequirementStatus
+const requirementStatusLabels: Record<string, string> = {
+  UNSUBMITTED: "Chưa nộp",
+  SUBMITTED: "Đã nộp",
+  APPROVED: "Đã duyệt",
+  REJECTED: "Bị từ chối",
+  RESUBMITTED: "Đã nộp lại",
+};
+
+const requirementStatusColors: Record<string, string> = {
+  UNSUBMITTED: "bg-red-100 text-red-700",
+  SUBMITTED: "bg-blue-100 text-blue-700",
+  APPROVED: "bg-green-100 text-green-700",
+  REJECTED: "bg-red-100 text-red-700",
+  RESUBMITTED: "bg-blue-100 text-blue-700",
+};
+
 export function ClubReportManagement() {
   const params = useParams();
   const clubIdParam = params.clubId;
@@ -131,9 +158,12 @@ export function ClubReportManagement() {
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [draftTitle, setDraftTitle] = useState("");
   const [draftContent, setDraftContent] = useState("");
+  const [draftFileUrl, setDraftFileUrl] = useState("");
   const [reportRequests, setReportRequests] = useState<ReportRequest[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [editingReportId, setEditingReportId] = useState<number | null>(null);
 
   // Fetch report requirements from API
   useEffect(() => {
@@ -146,7 +176,7 @@ export function ClubReportManagement() {
       try {
         setLoading(true);
         setError(null);
-        const requirements = await getClubReportRequirements(clubId);
+        const requirements = await getClubReportRequirementsForOfficer(clubId);
         
         // Map API response to ReportRequest format
         const mappedRequests: ReportRequest[] = requirements.map((req) => {
@@ -161,9 +191,11 @@ export function ClubReportManagement() {
                 .filter((s) => s.length > 0)
             : [];
 
+          const finalReportType: ReportType = reportType === "post-event" ? "post_event" : (reportType === "other" ? "periodic" : reportType);
+          
           return {
             request_id: req.id.toString(),
-            request_type: reportType === "post-event" ? "post_event" : reportType,
+            request_type: finalReportType,
             title: req.title,
             description: req.description || "",
             deadline: req.dueDate,
@@ -172,6 +204,8 @@ export function ClubReportManagement() {
             required_details: requiredDetails.length > 0 
               ? requiredDetails 
               : ["Báo cáo chi tiết về hoạt động của câu lạc bộ"],
+            templateUrl: req.templateUrl,
+            status: clubRequirement?.status,
           };
         });
 
@@ -191,7 +225,9 @@ export function ClubReportManagement() {
     }
   }, [clubId, activeTab]);
 
-  // Mock data for submissions (to be replaced later)
+  // Mock data for submissions (to be replaced later - currently using API data)
+  // Commented out as we're using API data now
+  /*
   const [mockReportRequests] = useState<ReportRequest[]>([
     {
       request_id: "1",
@@ -241,6 +277,7 @@ export function ClubReportManagement() {
       ],
     },
   ]);
+  */
 
   const [reportSubmissions, setReportSubmissions] = useState<
     ReportSubmission[]
@@ -357,61 +394,199 @@ export function ClubReportManagement() {
   const isDeadlinePassed = (deadline: string) =>
     new Date(deadline) < new Date();
 
-  const getSubmissionStatus = (requestId: string) => {
-    return reportSubmissions.find((s) => s.request_id === requestId)?.status;
-  };
-
-  const handleSubmitReport = (requestId: string) => {
-    setSelectedRequest(
-      reportRequests.find((r) => r.request_id === requestId) || null
-    );
-    setDraftTitle("");
-    setDraftContent("");
-    setShowSubmitDialog(true);
-  };
-
-  const handleSaveDraft = (requestId: string) => {
-    if (!draftTitle.trim() || !draftContent.trim()) {
-      alert("Vui lòng điền đầy đủ tiêu đề và nội dung");
+  const handleSubmitReport = async (requestId: string) => {
+    // Kiểm tra xem đã có báo cáo draft chưa
+    if (!clubId) {
+      toast.error("Không tìm thấy thông tin câu lạc bộ");
       return;
     }
 
-    const newSubmission: ReportSubmission = {
-      submission_id: `submit-${Date.now()}`,
-      request_id: requestId,
-      report_type: selectedRequest?.request_type || "periodic",
-      title: draftTitle,
-      period_month:
-        selectedRequest?.request_type === "periodic"
-          ? new Date().toLocaleDateString("vi-VN")
-          : undefined,
-      event_name:
-        selectedRequest?.request_type === "post_event" ? draftTitle : undefined,
-      created_by_name: "Trần Thị B", // Mock current user
-      created_by_id: "102",
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      status: "draft",
-      content: draftContent,
-    };
+    try {
+      const existingReport = await getClubReportByRequirementForOfficer(
+        Number(requestId),
+        clubId
+      );
 
-    setReportSubmissions([...reportSubmissions, newSubmission]);
-    setShowSubmitDialog(false);
-    alert("Báo cáo đã được lưu thành bản nháp. Chờ phê duyệt từ cấp lãnh đạo.");
+      if (existingReport) {
+        // Đã có báo cáo, mở dialog để chỉnh sửa hoặc nộp
+        setEditingReportId(existingReport.id);
+        setDraftTitle(existingReport.reportTitle || "");
+        setDraftContent(existingReport.content || "");
+        setDraftFileUrl(existingReport.fileUrl || "");
+        
+        if (existingReport.status === "DRAFT") {
+          // Nếu là draft, có thể chỉnh sửa hoặc nộp
+          setShowEditDialog(true);
+        } else {
+          // Nếu đã nộp, chỉ xem
+          setShowDetailModal(true);
+        }
+      } else {
+        // Chưa có báo cáo, mở dialog tạo mới
+        setSelectedRequest(
+          reportRequests.find((r) => r.request_id === requestId) || null
+        );
+        setEditingReportId(null);
+        setDraftTitle("");
+        setDraftContent("");
+        setDraftFileUrl("");
+        setShowSubmitDialog(true);
+      }
+    } catch (err) {
+      console.error("Error checking existing report:", err);
+      // Nếu lỗi, vẫn mở dialog tạo mới
+      setSelectedRequest(
+        reportRequests.find((r) => r.request_id === requestId) || null
+      );
+      setEditingReportId(null);
+      setDraftTitle("");
+      setDraftContent("");
+      setDraftFileUrl("");
+      setShowSubmitDialog(true);
+    }
   };
 
-  const handleSubmitForApproval = (submissionId: string) => {
-    setReportSubmissions((prev) =>
-      prev.map((sub) =>
-        sub.submission_id === submissionId
-          ? {
-              ...sub,
-              status: "pending_approval",
-              updated_at: new Date().toISOString(),
-            }
-          : sub
-      )
-    );
+  const handleSaveDraft = async (requestId: string) => {
+    if (!draftTitle.trim() || !draftContent.trim()) {
+      toast.error("Vui lòng điền đầy đủ tiêu đề và nội dung");
+      return;
+    }
+
+    if (!clubId) {
+      toast.error("Không tìm thấy thông tin câu lạc bộ");
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      
+      if (editingReportId) {
+        // Update existing draft
+        const updateRequest: UpdateReportRequest = {
+          reportTitle: draftTitle,
+          content: draftContent,
+          fileUrl: draftFileUrl || undefined,
+        };
+        
+        await updateReport(editingReportId, updateRequest);
+        toast.success("Báo cáo đã được cập nhật");
+      } else {
+        // Create new draft
+        const createRequest: CreateReportRequest = {
+          reportTitle: draftTitle,
+          content: draftContent,
+          fileUrl: draftFileUrl || undefined,
+          clubId: clubId,
+          reportRequirementId: Number(requestId),
+        };
+        
+        const createdReport = await createReport(createRequest);
+        setEditingReportId(createdReport.id);
+        toast.success("Báo cáo đã được lưu thành bản nháp");
+      }
+      
+      setShowSubmitDialog(false);
+      setShowEditDialog(false);
+      
+      // Refresh report requirements to update status
+      if (activeTab === "requests") {
+        const requirements = await getClubReportRequirementsForOfficer(clubId);
+        // Re-map and update state
+        const mappedRequests: ReportRequest[] = requirements.map((req) => {
+          const clubRequirement = req.clubRequirements?.[0];
+          const reportType = mapBackendToFrontendReportType(req.reportType);
+          
+          const requiredDetails = req.description
+            ? req.description
+                .split(/\r?\n|•|\u2022|-/)
+                .map((s) => s.trim())
+                .filter((s) => s.length > 0)
+            : [];
+
+          const finalReportType: ReportType = reportType === "post-event" ? "post_event" : (reportType === "other" ? "periodic" : reportType);
+          
+          return {
+            request_id: req.id.toString(),
+            request_type: finalReportType,
+            title: req.title,
+            description: req.description || "",
+            deadline: req.dueDate,
+            created_by: req.createdBy?.fullName || "Phòng Quản lý Sinh viên",
+            created_at: req.createdAt,
+            required_details: requiredDetails.length > 0 
+              ? requiredDetails 
+              : ["Báo cáo chi tiết về hoạt động của câu lạc bộ"],
+            templateUrl: req.templateUrl,
+            status: clubRequirement?.status,
+          };
+        });
+        setReportRequests(mappedRequests);
+      }
+    } catch (err) {
+      console.error("Error saving draft:", err);
+      const errorMessage = err instanceof Error ? err.message : "Không thể lưu báo cáo";
+      toast.error(errorMessage);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleSubmitForApproval = async (reportId: number) => {
+    if (!reportId) {
+      toast.error("Không tìm thấy thông tin báo cáo");
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      
+      const submitRequest: SubmitReportRequest = {
+        reportId: reportId,
+      };
+      
+      await submitReport(submitRequest);
+      toast.success("Báo cáo đã được nộp thành công");
+      
+      // Refresh report requirements to update status
+      if (clubId && activeTab === "requests") {
+        const requirements = await getClubReportRequirementsForOfficer(clubId);
+        const mappedRequests: ReportRequest[] = requirements.map((req) => {
+          const clubRequirement = req.clubRequirements?.[0];
+          const reportType = mapBackendToFrontendReportType(req.reportType);
+          
+          const requiredDetails = req.description
+            ? req.description
+                .split(/\r?\n|•|\u2022|-/)
+                .map((s) => s.trim())
+                .filter((s) => s.length > 0)
+            : [];
+
+          const finalReportType: ReportType = reportType === "post-event" ? "post_event" : (reportType === "other" ? "periodic" : reportType);
+          
+          return {
+            request_id: req.id.toString(),
+            request_type: finalReportType,
+            title: req.title,
+            description: req.description || "",
+            deadline: req.dueDate,
+            created_by: req.createdBy?.fullName || "Phòng Quản lý Sinh viên",
+            created_at: req.createdAt,
+            required_details: requiredDetails.length > 0 
+              ? requiredDetails 
+              : ["Báo cáo chi tiết về hoạt động của câu lạc bộ"],
+            templateUrl: req.templateUrl,
+            status: clubRequirement?.status,
+          };
+        });
+        setReportRequests(mappedRequests);
+      }
+    } catch (err) {
+      console.error("Error submitting report:", err);
+      const errorMessage = err instanceof Error ? err.message : "Không thể nộp báo cáo";
+      toast.error(errorMessage);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleApproveReport = (submissionId: string) => {
@@ -582,9 +757,6 @@ export function ClubReportManagement() {
             {!loading && !error && (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {filteredRequests.map((request) => {
-                const submissionStatus = getSubmissionStatus(
-                  request.request_id
-                );
                 const isDeadlineExp = isDeadlinePassed(request.deadline);
 
                 return (
@@ -595,15 +767,16 @@ export function ClubReportManagement() {
                     <CardHeader>
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-2">
+                          <div className="flex items-center gap-2 mb-2 flex-wrap">
                             <Badge
                               className={reportTypeColors[request.request_type]}
                             >
                               {reportTypeLabels[request.request_type]}
                             </Badge>
-                            {submissionStatus && (
-                              <Badge className={statusColors[submissionStatus]}>
-                                {statusLabels[submissionStatus]}
+                            {/* Hiển thị trạng thái yêu cầu (requirement status) - đây là trạng thái chính từ backend */}
+                            {request.status && (
+                              <Badge className={requirementStatusColors[request.status] || "bg-gray-100 text-gray-700"}>
+                                {requirementStatusLabels[request.status] || request.status}
                               </Badge>
                             )}
                           </div>
@@ -638,6 +811,23 @@ export function ClubReportManagement() {
                           <span>Yêu cầu từ: {request.created_by}</span>
                         </div>
 
+                        {/* Template URL */}
+                        {request.templateUrl && (
+                          <div className="flex items-center gap-2 text-sm">
+                            <FileText className="h-4 w-4 text-blue-600" />
+                            <span className="text-muted-foreground">Template:</span>
+                            <a
+                              href={request.templateUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1"
+                            >
+                              <span>Tải file template</span>
+                              <ExternalLink className="h-3 w-3" />
+                            </a>
+                          </div>
+                        )}
+
                         {/* Required details */}
                         <div>
                           <Label className="text-xs text-muted-foreground mb-2">
@@ -655,46 +845,71 @@ export function ClubReportManagement() {
                           </ul>
                         </div>
 
-                        {isDeadlineExp && !submissionStatus && (
+                        {/* Hiển thị thông báo dựa trên trạng thái yêu cầu (requirement status) */}
+                        {request.status === "UNSUBMITTED" && isDeadlineExp && (
                           <div className="p-3 bg-red-50 border border-red-200 rounded text-sm text-red-800">
                             <AlertCircle className="h-4 w-4 inline mr-2" />
                             Đã quá hạn nộp báo cáo
                           </div>
                         )}
 
-                        {submissionStatus === "pending_approval" && (
-                          <div className="p-3 bg-yellow-50 border border-yellow-200 rounded text-sm text-yellow-800">
-                            <Clock className="h-4 w-4 inline mr-2" />
-                            Báo cáo đang chờ phê duyệt
+                        {request.status === "SUBMITTED" && (
+                          <div className="p-3 bg-blue-50 border border-blue-200 rounded text-sm text-blue-800">
+                            <CheckCircle className="h-4 w-4 inline mr-2" />
+                            Báo cáo đã được nộp và đang chờ phê duyệt
                           </div>
                         )}
 
-                        {submissionStatus === "approved" && (
+                        {request.status === "APPROVED" && (
                           <div className="p-3 bg-green-50 border border-green-200 rounded text-sm text-green-800">
                             <CheckCircle className="h-4 w-4 inline mr-2" />
-                            Báo cáo đã được phê duyệt và nộp
+                            Báo cáo đã được phê duyệt
                           </div>
                         )}
 
-                        {submissionStatus === "rejected" && (
+                        {request.status === "REJECTED" && (
                           <div className="p-3 bg-red-50 border border-red-200 rounded text-sm text-red-800">
                             <XCircle className="h-4 w-4 inline mr-2" />
                             Báo cáo bị từ chối. Vui lòng kiểm tra và gửi lại.
                           </div>
                         )}
 
+                        {request.status === "RESUBMITTED" && (
+                          <div className="p-3 bg-blue-50 border border-blue-200 rounded text-sm text-blue-800">
+                            <CheckCircle className="h-4 w-4 inline mr-2" />
+                            Báo cáo đã được nộp lại và đang chờ phê duyệt
+                          </div>
+                        )}
+
                         <div className="flex gap-2 pt-2">
-                          {submissionStatus ? (
+                          {/* Hiển thị button dựa trên trạng thái yêu cầu từ backend */}
+                          {request.status && (request.status === "SUBMITTED" || request.status === "APPROVED" || request.status === "REJECTED") ? (
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => {
-                                setSelectedSubmission(
-                                  reportSubmissions.find(
-                                    (s) => s.request_id === request.request_id
-                                  ) || null
-                                );
-                                setShowDetailModal(true);
+                              onClick={async () => {
+                                try {
+                                  // Gọi API để lấy chi tiết báo cáo
+                                  const reportDetail = await getClubReportByRequirementForOfficer(
+                                    Number(request.request_id),
+                                    clubId!
+                                  );
+                                  if (reportDetail) {
+                                    // TODO: Hiển thị modal chi tiết báo cáo
+                                    // Hiện tại vẫn dùng mock data
+                                    setSelectedSubmission(
+                                      reportSubmissions.find(
+                                        (s) => s.request_id === request.request_id
+                                      ) || null
+                                    );
+                                    setShowDetailModal(true);
+                                  } else {
+                                    toast.error("Không tìm thấy báo cáo");
+                                  }
+                                } catch (error) {
+                                  console.error("Error fetching report detail:", error);
+                                  toast.error("Không thể tải chi tiết báo cáo");
+                                }
                               }}
                               className="bg-transparent"
                             >
@@ -708,9 +923,10 @@ export function ClubReportManagement() {
                                 handleSubmitReport(request.request_id)
                               }
                               className="bg-blue-600 hover:bg-blue-700"
+                              disabled={request.status === "APPROVED"}
                             >
                               <Plus className="h-4 w-4 mr-1" />
-                              Nộp báo cáo
+                              {request.status === "APPROVED" ? "Đã duyệt" : "Nộp báo cáo"}
                             </Button>
                           )}
                         </div>
@@ -865,14 +1081,17 @@ export function ClubReportManagement() {
                             </Button>
                             <Button
                               size="sm"
-                              onClick={() =>
-                                handleSubmitForApproval(
-                                  submission.submission_id
-                                )
-                              }
+                              onClick={() => {
+                                if (editingReportId) {
+                                  handleSubmitForApproval(editingReportId);
+                                } else {
+                                  toast.error("Không tìm thấy báo cáo để nộp");
+                                }
+                              }}
                               className="bg-green-600 hover:bg-green-700"
+                              disabled={submitting || !editingReportId}
                             >
-                              Gửi phê duyệt
+                              {submitting ? "Đang nộp..." : "Nộp báo cáo"}
                             </Button>
                           </>
                         )}
@@ -1190,18 +1409,84 @@ export function ClubReportManagement() {
               <div className="flex gap-2 justify-end pt-4">
                 <Button
                   variant="outline"
-                  onClick={() => setShowSubmitDialog(false)}
+                  onClick={() => {
+                    setShowSubmitDialog(false);
+                    setEditingReportId(null);
+                  }}
                   className="bg-transparent"
+                  disabled={submitting}
                 >
                   Hủy
                 </Button>
                 <Button
                   onClick={() => handleSaveDraft(selectedRequest.request_id)}
                   className="bg-blue-600 hover:bg-blue-700"
+                  disabled={submitting}
                 >
                   <Plus className="h-4 w-4 mr-2" />
-                  Lưu bản nháp
+                  {submitting ? "Đang lưu..." : editingReportId ? "Cập nhật" : "Lưu bản nháp"}
                 </Button>
+                {editingReportId && (
+                  <Button
+                    onClick={async () => {
+                      try {
+                        setSubmitting(true);
+                        const submitRequest: SubmitReportRequest = {
+                          reportId: editingReportId,
+                        };
+                        await submitReport(submitRequest);
+                        toast.success("Báo cáo đã được nộp thành công");
+                        setShowSubmitDialog(false);
+                        setEditingReportId(null);
+                        
+                        // Refresh data
+                        if (clubId && activeTab === "requests") {
+                          const requirements = await getClubReportRequirementsForOfficer(clubId);
+                          const mappedRequests: ReportRequest[] = requirements.map((req) => {
+                            const clubRequirement = req.clubRequirements?.[0];
+                            const reportType = mapBackendToFrontendReportType(req.reportType);
+                            
+                            const requiredDetails = req.description
+                              ? req.description
+                                  .split(/\r?\n|•|\u2022|-/)
+                                  .map((s) => s.trim())
+                                  .filter((s) => s.length > 0)
+                              : [];
+
+                            const finalReportType: ReportType = reportType === "post-event" ? "post_event" : (reportType === "other" ? "periodic" : reportType);
+                            
+                            return {
+                              request_id: req.id.toString(),
+                              request_type: finalReportType,
+                              title: req.title,
+                              description: req.description || "",
+                              deadline: req.dueDate,
+                              created_by: req.createdBy?.fullName || "Phòng Quản lý Sinh viên",
+                              created_at: req.createdAt,
+                              required_details: requiredDetails.length > 0 
+                                ? requiredDetails 
+                                : ["Báo cáo chi tiết về hoạt động của câu lạc bộ"],
+                              templateUrl: req.templateUrl,
+                              status: clubRequirement?.status,
+                            };
+                          });
+                          setReportRequests(mappedRequests);
+                        }
+                      } catch (err) {
+                        console.error("Error submitting report:", err);
+                        const errorMessage = err instanceof Error ? err.message : "Không thể nộp báo cáo";
+                        toast.error(errorMessage);
+                      } finally {
+                        setSubmitting(false);
+                      }
+                    }}
+                    className="bg-green-600 hover:bg-green-700"
+                    disabled={submitting}
+                  >
+                    <CheckCircle className="h-4 w-4 mr-2" />
+                    {submitting ? "Đang nộp..." : "Nộp báo cáo"}
+                  </Button>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -1238,32 +1523,88 @@ export function ClubReportManagement() {
               <div className="flex gap-2 justify-end pt-4">
                 <Button
                   variant="outline"
-                  onClick={() => setShowEditDialog(false)}
+                  onClick={() => {
+                    setShowEditDialog(false);
+                    setEditingReportId(null);
+                  }}
                   className="bg-transparent"
+                  disabled={submitting}
                 >
                   Hủy
                 </Button>
                 <Button
                   onClick={() => {
-                    setReportSubmissions((prev) =>
-                      prev.map((sub) =>
-                        sub.submission_id === selectedSubmission.submission_id
-                          ? {
-                              ...sub,
-                              title: draftTitle,
-                              content: draftContent,
-                              updated_at: new Date().toISOString(),
-                            }
-                          : sub
-                      )
-                    );
-                    setShowEditDialog(false);
+                    if (selectedRequest) {
+                      handleSaveDraft(selectedRequest.request_id);
+                    }
                   }}
                   className="bg-blue-600 hover:bg-blue-700"
+                  disabled={submitting}
                 >
                   <CheckCircle className="h-4 w-4 mr-2" />
-                  Lưu thay đổi
+                  {submitting ? "Đang lưu..." : "Lưu thay đổi"}
                 </Button>
+                {editingReportId && (
+                  <Button
+                    onClick={async () => {
+                      try {
+                        setSubmitting(true);
+                        const submitRequest: SubmitReportRequest = {
+                          reportId: editingReportId,
+                        };
+                        await submitReport(submitRequest);
+                        toast.success("Báo cáo đã được nộp thành công");
+                        setShowEditDialog(false);
+                        setEditingReportId(null);
+                        
+                        // Refresh data
+                        if (clubId && activeTab === "requests") {
+                          const requirements = await getClubReportRequirementsForOfficer(clubId);
+                          const mappedRequests: ReportRequest[] = requirements.map((req) => {
+                            const clubRequirement = req.clubRequirements?.[0];
+                            const reportType = mapBackendToFrontendReportType(req.reportType);
+                            
+                            const requiredDetails = req.description
+                              ? req.description
+                                  .split(/\r?\n|•|\u2022|-/)
+                                  .map((s) => s.trim())
+                                  .filter((s) => s.length > 0)
+                              : [];
+
+                            const finalReportType: ReportType = reportType === "post-event" ? "post_event" : (reportType === "other" ? "periodic" : reportType);
+                            
+                            return {
+                              request_id: req.id.toString(),
+                              request_type: finalReportType,
+                              title: req.title,
+                              description: req.description || "",
+                              deadline: req.dueDate,
+                              created_by: req.createdBy?.fullName || "Phòng Quản lý Sinh viên",
+                              created_at: req.createdAt,
+                              required_details: requiredDetails.length > 0 
+                                ? requiredDetails 
+                                : ["Báo cáo chi tiết về hoạt động của câu lạc bộ"],
+                              templateUrl: req.templateUrl,
+                              status: clubRequirement?.status,
+                            };
+                          });
+                          setReportRequests(mappedRequests);
+                        }
+                      } catch (err) {
+                        console.error("Error submitting report:", err);
+                        const errorMessage = err instanceof Error ? err.message : "Không thể nộp báo cáo";
+                        toast.error(errorMessage);
+                      } finally {
+                        setSubmitting(false);
+                      }
+                    }}
+                    className="bg-green-600 hover:bg-green-700"
+                    disabled={submitting}
+                  >
+                    <CheckCircle className="h-4 w-4 mr-2" />
+                    {submitting ? "Đang nộp..." : "Nộp báo cáo"}
+                  </Button>
+                )}
               </div>
             </CardContent>
           </Card>
