@@ -104,6 +104,17 @@ public interface ClubMemberShipRepository extends JpaRepository<ClubMemberShip, 
     @Query("SELECT COUNT(cms) > 0 FROM ClubMemberShip cms WHERE cms.club.id = :clubId AND cms.user.id = :userId AND cms.status = 'ACTIVE'")
     boolean existsByClubIdAndUserIdAndStatusActive(@Param("clubId") Long clubId, @Param("userId") Long userId);
 
+
+
+    @Query("""
+        SELECT cm
+        FROM ClubMemberShip cm
+        WHERE cm.user.id IN :userIds
+          AND cm.club.id = :clubId
+          AND cm.status = 'ACTIVE'
+    """)
+    List<ClubMemberShip> findByUserIdInAndClubId(@Param("userIds") List<Long> userIds,
+                                                 @Param("clubId") Long clubId);
 }
 
 
