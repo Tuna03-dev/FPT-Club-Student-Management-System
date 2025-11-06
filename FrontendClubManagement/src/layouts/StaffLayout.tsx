@@ -1,21 +1,15 @@
-// src/layouts/ClubLayout.tsx
+// src/layouts/StaffLayout.tsx
 import {
-  Home,
-  Users,
   Calendar,
   Bell,
   Settings,
-  Search,
   Menu,
-  Shield,
-  FileText,
+  Search,
   Clock,
-  Briefcase,
-  DollarSign,
-  Wallet,
+  FileText,
+  Users,
 } from "lucide-react";
-import { NavLink, Outlet, useParams, useNavigate } from "react-router-dom";
-import { useTranslation } from "react-i18next";
+import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,87 +27,31 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { authService } from "@/services/authService";
-import { useTeams } from "@/hooks/useTeams";
-import { Newspaper } from "lucide-react";
-import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
+
 const navItems = [
-  { key: "dashboard", url: "", icon: Home },
-  { key: "members", url: "/members", icon: Users },
-  { key: "events", url: "/events", icon: Calendar },
-  { key: "payments", url: "/payments", icon: Wallet },
-  { key: "notifications", url: "/notifications", icon: Bell },
+  { key: "events", url: "/events", icon: Calendar, label: "Sự kiện" },
 ];
 
+// Management items for Staff
 const managementItems = [
-  { key: "club_news", url: "/news", icon: Newspaper, label: "Yêu cầu tin tức" },
-  {
-    key: "permissions",
-    url: "/permissions",
-    icon: Shield,
-    label: "Phân quyền",
-  },
-  {
-    key: "pending_posts",
-    url: "/pending-posts",
-    icon: FileText,
-    label: "Bài viết chờ duyệt",
-  },
-  {
-    key: "manage_members",
-    url: "/members",
-    icon: Users,
-    label: "Quản lý thành viên",
-  },
-  {
-    key: "manage_events",
-    url: "/events",
-    icon: Calendar,
-    label: "Quản lý sự kiện",
-  },
-  {
-    key: "manage_recruitments",
-    url: "/recruitments",
-    icon: Briefcase,
-    label: "Quản lý tuyển thành viên",
-  },
-  {
-    key: "manage_finance",
-    url: "/finance",
-    icon: DollarSign,
-    label: "Quản lý tài chính",
-  },
-  {
-    key: "pending_requests",
-    url: "/pending-requests",
-    icon: Clock,
-    label: "Yêu cầu chờ duyệt",
-  },
+  { key: "manage_events", url: "/events", icon: Calendar, label: "Quản lý sự kiện" },
+  { key: "pending_requests", url: "/pending-requests", icon: Clock, label: "Yêu cầu chờ duyệt" },
+  { key: "pending_posts", url: "/pending-posts", icon: FileText, label: "Bài viết chờ duyệt" },
+  { key: "manage_members", url: "/members", icon: Users, label: "Quản lý thành viên" },
 ];
 
 const managementColors: Record<string, string> = {
-  permissions: "bg-gradient-to-br from-purple-500 to-purple-600",
+  manage_events: "bg-gradient-to-br from-green-500 to-green-600",
+  pending_requests: "bg-gradient-to-br from-orange-500 to-orange-600",
   pending_posts: "bg-gradient-to-br from-yellow-500 to-yellow-600",
   manage_members: "bg-gradient-to-br from-blue-500 to-blue-600",
-  manage_events: "bg-gradient-to-br from-green-500 to-green-600",
-  manage_recruitments: "bg-gradient-to-br from-red-500 to-red-600",
-  manage_finance: "bg-gradient-to-br from-emerald-500 to-emerald-600",
-  pending_requests: "bg-gradient-to-br from-orange-500 to-orange-600",
-  club_news: "bg-gradient-to-br from-indigo-500 to-indigo-600",
 };
 
-export const ClubLayout = () => {
+export const StaffLayout = () => {
   const { t } = useTranslation("common");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const navigate = useNavigate();
-  const { clubId = "0" } = useParams();
-  const numericClubId = Number(clubId);
-  const validClubId = Number.isFinite(numericClubId) && numericClubId > 0;
-
-  const {
-    data: teams,
-    loading,
-    error,
-  } = useTeams(validClubId ? numericClubId : undefined);
 
   const handleLogout = async () => {
     try {
@@ -122,18 +60,9 @@ export const ClubLayout = () => {
       /* ignore */
     } finally {
       authService.logout();
-      toast.success("Đăng xuất thành công!", { duration: 2000 });
-      navigate("/", { replace: true });
+      navigate("/login", { replace: true });
     }
   };
-
-  if (!validClubId) {
-    return (
-      <div className="p-6 text-sm text-muted-foreground">
-        Không xác định được câu lạc bộ. Vui lòng quay lại trang MyClub.
-      </div>
-    );
-  }
 
   return (
     <TooltipProvider delayDuration={200}>
@@ -143,7 +72,7 @@ export const ClubLayout = () => {
             {/* Left: logo + search */}
             <div className="flex items-center gap-4 flex-1 max-w-[320px]">
               <div className="h-10 w-10 rounded-full bg-gradient-to-br from-primary to-primary-glow shadow-lg flex items-center justify-center">
-                <span className="text-white font-bold text-lg">C</span>
+                <span className="text-white font-bold text-lg">S</span>
               </div>
               <div className="relative w-full max-w-[240px] hidden md:block">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -161,7 +90,7 @@ export const ClubLayout = () => {
                 <Tooltip key={item.key}>
                   <TooltipTrigger asChild>
                     <NavLink
-                      to={`/myclub/${clubId}${item.url}`}
+                      to={`/myclub/staff${item.url}`}
                       end={item.url === ""}
                       className={({ isActive }) =>
                         `flex items-center justify-center px-8 py-2 rounded-lg transition-all relative ${
@@ -182,7 +111,7 @@ export const ClubLayout = () => {
                     </NavLink>
                   </TooltipTrigger>
                   <TooltipContent side="bottom">
-                    <p>{t(`nav.${item.key}`)}</p>
+                    <p>{item.label}</p>
                   </TooltipContent>
                 </Tooltip>
               ))}
@@ -190,23 +119,19 @@ export const ClubLayout = () => {
 
             {/* Right: user */}
             <div className="flex items-center gap-2 flex-1 justify-end max-w-[320px]">
-              <NavLink to={`/myclub/${clubId}/settings`}>
+              <NavLink to="/myclub/staff/settings">
                 <Button variant="ghost" size="icon" className="rounded-full">
                   <Settings className="h-5 w-5" />
                 </Button>
               </NavLink>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="rounded-full relative"
-              >
+              <Button variant="ghost" size="icon" className="rounded-full relative">
                 <Bell className="h-5 w-5" />
                 <span className="absolute top-1 right-1 h-2 w-2 bg-destructive rounded-full" />
               </Button>
               <div className="flex items-center gap-2">
                 <Avatar className="h-8 w-8 ring-2 ring-primary/20">
                   <AvatarImage src="https://github.com/shadcn.png" />
-                  <AvatarFallback>U</AvatarFallback>
+                  <AvatarFallback>S</AvatarFallback>
                 </Avatar>
                 <Button variant="ghost" size="sm" onClick={handleLogout}>
                   {t("logout", { defaultValue: "Đăng xuất" })}
@@ -214,10 +139,7 @@ export const ClubLayout = () => {
               </div>
 
               {/* Mobile menu */}
-              <DropdownMenu
-                open={isMobileMenuOpen}
-                onOpenChange={setIsMobileMenuOpen}
-              >
+              <DropdownMenu open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="icon" className="md:hidden">
                     <Menu className="h-5 w-5" />
@@ -231,14 +153,12 @@ export const ClubLayout = () => {
                     {managementItems.map((item) => (
                       <DropdownMenuItem key={item.key} asChild>
                         <NavLink
-                          to={`/myclub/${clubId}${item.url}`}
+                          to={`/myclub/staff${item.url}`}
                           className="flex items-center gap-3 w-full"
                           onClick={() => setIsMobileMenuOpen(false)}
                         >
                           <div
-                            className={`h-6 w-6 rounded-lg ${
-                              managementColors[item.key]
-                            } flex items-center justify-center text-white shadow-sm`}
+                            className={`h-6 w-6 rounded-lg ${managementColors[item.key]} flex items-center justify-center text-white shadow-sm`}
                           >
                             <item.icon className="h-3 w-3" />
                           </div>
@@ -268,7 +188,7 @@ export const ClubLayout = () => {
                   {managementItems.map((item) => (
                     <NavLink
                       key={item.key}
-                      to={`/myclub/${clubId}${item.url}`}
+                      to={`/myclub/staff${item.url}`}
                       className={({ isActive }) =>
                         `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
                           isActive
@@ -278,9 +198,7 @@ export const ClubLayout = () => {
                       }
                     >
                       <div
-                        className={`h-8 w-8 rounded-lg ${
-                          managementColors[item.key]
-                        } flex items-center justify-center text-white shadow-sm`}
+                        className={`h-8 w-8 rounded-lg ${managementColors[item.key]} flex items-center justify-center text-white shadow-sm`}
                       >
                         <item.icon className="h-4 w-4" />
                       </div>
@@ -288,48 +206,6 @@ export const ClubLayout = () => {
                     </NavLink>
                   ))}
                 </div>
-              </div>
-
-              {/* Teams — CHỈ 1 DÒNG/MỖI TEAM (không còn submenu con) */}
-              <div>
-                <div className="px-3 mb-4">
-                  <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                    Phòng ban
-                  </h2>
-                </div>
-
-                {loading && (
-                  <p className="px-3 text-xs text-muted-foreground">
-                    Đang tải…
-                  </p>
-                )}
-                {error && <p className="px-3 text-xs text-red-600">{error}</p>}
-
-                {teams?.map((team) => {
-                  const base = `/myclub/${clubId}/teams/${team.teamId}`;
-                  return (
-                    <NavLink
-                      key={team.teamId}
-                      to={base}
-                      end
-                      className={({ isActive }) =>
-                        `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all ${
-                          isActive
-                            ? "bg-primary/10 text-primary shadow-sm"
-                            : "text-foreground hover:bg-secondary"
-                        }`
-                      }
-                    >
-                      <div className="h-8 w-8 rounded-lg bg-primary text-white flex items-center justify-center text-xs font-bold">
-                        {team.teamName.charAt(0).toUpperCase()}
-                      </div>
-                      <div className="flex-1 truncate">{team.teamName}</div>
-                      <span className="text-[10px] text-muted-foreground">
-                        {team.memberCount}
-                      </span>
-                    </NavLink>
-                  );
-                })}
               </div>
             </nav>
           </aside>
@@ -342,3 +218,4 @@ export const ClubLayout = () => {
     </TooltipProvider>
   );
 };
+

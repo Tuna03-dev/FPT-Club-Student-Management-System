@@ -2,10 +2,13 @@ import { createBrowserRouter, Navigate } from "react-router-dom";
 import MainLayout from "@/layouts/MainLayout";
 import HomePage from "@/pages/HomePage";
 import { ClubLayout } from "@/layouts/ClubLayout";
+import { StaffLayout } from "@/layouts/StaffLayout";
 
 import { Dashboard } from "@/pages/myclub/Dashboard";
 import MemberList from "@/pages/myclub/members/MemberList";
 import { EventList } from "@/pages/myclub/events/EventList";
+import { StaffEventList } from "@/pages/myclub/staff/StaffEventList";
+import EventAttendancePage from "@/pages/myclub/events/attendance/AttendancePage";
 import { Notifications } from "@/pages/myclub/Notifications";
 import { Settings } from "@/pages/myclub/Settings";
 
@@ -138,6 +141,7 @@ export const router = createBrowserRouter([
 
       { path: "members", element: <MemberList /> },
       { path: "events", element: <EventList /> },
+      { path: "events/attendance/:eventId", element: <EventAttendancePage /> },
       { path: "recruitments", element: <RecruitmentManagement /> },
       { path: "finance", element: <Finance /> },
       { path: "payments", element: <Payment /> },
@@ -150,6 +154,19 @@ export const router = createBrowserRouter([
 { path: "teams/:teamId/news-requests", element: <TeamNewsRequests /> },
 { path: "teams/:teamId/news-editor", element: <TeamNewsEditor /> },
 
+    ],
+  },
+
+  {
+    path: "/myclub/staff",
+    element: (
+      <ProtectedRoute>
+        <StaffLayout />
+      </ProtectedRoute>
+    ),
+    children: [
+      { path: "events", element: <StaffEventList /> },
+      { path: "settings", element: <Settings /> },
     ],
   },
 
