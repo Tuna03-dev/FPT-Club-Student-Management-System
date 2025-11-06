@@ -73,7 +73,34 @@ export interface PostSearchParams {
   size?: number;
   sort?: string;
 }
-
+interface SpringPageResponse<T> {
+  content: T[];
+  pageable: {
+    pageNumber: number;
+    pageSize: number;
+    sort: {
+      empty: boolean;
+      sorted: boolean;
+      unsorted: boolean;
+    };
+    offset: number;
+    paged: boolean;
+    unpaged: boolean;
+  };
+  last: boolean;          // ✅ Quan trọng: true nếu là trang cuối
+  totalElements: number;
+  totalPages: number;
+  size: number;
+  number: number;         // ✅ Page number hiện tại
+  sort: {
+    empty: boolean;
+    sorted: boolean;
+    unsorted: boolean;
+  };
+  first: boolean;         // ✅ true nếu là trang đầu
+  numberOfElements: number;
+  empty: boolean;
+}
 export const postService = {
   // Get club-wide posts
   async getClubWidePosts(
@@ -83,7 +110,7 @@ export const postService = {
       size?: number;
       sort?: string;
     } = {}
-  ): Promise<ApiResponse<{ content: PostWithRelationsData[]; totalElements: number; totalPages: number; hasNext: boolean; hasPrevious: boolean }>> {
+  ): Promise<ApiResponse<SpringPageResponse<PostWithRelationsData>>> {
     const query = new URLSearchParams();
     query.set("page", String(params.page ?? 0));
     query.set("size", String(params.size ?? 10));
@@ -127,7 +154,8 @@ export const postService = {
   // Create post with media
   async createPostWithMedia(
     request: CreatePostRequest,
-    files?: File[]
+    files?: File[],
+    onProgress?: (progress: number) => void
   ): Promise<ApiResponse<PostWithRelationsData>> {
     const formData = new FormData();
     
@@ -144,9 +172,21 @@ export const postService = {
       });
     }
 
-    // Note: Don't set Content-Type header explicitly when using FormData
-    // Axios will set it automatically with the correct boundary
-    return axiosClient.post("/posts/create/with-media", formData);
+    // Config cho upload: timeout dài + progress (kiểu AxiosRequestConfig)
+    const config: import('axios').AxiosRequestConfig = {
+      timeout: 300000, // 5 phút - adjust nếu cần
+      onUploadProgress: (progressEvent) => {
+        if (progressEvent.total && onProgress) {
+          const percentCompleted = Math.round(
+            (progressEvent.loaded * 100) / progressEvent.total
+          );
+          onProgress(percentCompleted);
+        }
+      },
+      // Không set Content-Type: axios tự handle FormData
+    };
+
+    return axiosClient.post("/posts/create/with-media", formData, config);
   },
 
   // Update post
