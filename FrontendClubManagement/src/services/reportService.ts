@@ -176,6 +176,8 @@ export async function getClubReportByRequirementForOfficer(
 
 /**
  * Create a report (draft for team officer, can submit for club president)
+ * Multipart/form-data endpoint
+ * File upload is optional. If file is provided, it will be uploaded to Cloudinary.
  */
 export interface CreateReportRequest {
   reportTitle: string;
@@ -183,19 +185,60 @@ export interface CreateReportRequest {
   fileUrl?: string;
   clubId: number;
   reportRequirementId: number;
+  autoSubmit?: boolean;
 }
 
 export async function createReport(
-  request: CreateReportRequest
+  request: CreateReportRequest,
+  file?: File
 ): Promise<ReportDetailResponse> {
-  const response = await axiosClient.post<ReportDetailResponse>(
-    "/reports/club",
-    request
-  );
-  if (!response.data) {
-    throw new Error("Failed to create report");
+  if (file) {
+    // Upload with file using FormData
+    const formData = new FormData();
+    
+    // Create a Blob for the JSON request with correct content-type
+    const requestBlob = new Blob([JSON.stringify(request)], {
+      type: "application/json",
+    });
+    formData.append("request", requestBlob, "request.json");
+    formData.append("file", file);
+
+    const response = await axiosClient.post<ReportDetailResponse>(
+      "/reports/club",
+      formData,
+      {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+        timeout: 60000, // Increase timeout for file uploads
+      }
+    );
+    if (!response.data) {
+      throw new Error("Failed to create report");
+    }
+    return response.data;
+  } else {
+    // Upload without file using JSON
+    const formData = new FormData();
+    const requestBlob = new Blob([JSON.stringify(request)], {
+      type: "application/json",
+    });
+    formData.append("request", requestBlob, "request.json");
+
+    const response = await axiosClient.post<ReportDetailResponse>(
+      "/reports/club",
+      formData,
+      {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      }
+    );
+    if (!response.data) {
+      throw new Error("Failed to create report");
+    }
+    return response.data;
   }
-  return response.data;
 }
 
 /**

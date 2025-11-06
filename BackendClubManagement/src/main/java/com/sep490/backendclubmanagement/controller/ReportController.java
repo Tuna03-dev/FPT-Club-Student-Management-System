@@ -76,23 +76,11 @@ public class ReportController {
 
     /**
      * Create report requirement for multiple clubs (for staff only)
-     * JSON endpoint (without file upload)
-     */
-    @PostMapping(value = "/staff/requirements", consumes = "application/json")
-    public ApiResponse<ReportRequirementResponse> createReportRequirement(
-            @RequestBody @Valid CreateReportRequirementRequest request
-    ) {
-        Long userId = SecurityUtils.getCurrentUserId();
-        ReportRequirementResponse data = reportService.createReportRequirement(request, null, userId);
-        return ApiResponse.success(data);
-    }
-
-    /**
-     * Create report requirement for multiple clubs with file upload (for staff only)
      * Multipart/form-data endpoint
+     * File upload is optional. If file is provided, it will be uploaded to Cloudinary.
      */
     @PostMapping(value = "/staff/requirements", consumes = "multipart/form-data")
-    public ApiResponse<ReportRequirementResponse> createReportRequirementWithFile(
+    public ApiResponse<ReportRequirementResponse> createReportRequirement(
             @RequestPart("request") String requestJson,
             @RequestPart(value = "file", required = false) MultipartFile file
     ) throws Exception {
@@ -104,13 +92,20 @@ public class ReportController {
 
     /**
      * Create a report (draft for team officer, can submit for club president)
+     * Multipart/form-data endpoint
+     * File upload is optional. If file is provided, it will be uploaded to Cloudinary.
+     * If autoSubmit is true (or null/default) and user is club president, the report will be automatically submitted.
+     * If autoSubmit is false and user is club president, the report will be created as draft.
+     * Team officer can only create draft reports regardless of autoSubmit flag.
      */
-    @PostMapping("/club")
+    @PostMapping(value = "/club", consumes = "multipart/form-data")
     public ApiResponse<ReportDetailResponse> createReport(
-            @RequestBody @Valid CreateReportRequest request
-    ) {
+            @RequestPart("request") String requestJson,
+            @RequestPart(value = "file", required = false) MultipartFile file
+    ) throws Exception {
         Long userId = SecurityUtils.getCurrentUserId();
-        ReportDetailResponse data = reportService.createReport(request, userId);
+        CreateReportRequest request = objectMapper.readValue(requestJson, CreateReportRequest.class);
+        ReportDetailResponse data = reportService.createReportWithFile(request, file, userId);
         return ApiResponse.success(data);
     }
 

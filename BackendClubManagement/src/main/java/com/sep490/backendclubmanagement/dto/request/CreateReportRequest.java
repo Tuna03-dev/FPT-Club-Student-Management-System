@@ -21,5 +21,11 @@ public class CreateReportRequest {
     
     @NotNull(message = "Report requirement ID is required")
     private Long reportRequirementId;
+    
+    /**
+     * If true, automatically submit the report after creation (only for club president)
+     * If false or null, create as draft (for team officer) or submitted (for club president by default)
+     */
+    private Boolean autoSubmit;
 }
 

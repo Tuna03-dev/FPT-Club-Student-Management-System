@@ -53,11 +53,26 @@ public interface ReportServiceInterface {
 
     /**
      * Create a report (draft for team officer, can submit for club president)
-     * @param request Create request containing report details
+     * If autoSubmit is true (or null/default) and user is club president, the report will be automatically submitted.
+     * If autoSubmit is false and user is club president, the report will be created as draft.
+     * Team officer can only create draft reports regardless of autoSubmit flag.
+     * @param request Create request containing report details and optional autoSubmit flag
      * @param userId Current user ID
      * @return Created report detail response
      */
     ReportDetailResponse createReport(CreateReportRequest request, Long userId);
+
+    /**
+     * Create a report with file upload (draft for team officer, can submit for club president)
+     * If autoSubmit is true (or null/default) and user is club president, the report will be automatically submitted.
+     * If autoSubmit is false and user is club president, the report will be created as draft.
+     * Team officer can only create draft reports regardless of autoSubmit flag.
+     * @param request Create request containing report details and optional autoSubmit flag
+     * @param file Optional file to upload (will be uploaded to Cloudinary and fileUrl will be set automatically)
+     * @param userId Current user ID
+     * @return Created report detail response
+     */
+    ReportDetailResponse createReportWithFile(CreateReportRequest request, MultipartFile file, Long userId);
 
     /**
      * Update a draft report

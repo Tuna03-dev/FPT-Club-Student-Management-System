@@ -263,6 +263,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
 
     /**
      * Create a report (draft for team officer, can submit for club president)
+     * If autoSubmit is true and user is club president, the report will be automatically submitted
      */
     @Override
     @Transactional
@@ -296,13 +297,21 @@ public class ReportServiceImpl implements ReportServiceInterface {
             );
         }
 
-        // Determine status based on role
+        // Determine status based on role and autoSubmit flag
         ReportStatus status;
+        boolean shouldAutoSubmit = false;
+        
         if (isClubPresident) {
-            // Club president can create and submit directly
-            status = ReportStatus.SUBMITTED;
+            // Club president: if autoSubmit is true or null (default), create and submit directly
+            // If autoSubmit is false, create as draft
+            if (request.getAutoSubmit() == null || Boolean.TRUE.equals(request.getAutoSubmit())) {
+                status = ReportStatus.SUBMITTED;
+                shouldAutoSubmit = true;
+            } else {
+                status = ReportStatus.DRAFT;
+            }
         } else {
-            // Team officer can only create draft
+            // Team officer: always create draft (ignore autoSubmit flag)
             status = ReportStatus.DRAFT;
         }
 
@@ -324,10 +333,42 @@ public class ReportServiceImpl implements ReportServiceInterface {
 
         Report savedReport = reportRepository.save(report);
 
-        log.info("User {} created report {} with status {} for club {}", userId, savedReport.getId(), status, request.getClubId());
+        log.info("User {} created report {} with status {} for club {} (autoSubmit: {})", 
+                userId, savedReport.getId(), status, request.getClubId(), shouldAutoSubmit);
+
+        // If autoSubmit is true and report was created as SUBMITTED, the report is already submitted
+        // No need to call submitReport separately as it's already in SUBMITTED status
 
         return reportMapper.toDetail(reportRepository.findByIdWithRelations(savedReport.getId())
                 .orElse(savedReport));
+    }
+
+    /**
+     * Create a report with file upload (draft for team officer, can submit for club president)
+     * If autoSubmit is true and user is club president, the report will be automatically submitted
+     */
+    @Override
+    @Transactional
+    public ReportDetailResponse createReportWithFile(CreateReportRequest request, MultipartFile file, Long userId) {
+        // Upload file if provided
+        String fileUrl = request.getFileUrl(); // Use provided fileUrl if any
+        if (file != null && !file.isEmpty()) {
+            try {
+                // Upload file to Cloudinary in club/reports folder
+                CloudinaryService.UploadResult uploadResult = cloudinaryService.uploadFile(file, "club/reports");
+                fileUrl = uploadResult.url();
+                log.info("Uploaded file for report: {}", fileUrl);
+            } catch (Exception e) {
+                log.error("Failed to upload file for report: {}", e.getMessage(), e);
+                throw new RuntimeException("Failed to upload file: " + e.getMessage(), e);
+            }
+        }
+
+        // Set the uploaded file URL to request
+        request.setFileUrl(fileUrl);
+
+        // Delegate to createReport method
+        return createReport(request, userId);
     }
 
     /**
