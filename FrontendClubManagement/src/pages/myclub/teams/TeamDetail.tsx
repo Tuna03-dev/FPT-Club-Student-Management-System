@@ -72,7 +72,7 @@ function MemberListRow({
         <Avatar className="h-12 w-12">
           <AvatarImage src={avatarUrl || ""} />
           <AvatarFallback className="bg-primary/10 text-primary">
-            {fullName?.charAt(0) ?? "U"}
+            {(fullName?.charAt(0) || "U").toUpperCase()}
           </AvatarFallback>
         </Avatar>
         <div className="flex-1 min-w-0">
@@ -149,7 +149,7 @@ function PostCard({
 
       {image && <img src={image} alt="Post" className="w-full object-cover max-h-96" />}
 
-      <div className="flex items-center justify-between px-4 py-2 text-sm text-muted-foreground border-top border-t">
+      <div className="flex items-center justify-between px-4 py-2 text-sm text-muted-foreground border-t">
         <span>{likes} lượt thích</span>
         <span>{comments} bình luận</span>
       </div>
@@ -210,6 +210,14 @@ export default function TeamDetailPage() {
     }
   }, [isLead, activeTab]);
 
+  // Nếu không phải member thì chặn tab posts → chuyển sang members
+  useEffect(() => {
+    const memberFlag = !!data?.member;
+    if (!memberFlag && activeTab === "posts") {
+      setActiveTab("members");
+    }
+  }, [data?.member, activeTab]);
+
   // ❌ ĐỪNG return sớm trước các hooks khác
   // Thay vì return, hiển thị loading/error trong JSX bên dưới
 
@@ -238,7 +246,6 @@ export default function TeamDetailPage() {
     () => members.find((m) => roleToneFrom(m.roleName) === "leader"),
     [members]
   );
- 
 
   const filteredMembers = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -263,7 +270,7 @@ export default function TeamDetailPage() {
     return arr;
   }, [filteredMembers]);
 
-  const mockPosts = [
+  const mockPosts = useMemo(() => [
     {
       author: {
         name: leader?.name || teamName || "Team",
@@ -277,7 +284,7 @@ export default function TeamDetailPage() {
       likes: 12,
       comments: 3,
     },
-  ];
+  ], [leader?.name, leader?.avatarUrl, leader?.roleName, teamName]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -330,8 +337,11 @@ export default function TeamDetailPage() {
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
               <div className="flex gap-8">
                 {[
-                  { id: "posts", label: "Bài đăng", icon: FileText, show: true },
+                  // Posts chỉ hiển thị nếu user thuộc team
+                  { id: "posts", label: "Bài đăng", icon: FileText, show: !!memberFlag },
+                  // Members luôn hiển thị để mọi thành viên CLB xem
                   { id: "members", label: "Thành viên", icon: Users, show: true },
+                  // Drafts/Requests: chỉ leader
                   { id: "drafts", label: "Drafts", icon: FileText, show: !!isLead },
                   { id: "requests", label: "Requests", icon: Clock, show: !!isLead },
                 ]
@@ -374,7 +384,7 @@ export default function TeamDetailPage() {
               {guardErr ? <span className="ml-4 text-red-600">{guardErr}</span> : null}
             </div>
 
-            {activeTab === "posts" && (
+            {activeTab === "posts" && memberFlag && (
               <div>
                 <div className="flex justify-between items-center mb-6">
                   <h2 className="text-2xl font-bold">Bài đăng gần đây</h2>
