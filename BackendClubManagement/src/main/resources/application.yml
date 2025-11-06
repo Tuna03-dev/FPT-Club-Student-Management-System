@@ -56,7 +56,7 @@ auth:
 
 app:
   payos:
-    webhook-url: ${PAYOS_WEBHOOK_URL:https://2558fb29848c.ngrok-free.app/api/pay-os/webhook}
+    webhook-url: ${PAYOS_WEBHOOK_URL:https://c620a15decfb.ngrok-free.app/api/pay-os/webhook}
 
 cloudinary:
   cloud-name: ${CLOUDINARY_CLOUD_NAME:dbeir3ru4}

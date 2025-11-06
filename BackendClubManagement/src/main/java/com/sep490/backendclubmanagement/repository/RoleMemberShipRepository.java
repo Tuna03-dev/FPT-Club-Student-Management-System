@@ -13,6 +13,16 @@ import java.util.Optional;
 @Repository
 public interface RoleMemberShipRepository extends JpaRepository<RoleMemberShip, Long> {
 
+    @Query("""
+    SELECT COUNT(DISTINCT rm.clubMemberShip.id)
+    FROM RoleMemberShip rm
+    JOIN rm.clubMemberShip cm
+    JOIN rm.semester s
+    WHERE cm.club.id = :clubId
+      AND COALESCE(rm.isActive, TRUE) = TRUE
+      AND s.isCurrent = TRUE
+""")
+    Long countActiveMembersInCurrentSemester(@Param("clubId") Long clubId);
 
     // Trả về system role của user
     @Query(value = "SELECT sr.role_name\n" +

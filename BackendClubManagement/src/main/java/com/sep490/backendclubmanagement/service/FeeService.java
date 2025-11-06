@@ -11,12 +11,7 @@ import com.sep490.backendclubmanagement.entity.*;
 import com.sep490.backendclubmanagement.exception.AppException;
 import com.sep490.backendclubmanagement.exception.ErrorCode;
 import com.sep490.backendclubmanagement.mapper.FeeMapper;
-import com.sep490.backendclubmanagement.repository.ClubRepository;
-import com.sep490.backendclubmanagement.repository.FeeRepository;
-import com.sep490.backendclubmanagement.repository.UserRepository;
-import com.sep490.backendclubmanagement.repository.IncomeTransactionRepository;
-import com.sep490.backendclubmanagement.repository.ClubWalletRepository;
-import com.sep490.backendclubmanagement.repository.PayOSPaymentRepository;
+import com.sep490.backendclubmanagement.repository.*;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -46,6 +41,7 @@ public class FeeService {
     private final ClubWalletRepository clubWalletRepository;
     private final PayOSPaymentRepository payOSPaymentRepository;
     private final WebSocketService webSocketService;
+    private final RoleMemberShipRepository roleMemberShipRepository;
 
     @Value("${app.frontend.url:http://localhost:5173}")
     private String frontendUrl;
@@ -106,11 +102,12 @@ public class FeeService {
                             .collect(Collectors.toSet())
                             .size();
 
-                    int totalMembers = 0;
+                    long totalMembers = roleMemberShipRepository.countActiveMembersInCurrentSemester(clubId);
+
 
 
                     feeDetailResponse.setPaidMembers(paidMembers);
-                    feeDetailResponse.setTotalMembers(totalMembers);
+                    feeDetailResponse.setTotalMembers((int)totalMembers);
 
                     return feeDetailResponse;
                 })
