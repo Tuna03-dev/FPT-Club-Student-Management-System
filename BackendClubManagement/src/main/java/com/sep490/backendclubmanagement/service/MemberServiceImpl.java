@@ -45,7 +45,7 @@ public class MemberServiceImpl implements MemberService{
 
         // Get all filtered members
         List<ClubMemberShip> allMembers = clubMemberShipRepository.findMembersWithFiltersList(
-                clubId, status, searchTerm);
+                clubId, searchTerm);
 
         // Get semester info if filtering by semester
         Semester targetSemester = null;

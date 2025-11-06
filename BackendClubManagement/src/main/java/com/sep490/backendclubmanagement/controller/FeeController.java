@@ -5,6 +5,7 @@ import com.sep490.backendclubmanagement.dto.request.CreateFeeRequest;
 import com.sep490.backendclubmanagement.dto.request.LockFeeRequest;
 import com.sep490.backendclubmanagement.dto.request.UpdateFeeRequest;
 import com.sep490.backendclubmanagement.dto.response.FeeDetailResponse;
+import com.sep490.backendclubmanagement.dto.response.FeeResponse;
 import com.sep490.backendclubmanagement.dto.response.PayOSCreatePaymentResponse;
 import com.sep490.backendclubmanagement.exception.AppException;
 import com.sep490.backendclubmanagement.exception.ErrorCode;
@@ -111,5 +112,24 @@ public class FeeController {
                     "Không thể tạo mã QR thanh toán: " + Arrays.toString(ex.getStackTrace()), null);
         }
     }
+
+    @GetMapping("/unpaid")
+    public ApiResponse<List<FeeDetailResponse>> getUnpaidFees(
+            @PathVariable Long clubId,
+            @RequestParam Long userId
+    ) {
+        List<FeeDetailResponse> unpaidFees = feeService.getUnpaidFeesByUser(clubId, userId);
+        return ApiResponse.success(unpaidFees);
+    }
+
+    @GetMapping("/paid")
+    public ApiResponse<List<FeeDetailResponse>> getPaidFees(
+            @PathVariable Long clubId,
+            @RequestParam Long userId
+    ) {
+        List<FeeDetailResponse> paidFees = feeService.getPaidFeesByUser(clubId, userId);
+        return ApiResponse.success(paidFees);
+    }
+
 }
 
