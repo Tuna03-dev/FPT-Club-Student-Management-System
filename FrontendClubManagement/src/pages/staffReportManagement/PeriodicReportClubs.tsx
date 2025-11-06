@@ -10,6 +10,7 @@ import {
   User,
   FileText,
   Users,
+  Download,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { ClubReportModal } from "@/components/features/report/ClubReportModal";
@@ -114,6 +115,13 @@ export function PeriodicReportClubs() {
       try {
         const requirementId = parseInt(reportId);
 
+        // Validate requirementId
+        if (isNaN(requirementId) || requirementId <= 0) {
+          toast.error("ID yêu cầu báo cáo không hợp lệ");
+          navigate("/staff/report");
+          return;
+        }
+
         // Fetch report requirement details
         const requirementsResponse = await getAllReportRequirements({
           page: 1,
@@ -132,7 +140,8 @@ export function PeriodicReportClubs() {
 
         setPeriodicReport(requirement);
 
-        // Fetch clubs for this requirement
+        // Fetch clubs for this specific requirement
+        // This API call will return only clubs that are assigned to this requirement
         const clubs = await getClubsByReportRequirement(requirementId);
 
         // Map to ClubWithReport format
@@ -231,6 +240,8 @@ export function PeriodicReportClubs() {
         return "bg-red-100 text-red-700";
       case "submitted":
         return "bg-blue-100 text-blue-700";
+      case "not-submitted":
+        return "bg-red-100 text-red-700";
       default:
         return "bg-gray-100 text-gray-700";
     }
@@ -308,21 +319,8 @@ export function PeriodicReportClubs() {
         <Card>
           <CardContent className="p-6">
             <div className="space-y-4">
-              {/* Description */}
-              {periodicReport.description && (
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                    <FileText className="h-4 w-4" />
-                    <span>Mô tả yêu cầu</span>
-                  </div>
-                  <p className="text-sm text-foreground bg-secondary/50 p-3 rounded-lg whitespace-pre-wrap">
-                    {periodicReport.description}
-                  </p>
-                </div>
-              )}
-
-              {/* Info Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 pt-2">
+              {/* Info Grid - Moved to top */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 {/* Created By */}
                 <div className="space-y-1">
                   <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
@@ -368,16 +366,64 @@ export function PeriodicReportClubs() {
                 </div>
               </div>
 
-              {/* Club Count */}
-              <div className="flex items-center gap-2 pt-2 border-t">
-                <Users className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm text-muted-foreground">
-                  Tổng số câu lạc bộ cần nộp báo cáo:
-                </span>
-                <span className="text-sm font-semibold text-foreground">
-                  {clubsWithReports.length}
-                </span>
-              </div>
+              {/* File Attachment - If available */}
+              {periodicReport.templateUrl && (
+                <div className="space-y-2 pt-2 border-t">
+                  <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                    <Download className="h-4 w-4" />
+                    <span>File đính kèm</span>
+                  </div>
+                  <div className="flex items-center gap-3 p-3 bg-secondary/50 rounded-lg">
+                    <div className="w-10 h-10 rounded bg-secondary flex items-center justify-center">
+                      <FileText className="h-5 w-5 text-muted-foreground" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground truncate">
+                        {periodicReport.templateUrl.split("/").pop() ||
+                          "Template file"}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        File template
+                      </p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        window.open(periodicReport.templateUrl, "_blank")
+                      }
+                      className="flex-shrink-0"
+                    >
+                      <Download className="h-4 w-4 mr-2" />
+                      Tải xuống
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Description - Moved to bottom */}
+              {periodicReport.description && (
+                <div className="space-y-2 pt-2 border-t">
+                  <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                    <FileText className="h-4 w-4" />
+                    <span>Mô tả yêu cầu</span>
+                  </div>
+                  <p className="text-sm text-foreground bg-secondary/50 p-3 rounded-lg whitespace-pre-wrap">
+                    {periodicReport.description}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Club Count */}
+            <div className="flex items-center gap-2 pt-2 border-t">
+              <Users className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm text-muted-foreground">
+                Tổng số câu lạc bộ cần nộp báo cáo:
+              </span>
+              <span className="text-sm font-semibold text-foreground">
+                {clubsWithReports.length}
+              </span>
             </div>
           </CardContent>
         </Card>

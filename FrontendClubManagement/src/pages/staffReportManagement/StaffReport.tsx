@@ -21,6 +21,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { getAllReportRequirements, createReportRequirement, getAllClubsForReport } from "@/services/reportService";
+import { getEventById } from "@/service/EventService";
 import type {
   ReportRequirementResponse,
   ReportType,
@@ -144,16 +145,25 @@ export function StaffReportManagement() {
         const allClubs = await getAllClubsForReport();
         clubIds = allClubs.map((club) => club.id);
       } else if (formData.type === "post-event") {
-        // For post-event reports, get clubs from the selected event
-        // Note: This would require getting clubs from event, but for now we'll use all clubs
-        // TODO: Get clubs from selected event
+        // For post-event reports, get club from the selected event
         if (!formData.selectedEventId) {
           toast.error("Vui lòng chọn sự kiện");
           return;
         }
-        // For now, use all clubs - this should be updated to get clubs from event
-        const allClubs = await getAllClubsForReport();
-        clubIds = allClubs.map((club) => club.id);
+        // Get event details to get the club that created the event
+        try {
+          const event = await getEventById(formData.selectedEventId);
+          if (!event.clubId) {
+            toast.error("Sự kiện không có thông tin câu lạc bộ");
+            return;
+          }
+          // Only include the club that created the event
+          clubIds = [event.clubId];
+        } catch (error: any) {
+          console.error("Error fetching event details:", error);
+          toast.error("Không thể lấy thông tin sự kiện. Vui lòng thử lại.");
+          return;
+        }
       } else if (formData.type === "other") {
         // For other reports, use selected clubs
         if (!formData.selectedClubIds || formData.selectedClubIds.length === 0) {
@@ -163,17 +173,23 @@ export function StaffReportManagement() {
         clubIds = formData.selectedClubIds;
       }
 
+      // Validate that we have at least one club
+      if (clubIds.length === 0) {
+        toast.error("Không có câu lạc bộ nào được chọn để tạo yêu cầu báo cáo");
+        return;
+      }
+
       // Map frontend report type to backend
       const backendReportType = mapFrontendToBackendReportType(formData.type);
 
-      // Build request
+      // Build request - ensure clubIds are sent correctly
       const request: CreateReportRequirementRequest = {
         title: formData.title,
         description: formData.content,
         dueDate: formData.dueDate,
         reportType: backendReportType,
-        clubIds: clubIds,
-        eventId: formData.selectedEventId,
+        clubIds: clubIds, // Send the correct club IDs based on report type
+        eventId: formData.selectedEventId, // Send eventId for post-event reports
         templateUrl: undefined, // Will be set from uploaded file
       };
 
@@ -198,25 +214,8 @@ export function StaffReportManagement() {
   };
 
   const handleReportRequirementView = (report: ReportRequirementDisplay) => {
-    // Get full data from stored map
-    const fullReport = reportsFullData.get(report.id);
-    if (fullReport) {
-      setSelectedReport(fullReport);
-      setIsReportContentModalOpen(true);
-    } else {
-      // Fallback to basic info if not found in map
-      const basicReport: ReportRequirementResponse = {
-        id: report.id,
-        title: report.title,
-        description: report.description,
-        dueDate: report.dueDate,
-        reportType: report.reportType,
-        createdAt: report.createdAt,
-        updatedAt: report.createdAt,
-      };
-      setSelectedReport(basicReport);
-      setIsReportContentModalOpen(true);
-    }
+    // Navigate to clubs list page for all report types (periodic, post-event, and other)
+    navigate(`/staff/report/${report.id}/clubs`);
   };
 
   const formatDate = (dateString: string) => {
@@ -344,59 +343,31 @@ export function StaffReportManagement() {
 
                             {/* Actions - Mobile */}
                             <div className="flex flex-row items-center gap-2 mt-2 md:hidden">
-                              {report.type === "periodic" ? (
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() =>
-                                    handlePeriodicReportView(report)
-                                  }
-                                  className="gap-2"
-                                >
-                                  <Eye className="h-4 w-4" />
-                                  <span>Xem</span>
-                                </Button>
-                              ) : (
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() =>
-                                    handleReportRequirementView(report)
-                                  }
-                                  className="gap-2"
-                                >
-                                  <Eye className="h-4 w-4" />
-                                  <span>Xem</span>
-                                </Button>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Actions - Desktop */}
-                          <div className="hidden md:flex flex-row items-center gap-2 ml-auto">
-                            {report.type === "periodic" ? (
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => handlePeriodicReportView(report)}
-                                className="gap-2"
-                              >
-                                <Eye className="h-4 w-4" />
-                                <span>Xem</span>
-                              </Button>
-                            ) : (
                               <Button
                                 size="sm"
                                 variant="ghost"
                                 onClick={() =>
-                                  handleReportRequirementView(report)
+                                  handlePeriodicReportView(report)
                                 }
                                 className="gap-2"
                               >
                                 <Eye className="h-4 w-4" />
                                 <span>Xem</span>
                               </Button>
-                            )}
+                            </div>
+                          </div>
+
+                          {/* Actions - Desktop */}
+                          <div className="hidden md:flex flex-row items-center gap-2 ml-auto">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handlePeriodicReportView(report)}
+                              className="gap-2"
+                            >
+                              <Eye className="h-4 w-4" />
+                              <span>Xem</span>
+                            </Button>
                           </div>
                         </div>
                       </CardContent>

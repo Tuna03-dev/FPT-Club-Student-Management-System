@@ -101,7 +101,7 @@ const statusConfig: Record<
   },
   "not-submitted": {
     label: "Chưa nộp",
-    color: "bg-gray-100 text-gray-700",
+    color: "bg-red-100 text-red-700",
     icon: null,
   },
 };

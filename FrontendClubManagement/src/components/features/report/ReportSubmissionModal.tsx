@@ -26,11 +26,13 @@ import {
   Check,
 } from "lucide-react";
 import {
-  getAllEventsByFilter,
   getAllClubs,
-  type EventData,
   type ClubDto,
 } from "@/service/EventService";
+import {
+  getEventsWithoutReportRequirement,
+  type EventWithoutReportRequirementDto,
+} from "@/services/reportService";
 
 type ReportType = "periodic" | "post-event" | "other";
 
@@ -139,7 +141,7 @@ export function ReportSubmissionModal({
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
 
   // Events and clubs data
-  const [events, setEvents] = useState<EventData[]>([]);
+  const [events, setEvents] = useState<EventWithoutReportRequirementDto[]>([]);
   const [clubs, setClubs] = useState<ClubDto[]>([]);
   const [eventSearchQuery, setEventSearchQuery] = useState("");
   const [clubSearchQuery, setClubSearchQuery] = useState("");
@@ -152,13 +154,9 @@ export function ReportSubmissionModal({
   useEffect(() => {
     if (formData.type === "post-event" && open) {
       setLoadingEvents(true);
-      getAllEventsByFilter({
-        keyword: eventSearchQuery || undefined,
-        page: 1,
-        size: 50,
-      })
-        .then((response) => {
-          setEvents(response.data || []);
+      getEventsWithoutReportRequirement()
+        .then((data) => {
+          setEvents(data || []);
         })
         .catch((error) => {
           console.error("Error fetching events:", error);
@@ -168,7 +166,7 @@ export function ReportSubmissionModal({
           setLoadingEvents(false);
         });
     }
-  }, [formData.type, eventSearchQuery, open]);
+  }, [formData.type, open]);
 
   // Fetch clubs when type is other
   useEffect(() => {
@@ -313,8 +311,8 @@ export function ReportSubmissionModal({
 
   const filteredEvents = events.filter(
     (event) =>
-      event.title.toLowerCase().includes(eventSearchQuery.toLowerCase()) ||
-      event.description?.toLowerCase().includes(eventSearchQuery.toLowerCase())
+      event.eventTitle.toLowerCase().includes(eventSearchQuery.toLowerCase()) ||
+      event.clubName.toLowerCase().includes(eventSearchQuery.toLowerCase())
   );
 
   const filteredClubs = clubs.filter((club) =>
@@ -476,8 +474,8 @@ export function ReportSubmissionModal({
                   <div className="border rounded-md p-3 bg-secondary/50">
                     <div className="flex items-center justify-between">
                       <p className="font-medium text-sm">
-                        {events.find((e) => e.id === formData.selectedEventId)
-                          ?.title || "Sự kiện đã chọn"}
+                        {events.find((e) => e.eventId === formData.selectedEventId)
+                          ?.eventTitle || "Sự kiện đã chọn"}
                       </p>
                       <Button
                         type="button"
@@ -520,19 +518,20 @@ export function ReportSubmissionModal({
                       <div className="border rounded-md max-h-60 overflow-y-auto">
                         {filteredEvents.map((event) => (
                           <div
-                            key={event.id}
+                            key={event.eventId}
                             className="p-3 cursor-pointer hover:bg-secondary transition-colors border-b last:border-b-0"
                             onClick={() => {
                               setFormData({
                                 ...formData,
-                                selectedEventId: event.id,
+                                selectedEventId: event.eventId,
                               });
                               if (errors.selectedEventId) {
                                 setErrors({ ...errors, selectedEventId: "" });
                               }
                             }}
                           >
-                            <p className="font-medium text-sm">{event.title}</p>
+                            <p className="font-medium text-sm">{event.eventTitle}</p>
+                            <p className="text-xs text-muted-foreground mt-1">{event.clubName}</p>
                           </div>
                         ))}
                       </div>
@@ -754,7 +753,7 @@ export function ReportSubmissionModal({
                 <li>• Loại báo cáo: {REPORT_TYPES.find(t => t.value === formData.type)?.label}</li>
                 <li>• Ngày hạn chót: {formData.dueDate || "Chưa có"}</li>
                 {formData.type === "post-event" && formData.selectedEventId && (
-                  <li>• Sự kiện: {events.find(e => e.id === formData.selectedEventId)?.title}</li>
+                  <li>• Sự kiện: {events.find(e => e.eventId === formData.selectedEventId)?.eventTitle}</li>
                 )}
                 {formData.type === "other" && formData.selectedClubIds && (
                   <li>• Số CLB: {formData.selectedClubIds.length}</li>
