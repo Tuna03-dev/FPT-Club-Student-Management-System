@@ -10,6 +10,7 @@ import { type EventData, getEventsByClubId, getStaffEventsByClubId, getStaffAllE
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { CreateEventForm } from "./create-event-form"
 import { authService } from "@/services/authService"
+import { useClubPermissions } from "@/hooks/useClubPermissions"
 
 // Helper to normalize error messages
 const getErrorMessage = (error: unknown, fallback = "Đã xảy ra lỗi"): string => {
@@ -59,6 +60,7 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
   const [loadingPending, setLoadingPending] = useState(false)
   const [cancelledEvents, setCancelledEvents] = useState<Event[] | null>(null)
   const [loadingCancelled, setLoadingCancelled] = useState(false)
+  const { isClubPresident: isPresidentOfCurrentClub } = useClubPermissions(clubId)
 
   // Fetch events from API
   useEffect(() => {
@@ -236,7 +238,8 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
   useEffect(() => {
     const user = authService.getCurrentUser()
     if (!user) return
-    const isReviewer = ["STAFF", "CLUB_PRESIDENT"].includes(user.systemRole)
+    const roleUpper = user.systemRole ? String(user.systemRole).trim().toUpperCase() : ""
+    const isReviewer = roleUpper === "STAFF" || isPresidentOfCurrentClub
     if (isReviewer) {
       setLoadingPending(true)
       getPendingRequests()
@@ -244,7 +247,7 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
         .catch(() => setPendingRequests([]))
         .finally(() => setLoadingPending(false))
     }
-    if (user.systemRole === "STAFF") {
+    if (roleUpper === "STAFF") {
       setLoadingCancelled(true)
       getStaffCancelledEvents(clubId && clubId > 0 ? clubId : undefined)
         .then((cancelled) => {
@@ -266,7 +269,7 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
         .catch(() => setCancelledEvents([]))
         .finally(() => setLoadingCancelled(false))
     }
-  }, [])
+  }, [clubId, isPresidentOfCurrentClub])
 
   // Listen to global refetch event (after cancel from modal)
   useEffect(() => {
@@ -717,9 +720,17 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
           {/* Pending requests card (STAFF/CLUB_PRESIDENT) */}
           {(() => {
             const user = authService.getCurrentUser()
-            const canReview = !!user && ["STAFF", "CLUB_PRESIDENT"].includes(user.systemRole)
+            const roleUpper = user?.systemRole ? String(user.systemRole).trim().toUpperCase() : ""
+            const canReview = !!user && (roleUpper === "STAFF" || isPresidentOfCurrentClub)
             if (!canReview) return null
-            const items = pendingRequests ?? []
+            const items = (pendingRequests ?? []).filter((req) => {
+              // Nếu có clubId được chọn (>0), chỉ hiển thị các request thuộc đúng CLB đó
+              if (clubId && clubId > 0) {
+                return req.club?.id === clubId
+              }
+              // Nếu không chọn CLB cụ thể, giữ nguyên toàn bộ danh sách
+              return true
+            })
             return (
               <Card className="p-6 shadow-lg mt-6 border-amber-300">
                 <div className="flex items-center gap-2 mb-4">
