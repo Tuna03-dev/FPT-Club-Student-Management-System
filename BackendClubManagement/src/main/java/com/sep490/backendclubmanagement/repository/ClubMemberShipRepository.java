@@ -73,6 +73,20 @@ public interface ClubMemberShipRepository extends JpaRepository<ClubMemberShip, 
             @Param("searchTerm") String searchTerm
     );
 
+    @Query("""
+    SELECT DISTINCT cms FROM ClubMemberShip cms 
+    LEFT JOIN FETCH cms.roleMemberships rm 
+    LEFT JOIN FETCH rm.semester s
+    LEFT JOIN FETCH rm.clubRole cr
+    WHERE cms.club.id = :clubId 
+    AND (:searchTerm IS NULL OR 
+         LOWER(cms.user.fullName) LIKE LOWER(CONCAT('%', :searchTerm, '%')) 
+         OR LOWER(cms.user.studentCode) LIKE LOWER(CONCAT('%', :searchTerm, '%')))
+""")
+    List<ClubMemberShip> findMembersWithFiltersList(
+            @Param("clubId") Long clubId,
+            @Param("searchTerm") String searchTerm
+    );
     // Kiểm tra xem user đã là thành viên active của club chưa
     boolean existsByUserIdAndClubIdAndStatus(Long userId, Long clubId, ClubMemberShipStatus status);
 

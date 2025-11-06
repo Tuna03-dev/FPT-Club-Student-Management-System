@@ -10,6 +10,7 @@ public enum ErrorCode {
     UNAUTHORIZED(HttpStatus.FORBIDDEN, 403, "User is not allowed to access"),
     INSUFFICIENT_PERMISSION(HttpStatus.FORBIDDEN, 403, "Insufficient permission"),
     FORBIDDEN(HttpStatus.FORBIDDEN, 403, "User is not allowed to access"),
+    ORG_UNAUTHORIZED(HttpStatus.FORBIDDEN, 403, "Your account is not with our organization"),
     CLUB_NOT_FOUND(HttpStatus.NOT_FOUND, 2000, "Club not found"),
     NOT_FOUND(HttpStatus.NOT_FOUND,404, "Resource not found"),
     ROLE_NOT_FOUND(HttpStatus.NOT_FOUND, 2001, "Role not found"),

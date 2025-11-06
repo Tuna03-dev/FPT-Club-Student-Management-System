@@ -1,9 +1,10 @@
 import { EventCalendar } from "../../../components/features/event/myclub/event-calender";
+import { useParams } from "react-router-dom";
 
 export const EventList = () => {
-  // TODO: Lấy clubId từ context hoặc props
-  // Hiện tại hardcode để test
-  const clubId = 1;
+  // Lấy clubId từ URL: /myclub/:clubId/events
+  const params = useParams();
+  const clubId = Number(params.clubId);
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-background to-muted p-6">

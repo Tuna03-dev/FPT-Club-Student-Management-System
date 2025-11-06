@@ -54,7 +54,10 @@ public class SecurityConfig {
             "/api/news/get-all-by-filter",
             "/api/news/{id}",
             "/api/public/clubs/**",
-            "/api/pay-os/webhook"
+            "/api/pay-os/webhook",
+            "/api/pay-os/webhook",
+            "/ws/**",
+            "/api/test/**"
 
     };
 

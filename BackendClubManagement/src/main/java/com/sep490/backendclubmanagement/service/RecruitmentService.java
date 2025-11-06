@@ -39,6 +39,7 @@ public class RecruitmentService implements RecruitmentServiceInterface {
     private final ClubMemberShipRepository clubMemberShipRepository;
     private final RoleMemberShipRepository roleMembershipRepository;
     private final SemesterRepository semesterRepository;
+    private final ClubRoleRepository clubRoleRepository;
 
     @Override
     public PagedResponse<RecruitmentData> listRecruitments(Long clubId, RecruitmentStatus status, Pageable pageable) {
@@ -91,13 +92,13 @@ public class RecruitmentService implements RecruitmentServiceInterface {
     @Override
     @Transactional
     public RecruitmentData createRecruitment(Long userId, Long clubId, RecruitmentCreateRequest req) throws AppException {
-        // Kiểm tra quyền: phải là CLUB_PRESIDENT và là thành viên của club
+        // Check permission: must be CLUB_PRESIDENT and a member of the club
         checkClubPresidentPermission(userId, clubId);
         
         Recruitment r = recruitmentMapper.toEntity(req, clubId);
         r = recruitmentRepository.save(r);
         
-        // Nếu recruitment mới có status là OPEN, đóng tất cả các recruitment OPEN khác của club
+        // If new recruitment has status OPEN, close all other OPEN recruitments of the club
         if (r.getStatus() == RecruitmentStatus.OPEN) {
             closeOtherOpenRecruitments(clubId, r.getId());
         }
@@ -126,7 +127,7 @@ public class RecruitmentService implements RecruitmentServiceInterface {
         Recruitment r = recruitmentRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.INTERNAL_SERVER_ERROR));
         
-        // Kiểm tra quyền: phải là CLUB_PRESIDENT và là thành viên của club
+        // Check permission: must be CLUB_PRESIDENT and a member of the club
         checkClubPresidentPermission(userId, r.getClub().getId());
         
         // Check if recruitment is closed
@@ -136,7 +137,7 @@ public class RecruitmentService implements RecruitmentServiceInterface {
         
         recruitmentMapper.updateEntity(r, req);
         
-        // Nếu recruitment được cập nhật thành OPEN, đóng tất cả các recruitment OPEN khác của club
+        // If recruitment is updated to OPEN, close all other OPEN recruitments of the club
         if (r.getStatus() == RecruitmentStatus.OPEN) {
             closeOtherOpenRecruitments(r.getClub().getId(), r.getId());
         }
@@ -166,10 +167,10 @@ public class RecruitmentService implements RecruitmentServiceInterface {
         Recruitment r = recruitmentRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.INTERNAL_SERVER_ERROR));
         
-        // Kiểm tra quyền: phải là CLUB_PRESIDENT và là thành viên của club
+        // Check permission: must be CLUB_PRESIDENT and a member of the club
         checkClubPresidentPermission(userId, r.getClub().getId());
         
-        // Nếu status mới là OPEN, đóng tất cả các recruitment OPEN khác của club
+        // If new status is OPEN, close all other OPEN recruitments of the club
         if (status == RecruitmentStatus.OPEN) {
             closeOtherOpenRecruitments(r.getClub().getId(), r.getId());
         }
@@ -184,7 +185,7 @@ public class RecruitmentService implements RecruitmentServiceInterface {
         Recruitment r = recruitmentRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.INTERNAL_SERVER_ERROR));
         
-        // Kiểm tra quyền: phải là CLUB_PRESIDENT và là thành viên của club
+        // Check permission: must be CLUB_PRESIDENT and a member of the club
         checkClubPresidentPermission(userId, r.getClub().getId());
         
         recruitmentRepository.deleteById(id);
@@ -196,11 +197,11 @@ public class RecruitmentService implements RecruitmentServiceInterface {
     }
     
     public PagedResponse<RecruitmentApplicationData> listApplications(Long userId, Long recruitmentId, RecruitmentApplicationStatus status, String keyword, Pageable pageable) throws AppException {
-        // Lấy recruitment để xác định clubId
+        // Get recruitment to determine clubId
         Recruitment recruitment = recruitmentRepository.findById(recruitmentId)
                 .orElseThrow(() -> new AppException(ErrorCode.INTERNAL_SERVER_ERROR));
         
-        // Kiểm tra quyền: phải là CLUB_PRESIDENT và là thành viên của club
+        // Check permission: must be CLUB_PRESIDENT and a member of the club
         checkClubPresidentPermission(userId, recruitment.getClub().getId());
         
         Page<RecruitmentApplication> page;
@@ -252,7 +253,7 @@ public class RecruitmentService implements RecruitmentServiceInterface {
         User applicant = userRepository.findById(applicantId)
                 .orElseThrow(() -> new AppException(ErrorCode.UNAUTHORIZED));
 
-        // Kiểm tra xem user đã là thành viên active của club chưa
+        // Check if user is already an active member of the club
         Long clubId = recruitment.getClub().getId();
         boolean isAlreadyMember = clubMemberShipRepository.existsByUserIdAndClubIdAndStatus(
                 applicantId, clubId, ClubMemberShipStatus.ACTIVE);
@@ -260,7 +261,7 @@ public class RecruitmentService implements RecruitmentServiceInterface {
             throw new AppException(ErrorCode.ALREADY_CLUB_MEMBER);
         }
 
-        // Kiểm tra nếu user đã nộp đơn ứng tuyển cho đợt này thì không cho nộp nữa
+        // Check if user has already submitted an application for this recruitment period
         if (applicationRepository.findByApplicant_IdAndRecruitment_Id(applicantId, recruitment.getId()).isPresent()) {
             throw new AppException(ErrorCode.ALREADY_APPLIED);
         }
@@ -361,7 +362,7 @@ public class RecruitmentService implements RecruitmentServiceInterface {
         RecruitmentApplication app = applicationRepository.findById(applicationId)
                 .orElseThrow(() -> new AppException(ErrorCode.INTERNAL_SERVER_ERROR));
         
-        // Kiểm tra quyền: phải là CLUB_PRESIDENT và là thành viên của club
+        // Check permission: must be CLUB_PRESIDENT and a member of the club
         Long clubId = app.getRecruitment().getClub().getId();
         checkClubPresidentPermission(userId, clubId);
         
@@ -376,7 +377,7 @@ public class RecruitmentService implements RecruitmentServiceInterface {
         RecruitmentApplication app = applicationRepository.findById(applicationId)
                 .orElseThrow(() -> new AppException(ErrorCode.INTERNAL_SERVER_ERROR));
         
-        // Kiểm tra: đơn ứng tuyển phải thuộc về applicant
+        // Check: application must belong to the applicant
         if (!app.getApplicant().getId().equals(applicantId)) {
             throw new AppException(ErrorCode.INSUFFICIENT_PERMISSIONS);
         }
@@ -393,7 +394,7 @@ public class RecruitmentService implements RecruitmentServiceInterface {
         RecruitmentApplication app = applicationRepository.findById(req.applicationId)
                 .orElseThrow(() -> new AppException(ErrorCode.INTERNAL_SERVER_ERROR));
         
-        // Kiểm tra quyền: phải là CLUB_PRESIDENT và là thành viên của club
+        // Check permission: must be CLUB_PRESIDENT and a member of the club
         Long clubId = app.getRecruitment().getClub().getId();
         checkClubPresidentPermission(userId, clubId);
         
@@ -402,7 +403,7 @@ public class RecruitmentService implements RecruitmentServiceInterface {
         app.setReviewedDate(LocalDateTime.now());
         applicationRepository.save(app);
         
-        // Nếu status là ACCEPTED, thêm user vào phòng ban đã đăng ký
+        // If status is ACCEPTED, add user to the registered team
         if (req.status == RecruitmentApplicationStatus.ACCEPTED && app.getTeamId() != null) {
             addMemberToTeam(app);
         }
@@ -411,7 +412,7 @@ public class RecruitmentService implements RecruitmentServiceInterface {
     }
     
     /**
-     * Lấy thông tin application không kiểm tra quyền (dùng nội bộ)
+     * Get application information without permission check (for internal use)
      */
     private RecruitmentApplicationData getApplicationInternal(Long applicationId) throws AppException {
         RecruitmentApplication app = applicationRepository.findById(applicationId)
@@ -424,19 +425,19 @@ public class RecruitmentService implements RecruitmentServiceInterface {
     }
     
     /**
-     * Thêm member vào team sau khi đơn được chấp nhận
+     * Add member to team after application is accepted
      */
     private void addMemberToTeam(RecruitmentApplication app) throws AppException {
         Long applicantId = app.getApplicant().getId();
         Long clubId = app.getRecruitment().getClub().getId();
         Long teamId = app.getTeamId();
         
-        // Kiểm tra xem user đã là thành viên của club chưa
+        // Check if user is already a member of the club
         ClubMemberShip clubMembership = clubMemberShipRepository
                 .findByUserIdAndClubIdAndStatus(applicantId, clubId, ClubMemberShipStatus.ACTIVE)
                 .orElse(null);
         
-        // Nếu chưa là member, tạo ClubMemberShip mới
+        // If not a member yet, create new ClubMemberShip
         if (clubMembership == null) {
             Club club = app.getRecruitment().getClub();
             User applicant = app.getApplicant();
@@ -450,20 +451,23 @@ public class RecruitmentService implements RecruitmentServiceInterface {
             clubMembership = clubMemberShipRepository.save(clubMembership);
         }
         
-        // Lấy current semester
+        // Get current semester
         Semester currentSemester = semesterRepository.findCurrentSemester()
                 .orElseThrow(() -> new AppException(ErrorCode.INTERNAL_SERVER_ERROR));
         
-        // Lấy team
+        // Get team
         Team team = teamRepository.findById(teamId)
                 .orElseThrow(() -> new AppException(ErrorCode.INTERNAL_SERVER_ERROR));
         
-        // Tạo RoleMemberShip để gán user vào team
-        // clubRole để null (member thông thường), có thể customize sau
+        // Find ClubRole with role code MEMBER
+        ClubRole memberRole = clubRoleRepository.findByClubIdAndRoleCode(clubId, "MEMBER")
+                .orElse(null); // If not found, set to null (keep original behavior)
+        
+        // Create RoleMemberShip to assign user to team
         RoleMemberShip roleMembership = RoleMemberShip.builder()
                 .clubMemberShip(clubMembership)
                 .team(team)
-                .clubRole(null) // Member thông thường không có role đặc biệt
+                .clubRole(memberRole) // Assign MEMBER role if found
                 .semester(currentSemester)
                 .isActive(true)
                 .build();
@@ -544,7 +548,7 @@ public class RecruitmentService implements RecruitmentServiceInterface {
     private void upsertTeamOptions(Recruitment recruitment, List<Long> teamIds) {
         // Validate teamIds is not null or empty (should be enforced by validation, but double-check)
         if (teamIds == null || teamIds.isEmpty()) {
-            throw new RuntimeException("teamOptionIds không được để trống. Phải chọn ít nhất một phòng ban.");
+            throw new RuntimeException("teamOptionIds cannot be empty. Must select at least one team.");
         }
         
         // Get existing team options
@@ -582,8 +586,8 @@ public class RecruitmentService implements RecruitmentServiceInterface {
     }
 
     /**
-     * Đóng tất cả các recruitment có status OPEN khác của club (trừ recruitment hiện tại)
-     * để đảm bảo chỉ có một recruitment OPEN tại một thời điểm
+     * Close all other OPEN recruitments of the club (except current recruitment)
+     * to ensure only one recruitment is OPEN at a time
      */
     private void closeOtherOpenRecruitments(Long clubId, Long currentRecruitmentId) {
         List<Recruitment> openRecruitments = recruitmentRepository.findByClub_IdAndStatusAndIdNot(
@@ -597,15 +601,15 @@ public class RecruitmentService implements RecruitmentServiceInterface {
     }
 
     /**
-     * Kiểm tra xem user có quyền quản lý recruitment của club không
-     * Yêu cầu: phải là thành viên ACTIVE của club VÀ có club role là CLUB_PRESIDENT trong kỳ hiện tại
+     * Check if user has permission to manage recruitment of the club
+     * Requirement: must be an ACTIVE member of the club AND have club role CLUB_PRESIDENT in the current semester
      */
     private void checkClubPresidentPermission(Long userId, Long clubId) throws AppException {
-        // Lấy semester hiện tại
+        // Get current semester
         Semester currentSemester = semesterRepository.findCurrentSemester()
                 .orElseThrow(() -> new AppException(ErrorCode.INTERNAL_SERVER_ERROR));
         
-        // Kiểm tra xem user có phải là CLUB_PRESIDENT của club trong semester hiện tại không
+        // Check if user is CLUB_PRESIDENT of the club in the current semester
         boolean isClubPresident = clubMemberShipRepository.isClubPresidentInSemester(
                 userId, clubId, currentSemester.getId()
         );

@@ -1,8 +1,6 @@
 "use client"
 
-import type React from "react"
-
-import { useState } from "react"
+import React, { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
@@ -15,6 +13,8 @@ interface CreateEventFormProps {
   eventTypes: Array<{ id: string; name: string }>
   onSubmit: (data: EventFormData) => Promise<void>
   onSuccess: () => void
+  initialStartTime?: string
+  initialEndTime?: string
 }
 
 export interface EventFormData {
@@ -27,16 +27,26 @@ export interface EventFormData {
   eventImages: File[]
 }
 
-export function CreateEventForm({ eventTypes, onSubmit, onSuccess }: CreateEventFormProps) {
+export function CreateEventForm({ eventTypes, onSubmit, onSuccess, initialStartTime, initialEndTime }: CreateEventFormProps) {
   const [formData, setFormData] = useState<EventFormData>({
     title: "",
     description: "",
     location: "",
-    startTime: "",
-    endTime: "",
+    startTime: initialStartTime ?? "",
+    endTime: initialEndTime ?? "",
     eventType: "",
     eventImages: [],
   })
+
+  // Sync initial times when dialog opens with preset values
+  useEffect(() => {
+    setFormData((prev) => ({
+      ...prev,
+      startTime: initialStartTime ?? prev.startTime,
+      endTime: initialEndTime ?? prev.endTime,
+    }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialStartTime, initialEndTime])
 
   const [imagePreview, setImagePreview] = useState<string[]>([])
   const [isLoading, setIsLoading] = useState(false)

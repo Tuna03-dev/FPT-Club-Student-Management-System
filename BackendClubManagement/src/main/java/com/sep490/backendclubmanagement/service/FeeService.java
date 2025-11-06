@@ -6,6 +6,7 @@ import com.sep490.backendclubmanagement.dto.request.PayOSWebhookRequest;
 import com.sep490.backendclubmanagement.dto.request.UpdateFeeRequest;
 import com.sep490.backendclubmanagement.dto.response.FeeDetailResponse;
 import com.sep490.backendclubmanagement.dto.response.PayOSCreatePaymentResponse;
+import com.sep490.backendclubmanagement.dto.websocket.PaymentWebSocketPayload;
 import com.sep490.backendclubmanagement.entity.*;
 import com.sep490.backendclubmanagement.exception.AppException;
 import com.sep490.backendclubmanagement.exception.ErrorCode;
@@ -44,10 +45,37 @@ public class FeeService {
     private final IncomeTransactionRepository incomeTransactionRepository;
     private final ClubWalletRepository clubWalletRepository;
     private final PayOSPaymentRepository payOSPaymentRepository;
-
+    private final WebSocketService webSocketService;
 
     @Value("${app.frontend.url:http://localhost:5173}")
     private String frontendUrl;
+
+
+    public List<FeeDetailResponse> getPaidFeesByUser(Long clubId, Long userId) {
+        List<Fee> fees = feeRepository.findPaidFeesByClubIdAndUserId(clubId, userId);
+        return fees.stream()
+                .map(fee -> {
+                    FeeDetailResponse response = feeMapper.toFeeDetailResponse(fee);
+
+                    // Tìm transaction của user này cho fee này
+                    IncomeTransaction userTransaction = fee.getIncomeTransactions().stream()
+                            .filter(t -> t.getUser().getId().equals(userId)
+                                    && t.getStatus() == TransactionStatus.SUCCESS)
+                            .findFirst()
+                            .orElse(null);
+
+                    // Set thông tin thanh toán
+                    if (userTransaction != null) {
+                        response.setPaidDate(userTransaction.getTransactionDate());
+                        response.setTransactionReference(userTransaction.getReference());
+                    }
+
+                    return response;
+                })
+                .collect(Collectors.toList());
+    }
+
+
 
     @Transactional
     public FeeDetailResponse createFee(Long clubId, CreateFeeRequest request) throws AppException {
@@ -411,6 +439,18 @@ public class FeeService {
 
         log.info("[PayOS] Giao dịch thành công | user={} | fee={} | amount={} | orderCode={}",
                 user.getFullName(), fee.getTitle(), fee.getAmount(), orderCode);
+
+        PaymentWebSocketPayload payload = PaymentWebSocketPayload.builder()
+                .userId(user.getId())
+                .feeId(fee.getId())
+                .amount(fee.getAmount())
+                .orderCode(orderCode)
+                .status("SUCCESS")
+                .transactionCode(webhookRequest.getData().getTransactionCode())
+                .message("Thanh toán khoản phí thành công")
+                .build();
+
+        webSocketService.sendPaymentSuccess(user.getEmail(), payload);
     }
 
     private LocalDateTime parseDateTime(String dateTimeStr) {
@@ -429,6 +469,14 @@ public class FeeService {
         }
 
         throw new IllegalArgumentException("Unrecognized datetime format: " + dateTimeStr);
+    }
+
+    /**
+     * Get unpaid fees for a user in a club
+     */
+    public List<FeeDetailResponse> getUnpaidFeesByUser(Long clubId, Long userId) {
+        List<Fee> fees = feeRepository.findUnpaidFeesByClubIdAndUserId(clubId, userId);
+        return fees.stream().map(feeMapper::toFeeDetailResponse).collect(Collectors.toList());
     }
 }
 

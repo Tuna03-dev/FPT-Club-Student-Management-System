@@ -1,4 +1,3 @@
-// src/layouts/ClubLayout.tsx
 import {
   Home,
   Users,
@@ -40,11 +39,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { toast } from "sonner";
 import { authService } from "@/services/authService";
 import { useTeams } from "@/hooks/useTeams";
-// ✅ dùng hook officer tối giản (team-level API, có fallback)
+// hook officer tối giản (team-level API, có fallback)
 import { useClubOfficer } from "@/hooks/useClubOfficer";
-// ✅ context permissions để Guard đọc
+// context permissions để Guard đọc
 import { PermissionContext } from "@/contexts/PermissionContext";
 
 const navItems = [
@@ -115,7 +115,7 @@ export const ClubLayout = () => {
     } catch {}
   }
 
-  // ✅ kiểm tra officer CN/PCN (dựa trên team-level API, có fallback)
+  // kiểm tra officer CN/PCN (dựa trên team-level API, có fallback)
   const { isOfficer, loading: officerLoading } =
     useClubOfficer(validClubId ? numericClubId : undefined, teamIdFromUrl);
 
@@ -136,7 +136,8 @@ export const ClubLayout = () => {
       /* ignore */
     } finally {
       authService.logout();
-      navigate("/login", { replace: true });
+      toast.success("Đăng xuất thành công!", { duration: 2000 });
+      navigate("/", { replace: true });
     }
   };
 
@@ -149,7 +150,7 @@ export const ClubLayout = () => {
   }
 
   return (
-    // ✅ Cung cấp quyền cho toàn bộ subtree (Guard chỉ đọc, không tự gọi API)
+    // Cung cấp quyền cho toàn bộ subtree (Guard chỉ đọc, không tự gọi API)
     <PermissionContext.Provider value={{ isOfficer, loading: officerLoading }}>
       <TooltipProvider delayDuration={200}>
         <div className="h-screen w-full bg-background flex flex-col overflow-hidden">
@@ -221,7 +222,7 @@ export const ClubLayout = () => {
                     <AvatarFallback>U</AvatarFallback>
                   </Avatar>
                   <Button variant="ghost" size="sm" onClick={handleLogout}>
-                    {t("common:logout", { defaultValue: "Đăng xuất" })}
+                    {t("logout", "Đăng xuất")}
                   </Button>
                 </div>
 
