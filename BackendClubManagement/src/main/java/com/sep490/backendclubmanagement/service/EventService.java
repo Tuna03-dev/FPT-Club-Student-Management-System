@@ -55,11 +55,10 @@ public class EventService {
                 .toList()
                 : List.of();
 
-        // 2️⃣ Lấy dữ liệu từ repository (lọc theo eventTypeId, clubId, thời gian, is_draft)
         Page<Event> page = this.eventRepository.getAllByFilter(request, request.getPageable());
         List<Event> events = page.getContent();
 
-        // 3️⃣ Nếu có keyword thì lọc tiếp ở tầng Java
+
         if (!keywords.isEmpty()) {
             events = events.stream()
                     .filter(event -> {
@@ -77,7 +76,7 @@ public class EventService {
                     .toList();
         }
 
-        // 4️⃣ Map sang DTO
+
         List<EventData> list = events.stream()
                 .map(event -> {
                     EventData dto = eventMapper.toDto(event);
@@ -87,10 +86,10 @@ public class EventService {
                 })
                 .toList();
 
-        // 5️⃣ Trả về kết quả
+
         return EventResponse.builder()
-                .total(page.getTotalElements())  // tổng số trong DB (chưa lọc keyword)
-                .count(list.size())              // số kết quả sau khi lọc keyword
+                .total(page.getTotalElements())
+                .count(list.size())
                 .data(list)
                 .build();
     }
@@ -167,9 +166,19 @@ public class EventService {
             throw new RuntimeException("Cannot register for draft event");
         }
         
-        // Kiểm tra event đã kết thúc chưa
-        if (event.getStartTime() != null && event.getStartTime().isBefore(LocalDateTime.now())) {
-            throw new RuntimeException("Cannot register for event that has already started");
+        // Cho phép MEETING đăng ký trong khi đang diễn ra; các loại khác chỉ trước khi bắt đầu
+        LocalDateTime now = LocalDateTime.now();
+        boolean isMeeting = event.getEventType() != null &&
+                event.getEventType().getTypeName() != null &&
+                "MEETING".equalsIgnoreCase(event.getEventType().getTypeName());
+        if (event.getStartTime() != null) {
+            boolean hasStarted = event.getStartTime().isBefore(now);
+            if (hasStarted && !isMeeting) {
+                throw new RuntimeException("Cannot register for event that has already started");
+            }
+        }
+        if (event.getEndTime() != null && event.getEndTime().isBefore(now)) {
+            throw new RuntimeException("Cannot register for event that has already ended");
         }
         
         // Kiểm tra user tồn tại
@@ -271,9 +280,9 @@ public class EventService {
             throw new NotFoundException("Event không thuộc về club nào");
         }
         
-        // Không cho điểm danh nếu sự kiện đã kết thúc
-        if (event.getEndTime() != null && event.getEndTime().isBefore(LocalDateTime.now())) {
-            throw new RuntimeException("Event has ended. Attendance can no longer be modified");
+        // Không cho điểm danh nếu sự kiện đã kết thúc quá 1 ngày
+        if (event.getEndTime() != null && event.getEndTime().isBefore(LocalDateTime.now().minusDays(1))) {
+            throw new RuntimeException("Event ended more than 1 day ago. Attendance can no longer be modified");
         }
         
         if (attendances == null || attendances.isEmpty()) {

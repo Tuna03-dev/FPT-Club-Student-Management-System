@@ -63,6 +63,8 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
 
   // Kiểm tra sự kiện đã kết thúc chưa
   const isEventEnded = new Date() >= event.endDate
+  // Cho phép điểm danh trong vòng 1 ngày sau khi kết thúc
+  const isWithinOneDayAfterEnd = new Date() < new Date(event.endDate.getTime() + 24 * 60 * 60 * 1000)
   const isEventUpcoming = new Date() < event.startDate
   const isMeeting = (eventTypeName ?? "").toUpperCase() === "MEETING"
   const canEditStaffEvent = isStaff && isEventUpcoming && (eventClubId == null)
@@ -375,20 +377,20 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
               {/* Nút Điểm danh/Xem điểm danh - chỉ hiện cho CLUB_PRESIDENT và CLUB_OFFICER */}
               {canMarkAttendance && currentClubId && (
                 <Button
-                  className={`${!isEventEnded ? "flex-1" : "flex-1"} h-10 text-sm gap-2 ${
-                    isEventEnded 
+                  className={`${(!isEventEnded || isWithinOneDayAfterEnd) ? "flex-1" : "flex-1"} h-10 text-sm gap-2 ${
+                    (isEventEnded && !isWithinOneDayAfterEnd)
                       ? "bg-white text-foreground border border-border hover:bg-orange-500 hover:text-white hover:border-orange-600"
                       : "bg-orange-500 hover:bg-orange-600 text-white"
                   }`}
                   onClick={() => {
                     onClose()
-                    const url = isEventEnded 
+                    const url = (isEventEnded && !isWithinOneDayAfterEnd)
                       ? `/myclub/${currentClubId}/events/attendance/${event.id}?mode=view`
                       : `/myclub/${currentClubId}/events/attendance/${event.id}`
                     navigate(url)
                   }}
                 >
-                  {isEventEnded ? (
+                  {(isEventEnded && !isWithinOneDayAfterEnd) ? (
                     <>
                       <Eye className="w-4 h-4" />
                       Xem điểm danh

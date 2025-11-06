@@ -30,6 +30,7 @@ interface Event {
   images: string[]
   isMyDraft?: boolean
   requestStatus?: string
+  eventTypeName?: string
 }
 interface EventFormValues {
   title: string
@@ -93,7 +94,8 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
           location: event.location,
           attendees: 0,
           status: determineEventStatus(new Date(event.startTime), new Date(event.endTime)),
-          images: event.mediaUrls || []
+          images: event.mediaUrls || [],
+          eventTypeName: event.eventTypeName,
         }))
         let all: Event[] = mappedEvents
         const userUpper = roleUpper
@@ -112,6 +114,7 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
               images: d.event.mediaUrls || [],
               isMyDraft: true,
               requestStatus: d.requestStatus,
+              eventTypeName: d.event.eventTypeName,
             }))
             const byId = new Map<string, Event>()
             for (const e of all) byId.set(e.id, e)
@@ -170,7 +173,8 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
         location: event.location,
         attendees: 0,
         status: determineEventStatus(new Date(event.startTime), new Date(event.endTime)),
-        images: event.mediaUrls || []
+        images: event.mediaUrls || [],
+        eventTypeName: event.eventTypeName,
       }))
       
       let all: Event[] = mappedEvents
@@ -190,6 +194,7 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
             images: d.event.mediaUrls || [],
             isMyDraft: true,
             requestStatus: d.requestStatus,
+            eventTypeName: d.event.eventTypeName,
           }))
           const byId = new Map<string, Event>()
           // First add all regular events
@@ -263,6 +268,7 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
             images: e.mediaUrls || [],
             isMyDraft: true,
             requestStatus: "CANCELLED",
+            eventTypeName: e.eventTypeName,
           }))
           setCancelledEvents(mapped)
         })
@@ -290,6 +296,7 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
           images: e.mediaUrls || [],
           isMyDraft: true,
           requestStatus: "CANCELLED",
+          eventTypeName: e.eventTypeName,
         }))
         setCancelledEvents(mapped)
       }
@@ -574,7 +581,7 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
                               return (
                                 <div
                                   key={event.id}
-                                  className={`text-[11px] px-1.5 py-0.5 rounded font-medium truncate cursor-pointer hover:opacity-90 flex-shrink-0 transition-opacity ${
+                                className={`text-[11px] px-1.5 py-0.5 rounded font-medium truncate cursor-pointer hover:opacity-90 flex-shrink-0 transition-opacity inline-flex items-center gap-1 ${
                                     isDraft 
                                       ? "!bg-gray-400 !text-white" 
                                       : getStatusColor(event.status)
@@ -585,6 +592,14 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
                                     setSelectedEvent(event)
                                   }}
                                 >
+                                  {/* MEETING marker */}
+                                  {(() => {
+                                    const t = event.eventTypeName ? String(event.eventTypeName).trim().toUpperCase() : ""
+                                    if (t === "MEETING") {
+                                      return <span className="align-middle">📷</span>
+                                    }
+                                    return null
+                                  })()}
                                   {event.title}
                                 </div>
                               )
@@ -632,91 +647,6 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
             
             
           </Card>
-          {/* Cancelled events card (STAFF) */}
-          {(() => {
-            const user = authService.getCurrentUser()
-            const isStaff = !!user && user.systemRole === "STAFF"
-            if (!isStaff) return null
-            const items = cancelledEvents ?? []
-            return (
-              <Card className="p-6 shadow-lg mt-6 border-gray-300">
-                <div className="flex items-center gap-2 mb-4">
-                  <span className="inline-block w-3 h-3 rounded-full bg-gray-400" />
-                  <h3 className="text-lg font-bold text-foreground">Sự kiện đã hủy{items.length != null ? ` (${items.length})` : ""}</h3>
-                </div>
-                {loadingCancelled ? (
-                  <div className="text-sm text-muted-foreground">Đang tải danh sách...</div>
-                ) : items.length === 0 ? (
-                  <div className="text-sm text-muted-foreground">Không có sự kiện nào</div>
-                ) : (
-                  <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
-                    {items.map((ev) => (
-                      <div key={ev.id} className="rounded-md border bg-gray-50 px-4 py-3">
-                        <div className="font-semibold text-foreground">{ev.title}</div>
-                        <div className="text-xs text-muted-foreground mt-1 mb-3">
-                          <span>
-                            {ev.startDate.toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}
-                            {" - "}
-                            {ev.endDate.toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}
-                          </span>
-                          {ev.location ? (<div className="mt-1">📍 {ev.location}</div>) : null}
-                        </div>
-                        <div className="flex gap-3">
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            className="bg-blue-50 text-blue-600 hover:bg-blue-100"
-                            disabled={(() => { const now=new Date(); return ev.startDate <= now; })()}
-                            onClick={async () => {
-                              if ((() => { const now=new Date(); return ev.startDate <= now; })()) return
-                              await restoreCancelledEventByStaff(Number(ev.id))
-                              toast.success("Đã khôi phục sự kiện")
-                              const refreshed = await getStaffCancelledEvents(clubId && clubId > 0 ? clubId : undefined)
-                              const mapped: Event[] = (refreshed ?? []).map((e) => ({
-                                id: String(e.id),
-                                title: e.title,
-                                description: e.description,
-                                startDate: new Date(e.startTime),
-                                endDate: new Date(e.endTime),
-                                location: e.location ?? "",
-                                attendees: 0,
-                                status: determineEventStatus(new Date(e.startTime), new Date(e.endTime)),
-                                images: e.mediaUrls || [],
-                                isMyDraft: true,
-                                requestStatus: "CANCELLED",
-                              }))
-                              setCancelledEvents(mapped)
-                              await refetchEvents()
-                            }}
-                          >
-                            Khôi phục
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            className="bg-rose-50 text-rose-600 hover:bg-rose-100"
-                            onClick={async () => {
-                              try {
-                                await deleteCancelledEventByStaff(Number(ev.id))
-                                toast.success("Đã xóa sự kiện")
-                                setCancelledEvents((prev) => (prev ?? []).filter((x: Event) => x.id !== ev.id))
-                                await refetchEvents()
-                              } catch (e: unknown) {
-                                console.error(e)
-                                toast.error(getErrorMessage(e, "Không thể xóa sự kiện"))
-                              }
-                            }}
-                          >
-                            Xóa
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </Card>
-            )
-          })()}
           {/* Pending requests card (STAFF/CLUB_PRESIDENT) */}
           {(() => {
             const user = authService.getCurrentUser()
@@ -856,6 +786,91 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
                       </div>
                       )
                     })}
+                  </div>
+                )}
+              </Card>
+            )
+          })()}
+          {/* Cancelled events card (STAFF) */}
+          {(() => {
+            const user = authService.getCurrentUser()
+            const isStaff = !!user && user.systemRole === "STAFF"
+            if (!isStaff) return null
+            const items = cancelledEvents ?? []
+            return (
+              <Card className="p-6 shadow-lg mt-6 border-gray-300">
+                <div className="flex items-center gap-2 mb-4">
+                  <span className="inline-block w-3 h-3 rounded-full bg-gray-400" />
+                  <h3 className="text-lg font-bold text-foreground">Sự kiện đã hủy{items.length != null ? ` (${items.length})` : ""}</h3>
+                </div>
+                {loadingCancelled ? (
+                  <div className="text-sm text-muted-foreground">Đang tải danh sách...</div>
+                ) : items.length === 0 ? (
+                  <div className="text-sm text-muted-foreground">Không có sự kiện nào</div>
+                ) : (
+                  <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
+                    {items.map((ev) => (
+                      <div key={ev.id} className="rounded-md border bg-gray-50 px-4 py-3">
+                        <div className="font-semibold text-foreground">{ev.title}</div>
+                        <div className="text-xs text-muted-foreground mt-1 mb-3">
+                          <span>
+                            {ev.startDate.toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}
+                            {" - "}
+                            {ev.endDate.toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}
+                          </span>
+                          {ev.location ? (<div className="mt-1">📍 {ev.location}</div>) : null}
+                        </div>
+                        <div className="flex gap-3">
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            className="bg-blue-50 text-blue-600 hover:bg-blue-100"
+                            disabled={(() => { const now=new Date(); return ev.startDate <= now; })()}
+                            onClick={async () => {
+                              if ((() => { const now=new Date(); return ev.startDate <= now; })()) return
+                              await restoreCancelledEventByStaff(Number(ev.id))
+                              toast.success("Đã khôi phục sự kiện")
+                              const refreshed = await getStaffCancelledEvents(clubId && clubId > 0 ? clubId : undefined)
+                              const mapped: Event[] = (refreshed ?? []).map((e) => ({
+                                id: String(e.id),
+                                title: e.title,
+                                description: e.description,
+                                startDate: new Date(e.startTime),
+                                endDate: new Date(e.endTime),
+                                location: e.location ?? "",
+                                attendees: 0,
+                                status: determineEventStatus(new Date(e.startTime), new Date(e.endTime)),
+                                images: e.mediaUrls || [],
+                                isMyDraft: true,
+                                requestStatus: "CANCELLED",
+                              }))
+                              setCancelledEvents(mapped)
+                              await refetchEvents()
+                            }}
+                          >
+                            Khôi phục
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            className="bg-rose-50 text-rose-600 hover:bg-rose-100"
+                            onClick={async () => {
+                              try {
+                                await deleteCancelledEventByStaff(Number(ev.id))
+                                toast.success("Đã xóa sự kiện")
+                                setCancelledEvents((prev) => (prev ?? []).filter((x: Event) => x.id !== ev.id))
+                                await refetchEvents()
+                              } catch (e: unknown) {
+                                console.error(e)
+                                toast.error(getErrorMessage(e, "Không thể xóa sự kiện"))
+                              }
+                            }}
+                          >
+                            Xóa
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 )}
               </Card>
