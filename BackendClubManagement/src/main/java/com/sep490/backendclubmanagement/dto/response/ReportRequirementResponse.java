@@ -37,7 +37,6 @@ public class ReportRequirementResponse {
         private String clubName;
         private String clubCode;
         private String status;
-        private String note;
         private ReportInfo report;
     }
 

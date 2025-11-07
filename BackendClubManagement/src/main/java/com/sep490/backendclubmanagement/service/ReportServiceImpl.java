@@ -67,12 +67,26 @@ public class ReportServiceImpl implements ReportServiceInterface {
 
     /**
      * Get all reports with filters and pagination (for staff only)
+     * Only returns reports with university-level status: PENDING_UNIVERSITY, APPROVED_UNIVERSITY, REJECTED_UNIVERSITY, RESUBMITTED_UNIVERSITY
      */
     @Override
     public PageResponse<ReportListItemResponse> getAllReports(ReportFilterRequest request, Long userId) {
         // Check staff permission
         if (!roleService.isStaff(userId)) {
             throw new ForbiddenException("Only staff can view report list");
+        }
+
+        // Staff can only view university-level reports
+        // If status is provided, validate it's a university-level status
+        if (request.getStatus() != null) {
+            if (request.getStatus() != ReportStatus.PENDING_UNIVERSITY
+                    && request.getStatus() != ReportStatus.APPROVED_UNIVERSITY
+                    && request.getStatus() != ReportStatus.REJECTED_UNIVERSITY
+                    && request.getStatus() != ReportStatus.RESUBMITTED_UNIVERSITY) {
+                throw new ForbiddenException(
+                        "Staff can only view reports with status: PENDING_UNIVERSITY, APPROVED_UNIVERSITY, REJECTED_UNIVERSITY, or RESUBMITTED_UNIVERSITY"
+                );
+            }
         }
 
         Pageable pageable = request.getPageable("submittedDate,desc");
@@ -85,11 +99,37 @@ public class ReportServiceImpl implements ReportServiceInterface {
                 pageable
         );
 
-        return PageResponse.of(reportPage.map(reportMapper::toListItem));
+        // Filter to only include university-level reports
+        List<Report> filteredReports = reportPage.getContent().stream()
+                .filter(report ->
+                        report.getStatus() == ReportStatus.PENDING_UNIVERSITY
+                                || report.getStatus() == ReportStatus.APPROVED_UNIVERSITY
+                                || report.getStatus() == ReportStatus.REJECTED_UNIVERSITY
+                                || report.getStatus() == ReportStatus.RESUBMITTED_UNIVERSITY
+                )
+                .toList();
+
+        // Map to response
+        List<ReportListItemResponse> filteredContent = filteredReports.stream()
+                .map(reportMapper::toListItem)
+                .toList();
+
+        // Create PageResponse with filtered content
+        // Note: totalElements and totalPages reflect the filtered results
+        return PageResponse.<ReportListItemResponse>builder()
+                .content(filteredContent)
+                .pageNumber(reportPage.getNumber())
+                .pageSize(reportPage.getSize())
+                .totalElements(filteredContent.size())
+                .totalPages((int) Math.ceil((double) filteredContent.size() / reportPage.getSize()))
+                .hasNext(reportPage.getNumber() < reportPage.getTotalPages() - 1 && filteredContent.size() == reportPage.getSize())
+                .hasPrevious(reportPage.getNumber() > 0)
+                .build();
     }
 
     /**
      * Get report detail by ID (for staff only)
+     * Only allows viewing reports with university-level status
      */
     @Override
     public ReportDetailResponse getReportDetail(Long reportId, Long userId) {
@@ -100,6 +140,17 @@ public class ReportServiceImpl implements ReportServiceInterface {
 
         Report report = reportRepository.findByIdWithRelations(reportId)
                 .orElseThrow(() -> new NotFoundException("Report not found with ID: " + reportId));
+
+        // Staff can only view university-level reports
+        if (report.getStatus() != ReportStatus.PENDING_UNIVERSITY
+                && report.getStatus() != ReportStatus.APPROVED_UNIVERSITY
+                && report.getStatus() != ReportStatus.REJECTED_UNIVERSITY
+                && report.getStatus() != ReportStatus.RESUBMITTED_UNIVERSITY) {
+            throw new ForbiddenException(
+                    "Staff can only view reports with status: PENDING_UNIVERSITY, APPROVED_UNIVERSITY, REJECTED_UNIVERSITY, or RESUBMITTED_UNIVERSITY. " +
+                    "Current status: " + report.getStatus()
+            );
+        }
 
         return reportMapper.toDetail(report);
     }
@@ -119,54 +170,27 @@ public class ReportServiceImpl implements ReportServiceInterface {
         Report report = reportRepository.findByIdWithRelations(request.getReportId())
                 .orElseThrow(() -> new NotFoundException("Report not found with ID: " + request.getReportId()));
 
-        // Only allow reviewing reports with status PENDING_CLUB, UPDATED_PENDING_CLUB, PENDING_UNIVERSITY, or RESUBMITTED_UNIVERSITY
-        if (report.getStatus() != ReportStatus.PENDING_CLUB 
-                && report.getStatus() != ReportStatus.UPDATED_PENDING_CLUB
-                && report.getStatus() != ReportStatus.PENDING_UNIVERSITY
+        // Only allow reviewing reports with status PENDING_UNIVERSITY, or RESUBMITTED_UNIVERSITY
+        if (report.getStatus() != ReportStatus.PENDING_UNIVERSITY
                 && report.getStatus() != ReportStatus.RESUBMITTED_UNIVERSITY) {
             throw new ForbiddenException(
-                    "Only reports with status PENDING_CLUB, UPDATED_PENDING_CLUB, PENDING_UNIVERSITY, or RESUBMITTED_UNIVERSITY can be reviewed. " +
+                    "Only reports with status PENDING_UNIVERSITY, or RESUBMITTED_UNIVERSITY can be reviewed. " +
                     "Current status: " + report.getStatus()
             );
         }
 
         // Validate status and update report status accordingly
-        // Determine if this is a club-level or university-level review based on current status
-        boolean isClubLevelReview = report.getStatus() == ReportStatus.PENDING_CLUB 
-                || report.getStatus() == ReportStatus.UPDATED_PENDING_CLUB;
-        boolean isUniversityLevelReview = report.getStatus() == ReportStatus.PENDING_UNIVERSITY 
-                || report.getStatus() == ReportStatus.RESUBMITTED_UNIVERSITY;
-        
+        // Staff only handles university-level reviews
         ReportStatus newReportStatus;
         
-        if (isClubLevelReview) {
-            // Club-level review
-            if (request.getStatus() == ReportStatus.APPROVED_CLUB) {
-                // After club approval, automatically move to university level for review
-                newReportStatus = ReportStatus.PENDING_UNIVERSITY;
-            } else if (request.getStatus() == ReportStatus.REJECTED_CLUB) {
-                newReportStatus = ReportStatus.REJECTED_CLUB;
-            } else {
-                throw new ForbiddenException(
-                        "For club-level review, status must be APPROVED_CLUB or REJECTED_CLUB. " +
-                        "Current report status: " + report.getStatus()
-                );
-            }
-        } else if (isUniversityLevelReview) {
-            // University-level review
-            if (request.getStatus() == ReportStatus.APPROVED_UNIVERSITY) {
-                newReportStatus = ReportStatus.APPROVED_UNIVERSITY;
-            } else if (request.getStatus() == ReportStatus.REJECTED_UNIVERSITY) {
-                newReportStatus = ReportStatus.REJECTED_UNIVERSITY;
-            } else {
-                throw new ForbiddenException(
-                        "For university-level review, status must be APPROVED_UNIVERSITY or REJECTED_UNIVERSITY. " +
-                        "Current report status: " + report.getStatus()
-                );
-            }
+        if (request.getStatus() == ReportStatus.APPROVED_UNIVERSITY) {
+            newReportStatus = ReportStatus.APPROVED_UNIVERSITY;
+        } else if (request.getStatus() == ReportStatus.REJECTED_UNIVERSITY) {
+            newReportStatus = ReportStatus.REJECTED_UNIVERSITY;
         } else {
             throw new ForbiddenException(
-                    "Cannot review report with current status: " + report.getStatus()
+                    "Staff can only approve or reject reports. Status must be APPROVED_UNIVERSITY or REJECTED_UNIVERSITY. " +
+                    "Current report status: " + report.getStatus()
             );
         }
         
@@ -252,19 +276,12 @@ public class ReportServiceImpl implements ReportServiceInterface {
                     .build();
 
             ClubReportRequirement savedClubRequirement = clubReportRequirementRepository.save(clubRequirement);
-
-            // Get status from report if exists, otherwise null
-            String statusStr = null;
-            if (savedClubRequirement.getReport() != null && savedClubRequirement.getReport().getStatus() != null) {
-                statusStr = savedClubRequirement.getReport().getStatus().name();
-            }
             
             clubRequirementInfos.add(ReportRequirementResponse.ClubRequirementInfo.builder()
                     .id(savedClubRequirement.getId())
                     .clubId(club.getId())
                     .clubName(club.getClubName())
                     .clubCode(club.getClubCode())
-                    .status(statusStr)
                     .build());
         }
 
@@ -699,6 +716,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
 
     /**
      * Get report of a specific club for a specific report requirement (for staff only)
+     * Only returns reports with university-level status
      */
     @Override
     public ReportDetailResponse getClubReportByRequirement(Long requirementId, Long clubId, Long userId) {
@@ -724,6 +742,16 @@ public class ReportServiceImpl implements ReportServiceInterface {
         }
 
         Report report = reportOptional.get();
+        
+        // Staff can only view university-level reports
+        if (report.getStatus() != ReportStatus.PENDING_UNIVERSITY
+                && report.getStatus() != ReportStatus.APPROVED_UNIVERSITY
+                && report.getStatus() != ReportStatus.REJECTED_UNIVERSITY
+                && report.getStatus() != ReportStatus.RESUBMITTED_UNIVERSITY) {
+            // Return null if report is not at university level (staff cannot view club-level reports)
+            return null;
+        }
+
         return reportMapper.toDetail(report);
     }
 
