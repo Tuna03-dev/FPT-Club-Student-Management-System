@@ -1,6 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { authService, type UserInfo } from "@/services/authService";
-import { useMyClubs } from "./useMyClubs";
 
 export interface ClubPermissions {
   isClubPresident: boolean;
@@ -11,49 +10,48 @@ export interface ClubPermissions {
 }
 
 /**
- * Hook to check if user has permissions to manage club recruitment
- * Requires: 
+ * Hook to check if user has permissions to manage club
+ * Requires:
  * - User must be an ACTIVE member of the club
  * - User must have CLUB_PRESIDENT club role in the current semester
- * 
+ *
  * Sử dụng role data từ localStorage (clubRoleList) để check quyền nhanh hơn
+ * Kiểm tra cả clubRole (tên tiếng Việt) và systemRole (mã hệ thống) để đảm bảo tính nhất quán
  */
-export function useClubPermissions(clubId: number | undefined): ClubPermissions {
+export function useClubPermissions(
+  clubId: number | undefined
+): ClubPermissions {
   const [user, setUser] = useState<UserInfo | null>(null);
   const [loading, setLoading] = useState(true);
-  const { data: myClubs, loading: clubsLoading } = useMyClubs();
 
   useEffect(() => {
     // Get current user
     const currentUser = authService.getCurrentUser();
     setUser(currentUser);
-    
-    // Loading is done when both user and clubs data are ready
-    if (!clubsLoading) {
-      setLoading(false);
-    }
-  }, [clubsLoading]);
+    setLoading(false);
+  }, []);
 
-  // Tìm club role từ localStorage (nhanh hơn)
-  const clubRole = clubId ? authService.getClubRole(clubId) : null;
-
-  // Fallback: Tìm từ myClubs nếu không có trong localStorage
-  const userClub = clubId && myClubs ? myClubs.find((club) => club.clubId === clubId) : null;
+  // Tìm club role từ localStorage, reactive với clubId và user
+  const clubRole = useMemo(() => {
+    if (!clubId || !user) return null;
+    return authService.getClubRole(clubId);
+  }, [clubId, user]);
 
   // Check if user is a member of this club
-  const isClubMember = !!clubRole || !!userClub;
+  const isClubMember = useMemo(() => !!clubRole, [clubRole]);
 
   // Check if user has CLUB_PRESIDENT role in this club
-  // Ưu tiên check từ localStorage, fallback về myClubs
-  const isClubPresident = !!(
-    (clubRole && (clubRole.systemRole === "CLUB_PRESIDENT" || clubRole.clubRole === "Chủ nhiệm")) ||
-    (userClub &&
-      userClub.clubRoles &&
-      userClub.clubRoles.includes("CLUB_PRESIDENT"))
-  );
+  const isClubPresident = useMemo(() => {
+    if (!clubRole) return false;
+
+    // Kiểm tra theo tên tiếng Việt
+    const isPresident = clubRole.clubRole === "Chủ nhiệm";
+
+    return isPresident;
+  }, [clubRole]);
 
   // User has permission if they have CLUB_PRESIDENT role in this club
-  const hasPermission = isClubPresident;
+  const hasPermission = useMemo(() => isClubPresident, [isClubPresident]);
 
   return {
     isClubPresident,
@@ -63,4 +61,3 @@ export function useClubPermissions(clubId: number | undefined): ClubPermissions 
     user,
   };
 }
-

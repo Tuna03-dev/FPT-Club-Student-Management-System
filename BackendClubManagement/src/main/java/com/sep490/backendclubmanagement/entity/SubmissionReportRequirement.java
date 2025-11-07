@@ -39,9 +39,6 @@ public class SubmissionReportRequirement extends BaseEntity {
     @JoinColumn(name = "createdBy")
     private User createdBy;
 
-    @OneToMany(mappedBy = "reportRequirement", cascade = CascadeType.ALL)
-    private Set<Report> reports;
-
     @OneToOne
     @JoinColumn(name = "event_id", unique = true)
     private Event event;

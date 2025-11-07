@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,6 +13,7 @@ import {
   type UpdateReportRequest,
   type SubmitReportRequest,
 } from "@/services/reportService";
+import { axiosClient, type ApiResponse } from "@/api/axiosClient";
 import {
   mapBackendToFrontendReportType,
   type ReportDetailResponse,
@@ -168,7 +169,7 @@ export function ClubReportManagement() {
   const params = useParams();
   const clubIdParam = params.clubId;
   const clubId = clubIdParam ? Number(clubIdParam) : undefined;
-  const { isClubPresident } = useClubPermissions(clubId);
+  const { isClubPresident, loading: permissionsLoading } = useClubPermissions(clubId);
 
   // Helper function to map API response to ReportRequest format
   const mapRequirementToReportRequest = (req: any): ReportRequest => {
@@ -250,6 +251,8 @@ export function ClubReportManagement() {
   const [savingDraft, setSavingDraft] = useState(false);
   const [submittingReport, setSubmittingReport] = useState(false);
   const [editingReportId, setEditingReportId] = useState<number | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const editFileInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch report requirements from API
   useEffect(() => {
@@ -475,9 +478,15 @@ export function ClubReportManagement() {
     setShowSubmitDialog(true);
   };
 
-  const handleSaveDraft = async (requestId: string) => {
+  const handleSaveDraft = async (requestId?: string) => {
     if (!draftTitle.trim() || !draftContent.trim()) {
       toast.error("Vui lòng điền đầy đủ tiêu đề và nội dung");
+      return;
+    }
+
+    // File là bắt buộc
+    if (!draftFile && !draftFileUrl) {
+      toast.error("Vui lòng chọn file đính kèm");
       return;
     }
 
@@ -491,16 +500,68 @@ export function ClubReportManagement() {
 
       if (editingReportId) {
         // Update existing draft
+        let finalFileUrl = draftFileUrl;
+        
+        // Nếu có file mới được chọn, upload file lên Cloudinary trước
+        if (draftFile) {
+          try {
+            // Upload file mới lên Cloudinary qua API /uploads/file
+            const formData = new FormData();
+            formData.append("file", draftFile);
+            
+            interface UploadResult {
+              url: string;
+              publicId: string;
+              format: string;
+              bytes: number;
+            }
+            
+            const uploadResponse = await axiosClient.post<UploadResult>(
+              "/uploads/file",
+              formData,
+              {
+                headers: {
+                  "Content-Type": "multipart/form-data",
+                },
+                timeout: 60000, // Increase timeout for file uploads
+              }
+            );
+            
+            // Handle ApiResponse wrapper - axiosClient returns ApiResponse<T>
+            if (uploadResponse.code === 200 && uploadResponse.data && uploadResponse.data.url) {
+              finalFileUrl = uploadResponse.data.url;
+              toast.success("File đã được tải lên thành công");
+            } else {
+              throw new Error(uploadResponse.message || "Upload file failed: No URL returned");
+            }
+          } catch (err) {
+            console.error("Error uploading file:", err);
+            const errorMessage = err instanceof Error ? err.message : "Không thể tải lên file";
+            toast.error(`Lỗi khi tải file: ${errorMessage}`);
+            // Tiếp tục update với fileUrl cũ nếu upload file thất bại
+          }
+        }
+        
         const updateRequest: UpdateReportRequest = {
           reportTitle: draftTitle,
           content: draftContent,
-          fileUrl: draftFileUrl || undefined,
+          fileUrl: finalFileUrl || undefined,
         };
 
         await updateReport(editingReportId, updateRequest);
-        toast.success("Báo cáo đã được cập nhật");
+        toast.success("Báo cáo đã được cập nhật thành công");
       } else {
-        // Create new draft - ensure autoSubmit is false to save as DRAFT
+        // Create new draft - cần có requestId
+        if (!requestId) {
+          // Nếu không có requestId, lấy từ selectedReportDetail
+          if (selectedReportDetail?.reportRequirement?.id) {
+            requestId = selectedReportDetail.reportRequirement.id.toString();
+          } else {
+            toast.error("Không tìm thấy thông tin yêu cầu báo cáo");
+            return;
+          }
+        }
+        
         const createRequest: CreateReportRequest = {
           reportTitle: draftTitle,
           content: draftContent,
@@ -521,6 +582,9 @@ export function ClubReportManagement() {
 
       setShowSubmitDialog(false);
       setShowEditDialog(false);
+      setShowDetailModal(false);
+      setSelectedReportDetail(null);
+      setDraftFile(null);
 
       // Refresh report requirements to update status
       if (activeTab === "requests") {
@@ -1461,64 +1525,26 @@ export function ClubReportManagement() {
                 )}
 
               {/* Action buttons for DRAFT status when user is club president */}
-              {selectedReportDetail.status?.toUpperCase() === "DRAFT" &&
-                isClubPresident && (
+              {(() => {
+                // Kiểm tra status - normalize và trim để tránh lỗi
+                const rawStatus = selectedReportDetail.status || "";
+                const reportStatus = rawStatus.toUpperCase().trim();
+                const isDraft = reportStatus === "DRAFT";
+                
+                const reportClubId = selectedReportDetail.club?.id;
+                // So sánh clubId (có thể là number hoặc string từ URL)
+                // Nếu không có reportClubId, coi như cùng club (vì report được lấy từ API với clubId)
+                const isSameClub = reportClubId !== undefined && clubId !== undefined 
+                  ? Number(reportClubId) === Number(clubId) 
+                  : true;
+                
+                // Tính toán điều kiện hiển thị
+                const shouldShow = !permissionsLoading && isDraft && isClubPresident && isSameClub;
+                
+                // Chỉ hiển thị khi không đang loading và thỏa mãn điều kiện
+                if (shouldShow) {
+                  return (
                   <div className="flex gap-2 justify-end pt-4 border-t">
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        // Set up edit dialog
-                        setDraftTitle(selectedReportDetail.reportTitle);
-                        setDraftContent(selectedReportDetail.content || "");
-                        setDraftFileUrl(selectedReportDetail.fileUrl || "");
-                        setEditingReportId(selectedReportDetail.id);
-                        // Find the request for this report
-                        const requirementId =
-                          selectedReportDetail.reportRequirement?.id;
-                        if (requirementId) {
-                          const request = reportRequests.find(
-                            (r) => r.request_id === requirementId.toString()
-                          );
-                          if (request) {
-                            setSelectedRequest(request);
-                          }
-                        }
-                        setShowDetailModal(false);
-                        setShowEditDialog(true);
-                      }}
-                      className="bg-transparent"
-                    >
-                      <FileText className="h-4 w-4 mr-2" />
-                      Chỉnh sửa
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={async () => {
-                        if (
-                          !confirm(
-                            "Bạn có chắc chắn muốn từ chối bản nháp này? Bản nháp sẽ bị xóa."
-                          )
-                        ) {
-                          return;
-                        }
-                        try {
-                          // Note: There's no delete API yet, so we'll just show a message
-                          // In the future, this could call a delete API
-                          toast.info(
-                            "Chức năng xóa bản nháp đang được phát triển"
-                          );
-                          setShowDetailModal(false);
-                          setSelectedReportDetail(null);
-                        } catch (err) {
-                          console.error("Error rejecting draft:", err);
-                          toast.error("Không thể từ chối bản nháp");
-                        }
-                      }}
-                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                    >
-                      <XCircle className="h-4 w-4 mr-2" />
-                      Từ chối
-                    </Button>
                     <Button
                       onClick={async () => {
                         if (!selectedReportDetail.id) {
@@ -1564,8 +1590,68 @@ export function ClubReportManagement() {
                       <CheckCircle className="h-4 w-4 mr-2" />
                       {submitting ? "Đang nộp..." : "Chấp nhận và nộp"}
                     </Button>
+                    <Button
+                      variant="outline"
+                      onClick={async () => {
+                        if (
+                          !confirm(
+                            "Bạn có chắc chắn muốn từ chối bản nháp này? Bản nháp sẽ bị xóa."
+                          )
+                        ) {
+                          return;
+                        }
+                        try {
+                          // Note: There's no delete API yet, so we'll just show a message
+                          // In the future, this could call a delete API
+                          toast.info(
+                            "Chức năng xóa bản nháp đang được phát triển"
+                          );
+                          setShowDetailModal(false);
+                          setSelectedReportDetail(null);
+                        } catch (err) {
+                          console.error("Error rejecting draft:", err);
+                          toast.error("Không thể từ chối bản nháp");
+                        }
+                      }}
+                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                    >
+                      <XCircle className="h-4 w-4 mr-2" />
+                      Từ chối
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        // Set up edit dialog
+                        setDraftTitle(selectedReportDetail.reportTitle);
+                        setDraftContent(selectedReportDetail.content || "");
+                        setDraftFileUrl(selectedReportDetail.fileUrl || "");
+                        setEditingReportId(selectedReportDetail.id);
+                        // Find the request for this report
+                        const requirementId =
+                          selectedReportDetail.reportRequirement?.id;
+                        if (requirementId) {
+                          const request = reportRequests.find(
+                            (r) => r.request_id === requirementId.toString()
+                          );
+                          if (request) {
+                            setSelectedRequest(request);
+                          }
+                        }
+                        setShowDetailModal(false);
+                        setShowEditDialog(true);
+                      }}
+                      className="bg-transparent"
+                    >
+                      <FileText className="h-4 w-4 mr-2" />
+                      Chỉnh sửa
+                    </Button>
                   </div>
-                )}
+                  );
+                }
+                
+                // Nếu không thỏa mãn điều kiện, không hiển thị gì
+                return null;
+              })()}
             </CardContent>
           </Card>
         </div>
@@ -1604,7 +1690,7 @@ export function ClubReportManagement() {
                 />
               </div>
               <div>
-                <Label>Tệp đính kèm (tùy chọn)</Label>
+                <Label>Tệp đính kèm <span className="text-red-500">*</span></Label>
                 {draftFile ? (
                   <div className="flex items-center justify-between bg-muted/50 p-3 rounded-md mt-2">
                     <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -1622,7 +1708,12 @@ export function ClubReportManagement() {
                       type="button"
                       variant="ghost"
                       size="sm"
-                      onClick={() => setDraftFile(null)}
+                      onClick={() => {
+                        setDraftFile(null);
+                        if (fileInputRef.current) {
+                          fileInputRef.current.value = "";
+                        }
+                      }}
                       className="flex-shrink-0"
                     >
                       <X className="h-4 w-4" />
@@ -1643,6 +1734,7 @@ export function ClubReportManagement() {
                         </div>
                       </div>
                       <input
+                        ref={fileInputRef}
                         type="file"
                         onChange={(e) => {
                           const file = e.target.files?.[0];
@@ -1718,6 +1810,12 @@ export function ClubReportManagement() {
                   onClick={async () => {
                     if (!draftTitle.trim() || !draftContent.trim()) {
                       toast.error("Vui lòng điền đầy đủ tiêu đề và nội dung");
+                      return;
+                    }
+
+                    // File là bắt buộc
+                    if (!draftFile) {
+                      toast.error("Vui lòng chọn file đính kèm");
                       return;
                     }
 
@@ -1799,7 +1897,7 @@ export function ClubReportManagement() {
         </div>
       )}
 
-      {showEditDialog && selectedSubmission && (
+      {(showEditDialog && (selectedSubmission || selectedReportDetail)) && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <CardHeader>
@@ -1829,17 +1927,28 @@ export function ClubReportManagement() {
                 />
               </div>
               <div>
-                <Label>Tệp đính kèm (tùy chọn)</Label>
-                {draftFile ? (
+                <Label>Tệp đính kèm <span className="text-red-500">*</span></Label>
+                {draftFile || draftFileUrl ? (
                   <div className="flex items-center justify-between bg-muted/50 p-3 rounded-md mt-2">
                     <div className="flex items-center gap-2 flex-1 min-w-0">
                       <FileText className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-medium truncate">
-                          {draftFile.name}
+                          {draftFile ? draftFile.name : "File đã tải lên"}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          {(draftFile.size / 1024 / 1024).toFixed(2)} MB
+                          {draftFile ? (
+                            `${(draftFile.size / 1024 / 1024).toFixed(2)} MB`
+                          ) : (
+                            <a
+                              href={draftFileUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-600 hover:underline"
+                            >
+                              Xem file
+                            </a>
+                          )}
                         </p>
                       </div>
                     </div>
@@ -1847,32 +1956,17 @@ export function ClubReportManagement() {
                       type="button"
                       variant="ghost"
                       size="sm"
-                      onClick={() => setDraftFile(null)}
+                      onClick={() => {
+                        setDraftFile(null);
+                        setDraftFileUrl("");
+                        if (editFileInputRef.current) {
+                          editFileInputRef.current.value = "";
+                        }
+                      }}
                       className="flex-shrink-0"
                     >
                       <X className="h-4 w-4" />
                     </Button>
-                  </div>
-                ) : draftFileUrl ? (
-                  <div className="flex items-center justify-between bg-muted/50 p-3 rounded-md mt-2">
-                    <div className="flex items-center gap-2 flex-1 min-w-0">
-                      <FileText className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium truncate">
-                          File đã tải lên
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          <a
-                            href={draftFileUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-blue-600 hover:underline"
-                          >
-                            Xem file
-                          </a>
-                        </p>
-                      </div>
-                    </div>
                   </div>
                 ) : (
                   <div className="border-2 border-dashed border-muted rounded-lg p-6 text-center hover:border-primary/50 transition-colors mt-2">
@@ -1889,6 +1983,7 @@ export function ClubReportManagement() {
                         </div>
                       </div>
                       <input
+                        ref={editFileInputRef}
                         type="file"
                         onChange={(e) => {
                           const file = e.target.files?.[0];
@@ -1926,6 +2021,8 @@ export function ClubReportManagement() {
                             }
 
                             setDraftFile(file);
+                            // Xóa fileUrl cũ khi chọn file mới
+                            setDraftFileUrl("");
                           }
                         }}
                         className="hidden"
@@ -1949,10 +2046,15 @@ export function ClubReportManagement() {
                   Hủy
                 </Button>
                 <Button
-                  onClick={() => {
+                  onClick={async () => {
+                    // Lấy requestId từ selectedRequest hoặc selectedReportDetail
+                    let requestId: string | undefined;
                     if (selectedRequest) {
-                      handleSaveDraft(selectedRequest.request_id);
+                      requestId = selectedRequest.request_id;
+                    } else if (selectedReportDetail?.reportRequirement?.id) {
+                      requestId = selectedReportDetail.reportRequirement.id.toString();
                     }
+                    await handleSaveDraft(requestId);
                   }}
                   className="bg-blue-600 hover:bg-blue-700"
                   disabled={savingDraft || submittingReport}

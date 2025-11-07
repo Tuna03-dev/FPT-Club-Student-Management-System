@@ -42,10 +42,6 @@ public class Report extends BaseEntity {
     private String reviewerFeedback;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "club_id", nullable = false)
-    private Club club;
-
-    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "semester_id")
     private Semester semester;
 
@@ -53,10 +49,9 @@ public class Report extends BaseEntity {
     @JoinColumn(name = "createdBy")
     private User createdBy;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "report_requirement_id")
-    private SubmissionReportRequirement reportRequirement;
-
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "club_report_requirement_id", nullable = false, unique = true)
+    private ClubReportRequirement clubReportRequirement;
 
 }
 

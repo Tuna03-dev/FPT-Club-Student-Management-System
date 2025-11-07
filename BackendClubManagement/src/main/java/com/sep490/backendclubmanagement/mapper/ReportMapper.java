@@ -3,6 +3,7 @@ package com.sep490.backendclubmanagement.mapper;
 import com.sep490.backendclubmanagement.dto.response.ReportDetailResponse;
 import com.sep490.backendclubmanagement.dto.response.ReportListItemResponse;
 import com.sep490.backendclubmanagement.entity.Report;
+import com.sep490.backendclubmanagement.entity.SubmissionReportRequirement;
 import org.mapstruct.Mapper;
 
 
@@ -18,11 +19,11 @@ public interface ReportMapper {
         }
 
         ReportListItemResponse.ClubMiniInfo clubInfo = null;
-        if (report.getClub() != null) {
+        if (report.getClubReportRequirement() != null && report.getClubReportRequirement().getClub() != null) {
             clubInfo = ReportListItemResponse.ClubMiniInfo.builder()
-                    .id(report.getClub().getId())
-                    .clubName(report.getClub().getClubName())
-                    .clubCode(report.getClub().getClubCode())
+                    .id(report.getClubReportRequirement().getClub().getId())
+                    .clubName(report.getClubReportRequirement().getClub().getClubName())
+                    .clubCode(report.getClubReportRequirement().getClub().getClubCode())
                     .build();
         }
 
@@ -67,11 +68,11 @@ public interface ReportMapper {
         }
 
         ReportDetailResponse.ClubInfo clubInfo = null;
-        if (report.getClub() != null) {
+        if (report.getClubReportRequirement() != null && report.getClubReportRequirement().getClub() != null) {
             clubInfo = ReportDetailResponse.ClubInfo.builder()
-                    .id(report.getClub().getId())
-                    .clubName(report.getClub().getClubName())
-                    .clubCode(report.getClub().getClubCode())
+                    .id(report.getClubReportRequirement().getClub().getId())
+                    .clubName(report.getClubReportRequirement().getClub().getClubName())
+                    .clubCode(report.getClubReportRequirement().getClub().getClubCode())
                     .build();
         }
 
@@ -95,26 +96,27 @@ public interface ReportMapper {
         }
 
         ReportDetailResponse.ReportRequirementInfo requirementInfo = null;
-        if (report.getReportRequirement() != null) {
+        if (report.getClubReportRequirement() != null && report.getClubReportRequirement().getSubmissionReportRequirement() != null) {
+            SubmissionReportRequirement submissionRequirement = report.getClubReportRequirement().getSubmissionReportRequirement();
             ReportDetailResponse.UserInfo requirementCreatedByInfo = null;
-            if (report.getReportRequirement().getCreatedBy() != null) {
+            if (submissionRequirement.getCreatedBy() != null) {
                 requirementCreatedByInfo = ReportDetailResponse.UserInfo.builder()
-                        .id(report.getReportRequirement().getCreatedBy().getId())
-                        .fullName(report.getReportRequirement().getCreatedBy().getFullName())
-                        .email(report.getReportRequirement().getCreatedBy().getEmail())
-                        .studentCode(report.getReportRequirement().getCreatedBy().getStudentCode())
+                        .id(submissionRequirement.getCreatedBy().getId())
+                        .fullName(submissionRequirement.getCreatedBy().getFullName())
+                        .email(submissionRequirement.getCreatedBy().getEmail())
+                        .studentCode(submissionRequirement.getCreatedBy().getStudentCode())
                         .build();
             }
 
             requirementInfo = ReportDetailResponse.ReportRequirementInfo.builder()
-                    .id(report.getReportRequirement().getId())
-                    .title(report.getReportRequirement().getTitle())
-                    .description(report.getReportRequirement().getDescription())
-                    .dueDate(report.getReportRequirement().getDueDate() != null
-                            ? report.getReportRequirement().getDueDate().atStartOfDay()
+                    .id(submissionRequirement.getId())
+                    .title(submissionRequirement.getTitle())
+                    .description(submissionRequirement.getDescription())
+                    .dueDate(submissionRequirement.getDueDate() != null
+                            ? submissionRequirement.getDueDate().atStartOfDay()
                             : null)
-                    .reportType(report.getReportRequirement().getReportType())
-                    .templateUrl(report.getReportRequirement().getTemplateUrl())
+                    .reportType(submissionRequirement.getReportType())
+                    .templateUrl(submissionRequirement.getTemplateUrl())
                     .createdBy(requirementCreatedByInfo)
                     .build();
         }

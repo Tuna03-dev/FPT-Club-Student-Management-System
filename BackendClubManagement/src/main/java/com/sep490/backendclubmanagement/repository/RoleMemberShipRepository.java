@@ -361,19 +361,24 @@ SELECT CASE WHEN EXISTS (
                                              @Param("semesterId") Long semesterId);
 
     /**
-     * Kiểm tra user có system role là CLUB_OFFICER hoặc TEAM_OFFICER trong kỳ hiện tại và đang active không
+     * Kiểm tra user có club role là CLUB_OFFICER hoặc TEAM_OFFICER trong kỳ hiện tại và đang active không
+     * Kiểm tra từ bảng club_roles thông qua RoleMemberShip
      */
     @Query("""
         SELECT CASE WHEN COUNT(rm) > 0 THEN true ELSE false END
         FROM RoleMemberShip rm
         JOIN rm.clubMemberShip cm
-        JOIN cm.user u
-        JOIN u.systemRole sr
+        JOIN rm.clubRole cr
+        LEFT JOIN cr.systemRole sr
         WHERE cm.user.id = :userId
           AND cm.club.id = :clubId
           AND rm.semester.id = :semesterId
           AND COALESCE(rm.isActive, TRUE) = TRUE
-          AND UPPER(TRIM(sr.roleName)) IN ('CLUB_OFFICER', 'TEAM_OFFICER')
+          AND cr IS NOT NULL
+          AND (
+              UPPER(TRIM(cr.roleCode)) IN ('CLUB_OFFICER', 'TEAM_OFFICER')
+              OR (sr IS NOT NULL AND UPPER(TRIM(sr.roleName)) IN ('CLUB_OFFICER', 'TEAM_OFFICER'))
+          )
     """)
     boolean isClubOfficerOrTeamOfficerInCurrentSemester(@Param("userId") Long userId,
                                            @Param("clubId") Long clubId,

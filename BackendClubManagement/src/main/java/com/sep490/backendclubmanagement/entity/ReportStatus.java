@@ -2,8 +2,13 @@ package com.sep490.backendclubmanagement.entity;
 
 public enum ReportStatus {
     DRAFT,          // Bản nháp
-    UPDATED,      // Đã cập nhật
-    SUBMITTED,       // Đã duyệt
-    REJECTED        // Bị từ chối
+    PENDING_CLUB,    // Chờ xử lý
+    APPROVED_CLUB,   // Đã duyệt
+    REJECTED_CLUB,
+    UPDATED_PENDING_CLUB,
+    PENDING_UNIVERSITY,    // Chờ xử lý
+    APPROVED_UNIVERSITY,   // Đã duyệt
+    REJECTED_UNIVERSITY,
+    RESUBMITTED_UNIVERSITY
 }
 

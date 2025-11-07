@@ -18,9 +18,9 @@ public interface ReportRepository extends JpaRepository<Report, Long> {
 
     @Query("SELECT r FROM Report r " +
            "WHERE (:status IS NULL OR r.status = :status) " +
-           "AND (:clubId IS NULL OR r.club.id = :clubId) " +
+           "AND (:clubId IS NULL OR r.clubReportRequirement.club.id = :clubId) " +
            "AND (:semesterId IS NULL OR r.semester.id = :semesterId) " +
-           "AND (:reportType IS NULL OR r.reportRequirement.reportType = :reportType) " +
+           "AND (:reportType IS NULL OR r.clubReportRequirement.submissionReportRequirement.reportType = :reportType) " +
            "AND (:keyword IS NULL OR LOWER(r.reportTitle) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
            "OR LOWER(r.content) LIKE LOWER(CONCAT('%', :keyword, '%'))) " +
            "ORDER BY r.submittedDate DESC, r.createdAt DESC")
@@ -34,11 +34,12 @@ public interface ReportRepository extends JpaRepository<Report, Long> {
     );
 
     @Query("SELECT r FROM Report r " +
-           "LEFT JOIN FETCH r.club " +
+           "LEFT JOIN FETCH r.clubReportRequirement crr " +
+           "LEFT JOIN FETCH crr.club " +
+           "LEFT JOIN FETCH crr.submissionReportRequirement srr " +
+           "LEFT JOIN FETCH srr.createdBy " +
            "LEFT JOIN FETCH r.semester " +
            "LEFT JOIN FETCH r.createdBy " +
-           "LEFT JOIN FETCH r.reportRequirement rr " +
-           "LEFT JOIN FETCH rr.createdBy " +
            "WHERE r.id = :id")
     Optional<Report> findByIdWithRelations(@Param("id") Long id);
 
@@ -48,33 +49,35 @@ public interface ReportRepository extends JpaRepository<Report, Long> {
     List<Report> findAllByStatus(@Param("status") ReportStatus status);
 
     @Query("SELECT r FROM Report r " +
-           "WHERE r.club.id = :clubId " +
+           "WHERE r.clubReportRequirement.club.id = :clubId " +
            "ORDER BY r.submittedDate DESC")
     List<Report> findAllByClubId(@Param("clubId") Long clubId);
 
     @Query("SELECT r FROM Report r " +
-           "WHERE r.reportRequirement.id = :requirementId")
+           "WHERE r.clubReportRequirement.submissionReportRequirement.id = :requirementId")
     List<Report> findAllByReportRequirementId(@Param("requirementId") Long requirementId);
 
     @Query("SELECT r FROM Report r " +
-           "LEFT JOIN FETCH r.club " +
+           "LEFT JOIN FETCH r.clubReportRequirement crr " +
+           "LEFT JOIN FETCH crr.club " +
+           "LEFT JOIN FETCH crr.submissionReportRequirement srr " +
+           "LEFT JOIN FETCH srr.createdBy " +
            "LEFT JOIN FETCH r.semester " +
            "LEFT JOIN FETCH r.createdBy " +
-           "LEFT JOIN FETCH r.reportRequirement rr " +
-           "LEFT JOIN FETCH rr.createdBy " +
-           "WHERE r.club.id = :clubId " +
+           "WHERE r.clubReportRequirement.club.id = :clubId " +
            "AND (:status IS NULL OR r.status = :status) " +
            "ORDER BY r.createdAt DESC")
     List<Report> findByClubIdAndStatus(@Param("clubId") Long clubId, 
                                        @Param("status") ReportStatus status);
 
     @Query("SELECT r FROM Report r " +
-           "LEFT JOIN FETCH r.club " +
+           "LEFT JOIN FETCH r.clubReportRequirement crr " +
+           "LEFT JOIN FETCH crr.club " +
+           "LEFT JOIN FETCH crr.submissionReportRequirement srr " +
+           "LEFT JOIN FETCH srr.createdBy " +
            "LEFT JOIN FETCH r.semester " +
            "LEFT JOIN FETCH r.createdBy " +
-           "LEFT JOIN FETCH r.reportRequirement rr " +
-           "LEFT JOIN FETCH rr.createdBy " +
-           "WHERE r.club.id = :clubId " +
+           "WHERE r.clubReportRequirement.club.id = :clubId " +
            "AND r.createdBy.id = :userId " +
            "AND (:status IS NULL OR r.status = :status) " +
            "ORDER BY r.createdAt DESC")
@@ -87,13 +90,14 @@ public interface ReportRepository extends JpaRepository<Report, Long> {
      * Fetch all relations to avoid LazyInitializationException
      */
     @Query("SELECT r FROM Report r " +
-           "LEFT JOIN FETCH r.club " +
+           "LEFT JOIN FETCH r.clubReportRequirement crr " +
+           "LEFT JOIN FETCH crr.club " +
+           "LEFT JOIN FETCH crr.submissionReportRequirement srr " +
+           "LEFT JOIN FETCH srr.createdBy " +
            "LEFT JOIN FETCH r.semester " +
            "LEFT JOIN FETCH r.createdBy " +
-           "LEFT JOIN FETCH r.reportRequirement rr " +
-           "LEFT JOIN FETCH rr.createdBy " +
-           "WHERE r.club.id = :clubId " +
-           "AND r.reportRequirement.id = :requirementId")
+           "WHERE r.clubReportRequirement.club.id = :clubId " +
+           "AND r.clubReportRequirement.submissionReportRequirement.id = :requirementId")
     Optional<Report> findByClubIdAndReportRequirementId(
             @Param("clubId") Long clubId,
             @Param("requirementId") Long requirementId
