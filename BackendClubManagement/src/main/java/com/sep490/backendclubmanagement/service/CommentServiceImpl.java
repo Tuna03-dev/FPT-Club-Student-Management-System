@@ -57,15 +57,16 @@ public class CommentServiceImpl implements ICommentService {
 
             // ✅ Chuẩn hoá về 2 cấp:
             // nếu parent là reply (có parentComment != null) thì gắn về cha top-level của nó
-            Comment topLevel = (parent.getParentComment() == null)
-                    ? parent
-                    : parent.getParentComment();
+//            Comment topLevel = (parent.getParentComment() == null)
+//                    ? parent
+//                    : parent.getParentComment();
 
             // (phòng hờ) đảm bảo vẫn cùng post
-            if (!topLevel.getPost().getId().equals(postId))
+            if (!parent.getPost().getId().equals(postId)) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid parent comment");
+            }
 
-            c.setParentComment(topLevel);
+            c.setParentComment(parent);
         }
 
 

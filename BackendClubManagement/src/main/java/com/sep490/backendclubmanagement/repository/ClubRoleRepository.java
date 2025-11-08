@@ -9,5 +9,15 @@ import java.util.List;
 @Repository
 public interface ClubRoleRepository extends JpaRepository<ClubRole, Long> {
     List<ClubRole> findByClubId(Long clubId);
+
+   // check xem code role và role nam có trùng nhau k ( trong 1 clb)
+    boolean existsByClubIdAndRoleCodeIgnoreCase(Long clubId, String roleCode);
+
+    boolean existsByClubIdAndRoleNameIgnoreCase(Long clubId, String roleName);
+
+    // check xem 2 club cùng code/name role vs nhau khac clubid
+    boolean existsByClubIdAndRoleCodeIgnoreCaseAndIdNot(Long clubId, String roleCode, Long id);
+
+    boolean existsByClubIdAndRoleNameIgnoreCaseAndIdNot(Long clubId, String roleName, Long id);
 }
 

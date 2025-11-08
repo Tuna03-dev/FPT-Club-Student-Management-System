@@ -73,9 +73,12 @@ public class PostService {
         Long teamId = req.getTeamId();
         boolean isClubWide = Boolean.TRUE.equals(req.getClubWide()) && teamId == null;
 
-        if (isClubWide && clubRoleService.isClubLeaderOrVice(authorId, clubId)) {
-            status = PostStatus.PUBLISHED;          // Chủ nhiệm/Phó đăng club-wide ⇒ auto publish
-        } else if (!isClubWide && teamId != null && clubRoleService.isTeamLeader(authorId, teamId)) {
+        boolean isClubPresident = clubRoleService.isClubLeaderOrVice(authorId, clubId);
+        boolean isTeamLead = (teamId != null) && clubRoleService.isTeamLeader(authorId, teamId);
+
+        if (isClubPresident){
+            status = PostStatus.PUBLISHED;          // Chủ nhiệm/Phó đăng ⇒ auto publish
+        } else if (!isClubWide && isTeamLead) {
             status = PostStatus.PUBLISHED;          // Trưởng ban đăng đúng team ⇒ auto publish
         } else {
             status = PostStatus.PENDING;            // Còn lại ⇒ chờ duyệt

@@ -166,10 +166,12 @@ public interface RoleMemberShipRepository extends JpaRepository<RoleMemberShip, 
         FROM RoleMemberShip rm
         JOIN rm.clubMemberShip cm
         JOIN rm.clubRole cr
+        JOIN rm.semester s
         WHERE cm.user.id = :userId
           AND rm.team.id = :teamId
           AND COALESCE(rm.isActive, TRUE) = TRUE
-          AND ( cr.roleCode LIKE %:headSuffix OR cr.roleLevel = 3 )
+          AND ( cr.roleCode LIKE %:headSuffix OR cr.roleLevel <= 3 )
+          AND s.isCurrent = true
     """)
     boolean existsTeamLeader(@Param("userId") Long userId,
                              @Param("teamId") Long teamId,
@@ -181,11 +183,13 @@ public interface RoleMemberShipRepository extends JpaRepository<RoleMemberShip, 
     FROM RoleMemberShip rm
     JOIN rm.clubMemberShip c
     JOIN rm.clubRole cr
+    JOIN rm.semester s
     WHERE c.user.id = :userId
       AND c.club.id = :clubId
       AND rm.team IS NULL
       AND COALESCE(rm.isActive, TRUE) = TRUE
       AND cr.roleLevel <= 2
+      AND s.isCurrent = true
     """)
     boolean existsClubAdmin(@Param("userId") Long userId,
                             @Param("clubId") Long clubId);
