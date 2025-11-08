@@ -1,16 +1,17 @@
 "use client"
 import { useState, useMemo, useEffect } from "react"
-import { ChevronLeft, ChevronRight } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { toast } from "sonner"
 import { EventDetailModal } from "./event-detail-modal"
-import { type EventData, getEventsByClubId, getStaffEventsByClubId, getStaffAllEvents, createEvent, getAllEventTypes, getPendingRequests, type PendingRequestDto, approveByClub, approveByUniversity, getMyDraftEvents, type MyDraftEventDto, getStaffCancelledEvents, restoreCancelledEventByStaff, deleteCancelledEventByStaff } from "@/service/EventService"
+import { type EventData, getEventsByClubId, getStaffEventsByClubId, getStaffAllEvents, createEvent, getAllEventTypes, getPendingRequests, type PendingRequestDto, getMyDraftEvents, type MyDraftEventDto, getStaffCancelledEvents } from "@/service/EventService"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { CreateEventForm } from "./create-event-form"
 import { authService } from "@/services/authService"
 import { useClubPermissions } from "@/hooks/useClubPermissions"
+import { EventCalendarGrid, type CalendarEvent } from "./EventCalendarGrid"
+import { EventCalendarSidebar } from "./EventCalendarSidebar"
 
 // Helper to normalize error messages
 const getErrorMessage = (error: unknown, fallback = "Đã xảy ra lỗi"): string => {
@@ -324,12 +325,21 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
     return days
   }, [currentDate])
 
-  const getEventsForDate = (day: number | null) => {
+  const getEventsForDate = (day: number | null): CalendarEvent[] => {
     if (!day) return []
     const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day)
-    return events.filter(
-      (event) => event.startDate.toDateString() === date.toDateString()
-    )
+    return events
+      .filter((event) => event.startDate.toDateString() === date.toDateString())
+      .map((event): CalendarEvent => ({
+        id: event.id,
+        title: event.title,
+        location: event.location,
+        startDate: event.startDate,
+        status: event.status,
+        isMyDraft: event.isMyDraft,
+        requestStatus: event.requestStatus,
+        eventTypeName: event.eventTypeName,
+      }))
   }
 
 
@@ -368,24 +378,6 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
         return { label: status, className: "bg-muted text-foreground" };
     }
   }
-
-
-  const monthNames = [
-    "Tháng 1",
-    "Tháng 2",
-    "Tháng 3",
-    "Tháng 4",
-    "Tháng 5",
-    "Tháng 6",
-    "Tháng 7",
-    "Tháng 8",
-    "Tháng 9",
-    "Tháng 10",
-    "Tháng 11",
-    "Tháng 12",
-  ]
-
-  const dayNames = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"]
 
   // Loading state
   if (loading) {
@@ -471,412 +463,89 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
     )
   }
 
+  const handleDayClick = (day: number) => {
+    const user = authService.getCurrentUser()
+    const canCreate = !!user && ["STAFF", "CLUB_OFFICER", "TEAM_OFFICER"].includes(user.systemRole)
+    if (!canCreate) return
+    const start = new Date(currentDate.getFullYear(), currentDate.getMonth(), day, 8, 0, 0)
+    const end = new Date(start.getTime() + 2 * 60 * 60 * 1000)
+    setDefaultCreateStartISO(start.toISOString())
+    setDefaultCreateEndISO(end.toISOString())
+    setOpenCreate(true)
+  }
+
+  const handleEventClick = (event: CalendarEvent) => {
+    // Find the full event from events array
+    const fullEvent = events.find(e => e.id === event.id)
+    if (fullEvent) {
+      setSelectedEvent(fullEvent)
+      setSelectedReadOnly(false)
+    }
+  }
+
+  const handleRequestClick = (event: Event) => {
+    setSelectedEvent(event)
+    setSelectedReadOnly(true)
+  }
+
+  const handlePrevMonth = () => {
+    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1))
+  }
+
+  const handleNextMonth = () => {
+    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1))
+  }
+
+  const handleCreateEvent = () => {
+    setOpenCreate(true)
+    setDefaultCreateStartISO(null)
+    setDefaultCreateEndISO(null)
+  }
+
   return (
     <>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Calendar */}
         <div className="lg:col-span-2">
-          <Card className="p-6 shadow-lg">
-            {/* Header */}
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold text-foreground">
-                {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
-              </h2>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1))}
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1))}
-                >
-                  <ChevronRight className="w-4 h-4" />
-                </Button>
-                {(() => {
-                  const user = authService.getCurrentUser()
-                  const canCreate = !!user && ["STAFF", "CLUB_OFFICER", "TEAM_OFFICER"].includes(user.systemRole)
-                  
-                  return (
-                    <>
-                      {canCreate && (
-                        <Button onClick={() => {
-                          setOpenCreate(true)
-                          setDefaultCreateStartISO(null)
-                          setDefaultCreateEndISO(null)
-                        }}>+ Tạo sự kiện mới</Button>
-                      )}
-                    </>
-                  )
-                })()}
-              </div>
-            </div>
-
-            {/* Day names */}
-            <div className="grid grid-cols-7 border-b border-border">
-              {dayNames.map((day) => (
-                <div key={day} className="text-center font-semibold text-muted-foreground text-sm py-3 border-r border-border last:border-r-0">
-                  {day}
-                </div>
-              ))}
-            </div>
-
-            {/* Calendar grid */}
-            <div className="border-l border-t border-border">
-              <div className="grid grid-cols-7">
-                {monthDays.map((day, index) => {
-                  const events = getEventsForDate(day)
-                  const hasUpcoming = events.some((e) => e.status === "upcoming")
-                  const hasOngoing = events.some((e) => e.status === "ongoing")
-                  const hasCompleted = events.some((e) => e.status === "completed")
-
-                  // Determine background color based on event status
-                  let bgColor = "bg-card"
-                  if (hasOngoing) bgColor = "bg-green-50/50"
-                  else if (hasUpcoming) bgColor = "bg-blue-50/50"
-                  else if (hasCompleted) bgColor = "bg-red-50/50"
-
-                  const isLastInRow = (index + 1) % 7 === 0
-                  const isLastRow = index >= monthDays.length - 7
-
-                  return (
-                    <div
-                      key={index}
-                      className={`aspect-square p-2 border-r border-b border-border transition-all flex flex-col ${
-                        isLastInRow ? "border-r-0" : ""
-                      } ${isLastRow ? "border-b-0" : ""} ${
-                        day ? `${bgColor} hover:bg-accent/50 cursor-pointer` : "bg-muted/30"
-                      }`}
-                      onClick={() => {
-                        if (!day) return
-                        const user = authService.getCurrentUser()
-                        const canCreate = !!user && ["STAFF", "CLUB_OFFICER", "TEAM_OFFICER"].includes(user.systemRole)
-                        if (!canCreate) return
-                        const start = new Date(currentDate.getFullYear(), currentDate.getMonth(), day, 8, 0, 0)
-                        const end = new Date(start.getTime() + 2 * 60 * 60 * 1000)
-                        setDefaultCreateStartISO(start.toISOString())
-                        setDefaultCreateEndISO(end.toISOString())
-                        setOpenCreate(true)
-                      }}
-                    >
-                      {day && (
-                        <>
-                          <div className="text-sm font-semibold text-foreground mb-1 flex-shrink-0">{day}</div>
-                          
-                          <div className="flex flex-col gap-0.5 flex-1 overflow-y-auto max-h-[100px] min-h-0 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-border [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:hover:bg-muted-foreground/30">
-                            {events.map((event) => {
-                              // Determine color: draft events should be gray, regardless of status
-                              // Check if event is draft: either has isMyDraft flag or has requestStatus
-                              const isDraft = event.isMyDraft === true || (event.requestStatus !== undefined && event.requestStatus !== null && event.requestStatus !== "")
-                              
-                              // Debug log (remove after testing)
-                              if (event.isMyDraft || event.requestStatus) {
-                                console.log("Draft event detected:", { id: event.id, title: event.title, isMyDraft: event.isMyDraft, requestStatus: event.requestStatus, isDraft })
-                              }
-                              
-                              return (
-                                <div
-                                  key={event.id}
-                                className={`text-[11px] px-1.5 py-0.5 rounded font-medium truncate cursor-pointer hover:opacity-90 flex-shrink-0 transition-opacity inline-flex items-center gap-1 ${
-                                    isDraft 
-                                      ? "!bg-gray-400 !text-white" 
-                                      : getStatusColor(event.status)
-                                  }`}
-                                  title={`${event.title}${event.isMyDraft ? ' (Draft)' : ''} - ${event.location} - ${event.startDate.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}`}
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    setSelectedEvent(event)
-                                  }}
-                                >
-                                  {/* MEETING marker */}
-                                  {(() => {
-                                    const t = event.eventTypeName ? String(event.eventTypeName).trim().toUpperCase() : ""
-                                    if (t === "MEETING") {
-                                      return <span className="align-middle">📷</span>
-                                    }
-                                    return null
-                                  })()}
-                                  {event.title}
-                                </div>
-                              )
-                            })}
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          </Card>
+          <EventCalendarGrid
+            currentDate={currentDate}
+            monthDays={monthDays}
+            events={events.map((e): CalendarEvent => ({
+              id: e.id,
+              title: e.title,
+              location: e.location,
+              startDate: e.startDate,
+              status: e.status,
+              isMyDraft: e.isMyDraft,
+              requestStatus: e.requestStatus,
+              eventTypeName: e.eventTypeName,
+            }))}
+            onPrevMonth={handlePrevMonth}
+            onNextMonth={handleNextMonth}
+            onCreateEvent={handleCreateEvent}
+            onDayClick={handleDayClick}
+            onEventClick={handleEventClick}
+            getStatusColor={getStatusColor}
+            getEventsForDate={getEventsForDate}
+          />
         </div>
 
-        {/* Legend */}
+        {/* Sidebar */}
         <div>
-          <Card className="p-6 shadow-lg">
-            <h3 className="text-lg font-bold text-foreground mb-4">Trạng thái sự kiện</h3>
-            <div className="space-y-3">
-              <div className="flex items-center gap-3">
-                <div className="w-4 h-4 rounded bg-blue-500"></div>
-                <span className="text-sm text-foreground">Sắp diễn ra</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="w-4 h-4 rounded bg-green-500"></div>
-                <span className="text-sm text-foreground">Đang diễn ra</span>
-              </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-4 h-4 rounded bg-red-500"></div>
-                    <span className="text-sm text-foreground">Đã kết thúc</span>
-                  </div>
-              {(() => {
-                const user = authService.getCurrentUser()
-                const showPending = !!user && ["CLUB_OFFICER", "TEAM_OFFICER"].includes(user.systemRole)
-                if (!showPending) return null
-                return (
-                  <div className="flex items-center gap-3">
-                    <div className="w-4 h-4 rounded bg-gray-400"></div>
-                    <span className="text-sm text-foreground">Chờ duyệt</span>
-                  </div>
-                )
-              })()}
-            </div>
-            
-            
-          </Card>
-          {/* Pending requests card (STAFF/CLUB_OFFICER) */}
-          {(() => {
-            const user = authService.getCurrentUser()
-            const roleUpper = user?.systemRole ? String(user.systemRole).trim().toUpperCase() : ""
-            const canReview = !!user && (roleUpper === "STAFF" || roleUpper === "CLUB_OFFICER" || isPresidentOfCurrentClub)
-            if (!canReview) return null
-            const items = (pendingRequests ?? []).filter((req) => {
-              // Nếu có clubId được chọn (>0), chỉ hiển thị các request thuộc đúng CLB đó
-              if (clubId && clubId > 0) {
-                return req.club?.id === clubId
-              }
-              // Nếu không chọn CLB cụ thể, giữ nguyên toàn bộ danh sách
-              return true
-            })
-            return (
-              <Card className="p-6 shadow-lg mt-6 border-amber-300">
-                <div className="flex items-center gap-2 mb-4">
-                  <span className="inline-block w-3 h-3 rounded-full bg-yellow-400" />
-                  <h3 className="text-lg font-bold text-foreground">Chờ duyệt{items.length != null ? ` (${items.length})` : ""}</h3>
-                </div>
-                {loadingPending ? (
-                  <div className="text-sm text-muted-foreground">Đang tải danh sách...</div>
-                ) : items.length === 0 ? (
-                  <div className="text-sm text-muted-foreground">Không có yêu cầu nào</div>
-                ) : (
-                  <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
-                    {items.map((req) => {
-                      const user = authService.getCurrentUser()
-                      const roleUpper = user?.systemRole ? String(user.systemRole).trim().toUpperCase() : undefined
-                      const reqStatusUpper = req.status ? String(req.status).trim().toUpperCase() : undefined
-                      const isPresidentActionable = roleUpper === "CLUB_OFFICER" && reqStatusUpper === "PENDING_CLUB"
-                      const isStaffActionable = roleUpper === "STAFF" && reqStatusUpper === "PENDING_UNIVERSITY"
-                      const showActions = isPresidentActionable || isStaffActionable
-                      // Debug: check console to verify values
-                      console.log("Debug approve buttons:", { userRole: roleUpper, reqStatus: req.status, reqStatusUpper, isStaffActionable, showActions })
-                      return (
-                      <div
-                        key={req.requestEventId}
-                        className="rounded-md border bg-amber-50 px-4 py-3 cursor-pointer"
-                        onClick={() => {
-                          if (!req.event) return
-                          const mapped: Event = {
-                            id: String(req.event.id),
-                            title: req.event.title,
-                            description: req.description ?? "",
-                            startDate: new Date(req.event.startTime),
-                            endDate: new Date(req.event.endTime),
-                            location: req.event.location ?? "",
-                            attendees: 0,
-                            status: determineEventStatus(new Date(req.event.startTime), new Date(req.event.endTime)),
-                            images: [],
-                            isMyDraft: true,
-                            requestStatus: req.status,
-                          }
-                          setSelectedEvent(mapped)
-                          setSelectedReadOnly(true)
-                        }}
-                      >
-                        <div className="font-semibold text-foreground">{req.requestTitle}</div>
-                        <div className="text-xs text-muted-foreground">Tạo bởi: {req.createdBy?.fullName ?? "N/A"}</div>
-                        {(() => {
-                          const info = getRequestStatusInfo(req.status)
-                          return (
-                            <div className="text-xs text-muted-foreground mt-1 mb-3">
-                              <span className={`inline-block rounded px-2 py-0.5 mr-2 ${info.className}`}>{info.label}</span>
-                              {req.event ? (
-                                <>
-                                  <span>
-                                    {new Date(req.event.startTime).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}
-                                    {" - "}
-                                    {new Date(req.event.endTime).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}
-                                  </span>
-                                  {req.event.location ? (<div className="mt-1">📍 {req.event.location}</div>) : null}
-                                </>
-                              ) : null}
-                            </div>
-                          )
-                        })()}
-                        {showActions && (
-                          <div className="flex gap-3">
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              className="bg-emerald-50 text-emerald-600 hover:bg-emerald-100"
-                              onClick={async (e) => {
-                                e.stopPropagation()
-                                const userNow = authService.getCurrentUser()
-                                if (!userNow) return
-                                try {
-                                  if (userNow.systemRole === "STAFF") {
-                                    await approveByUniversity(req.requestEventId, true)
-                                    setPendingRequests((prev) => (prev ?? []).filter(x => x.requestEventId !== req.requestEventId))
-                                    toast.success("Đã duyệt sự kiện thành công")
-                                  } else if (userNow.systemRole === "CLUB_OFFICER") {
-                                    await approveByClub(req.requestEventId, true)
-                                    setPendingRequests((prev) => (prev ?? []).map(x => x.requestEventId === req.requestEventId ? { ...x, status: "PENDING_UNIVERSITY" } : x))
-                                    toast.success("Đã duyệt sự kiện. Đang chờ duyệt từ Nhà trường")
-                                  }
-                                  // Refetch events to update calendar
-                                  await refetchEvents()
-                                } catch (e: unknown) {
-                                  console.error("Approve failed", e)
-                                  toast.error(getErrorMessage(e, "Không thể duyệt sự kiện. Vui lòng thử lại."))
-                                }
-                              }}
-                            >
-                              ✓ Duyệt
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              className="bg-rose-50 text-rose-600 hover:bg-rose-100"
-                              onClick={async (e) => {
-                                e.stopPropagation()
-                                const userNow = authService.getCurrentUser()
-                                if (!userNow) return
-                                try {
-                                  if (userNow.systemRole === "STAFF") {
-                                    await approveByUniversity(req.requestEventId, false)
-                                    setPendingRequests((prev) => (prev ?? []).filter(x => x.requestEventId !== req.requestEventId))
-                                    toast.success("Đã từ chối sự kiện")
-                                  } else if (userNow.systemRole === "CLUB_OFFICER") {
-                                    await approveByClub(req.requestEventId, false)
-                                    setPendingRequests((prev) => (prev ?? []).map(x => x.requestEventId === req.requestEventId ? { ...x, status: "REJECTED_CLUB" } : x))
-                                    toast.success("Đã từ chối sự kiện")
-                                  }
-                                } catch (e: unknown) {
-                                  console.error("Reject failed", e)
-                                  toast.error(getErrorMessage(e, "Không thể từ chối sự kiện. Vui lòng thử lại."))
-                                }
-                              }}
-                            >
-                              ✗ Từ chối
-                            </Button>
-                          </div>
-                        )}
-                      </div>
-                      )
-                    })}
-                  </div>
-                )}
-              </Card>
-            )
-          })()}
-          {/* Cancelled events card (STAFF) */}
-          {(() => {
-            const user = authService.getCurrentUser()
-            const isStaff = !!user && user.systemRole === "STAFF"
-            if (!isStaff) return null
-            const items = cancelledEvents ?? []
-            return (
-              <Card className="p-6 shadow-lg mt-6 border-gray-300">
-                <div className="flex items-center gap-2 mb-4">
-                  <span className="inline-block w-3 h-3 rounded-full bg-gray-400" />
-                  <h3 className="text-lg font-bold text-foreground">Sự kiện đã hủy{items.length != null ? ` (${items.length})` : ""}</h3>
-                </div>
-                {loadingCancelled ? (
-                  <div className="text-sm text-muted-foreground">Đang tải danh sách...</div>
-                ) : items.length === 0 ? (
-                  <div className="text-sm text-muted-foreground">Không có sự kiện nào</div>
-                ) : (
-                  <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
-                    {items.map((ev) => (
-                      <div key={ev.id} className="rounded-md border bg-gray-50 px-4 py-3">
-                        <div className="font-semibold text-foreground">{ev.title}</div>
-                        <div className="text-xs text-muted-foreground mt-1 mb-3">
-                          <span>
-                            {ev.startDate.toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}
-                            {" - "}
-                            {ev.endDate.toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}
-                          </span>
-                          {ev.location ? (<div className="mt-1">📍 {ev.location}</div>) : null}
-                        </div>
-                        <div className="flex gap-3">
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            className="bg-blue-50 text-blue-600 hover:bg-blue-100"
-                            disabled={(() => { const now=new Date(); return ev.startDate <= now; })()}
-                            onClick={async () => {
-                              if ((() => { const now=new Date(); return ev.startDate <= now; })()) return
-                              await restoreCancelledEventByStaff(Number(ev.id))
-                              toast.success("Đã khôi phục sự kiện")
-                              const refreshed = await getStaffCancelledEvents(clubId && clubId > 0 ? clubId : undefined)
-                              const mapped: Event[] = (refreshed ?? []).map((e) => ({
-                                id: String(e.id),
-                                title: e.title,
-                                description: e.description,
-                                startDate: new Date(e.startTime),
-                                endDate: new Date(e.endTime),
-                                location: e.location ?? "",
-                                attendees: 0,
-                                status: determineEventStatus(new Date(e.startTime), new Date(e.endTime)),
-                                images: e.mediaUrls || [],
-                                isMyDraft: true,
-                                requestStatus: "CANCELLED",
-                              }))
-                              setCancelledEvents(mapped)
-                              await refetchEvents()
-                            }}
-                          >
-                            Khôi phục
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            className="bg-rose-50 text-rose-600 hover:bg-rose-100"
-                            onClick={async () => {
-                              try {
-                                await deleteCancelledEventByStaff(Number(ev.id))
-                                toast.success("Đã xóa sự kiện")
-                                setCancelledEvents((prev) => (prev ?? []).filter((x: Event) => x.id !== ev.id))
-                                await refetchEvents()
-                              } catch (e: unknown) {
-                                console.error(e)
-                                toast.error(getErrorMessage(e, "Không thể xóa sự kiện"))
-                              }
-                            }}
-                          >
-                            Xóa
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </Card>
-            )
-          })()}
-          
+          <EventCalendarSidebar
+            clubId={clubId}
+            pendingRequests={pendingRequests}
+            loadingPending={loadingPending}
+            cancelledEvents={cancelledEvents}
+            loadingCancelled={loadingCancelled}
+            onRequestClick={handleRequestClick}
+            onRefetch={refetchEvents}
+            determineEventStatus={determineEventStatus}
+            getRequestStatusInfo={getRequestStatusInfo}
+            getErrorMessage={getErrorMessage}
+            setCancelledEvents={setCancelledEvents}
+            setPendingRequests={setPendingRequests}
+          />
         </div>
       </div>
 

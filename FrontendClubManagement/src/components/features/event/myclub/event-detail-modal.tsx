@@ -305,7 +305,7 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
                       // Thông báo cho calendar refetch lại dữ liệu
                       try {
                         window.dispatchEvent(new CustomEvent('events:refetch'))
-                      } catch {}
+                      } catch { /* empty */ }
                     } catch (error: unknown) {
                       console.error("Error publishing event:", error)
                       toast.error(getErrorMessage(error, "Không thể public sự kiện. Vui lòng thử lại."))
@@ -322,7 +322,7 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
                   ) : (
                     <>
                       <Users className="w-4 h-4" />
-                      Public
+                      Công Khai
                     </>
                   )}
                 </Button>
@@ -420,7 +420,7 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
                           // Thông báo cho calendar refetch lại dữ liệu
                           try {
                             window.dispatchEvent(new CustomEvent('events:refetch'))
-                          } catch {}
+                          } catch { /* empty */ }
                           onClose()
                         } catch (error: unknown) {
                           console.error("Cancel event failed:", error)
