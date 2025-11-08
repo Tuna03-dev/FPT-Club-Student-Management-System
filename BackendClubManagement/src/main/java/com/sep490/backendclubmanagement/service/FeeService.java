@@ -5,6 +5,7 @@ import com.sep490.backendclubmanagement.dto.request.PayOSCreatePaymentRequest;
 import com.sep490.backendclubmanagement.dto.request.PayOSWebhookRequest;
 import com.sep490.backendclubmanagement.dto.request.UpdateFeeRequest;
 import com.sep490.backendclubmanagement.dto.response.FeeDetailResponse;
+import com.sep490.backendclubmanagement.dto.response.PageResponse;
 import com.sep490.backendclubmanagement.dto.response.PayOSCreatePaymentResponse;
 import com.sep490.backendclubmanagement.dto.websocket.PaymentWebSocketPayload;
 import com.sep490.backendclubmanagement.entity.*;
@@ -16,6 +17,8 @@ import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import vn.payos.PayOS;
 import vn.payos.model.v2.paymentRequests.PaymentLink;
@@ -46,6 +49,36 @@ public class FeeService {
     @Value("${app.frontend.url:http://localhost:5173}")
     private String frontendUrl;
 
+    public PageResponse<FeeDetailResponse> getFeesByClubId(Long clubId, Pageable pageable) {
+        Page<Fee> feePage = feeRepository.findByClub_Id(clubId, pageable);
+        long totalMembers = roleMemberShipRepository.countActiveMembersInCurrentSemester(clubId);
+
+        List<FeeDetailResponse> content = feePage.getContent().stream()
+                .map(fee -> {
+                    FeeDetailResponse response = feeMapper.toFeeDetailResponse(fee);
+
+                    int paidMembers = fee.getIncomeTransactions().stream()
+                            .map(IncomeTransaction::getUser)
+                            .collect(Collectors.toSet())
+                            .size();
+
+                    response.setPaidMembers(paidMembers);
+                    response.setTotalMembers((int) totalMembers);
+
+                    return response;
+                })
+                .collect(Collectors.toList());
+
+        return PageResponse.<FeeDetailResponse>builder()
+                .content(content)
+                .pageNumber(feePage.getNumber())
+                .pageSize(feePage.getSize())
+                .totalElements(feePage.getTotalElements())
+                .totalPages(feePage.getTotalPages())
+                .hasNext(feePage.hasNext())
+                .hasPrevious(feePage.hasPrevious())
+                .build();
+    }
 
     public List<FeeDetailResponse> getPaidFeesByUser(Long clubId, Long userId) {
         List<Fee> fees = feeRepository.findPaidFeesByClubIdAndUserId(clubId, userId);
@@ -71,12 +104,46 @@ public class FeeService {
                 .collect(Collectors.toList());
     }
 
+    public PageResponse<FeeDetailResponse> getPaidFeesByUser(Long clubId, Long userId, Pageable pageable) {
+        Page<Fee> feePage = feeRepository.findPaidFeesByClubIdAndUserId(clubId, userId, pageable);
 
+        List<FeeDetailResponse> content = feePage.getContent().stream()
+                .map(fee -> {
+                    FeeDetailResponse response = feeMapper.toFeeDetailResponse(fee);
+
+                    // Tìm transaction của user này cho fee này
+                    IncomeTransaction userTransaction = fee.getIncomeTransactions().stream()
+                            .filter(t -> t.getUser().getId().equals(userId)
+                                    && t.getStatus() == TransactionStatus.SUCCESS)
+                            .findFirst()
+                            .orElse(null);
+
+                    // Set thông tin thanh toán
+                    if (userTransaction != null) {
+                        response.setPaidDate(userTransaction.getTransactionDate());
+                        response.setTransactionReference(userTransaction.getReference());
+                    }
+
+                    return response;
+                })
+                .collect(Collectors.toList());
+
+        return PageResponse.<FeeDetailResponse>builder()
+                .content(content)
+                .pageNumber(feePage.getNumber())
+                .pageSize(feePage.getSize())
+                .totalElements(feePage.getTotalElements())
+                .totalPages(feePage.getTotalPages())
+                .hasNext(feePage.hasNext())
+                .hasPrevious(feePage.hasPrevious())
+                .build();
+    }
 
     @Transactional
     public FeeDetailResponse createFee(Long clubId, CreateFeeRequest request) throws AppException {
         Club club = clubRepository.findById(clubId)
             .orElseThrow(() -> new AppException(ErrorCode.CLUB_NOT_FOUND));
+        boolean isDraft = request.getIsDraft() == null || Boolean.TRUE.equals(request.getIsDraft());
         Fee fee = Fee.builder()
                 .title(request.getTitle())
                 .description(request.getDescription())
@@ -84,42 +151,19 @@ public class FeeService {
                 .feeType(request.getFeeType())
                 .dueDate(request.getDueDate())
                 .isMandatory(request.getIsMandatory())
-                .isLocked(false)
+                .isDraft(isDraft)
                 .club(club)
                 .build();
         Fee saved = feeRepository.save(fee);
         return feeMapper.toFeeDetailResponse(saved);
     }
 
-    public List<FeeDetailResponse> getFeesByClubId(Long clubId) {
-        List<Fee> fees = feeRepository.findByClub_Id(clubId);
-        return fees.stream()
-                .map(fee -> {
-                    FeeDetailResponse feeDetailResponse = feeMapper.toFeeDetailResponse(fee);
-
-                    int paidMembers = fee.getIncomeTransactions().stream()
-                            .map(IncomeTransaction::getUser)
-                            .collect(Collectors.toSet())
-                            .size();
-
-                    long totalMembers = roleMemberShipRepository.countActiveMembersInCurrentSemester(clubId);
-
-
-
-                    feeDetailResponse.setPaidMembers(paidMembers);
-                    feeDetailResponse.setTotalMembers((int)totalMembers);
-
-                    return feeDetailResponse;
-                })
-                .collect(Collectors.toList());
-    }
-
     public boolean isFeeTitleExists(Long clubId, String title) {
-        return feeRepository.existsByTitleIgnoreCaseAndClub_Id(title, clubId);
+        return feeRepository.existsByTitleIgnoreCaseAndClub_IdAndIsDraftFalse(title, clubId);
     }
 
     public boolean isFeeTitleExistsExcluding(Long clubId, String title, Long excludeFeeId) {
-        return feeRepository.existsByTitleIgnoreCaseAndClub_IdAndIdNot(title, clubId, excludeFeeId);
+        return feeRepository.existsByTitleIgnoreCaseAndClub_IdAndIsDraftFalseAndIdNot(title, clubId, excludeFeeId);
     }
 
     @Transactional
@@ -145,11 +189,16 @@ public class FeeService {
         return feeMapper.toFeeDetailResponse(updated);
     }
 
+    public List<FeeDetailResponse> getDraftFeesByClubId(Long clubId) {
+        List<Fee> fees = feeRepository.findByClub_IdAndIsDraftTrue(clubId);
+        return fees.stream().map(feeMapper::toFeeDetailResponse).collect(Collectors.toList());
+    }
+
     @Transactional
-    public FeeDetailResponse lockFee(Long feeId, Boolean lock) throws AppException {
+    public FeeDetailResponse publishFee(Long feeId) throws AppException {
         Fee fee = feeRepository.findById(feeId)
                 .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND, "Fee not found"));
-        fee.setIsLocked(lock);
+        fee.setIsDraft(false);
         feeRepository.save(fee);
         return feeMapper.toFeeDetailResponse(fee);
     }
@@ -160,12 +209,12 @@ public class FeeService {
                 .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND, "Fee not found"));
 
         // Check if any members have already paid
-        int paidCount = fee.getIncomeTransactions() != null 
-                ? fee.getIncomeTransactions().size() 
+        int paidCount = fee.getIncomeTransactions() != null
+                ? fee.getIncomeTransactions().size()
                 : 0;
 
         if (paidCount > 0 ) {
-            throw new AppException(ErrorCode.VALIDATION_ERROR, 
+            throw new AppException(ErrorCode.VALIDATION_ERROR,
                     String.format("Không thể xóa khoản phí đã có %d thành viên đóng phí", paidCount));
         }
 
@@ -186,6 +235,9 @@ public class FeeService {
                 .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND, "Khoản phí không tồn tại"));
         if (!fee.getClub().getId().equals(clubId)) {
             throw new AppException(ErrorCode.VALIDATION_ERROR, "Khoản phí không thuộc câu lạc bộ này");
+        }
+        if (Boolean.TRUE.equals(fee.getIsDraft())) {
+            throw new AppException(ErrorCode.VALIDATION_ERROR, "Không thể thanh toán cho khoản phí đang ở trạng thái bản nháp");
         }
 
         // Validate user exists

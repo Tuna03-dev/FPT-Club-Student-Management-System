@@ -112,7 +112,7 @@ export const ClubLayout = () => {
           JSON.stringify({ value: teams[0].teamId, at: Date.now() })
         );
       }
-    } catch {}
+    } catch { /* empty */ } 
   }
 
   // kiểm tra officer CN/PCN (dựa trên team-level API, có fallback)
