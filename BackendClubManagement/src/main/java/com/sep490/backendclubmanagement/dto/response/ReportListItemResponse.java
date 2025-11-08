@@ -20,6 +20,7 @@ public class ReportListItemResponse {
     private ReportStatus status;
     private LocalDateTime submittedDate;
     private LocalDateTime reviewedDate;
+    private Boolean mustResubmit;
     private LocalDateTime createdAt;
 
     private ClubMiniInfo club;

@@ -208,6 +208,20 @@ public class ReportServiceImpl implements ReportServiceInterface {
         if (request.getReviewerFeedback() != null) {
             report.setReviewerFeedback(request.getReviewerFeedback());
         }
+        
+        // Handle mustResubmit field
+        if (newReportStatus == ReportStatus.APPROVED_UNIVERSITY) {
+            // When approving, set mustResubmit to false
+            report.setMustResubmit(false);
+        } else if (newReportStatus == ReportStatus.REJECTED_UNIVERSITY) {
+            // When rejecting, use mustResubmit from request if provided, otherwise default to true
+            if (request.getMustResubmit() != null) {
+                report.setMustResubmit(request.getMustResubmit());
+            } else {
+                report.setMustResubmit(true);
+            }
+        }
+        
         reportRepository.save(report);
 
         log.info("Staff {} has reviewed report {} with status {}", userId, request.getReportId(), newReportStatus);
@@ -441,31 +455,40 @@ public class ReportServiceImpl implements ReportServiceInterface {
         Report report = reportRepository.findByIdWithRelations(reportId)
                 .orElseThrow(() -> new NotFoundException("Report not found with ID: " + reportId));
 
-        // Only allow updating draft reports or rejected reports (for resubmission)
+        // Only allow updating draft reports, rejected reports (for resubmission), or pending club reports
         if (report.getStatus() != ReportStatus.DRAFT 
                 && report.getStatus() != ReportStatus.REJECTED_CLUB 
-                && report.getStatus() != ReportStatus.REJECTED_UNIVERSITY) {
+                && report.getStatus() != ReportStatus.REJECTED_UNIVERSITY
+                && report.getStatus() != ReportStatus.PENDING_CLUB) {
             throw new ForbiddenException(
-                    "Chỉ có thể cập nhật báo cáo ở trạng thái nháp (DRAFT) hoặc bị từ chối (REJECTED). " +
+                    "Chỉ có thể cập nhật báo cáo ở trạng thái nháp (DRAFT), bị từ chối (REJECTED), hoặc chờ CLB phê duyệt (PENDING_CLUB). " +
                     "Trạng thái hiện tại: " + report.getStatus()
             );
         }
 
-        // Check if user is the creator or club president
+        // Check if user is the creator
         boolean isCreator = report.getCreatedBy() != null && report.getCreatedBy().getId().equals(userId);
         
+        if (!isCreator) {
+            throw new ForbiddenException("Bạn không có quyền cập nhật báo cáo này. Chỉ người tạo mới được chỉnh sửa.");
+        }
+
         // Get current semester
         Semester currentSemester = semesterRepository.findCurrentSemester()
                 .orElseThrow(() -> new NotFoundException("Current semester not found"));
 
-        boolean isClubPresident = false;
-        if (report.getClubReportRequirement() != null && report.getClubReportRequirement().getClub() != null) {
-            isClubPresident = roleMemberShipRepository.isClubPresidentInCurrentSemester(
+        // For PENDING_CLUB status, also check if user is club officer
+        if (report.getStatus() == ReportStatus.PENDING_CLUB) {
+            if (report.getClubReportRequirement() == null || report.getClubReportRequirement().getClub() == null) {
+                throw new NotFoundException("Report must have an associated club");
+            }
+            
+            boolean isClubOfficer = roleMemberShipRepository.isClubOfficerOrTeamOfficerInCurrentSemester(
                     userId, report.getClubReportRequirement().getClub().getId(), currentSemester.getId());
-        }
-
-        if (!isCreator) {
-            throw new ForbiddenException("Bạn không có quyền cập nhật báo cáo này. Chỉ người tạo mới được chỉnh sửa.");
+            
+            if (!isClubOfficer) {
+                throw new ForbiddenException("Bạn không có quyền cập nhật báo cáo này. Chỉ club officer mới được chỉnh sửa báo cáo ở trạng thái PENDING_CLUB.");
+            }
         }
 
         // Update report
@@ -530,26 +553,43 @@ public class ReportServiceImpl implements ReportServiceInterface {
             );
         }
 
-        // Determine the appropriate status based on current status
+        // Determine the appropriate status based on current status and user role
+        ReportStatus currentStatus = report.getStatus();
         ReportStatus newStatus;
         
-        if (report.getStatus() == ReportStatus.DRAFT) {
+        if (currentStatus == ReportStatus.DRAFT) {
             // First submission: PENDING_CLUB
             newStatus = ReportStatus.PENDING_CLUB;
-        } else if (report.getStatus() == ReportStatus.REJECTED_CLUB) {
+        } else if (currentStatus == ReportStatus.REJECTED_CLUB) {
             // Resubmission after club rejection: UPDATED_PENDING_CLUB
             newStatus = ReportStatus.UPDATED_PENDING_CLUB;
-        } else if (report.getStatus() == ReportStatus.REJECTED_UNIVERSITY) {
-            // Resubmission after university rejection: RESUBMITTED_UNIVERSITY
-            newStatus = ReportStatus.RESUBMITTED_UNIVERSITY;
+        } else if (currentStatus == ReportStatus.REJECTED_UNIVERSITY) {
+            // Resubmission after university rejection:
+            // - If club president: RESUBMITTED_UNIVERSITY (nộp lại lên trường)
+            // - If team officer: UPDATED_PENDING_CLUB (nộp lại lên câu lạc bộ)
+            if (isClubPresident) {
+                newStatus = ReportStatus.RESUBMITTED_UNIVERSITY;
+            } else {
+                // Team officer resubmits to club level
+                newStatus = ReportStatus.UPDATED_PENDING_CLUB;
+            }
         } else {
             // Fallback (should not happen due to validation above)
             newStatus = ReportStatus.PENDING_CLUB;
         }
         
+        // Reset reviewerFeedback when resubmitting to university (from REJECTED_UNIVERSITY to RESUBMITTED_UNIVERSITY)
+        // Only reset when club president resubmits to university level
+        if (currentStatus == ReportStatus.REJECTED_UNIVERSITY && newStatus == ReportStatus.RESUBMITTED_UNIVERSITY) {
+            report.setReviewerFeedback(null);
+        }
+        
         // Update report status
         report.setStatus(newStatus);
         report.setSubmittedDate(LocalDateTime.now());
+        
+        // Reset mustResubmit when report is resubmitted
+       // report.setMustResubmit(false);
 
         Report submittedReport = reportRepository.save(report);
 
@@ -721,8 +761,16 @@ public class ReportServiceImpl implements ReportServiceInterface {
                 .map(crr -> {
                     // Get status from report if exists, otherwise null
                     String statusStr = null;
-                    if (crr.getReport() != null && crr.getReport().getStatus() != null) {
-                        statusStr = crr.getReport().getStatus().name();
+                    ReportRequirementResponse.ReportInfo reportInfo = null;
+                    if (crr.getReport() != null) {
+                        Report report = crr.getReport();
+                        if (report.getStatus() != null) {
+                            statusStr = report.getStatus().name();
+                        }
+                        // Build report info with only mustResubmit
+                        reportInfo = ReportRequirementResponse.ReportInfo.builder()
+                                .mustResubmit(report.isMustResubmit())
+                                .build();
                     }
                     return ReportRequirementResponse.ClubRequirementInfo.builder()
                             .id(crr.getId())
@@ -730,6 +778,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
                             .clubName(crr.getClub().getClubName())
                             .clubCode(crr.getClub().getClubCode())
                             .status(statusStr)
+                            .report(reportInfo)
                             .build();
                 })
                 .toList();
@@ -872,6 +921,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
                                 .submittedDate(report.getSubmittedDate())
                                 .createdAt(report.getCreatedAt())
                                 .updatedAt(report.getUpdatedAt())
+                                .mustResubmit(report.isMustResubmit())
                                 .build();
                     }
                     
@@ -1033,9 +1083,16 @@ public class ReportServiceImpl implements ReportServiceInterface {
         report.setStatus(newReportStatus);
         report.setReviewedDate(LocalDateTime.now());
         
-        // Set feedback if provided
-        if (request.getReviewerFeedback() != null && !request.getReviewerFeedback().trim().isEmpty()) {
-            report.setReviewerFeedback(request.getReviewerFeedback());
+        // Handle reviewerFeedback based on action
+        if (newReportStatus == ReportStatus.PENDING_UNIVERSITY) {
+            // When approving and submitting to university, reset reviewerFeedback to null
+            // This ensures that when a report is submitted to university level, any previous feedback is cleared
+            report.setReviewerFeedback(null);
+        } else if (newReportStatus == ReportStatus.REJECTED_CLUB) {
+            // When rejecting, set feedback if provided
+            if (request.getReviewerFeedback() != null && !request.getReviewerFeedback().trim().isEmpty()) {
+                report.setReviewerFeedback(request.getReviewerFeedback());
+            }
         }
 
         Report reviewedReport = reportRepository.save(report);

@@ -19,5 +19,7 @@ public class ReportReviewRequest {
     private ReportStatus status; // APPROVED or REJECTED
 
     private String reviewerFeedback;
+
+    private Boolean mustResubmit; // Optional: set to true if report must be resubmitted
 }
 

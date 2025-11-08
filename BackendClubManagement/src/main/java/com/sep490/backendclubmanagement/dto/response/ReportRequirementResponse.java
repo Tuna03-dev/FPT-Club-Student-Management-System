@@ -62,6 +62,7 @@ public class ReportRequirementResponse {
         private LocalDateTime submittedDate;
         private LocalDateTime createdAt;
         private LocalDateTime updatedAt;
+        private Boolean mustResubmit;
     }
 }
 

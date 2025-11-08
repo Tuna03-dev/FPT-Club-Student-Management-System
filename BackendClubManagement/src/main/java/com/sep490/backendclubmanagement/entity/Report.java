@@ -41,6 +41,9 @@ public class Report extends BaseEntity {
     @Column(name = "reviewer_feedback", columnDefinition = "TEXT")
     private String reviewerFeedback;
 
+    @Column(name = "must_resubmit")
+    private boolean mustResubmit;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "semester_id")
     private Semester semester;

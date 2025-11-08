@@ -60,6 +60,7 @@ export interface ReportInfo {
   submittedDate?: string;
   createdAt: string;
   updatedAt: string;
+  mustResubmit?: boolean;
 }
 
 // Report Detail Response
@@ -72,6 +73,7 @@ export interface ReportDetailResponse {
   submittedDate?: string;
   reviewedDate?: string;
   reviewerFeedback?: string;
+  mustResubmit?: boolean;
   createdAt: string;
   updatedAt: string;
   club?: ClubInfo;

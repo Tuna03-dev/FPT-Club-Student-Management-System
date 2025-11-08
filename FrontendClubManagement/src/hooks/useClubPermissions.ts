@@ -46,7 +46,7 @@ export function useClubPermissions(
     if (!clubRole) return false;
 
     // Kiểm tra theo tên tiếng Việt
-    const isPresident = clubRole.systemRole === "CLUB_PRESIDENT";
+    const isPresident = clubRole.systemRole === "CLUB_OFFICER";
 
     return isPresident;
   }, [clubRole]);

@@ -98,6 +98,7 @@ interface Club {
 interface ClubWithReport extends Club {
   reportStatus: ReportStatus;
   backendStatus: string | null; // Store the original backend status
+  mustResubmit: boolean; // Store mustResubmit flag from report
   hasReport: boolean;
   report?: Report;
   clubRequirementId: number;
@@ -135,6 +136,7 @@ export function PeriodicReportClubs() {
         description: "",
         reportStatus: mapBackendStatusToFrontend(club.status),
         backendStatus: club.status || null,
+        mustResubmit: club.report?.mustResubmit || false, // Store mustResubmit flag
         hasReport: isUniversityStatus(club.status),
         clubRequirementId: club.id,
         clubId: club.clubId,
@@ -197,6 +199,7 @@ export function PeriodicReportClubs() {
           description: "",
           reportStatus: mapBackendStatusToFrontend(club.status),
           backendStatus: club.status || null, // Store the original backend status
+          mustResubmit: club.report?.mustResubmit || false, // Store mustResubmit flag
           // Only allow viewing report if status is from university (school)
           hasReport: isUniversityStatus(club.status),
           clubRequirementId: club.id,
@@ -254,7 +257,7 @@ export function PeriodicReportClubs() {
     setIsClubReportModalOpen(false);
   };
 
-  const getStatusLabel = (status: ReportStatus, backendStatus?: string | null) => {
+  const getStatusLabel = (status: ReportStatus, backendStatus?: string | null, mustResubmit?: boolean) => {
     // If we have the backend status and it's a university status, use the proper label
     if (backendStatus && isUniversityStatus(backendStatus)) {
       switch (backendStatus) {
@@ -267,15 +270,20 @@ export function PeriodicReportClubs() {
         case "RESUBMITTED_UNIVERSITY":
           return "Đã nộp lại nhà trường";
         default:
-          return "Chưa nộp";
+          return "Đang yêu cầu nộp lại";
       }
     }
     
-    // For all other cases, show "Chưa nộp"
+    // For all other cases (not university statuses)
+    // If mustResubmit is true, show "Đang yêu cầu nộp lại"
+    // Otherwise, show "Chưa nộp"
+    if (mustResubmit === true) {
+      return "Đang yêu cầu nộp lại";
+    }
     return "Chưa nộp";
   };
 
-  const getStatusColor = (status: ReportStatus, backendStatus?: string | null) => {
+  const getStatusColor = (status: ReportStatus, backendStatus?: string | null, mustResubmit?: boolean) => {
     // If we have the backend status and it's a university status, use specific colors
     if (backendStatus && isUniversityStatus(backendStatus)) {
       switch (backendStatus) {
@@ -288,11 +296,16 @@ export function PeriodicReportClubs() {
         case "RESUBMITTED_UNIVERSITY":
           return "bg-blue-100 text-blue-700";
         default:
-          return "bg-red-100 text-red-700"; // Chưa nộp
+          return "bg-orange-100 text-orange-700"; // Đang yêu cầu nộp lại
       }
     }
     
-    // For all other cases (not submitted), use red color
+    // For all other cases (not university statuses)
+    // If mustResubmit is true, use orange color for "Đang yêu cầu nộp lại"
+    // Otherwise, use red color for "Chưa nộp"
+    if (mustResubmit === true) {
+      return "bg-orange-100 text-orange-700";
+    }
     return "bg-red-100 text-red-700";
   };
 
@@ -525,10 +538,11 @@ export function PeriodicReportClubs() {
                         <div
                           className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium whitespace-nowrap ${getStatusColor(
                             club.reportStatus,
-                            club.backendStatus
+                            club.backendStatus,
+                            club.mustResubmit
                           )}`}
                         >
-                          <span>{getStatusLabel(club.reportStatus, club.backendStatus)}</span>
+                          <span>{getStatusLabel(club.reportStatus, club.backendStatus, club.mustResubmit)}</span>
                         </div>
 
                         {/* Only show "View Report" button if status is from university (school) */}

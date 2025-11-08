@@ -22,6 +22,7 @@ public class ReportDetailResponse {
     private LocalDateTime submittedDate;
     private LocalDateTime reviewedDate;
     private String reviewerFeedback;
+    private Boolean mustResubmit;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
