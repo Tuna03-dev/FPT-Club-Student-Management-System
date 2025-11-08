@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface ClubRoleRepository extends JpaRepository<ClubRole, Long> {
@@ -19,5 +20,7 @@ public interface ClubRoleRepository extends JpaRepository<ClubRole, Long> {
     boolean existsByClubIdAndRoleCodeIgnoreCaseAndIdNot(Long clubId, String roleCode, Long id);
 
     boolean existsByClubIdAndRoleNameIgnoreCaseAndIdNot(Long clubId, String roleName, Long id);
+    Optional<ClubRole> findByRoleName(String roleName);
+    Optional<ClubRole> findByClubIdAndRoleCode(Long clubId, String roleCode);
 }
 

@@ -13,7 +13,6 @@ public class RecruitmentData {
     private String description;
     private LocalDateTime startDate;
     private LocalDateTime endDate;
-    private Integer maxApplicants;
     private RecruitmentStatus status;
     private String requirements;
     private Long clubId;

@@ -1,5 +1,6 @@
 import { axiosClient } from "./axiosClient";
 import type { VisibleTeamDTO, MyTeamDetailDTO } from "@/types/team";
+import type { CreateTeamPayload, TeamResponse } from "@/types/team";
 
 export async function getVisibleTeams(
   clubId?: number,
@@ -19,7 +20,7 @@ export async function getTeamDetail(
   semesterId?: number
 ): Promise<MyTeamDetailDTO> {
   const res = await axiosClient.get<MyTeamDetailDTO>(
-    `/management/clubs/${clubId}/team/${teamId}`, // BE của bạn là `/team/:teamId`
+    `/management/clubs/${clubId}/team/${teamId}`,
     { params: { semesterId } }
   );
   if (res.code !== 200)
@@ -27,10 +28,6 @@ export async function getTeamDetail(
   return res.data!;
 }
 
-/**
- * Lấy tất cả teams của club cho CLUB_PRESIDENT của kì hiện tại
- * API này chỉ dành cho CLUB_PRESIDENT
- */
 export async function getAllTeamsForPresident(
   clubId: number
 ): Promise<VisibleTeamDTO[]> {
@@ -40,4 +37,10 @@ export async function getAllTeamsForPresident(
   if (res.code !== 200)
     throw new Error(res.message || "Failed to fetch teams for president");
   return res.data ?? [];
+}
+export async function createTeam(payload: CreateTeamPayload): Promise<TeamResponse> {
+  const res = await axiosClient.post<TeamResponse>("/api/teams", payload);
+  // res hiện là ApiResponse<TeamResponse>
+  if (res.code !== 200 || !res.data) throw new Error(res.message || "Create team failed");
+  return res.data;                       // ✅ Trả về T duy nhất
 }

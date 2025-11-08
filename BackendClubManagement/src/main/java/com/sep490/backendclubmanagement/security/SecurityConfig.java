@@ -28,7 +28,6 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 public class SecurityConfig {
     
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
-    private final UserDetailsService userDetailsService;
     private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
     private final CustomAccessDeniedHandler customAccessDeniedHandler;
 
@@ -53,7 +52,12 @@ public class SecurityConfig {
             "/api/events/{id}",
             "/api/events/get-all-club",
             "/api/news/get-all-by-filter",
-            "/api/news/{id}"
+            "/api/news/{id}",
+            "/api/public/clubs/**",
+            "/api/pay-os/webhook",
+            "/api/pay-os/webhook",
+            "/ws/**",
+            "/api/test/**"
 
     };
 

@@ -6,7 +6,8 @@
     "events": "Sự kiện",
     "notifications": "Thông báo",
     "settings": "Cài đặt",
-    "management": "Quản lý"
+    "management": "Quản lý",
+    "payments": "Đóng phí"
   },
   "teams": {
     "title": "Phòng ban",
@@ -41,4 +42,5 @@
     "loginFailed": "Đăng nhập thất bại:",
     "loginError": "Có lỗi xảy ra khi đăng nhập"
   }
+  
 }

@@ -1,18 +1,25 @@
 package com.sep490.backendclubmanagement.service;
 
+import com.sep490.backendclubmanagement.dto.request.BatchMarkAttendanceRequest;
 import com.sep490.backendclubmanagement.dto.request.EventRequest;
 import com.sep490.backendclubmanagement.dto.response.ClubDto;
 import com.sep490.backendclubmanagement.dto.response.EventData;
+import com.sep490.backendclubmanagement.dto.response.EventRegistrationDto;
 import com.sep490.backendclubmanagement.dto.response.EventResponse;
 import com.sep490.backendclubmanagement.dto.response.EventTypesDto;
+import com.sep490.backendclubmanagement.entity.AttendanceStatus;
 import com.sep490.backendclubmanagement.entity.Club;
 import com.sep490.backendclubmanagement.entity.Event;
+import com.sep490.backendclubmanagement.entity.EventAttendance;
 import com.sep490.backendclubmanagement.entity.EventType;
+import com.sep490.backendclubmanagement.entity.User;
 import com.sep490.backendclubmanagement.exception.NotFoundException;
 import com.sep490.backendclubmanagement.mapper.EventMapper;
 import com.sep490.backendclubmanagement.repository.ClubMemberShipRepository;
+import com.sep490.backendclubmanagement.repository.EventAttendanceRepository;
 import com.sep490.backendclubmanagement.repository.EventMediaRepository;
 import com.sep490.backendclubmanagement.repository.EventRepository;
+import com.sep490.backendclubmanagement.repository.UserRepository;
 import com.sep490.backendclubmanagement.shared.ModelMapperUtils;
 import lombok.Builder;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +27,7 @@ import org.springframework.context.MessageSource;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.data.domain.Page;
 
 import java.time.LocalDateTime;
@@ -34,6 +42,8 @@ public class EventService {
     private final EventRepository eventRepository;
     private final EventMediaRepository eventMediaRepository;
     private final ClubMemberShipRepository clubMemberShipRepository;
+    private final EventAttendanceRepository eventAttendanceRepository;
+    private final UserRepository userRepository;
     private final EventMapper eventMapper;
     private final MessageSource messageSource;
 
@@ -118,5 +128,179 @@ public class EventService {
                     return dto;
                 })
                 .toList();
+    }
+
+
+    public List<EventData> getStaffAllEvents() {
+        return eventRepository.findStaffAllEventsExcludingMeeting()
+                .stream()
+                .map(event -> {
+                    EventData dto = eventMapper.toDto(event);
+                    dto.setMediaUrls(eventMediaRepository.findMediaUrlsByEventId(event.getId()));
+                    dto.setClubId(event.getClub() != null ? event.getClub().getId() : null);
+                    return dto;
+                })
+                .toList();
+    }
+
+
+    public List<EventData> getStaffEventsByClubId(Long clubId) {
+        return eventRepository.findStaffEventsByClubIdExcludingMeeting(clubId)
+                .stream()
+                .map(event -> {
+                    EventData dto = eventMapper.toDto(event);
+                    dto.setMediaUrls(eventMediaRepository.findMediaUrlsByEventId(event.getId()));
+                    dto.setClubId(event.getClub() != null ? event.getClub().getId() : null);
+                    return dto;
+                })
+                .toList();
+    }
+
+
+    public void registerForEvent(Long eventId, Long userId) {
+        // Kiểm tra event tồn tại
+        Event event = eventRepository.findById(eventId)
+                .orElseThrow(() -> new NotFoundException("Event not found"));
+        
+        // Kiểm tra event đã được publish chưa
+        if (event.getIsDraft() != null && event.getIsDraft()) {
+            throw new RuntimeException("Cannot register for draft event");
+        }
+        
+        // Kiểm tra event đã kết thúc chưa
+        if (event.getStartTime() != null && event.getStartTime().isBefore(LocalDateTime.now())) {
+            throw new RuntimeException("Cannot register for event that has already started");
+        }
+        
+        // Kiểm tra user tồn tại
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new NotFoundException("User not found"));
+        
+        // Kiểm tra đã đăng ký chưa
+        if (eventAttendanceRepository.existsByEventIdAndUserId(eventId, userId)) {
+            throw new RuntimeException("You have already registered for this event");
+        }
+        
+        // Tạo event attendance với status REGISTERED
+        EventAttendance eventAttendance = EventAttendance.builder()
+                .event(event)
+                .user(user)
+                .registrationTime(LocalDateTime.now())
+                .attendanceStatus(AttendanceStatus.REGISTERED)
+                .build();
+        
+        eventAttendanceRepository.save(eventAttendance);
+    }
+
+
+    public void cancelEventRegistration(Long eventId, Long userId) {
+        // Kiểm tra đã đăng ký chưa
+        EventAttendance eventAttendance = eventAttendanceRepository.findByEventIdAndUserId(eventId, userId)
+                .orElseThrow(() -> new NotFoundException("You have not registered for this event"));
+        
+        // Kiểm tra event đã bắt đầu chưa
+        Event event = eventAttendance.getEvent();
+        if (event.getStartTime() != null && event.getStartTime().isBefore(LocalDateTime.now())) {
+            throw new RuntimeException("Cannot cancel registration for event that has already started");
+        }
+        
+        // Xóa đăng ký
+        eventAttendanceRepository.delete(eventAttendance);
+    }
+
+
+    public boolean isUserRegisteredForEvent(Long eventId, Long userId) {
+        return eventAttendanceRepository.existsByEventIdAndUserId(eventId, userId);
+    }
+
+
+    public List<EventRegistrationDto> getEventRegistrations(Long eventId) {
+        Event event = eventRepository.findById(eventId)
+                .orElseThrow(() -> new NotFoundException("Event not found"));
+        
+        List<EventAttendance> attendances = eventAttendanceRepository.findByEventId(eventId);
+        
+        return attendances.stream()
+                .map(attendance -> {
+                    User user = attendance.getUser();
+                    return EventRegistrationDto.builder()
+                            .id(attendance.getId())
+                            .userId(user.getId())
+                            .fullName(user.getFullName())
+                            .studentCode(user.getStudentCode())
+                            .email(user.getEmail())
+                            .avatarUrl(user.getAvatarUrl())
+                            .registrationTime(attendance.getRegistrationTime())
+                            .attendanceStatus(attendance.getAttendanceStatus() != null 
+                                    ? attendance.getAttendanceStatus().name() 
+                                    : null)
+                            .checkInTime(attendance.getCheckInTime())
+                            .notes(attendance.getNotes())
+                            .build();
+                })
+                .collect(Collectors.toList());
+    }
+
+    public List<EventRegistrationDto> getEventRegistrations(Long eventId, String keyword) {
+        List<EventRegistrationDto> list = getEventRegistrations(eventId);
+        if (keyword == null || keyword.isBlank()) return list;
+        String kw = keyword.trim().toLowerCase();
+        return list.stream()
+                .filter(r -> {
+                    String name = r.getFullName() != null ? r.getFullName().toLowerCase() : "";
+                    String code = r.getStudentCode() != null ? r.getStudentCode().toLowerCase() : "";
+                    return name.contains(kw) || code.contains(kw);
+                })
+                .toList();
+    }
+
+
+    public Long getEventRegistrationCount(Long eventId) {
+        return eventAttendanceRepository.countByEventIdAndStatus(eventId);
+    }
+
+
+    @Transactional
+    public void batchMarkAttendance(Long eventId, List<BatchMarkAttendanceRequest.AttendanceItem> attendances) {
+        // Kiểm tra event tồn tại và thuộc club
+        Event event = eventRepository.findById(eventId)
+                .orElseThrow(() -> new NotFoundException("Event not found"));
+        
+        // Kiểm tra event thuộc club nào
+        if (event.getClub() == null) {
+            throw new NotFoundException("Event không thuộc về club nào");
+        }
+        
+        // Không cho điểm danh nếu sự kiện đã kết thúc
+        if (event.getEndTime() != null && event.getEndTime().isBefore(LocalDateTime.now())) {
+            throw new RuntimeException("Event has ended. Attendance can no longer be modified");
+        }
+        
+        if (attendances == null || attendances.isEmpty()) {
+            throw new RuntimeException("Danh sách điểm danh không được rỗng");
+        }
+        
+        List<EventAttendance> updatedAttendances = new ArrayList<>();
+        
+        for (BatchMarkAttendanceRequest.AttendanceItem item : attendances) {
+            // Kiểm tra status hợp lệ
+            if (item.getAttendanceStatus() != AttendanceStatus.PRESENT && 
+                item.getAttendanceStatus() != AttendanceStatus.ABSENT) {
+                throw new RuntimeException("Chỉ có thể điểm danh PRESENT hoặc ABSENT cho userId: " + item.getUserId());
+            }
+            
+            // Kiểm tra user đã đăng ký event chưa
+            EventAttendance attendance = eventAttendanceRepository.findByEventIdAndUserId(eventId, item.getUserId())
+                    .orElseThrow(() -> new NotFoundException("User với ID " + item.getUserId() + " chưa đăng ký sự kiện này"));
+            
+            // Cập nhật điểm danh
+            attendance.setAttendanceStatus(item.getAttendanceStatus());
+            attendance.setCheckInTime(item.getAttendanceStatus() == AttendanceStatus.PRESENT ? LocalDateTime.now() : null);
+            attendance.setNotes(item.getNotes());
+            
+            updatedAttendances.add(attendance);
+        }
+        
+        eventAttendanceRepository.saveAll(updatedAttendances);
     }
 }

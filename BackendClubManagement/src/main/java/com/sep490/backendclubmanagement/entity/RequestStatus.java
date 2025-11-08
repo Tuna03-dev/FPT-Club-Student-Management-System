@@ -8,6 +8,6 @@ public enum RequestStatus {
     PENDING_UNIVERSITY,    // Chờ xử lý
     APPROVED_UNIVERSITY,   // Đã duyệt
     REJECTED_UNIVERSITY,// Bị từ chối
-
+    CANCELED
 }
 
