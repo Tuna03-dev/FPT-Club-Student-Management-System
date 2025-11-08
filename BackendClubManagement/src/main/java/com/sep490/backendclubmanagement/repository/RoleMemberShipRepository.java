@@ -211,6 +211,7 @@ SELECT CASE WHEN EXISTS (
                                       @Param("clubId") Long clubId,
                                       @Param("semesterId") Long semesterId);
 
+    // ---- User có thuộc team này không? (cho phép xem DETAIL nếu không phải CLUB_PRESIDENT)
     @Query("""
         SELECT CASE WHEN COUNT(rm.id) > 0 THEN TRUE ELSE FALSE END
         FROM RoleMemberShip rm
@@ -226,6 +227,7 @@ SELECT CASE WHEN EXISTS (
                      @Param("teamId") Long teamId,
                      @Param("semesterId") Long semesterId);
 
+    // ---- Đếm distinct member của 1 team
     @Query("""
         SELECT COUNT(DISTINCT rm.clubMemberShip.id)
         FROM RoleMemberShip rm
@@ -236,6 +238,7 @@ SELECT CASE WHEN EXISTS (
     Long countDistinctMembers(@Param("teamId") Long teamId,
                               @Param("semesterId") Long semesterId);
 
+    // ---- Các role của user trong 1 team (để gắn vào myRoles ở DETAIL)
     @Query("""
         SELECT DISTINCT COALESCE(cr.roleName, 'Thành viên')
         FROM RoleMemberShip rm
@@ -299,10 +302,12 @@ SELECT CASE WHEN EXISTS (
         FROM RoleMemberShip rm
         JOIN rm.clubMemberShip cm
         JOIN rm.clubRole cr
+        JOIN rm.semester s
         WHERE cm.user.id = :userId
           AND rm.team.id = :teamId
           AND COALESCE(rm.isActive, TRUE) = TRUE
-          AND ( cr.roleCode LIKE %:headSuffix OR cr.roleLevel = 3 )
+          AND ( cr.roleCode LIKE %:headSuffix OR cr.roleLevel <= 3 )
+          AND s.isCurrent = true
     """)
     boolean existsTeamLeader(@Param("userId") Long userId,
                              @Param("teamId") Long teamId,
@@ -310,18 +315,18 @@ SELECT CASE WHEN EXISTS (
 
     // RoleMemberShipRepository.java
     @Query("""
-SELECT CASE WHEN COUNT(rm) > 0 THEN true ELSE false END
-FROM RoleMemberShip rm
-JOIN rm.clubMemberShip c
-JOIN rm.clubRole cr
-JOIN rm.semester s
-WHERE c.user.id = :userId
-  AND c.club.id = :clubId
-  AND rm.team IS NULL
-  AND COALESCE(rm.isActive, TRUE) = TRUE
-  AND cr.roleLevel <= 2
-  AND s.isCurrent = true
-""")
+    SELECT CASE WHEN COUNT(rm) > 0 THEN true ELSE false END
+    FROM RoleMemberShip rm
+    JOIN rm.clubMemberShip c
+    JOIN rm.clubRole cr
+    JOIN rm.semester s
+    WHERE c.user.id = :userId
+      AND c.club.id = :clubId
+      AND rm.team IS NULL
+      AND COALESCE(rm.isActive, TRUE) = TRUE
+      AND cr.roleLevel <= 2
+      AND s.isCurrent = true
+    """)
     boolean existsClubAdmin(@Param("userId") Long userId,
                             @Param("clubId") Long clubId);
 
