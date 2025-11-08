@@ -14,8 +14,12 @@ public interface ClubReportRequirementRepository extends JpaRepository<ClubRepor
 
     /**
      * Find ClubReportRequirement by clubId and submissionReportRequirementId
+     * Fetch report if exists to avoid LazyInitializationException and check if report already exists
      */
     @Query("SELECT crr FROM ClubReportRequirement crr " +
+           "LEFT JOIN FETCH crr.report " +
+           "JOIN FETCH crr.club " +
+           "JOIN FETCH crr.submissionReportRequirement " +
            "WHERE crr.club.id = :clubId " +
            "AND crr.submissionReportRequirement.id = :submissionReportRequirementId")
     Optional<ClubReportRequirement> findByClubIdAndSubmissionReportRequirementId(

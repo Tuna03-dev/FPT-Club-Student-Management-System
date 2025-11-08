@@ -333,6 +333,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
         }
 
         // Find or get ClubReportRequirement for this club and submission requirement
+        // Fetch report if exists to properly check if report already exists
         ClubReportRequirement clubReportRequirement = clubReportRequirementRepository
                 .findByClubIdAndSubmissionReportRequirementId(request.getClubId(), request.getReportRequirementId())
                 .orElseThrow(() -> new NotFoundException(
@@ -363,7 +364,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
             status = ReportStatus.DRAFT;
         }
 
-        // Create report
+        // Create report with bidirectional relationship properly set
         Report report = Report.builder()
                 .reportTitle(request.getReportTitle())
                 .content(request.getContent())
@@ -378,18 +379,26 @@ public class ReportServiceImpl implements ReportServiceInterface {
             report.setSubmittedDate(LocalDateTime.now());
         }
 
+        // Set bidirectional relationship: Report -> ClubReportRequirement (already set in builder)
+        // and ClubReportRequirement -> Report
+        // This ensures the relationship is properly maintained on both sides in memory
+        clubReportRequirement.setReport(report);
+
+        // Save Report (Report is the owning side with the foreign key club_report_requirement_id)
+        // The foreign key will be set when saving Report
+        // Note: We don't need to save ClubReportRequirement separately because:
+        // 1. Report is the owning side (has the foreign key)
+        // 2. ClubReportRequirement doesn't have a foreign key to Report
+        // 3. Setting clubReportRequirement.setReport(report) is just for bidirectional relationship in memory
         Report savedReport = reportRepository.save(report);
-        
-        // Update ClubReportRequirement to link the report
-        clubReportRequirement.setReport(savedReport);
-        clubReportRequirementRepository.save(clubReportRequirement);
 
         log.info("User {} created report {} with status {} for club {} (autoSubmit: {})", 
                 userId, savedReport.getId(), status, request.getClubId(), shouldAutoSubmit);
 
-        // If autoSubmit is true and report was created as SUBMITTED, the report is already submitted
-        // No need to call submitReport separately as it's already in SUBMITTED status
+        // If autoSubmit is true and report was created as PENDING_CLUB, the report is already submitted
+        // No need to call submitReport separately as it's already in PENDING_CLUB status
 
+        // Fetch the saved report with all relations for response
         return reportMapper.toDetail(reportRepository.findByIdWithRelations(savedReport.getId())
                 .orElse(savedReport));
     }

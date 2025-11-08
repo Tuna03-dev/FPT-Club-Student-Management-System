@@ -48,7 +48,7 @@ export interface ClubRequirementInfo {
   clubId: number;
   clubName: string;
   clubCode: string;
-  status: string;
+  status: string; // ReportStatus enum from backend (DRAFT, PENDING_CLUB, etc.) or null if no report exists
   note?: string;
   report?: ReportInfo;
 }
@@ -56,7 +56,7 @@ export interface ClubRequirementInfo {
 export interface ReportInfo {
   id: number;
   reportTitle: string;
-  status?: string;
+  status?: string; // ReportStatus enum: DRAFT, PENDING_CLUB, APPROVED_CLUB, REJECTED_CLUB, UPDATED_PENDING_CLUB, PENDING_UNIVERSITY, APPROVED_UNIVERSITY, REJECTED_UNIVERSITY, RESUBMITTED_UNIVERSITY
   submittedDate?: string;
   createdAt: string;
   updatedAt: string;
@@ -68,7 +68,7 @@ export interface ReportDetailResponse {
   reportTitle: string;
   content?: string;
   fileUrl?: string;
-  status: string; // DRAFT, UPDATED, SUBMITTED, REJECTED
+  status: string; // DRAFT, PENDING_CLUB, APPROVED_CLUB, REJECTED_CLUB, UPDATED_PENDING_CLUB, PENDING_UNIVERSITY, APPROVED_UNIVERSITY, REJECTED_UNIVERSITY, RESUBMITTED_UNIVERSITY
   submittedDate?: string;
   reviewedDate?: string;
   reviewerFeedback?: string;

@@ -134,35 +134,60 @@ const statusColors: Record<SubmissionStatus, string> = {
 };
 
 // Status labels for ClubReportRequirementStatus
+// This maps the ReportStatus from backend when report exists, or null when no report
+// Backend returns report.status in clubRequirement.status if report exists
 const requirementStatusLabels: Record<string, string> = {
+  // When status is null (no report exists)
   UNSUBMITTED: "Chưa nộp",
-  SUBMITTED: "Đã nộp",
-  APPROVED: "Đã duyệt",
-  REJECTED: "Bị từ chối",
-  RESUBMITTED: "Đã nộp lại",
+  // ReportStatus enum values from backend
+  DRAFT: "Bản nháp",
+  PENDING_CLUB: "Chờ phê duyệt CLB",
+  APPROVED_CLUB: "Đã duyệt CLB",
+  REJECTED_CLUB: "Bị từ chối CLB",
+  UPDATED_PENDING_CLUB: "Đã cập nhật - Chờ phê duyệt CLB",
+  PENDING_UNIVERSITY: "Chờ phê duyệt nhà trường",
+  APPROVED_UNIVERSITY: "Đã duyệt nhà trường",
+  REJECTED_UNIVERSITY: "Bị từ chối nhà trường",
+  RESUBMITTED_UNIVERSITY: "Đã nộp lại nhà trường",
 };
 
 const requirementStatusColors: Record<string, string> = {
   UNSUBMITTED: "bg-red-100 text-red-700",
-  SUBMITTED: "bg-blue-100 text-blue-700",
-  APPROVED: "bg-green-100 text-green-700",
-  REJECTED: "bg-red-100 text-red-700",
-  RESUBMITTED: "bg-blue-100 text-blue-700",
+  DRAFT: "bg-gray-600 text-white",
+  PENDING_CLUB: "bg-yellow-100 text-yellow-700",
+  APPROVED_CLUB: "bg-green-100 text-green-700",
+  REJECTED_CLUB: "bg-red-100 text-red-700",
+  UPDATED_PENDING_CLUB: "bg-yellow-100 text-yellow-700",
+  PENDING_UNIVERSITY: "bg-blue-100 text-blue-700",
+  APPROVED_UNIVERSITY: "bg-green-100 text-green-700",
+  REJECTED_UNIVERSITY: "bg-red-100 text-red-700",
+  RESUBMITTED_UNIVERSITY: "bg-blue-100 text-blue-700",
 };
 
-// Report status labels and colors (from ReportStatus enum: DRAFT, UPDATED, SUBMITTED, REJECTED)
+// Report status labels and colors (from ReportStatus enum in backend)
+// Used for displaying report status in detail views
 const reportStatusLabels: Record<string, string> = {
   DRAFT: "Bản nháp",
-  UPDATED: "Đã cập nhật",
-  SUBMITTED: "Đã nộp",
-  REJECTED: "Bị từ chối",
+  PENDING_CLUB: "Chờ phê duyệt CLB",
+  APPROVED_CLUB: "Đã duyệt CLB",
+  REJECTED_CLUB: "Bị từ chối CLB",
+  UPDATED_PENDING_CLUB: "Đã cập nhật - Chờ phê duyệt CLB",
+  PENDING_UNIVERSITY: "Chờ phê duyệt nhà trường",
+  APPROVED_UNIVERSITY: "Đã duyệt nhà trường",
+  REJECTED_UNIVERSITY: "Bị từ chối nhà trường",
+  RESUBMITTED_UNIVERSITY: "Đã nộp lại nhà trường",
 };
 
 const reportStatusColors: Record<string, string> = {
-  DRAFT: "bg-gray-100 text-gray-700",
-  UPDATED: "bg-yellow-100 text-yellow-700",
-  SUBMITTED: "bg-blue-100 text-blue-700",
-  REJECTED: "bg-red-100 text-red-700",
+  DRAFT: "bg-gray-600 text-white",
+  PENDING_CLUB: "bg-yellow-100 text-yellow-700",
+  APPROVED_CLUB: "bg-green-100 text-green-700",
+  REJECTED_CLUB: "bg-red-100 text-red-700",
+  UPDATED_PENDING_CLUB: "bg-yellow-100 text-yellow-700",
+  PENDING_UNIVERSITY: "bg-blue-100 text-blue-700",
+  APPROVED_UNIVERSITY: "bg-green-100 text-green-700",
+  REJECTED_UNIVERSITY: "bg-red-100 text-red-700",
+  RESUBMITTED_UNIVERSITY: "bg-blue-100 text-blue-700",
 };
 
 export function ClubReportManagement() {
@@ -828,17 +853,16 @@ export function ClubReportManagement() {
                                 {reportTypeLabels[request.request_type]}
                               </Badge>
                               {/* Hiển thị trạng thái yêu cầu (requirement status) - đây là trạng thái chính từ backend */}
-                              {request.status && (
-                                <Badge
-                                  className={
-                                    requirementStatusColors[request.status] ||
-                                    "bg-gray-100 text-gray-700"
-                                  }
-                                >
-                                  {requirementStatusLabels[request.status] ||
-                                    request.status}
-                                </Badge>
-                              )}
+                              <Badge
+                                className={
+                                  requirementStatusColors[request.status || "UNSUBMITTED"] ||
+                                  "bg-gray-100 text-gray-700"
+                                }
+                              >
+                                {requirementStatusLabels[request.status || "UNSUBMITTED"] ||
+                                  request.status ||
+                                  "Chưa nộp"}
+                              </Badge>
                             </div>
                             <CardTitle className="text-lg mb-1">
                               {request.title}
@@ -905,7 +929,8 @@ export function ClubReportManagement() {
                           </div>
 
                           {/* Hiển thị thông báo dựa trên trạng thái yêu cầu (requirement status) */}
-                          {request.status === "UNSUBMITTED" &&
+                          {/* Status là null hoặc UNSUBMITTED khi chưa có report */}
+                          {(request.status === "UNSUBMITTED" || !request.status) &&
                             isDeadlineExp && (
                               <div className="p-3 bg-red-50 border border-red-200 rounded text-sm text-red-800">
                                 <AlertCircle className="h-4 w-4 inline mr-2" />
@@ -913,42 +938,77 @@ export function ClubReportManagement() {
                               </div>
                             )}
 
-                          {request.status === "SUBMITTED" && (
-                            <div className="p-3 bg-blue-50 border border-blue-200 rounded text-sm text-blue-800">
-                              <CheckCircle className="h-4 w-4 inline mr-2" />
-                              Báo cáo đã được nộp và đang chờ phê duyệt
+                          {/* Báo cáo đang ở trạng thái nháp */}
+                          {request.status === "DRAFT" && (
+                            <div className="p-3 bg-gray-50 border border-gray-200 rounded text-sm text-gray-800">
+                              <FileText className="h-4 w-4 inline mr-2" />
+                              Báo cáo đang ở trạng thái nháp
                             </div>
                           )}
 
-                          {request.status === "APPROVED" && (
+                          {/* Báo cáo đang chờ phê duyệt từ CLB */}
+                          {(request.status === "PENDING_CLUB" || request.status === "UPDATED_PENDING_CLUB") && (
+                            <div className="p-3 bg-yellow-50 border border-yellow-200 rounded text-sm text-yellow-800">
+                              <CheckCircle className="h-4 w-4 inline mr-2" />
+                              Báo cáo đã được nộp và đang chờ phê duyệt từ CLB
+                            </div>
+                          )}
+
+                          {/* Báo cáo đã được CLB phê duyệt, đang chờ nhà trường */}
+                          {request.status === "APPROVED_CLUB" && (
                             <div className="p-3 bg-green-50 border border-green-200 rounded text-sm text-green-800">
                               <CheckCircle className="h-4 w-4 inline mr-2" />
-                              Báo cáo đã được phê duyệt
+                              Báo cáo đã được CLB phê duyệt, đang chờ phê duyệt từ nhà trường
                             </div>
                           )}
 
-                          {request.status === "REJECTED" && (
+                          {/* Báo cáo bị CLB từ chối */}
+                          {request.status === "REJECTED_CLUB" && (
                             <div className="p-3 bg-red-50 border border-red-200 rounded text-sm text-red-800">
                               <XCircle className="h-4 w-4 inline mr-2" />
-                              Báo cáo bị từ chối. Vui lòng kiểm tra và gửi lại.
+                              Báo cáo bị CLB từ chối. Vui lòng kiểm tra và gửi lại.
                             </div>
                           )}
 
-                          {request.status === "RESUBMITTED" && (
+                          {/* Báo cáo đang chờ phê duyệt từ nhà trường */}
+                          {request.status === "PENDING_UNIVERSITY" && (
                             <div className="p-3 bg-blue-50 border border-blue-200 rounded text-sm text-blue-800">
                               <CheckCircle className="h-4 w-4 inline mr-2" />
-                              Báo cáo đã được nộp lại và đang chờ phê duyệt
+                              Báo cáo đang chờ phê duyệt từ nhà trường
+                            </div>
+                          )}
+
+                          {/* Báo cáo đã được nhà trường phê duyệt */}
+                          {request.status === "APPROVED_UNIVERSITY" && (
+                            <div className="p-3 bg-green-50 border border-green-200 rounded text-sm text-green-800">
+                              <CheckCircle className="h-4 w-4 inline mr-2" />
+                              Báo cáo đã được nhà trường phê duyệt
+                            </div>
+                          )}
+
+                          {/* Báo cáo bị nhà trường từ chối */}
+                          {request.status === "REJECTED_UNIVERSITY" && (
+                            <div className="p-3 bg-red-50 border border-red-200 rounded text-sm text-red-800">
+                              <XCircle className="h-4 w-4 inline mr-2" />
+                              Báo cáo bị nhà trường từ chối. Vui lòng kiểm tra và gửi lại.
+                            </div>
+                          )}
+
+                          {/* Báo cáo đã được nộp lại lên nhà trường */}
+                          {request.status === "RESUBMITTED_UNIVERSITY" && (
+                            <div className="p-3 bg-blue-50 border border-blue-200 rounded text-sm text-blue-800">
+                              <CheckCircle className="h-4 w-4 inline mr-2" />
+                              Báo cáo đã được nộp lại và đang chờ phê duyệt từ nhà trường
                             </div>
                           )}
 
                           <div className="flex gap-2 pt-2">
                             {/* Hiển thị button dựa trên trạng thái yêu cầu và thông tin báo cáo từ backend */}
+                            {/* Hiển thị "Xem báo cáo" nếu đã có report (status không phải null) và không phải UNSUBMITTED */}
                             {request.report ||
                             (request.status &&
-                              (request.status === "SUBMITTED" ||
-                                request.status === "APPROVED" ||
-                                request.status === "REJECTED" ||
-                                request.status === "RESUBMITTED")) ? (
+                              request.status !== "UNSUBMITTED" &&
+                              request.status !== null) ? (
                               <Button
                                 variant="outline"
                                 size="sm"
@@ -1002,10 +1062,14 @@ export function ClubReportManagement() {
                                   handleSubmitReport(request.request_id)
                                 }
                                 className="bg-blue-600 hover:bg-blue-700"
-                                disabled={request.status === "APPROVED"}
+                                disabled={
+                                  request.status === "APPROVED_UNIVERSITY" ||
+                                  request.status === "APPROVED_CLUB"
+                                }
                               >
                                 <Plus className="h-4 w-4 mr-1" />
-                                {request.status === "APPROVED"
+                                {request.status === "APPROVED_UNIVERSITY" ||
+                                request.status === "APPROVED_CLUB"
                                   ? "Đã duyệt"
                                   : "Tạo báo cáo"}
                               </Button>
@@ -1485,7 +1549,9 @@ export function ClubReportManagement() {
                 </div>
               )}
 
-              {selectedReportDetail.status?.toUpperCase() === "SUBMITTED" &&
+              {/* Hiển thị phản hồi phê duyệt cho các status đã được duyệt */}
+              {(selectedReportDetail.status?.toUpperCase() === "APPROVED_CLUB" ||
+                selectedReportDetail.status?.toUpperCase() === "APPROVED_UNIVERSITY") &&
                 selectedReportDetail.reviewerFeedback &&
                 selectedReportDetail.reviewedDate && (
                   <div>
@@ -1504,7 +1570,9 @@ export function ClubReportManagement() {
                   </div>
                 )}
 
-              {selectedReportDetail.status?.toUpperCase() === "REJECTED" &&
+              {/* Hiển thị lý do từ chối cho các status bị từ chối */}
+              {(selectedReportDetail.status?.toUpperCase() === "REJECTED_CLUB" ||
+                selectedReportDetail.status?.toUpperCase() === "REJECTED_UNIVERSITY") &&
                 selectedReportDetail.reviewerFeedback && (
                   <div>
                     <h4 className="font-semibold mb-2 text-red-700">
