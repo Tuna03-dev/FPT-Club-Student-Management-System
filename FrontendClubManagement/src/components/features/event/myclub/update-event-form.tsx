@@ -19,6 +19,7 @@ export interface UpdateEventFormData {
   endTime?: string
   eventTypeId?: string
   eventImages?: File[]
+  deleteMediaIds?: number[] // IDs của media cần xóa
 }
 
 interface UpdateEventFormProps {
@@ -29,6 +30,7 @@ interface UpdateEventFormProps {
     startTime?: string // datetime-local string
     endTime?: string   // datetime-local string
     eventTypeId?: string // optional; if not provided, keep unchanged
+    existingMedia?: Array<{ id: number; url: string; type: "IMAGE" | "VIDEO" }> // Media cũ đã upload
   }
   onSubmit: (data: UpdateEventFormData) => Promise<void>
   onSuccess: () => void
@@ -44,8 +46,11 @@ export function UpdateEventForm({ initial, onSubmit, onSuccess }: UpdateEventFor
     endTime: initial?.endTime ?? "",
     eventTypeId: initial?.eventTypeId ?? "",
     eventImages: [],
+    deleteMediaIds: [],
   })
-  const [imagePreview, setImagePreview] = useState<string[]>([])
+  const [existingMedia, setExistingMedia] = useState<Array<{ id: number; url: string; type: "IMAGE" | "VIDEO" }>>(initial?.existingMedia ?? [])
+  const [newMediaPreview, setNewMediaPreview] = useState<string[]>([]) // Preview cho media mới upload
+  const [newMediaTypes, setNewMediaTypes] = useState<Array<"image" | "video">>([]) // Track type của media mới
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -60,6 +65,13 @@ export function UpdateEventForm({ initial, onSubmit, onSuccess }: UpdateEventFor
     })()
   }, [])
 
+  // Fetch existing media nếu có eventId từ initial (từ event-detail-modal)
+  useEffect(() => {
+    if (initial?.existingMedia && initial.existingMedia.length > 0) {
+      setExistingMedia(initial.existingMedia)
+    }
+  }, [initial?.existingMedia])
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
     setFormData((prev) => ({ ...prev, [name]: value }))
@@ -71,21 +83,48 @@ export function UpdateEventForm({ initial, onSubmit, onSuccess }: UpdateEventFor
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || [])
-    const validFiles = files.filter((file) => ["image/jpeg", "image/png", "image/webp", "image/gif"].includes(file.type))
+    
+    // Validate file types - support both images and videos
+    const allowedTypes = [
+      "image/jpeg", "image/png", "image/webp", "image/gif",
+      "video/mp4", "video/webm", "video/ogg", "video/quicktime", "video/x-msvideo"
+    ]
+    
+    const validFiles = files.filter((file) => allowedTypes.includes(file.type))
     if (validFiles.length !== files.length) {
-      setError("Chỉ chấp nhận các file ảnh (JPEG, PNG, WebP, GIF)")
+      setError("Chỉ chấp nhận các file ảnh (JPEG, PNG, WebP, GIF) hoặc video (MP4, WebM, OGG)")
       return
     }
+
+    // Check file size (e.g., max 100MB for videos)
+    const maxSize = 100 * 1024 * 1024 // 100MB
+    const oversizedFiles = validFiles.filter((file) => file.size > maxSize)
+    if (oversizedFiles.length > 0) {
+      setError("File quá lớn. Kích thước tối đa là 100MB")
+      return
+    }
+
     setFormData((prev) => ({ ...prev, eventImages: [...(prev.eventImages ?? []), ...validFiles] }))
     const newPreviews = validFiles.map((file) => URL.createObjectURL(file))
-    setImagePreview((prev) => [...prev, ...newPreviews])
+    const newTypes = validFiles.map((file) => file.type.startsWith("video/") ? "video" : "image" as "image" | "video")
+    setNewMediaPreview((prev) => [...prev, ...newPreviews])
+    setNewMediaTypes((prev) => [...prev, ...newTypes])
     setError(null)
   }
 
-  const removeImage = (index: number) => {
+  const removeExistingMedia = (mediaId: number) => {
+    setExistingMedia((prev) => prev.filter((m) => m.id !== mediaId))
+    setFormData((prev) => ({
+      ...prev,
+      deleteMediaIds: [...(prev.deleteMediaIds ?? []), mediaId]
+    }))
+  }
+
+  const removeNewMedia = (index: number) => {
     setFormData((prev) => ({ ...prev, eventImages: (prev.eventImages ?? []).filter((_, i) => i !== index) }))
-    URL.revokeObjectURL(imagePreview[index])
-    setImagePreview((prev) => prev.filter((_, i) => i !== index))
+    URL.revokeObjectURL(newMediaPreview[index])
+    setNewMediaPreview((prev) => prev.filter((_, i) => i !== index))
+    setNewMediaTypes((prev) => prev.filter((_, i) => i !== index))
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -156,26 +195,88 @@ export function UpdateEventForm({ initial, onSubmit, onSuccess }: UpdateEventFor
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="eventImages">Thêm hình ảnh</Label>
+        <Label htmlFor="eventImages">Hình ảnh / Video sự kiện</Label>
+        
+        {/* Hiển thị media cũ */}
+        {existingMedia.length > 0 && (
+          <div className="mb-4">
+            <div className="text-xs text-muted-foreground mb-2">Media hiện có:</div>
+            <div className="grid grid-cols-3 gap-3">
+              {existingMedia.map((media) => (
+                <Card key={media.id} className="relative overflow-hidden group">
+                  {media.type === "VIDEO" ? (
+                    <video
+                      src={media.url}
+                      className="w-full h-24 object-cover"
+                      controls={false}
+                      muted
+                    />
+                  ) : (
+                    <img src={media.url || "/placeholder.svg"} alt={`Existing media ${media.id}`} className="w-full h-24 object-cover" />
+                  )}
+                  {media.type === "VIDEO" && (
+                    <div className="absolute top-1 left-1 bg-black/60 text-white text-xs px-1.5 py-0.5 rounded">
+                      Video
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => removeExistingMedia(media.id)}
+                    disabled={isLoading}
+                    className="absolute top-1 right-1 bg-destructive text-destructive-foreground rounded-full p-1 opacity-0 group-hover:opacity-100 transition"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </Card>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Upload area */}
         <div className="border-2 border-dashed border-border rounded-lg p-6 text-center cursor-pointer hover:bg-muted/50 transition">
-          <input id="eventImages" type="file" multiple accept="image/*" onChange={handleImageChange} disabled={isLoading} className="hidden" />
+          <input id="eventImages" type="file" multiple accept="image/*,video/*" onChange={handleImageChange} disabled={isLoading} className="hidden" />
           <label htmlFor="eventImages" className="cursor-pointer block">
             <div className="text-sm text-muted-foreground">
-              Kéo thả hình ảnh hoặc <span className="text-primary font-medium">chọn từ máy tính</span>
+              Kéo thả hình ảnh/video hoặc <span className="text-primary font-medium">chọn từ máy tính</span>
             </div>
-            <div className="text-xs text-muted-foreground mt-1">Hỗ trợ: JPEG, PNG, WebP, GIF</div>
+            <div className="text-xs text-muted-foreground mt-1">Hỗ trợ: JPEG, PNG, WebP, GIF, MP4, WebM, OGG (tối đa 100MB/file)</div>
           </label>
         </div>
-        {imagePreview.length > 0 && (
-          <div className="grid grid-cols-3 gap-3 mt-4">
-            {imagePreview.map((preview, index) => (
-              <Card key={index} className="relative overflow-hidden group">
-                <img src={preview || "/placeholder.svg"} alt={`Preview ${index + 1}`} className="w-full h-24 object-cover" />
-                <button type="button" onClick={() => removeImage(index)} disabled={isLoading} className="absolute top-1 right-1 bg-destructive text-destructive-foreground rounded-full p-1 opacity-0 group-hover:opacity-100 transition">
-                  <X className="w-4 h-4" />
-                </button>
-              </Card>
-            ))}
+
+        {/* Preview media mới */}
+        {newMediaPreview.length > 0 && (
+          <div className="mt-4">
+            <div className="text-xs text-muted-foreground mb-2">Media mới:</div>
+            <div className="grid grid-cols-3 gap-3">
+              {newMediaPreview.map((preview, index) => (
+                <Card key={index} className="relative overflow-hidden group">
+                  {newMediaTypes[index] === "video" ? (
+                    <video
+                      src={preview}
+                      className="w-full h-24 object-cover"
+                      controls={false}
+                      muted
+                    />
+                  ) : (
+                    <img src={preview || "/placeholder.svg"} alt={`New preview ${index + 1}`} className="w-full h-24 object-cover" />
+                  )}
+                  {newMediaTypes[index] === "video" && (
+                    <div className="absolute top-1 left-1 bg-black/60 text-white text-xs px-1.5 py-0.5 rounded">
+                      Video
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => removeNewMedia(index)}
+                    disabled={isLoading}
+                    className="absolute top-1 right-1 bg-destructive text-destructive-foreground rounded-full p-1 opacity-0 group-hover:opacity-100 transition"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </Card>
+              ))}
+            </div>
           </div>
         )}
       </div>

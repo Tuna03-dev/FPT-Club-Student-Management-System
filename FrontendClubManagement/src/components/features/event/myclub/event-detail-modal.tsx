@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { UpdateEventForm, type UpdateEventFormData } from "./update-event-form"
-import { updateEvent, deleteEvent, getEventById, registerForEvent, cancelEventRegistration, getRegistrationStatus, cancelClubEventByStaff, publishEventByStaff } from "@/service/EventService"
+import { updateEvent, deleteEvent, getEventById, registerForEvent, cancelEventRegistration, getRegistrationStatus, cancelClubEventByStaff, publishEventByStaff, type UpdateEventPayload } from "@/service/EventService"
 import { authService } from "@/services/authService"
 import { toast } from "sonner"
 import React from "react"
@@ -44,9 +44,11 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
   const params = useParams()
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
   const [openUpdate, setOpenUpdate] = useState(false)
+  const [updateFormMedia, setUpdateFormMedia] = useState<Array<{ id: number; url: string; type: "IMAGE" | "VIDEO" }>>([])
   const [isDeleting, setIsDeleting] = useState(false)
   const [isPublishing, setIsPublishing] = useState(false)
   const [images, setImages] = useState<string[]>(event.images ?? [])
+  const [mediaTypes, setMediaTypes] = useState<string[]>([])
   const [isRegistered, setIsRegistered] = useState(false)
   const [isRegistering, setIsRegistering] = useState(false)
   const [clubName, setClubName] = useState<string | null>(null)
@@ -82,6 +84,7 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
           if (!images || images.length === 0) {
             setImages(full.mediaUrls ?? [])
           }
+          setMediaTypes(full.mediaTypes ?? [])
           setClubName(full.clubName || null)
           setEventTypeName(full.eventTypeName || null)
           setEventClubId(full.clubId ?? null)
@@ -175,15 +178,24 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
         </div>
 
         <div className="p-6 space-y-6 overflow-y-auto">
-          {/* Image Carousel */}
+          {/* Media Carousel (Images & Videos) */}
           {images.length > 0 && (
             <div className="space-y-4">
               <div className="relative bg-muted rounded-lg overflow-hidden aspect-video">
-                <img
-                  src={images[currentImageIndex] || "/placeholder.svg"}
-                  alt={`${event.title} - ảnh ${currentImageIndex + 1}`}
-                  className="w-full h-full object-cover"
-                />
+                {mediaTypes[currentImageIndex] === "VIDEO" ? (
+                  <video
+                    src={images[currentImageIndex]}
+                    className="w-full h-full object-cover"
+                    controls
+                    playsInline
+                  />
+                ) : (
+                  <img
+                    src={images[currentImageIndex] || "/placeholder.svg"}
+                    alt={`${event.title} - ${mediaTypes[currentImageIndex] === "VIDEO" ? "video" : "ảnh"} ${currentImageIndex + 1}`}
+                    className="w-full h-full object-cover"
+                  />
+                )}
 
                 {/* Navigation buttons */}
                 {images.length > 1 && (
@@ -191,14 +203,14 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
                     <button
                       onClick={handlePrevImage}
                       className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white p-2 rounded-full transition-colors"
-                      aria-label="Ảnh trước"
+                      aria-label="Media trước"
                     >
                       <ChevronLeft className="w-5 h-5" />
                     </button>
                     <button
                       onClick={handleNextImage}
                       className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white p-2 rounded-full transition-colors"
-                      aria-label="Ảnh tiếp theo"
+                      aria-label="Media tiếp theo"
                     >
                       <ChevronRight className="w-5 h-5" />
                     </button>
@@ -206,9 +218,9 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
                 )}
               </div>
 
-              {/* Image counter only - no thumbnails */}
+              {/* Media counter */}
               <div className="text-sm text-muted-foreground text-center">
-                Ảnh {currentImageIndex + 1} / {images.length}
+                {mediaTypes[currentImageIndex] === "VIDEO" ? "Video" : "Ảnh"} {currentImageIndex + 1} / {images.length}
               </div>
             </div>
           )}
@@ -329,7 +341,23 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
               )}
               <Button
                 className="flex-1 bg-blue-600 hover:bg-blue-700 text-white h-10 text-sm gap-2"
-                onClick={() => setOpenUpdate(true)}
+                onClick={async () => {
+                  // Fetch lại media để đảm bảo có mediaIds
+                  try {
+                    const full = await getEventById(Number(event.id))
+                    const mediaUrls = full.mediaUrls ?? []
+                    const mediaTypes = full.mediaTypes ?? []
+                    const mediaIds = full.mediaIds ?? []
+                    setUpdateFormMedia(mediaUrls.map((url, idx) => ({
+                      id: mediaIds[idx] ?? 0,
+                      url,
+                      type: (mediaTypes[idx] ?? "IMAGE") as "IMAGE" | "VIDEO"
+                    })))
+                    setOpenUpdate(true)
+                  } catch {
+                    setOpenUpdate(true)
+                  }
+                }}
               >
                 <Edit className="w-4 h-4" />
                 Cập nhật
@@ -372,7 +400,23 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
                 <>
                   <Button
                     className="flex-1 bg-blue-600 hover:bg-blue-700 text-white h-10 text-sm gap-2"
-                    onClick={() => setOpenUpdate(true)}
+                    onClick={async () => {
+                      // Fetch lại media để đảm bảo có mediaIds
+                      try {
+                        const full = await getEventById(Number(event.id))
+                        const mediaUrls = full.mediaUrls ?? []
+                        const mediaTypes = full.mediaTypes ?? []
+                        const mediaIds = full.mediaIds ?? []
+                        setUpdateFormMedia(mediaUrls.map((url, idx) => ({
+                          id: mediaIds[idx] ?? 0,
+                          url,
+                          type: (mediaTypes[idx] ?? "IMAGE") as "IMAGE" | "VIDEO"
+                        })))
+                        setOpenUpdate(true)
+                      } catch {
+                        setOpenUpdate(true)
+                      }
+                    }}
                   >
                     <Edit className="w-4 h-4" />
                     Sửa
@@ -508,9 +552,10 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
               startTime: new Date(event.startDate).toISOString().slice(0,16),
               endTime: new Date(event.endDate).toISOString().slice(0,16),
               // eventTypeId không có sẵn trong event, để trống nghĩa là không đổi
+              ...(updateFormMedia.length > 0 ? { existingMedia: updateFormMedia } : {})
             }}
             onSubmit={async (data: UpdateEventFormData) => {
-              const payload = {
+              const payload: UpdateEventPayload = {
                 title: data.title && data.title.trim() !== "" ? data.title : undefined,
                 description: data.description && data.description.trim() !== "" ? data.description : undefined,
                 location: data.location && data.location.trim() !== "" ? data.location : undefined,
@@ -518,6 +563,7 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
                 endTime: data.endTime && data.endTime !== "" ? data.endTime : undefined,
                 eventTypeId: data.eventTypeId ? Number(data.eventTypeId) : undefined,
                 images: data.eventImages ?? [],
+                deleteMediaIds: data.deleteMediaIds && data.deleteMediaIds.length > 0 ? data.deleteMediaIds : undefined,
               }
               try {
                 const updated = await updateEvent(Number(event.id), payload)

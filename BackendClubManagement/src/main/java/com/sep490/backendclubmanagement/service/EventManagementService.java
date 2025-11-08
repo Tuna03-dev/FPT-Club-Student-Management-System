@@ -158,12 +158,24 @@ public class EventManagementService {
             }
             
             try {
-                CloudinaryService.UploadResult uploadResult = cloudinaryService.uploadImage(file, "club/events");
+                String contentType = file.getContentType();
+                boolean isVideo = contentType != null && contentType.startsWith("video/");
+                
+                CloudinaryService.UploadResult uploadResult;
+                MediaType mediaType;
+                
+                if (isVideo) {
+                    uploadResult = cloudinaryService.uploadVideo(file, "club/events");
+                    mediaType = MediaType.VIDEO;
+                } else {
+                    uploadResult = cloudinaryService.uploadImage(file, "club/events");
+                    mediaType = MediaType.IMAGE;
+                }
                 
                 EventMedia eventMedia = EventMedia.builder()
                         .event(event)
                         .mediaUrl(uploadResult.url())
-                        .mediaType(MediaType.IMAGE)
+                        .mediaType(mediaType)
                         .displayOrder(displayOrder++)
                         .build();
                 
@@ -345,6 +357,13 @@ public class EventManagementService {
                 eventToUpdate.setEventType(newType);
             }
             Event savedStaffEvent = eventRepository.save(eventToUpdate);
+            
+            // Xóa media cũ nếu có
+            if (request.getDeleteMediaIds() != null && !request.getDeleteMediaIds().isEmpty()) {
+                eventMediaRepository.deleteAllById(request.getDeleteMediaIds());
+            }
+            
+            // Thêm media mới nếu có
             if (request.getMediaFiles() != null && !request.getMediaFiles().isEmpty()) {
                 uploadAndSaveEventMedia(savedStaffEvent, request.getMediaFiles());
             }
@@ -383,6 +402,13 @@ public class EventManagementService {
             if (request.getEndTime() != null) eventToUpdate.setEndTime(request.getEndTime());
 
             Event savedMeeting = eventRepository.save(eventToUpdate);
+            
+            // Xóa media cũ nếu có
+            if (request.getDeleteMediaIds() != null && !request.getDeleteMediaIds().isEmpty()) {
+                eventMediaRepository.deleteAllById(request.getDeleteMediaIds());
+            }
+            
+            // Thêm media mới nếu có
             if (request.getMediaFiles() != null && !request.getMediaFiles().isEmpty()) {
                 uploadAndSaveEventMedia(savedMeeting, request.getMediaFiles());
             }
@@ -617,7 +643,10 @@ public class EventManagementService {
         }
         return list.stream().map(e -> {
             EventData dto = eventMapper.toDto(e);
-            dto.setMediaUrls(eventMediaRepository.findMediaUrlsByEventId(e.getId()));
+            List<EventMedia> mediaList = eventMediaRepository.findByEventIdOrderByDisplayOrder(e.getId());
+            dto.setMediaUrls(mediaList.stream().map(EventMedia::getMediaUrl).toList());
+            dto.setMediaTypes(mediaList.stream().map(m -> m.getMediaType() != null ? m.getMediaType().name() : "IMAGE").toList());
+            dto.setMediaIds(mediaList.stream().map(EventMedia::getId).toList());
             dto.setClubId(e.getClub() != null ? e.getClub().getId() : null);
             return dto;
         }).toList();

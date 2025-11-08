@@ -11,6 +11,8 @@ export interface EventData {
   clubId: number;
   clubName?: string;
   mediaUrls: string[];
+  mediaTypes?: string[]; // "IMAGE" or "VIDEO" - maps to mediaUrls by index
+  mediaIds?: number[]; // IDs của media - maps to mediaUrls by index
   eventTypeId?: number;
   eventTypeName?: string;
 }
@@ -155,6 +157,7 @@ export async function createEvent(payload: CreateEventPayload): Promise<EventDat
 }
 
 export interface UpdateEventPayload {
+  deleteMediaIds?: number[]; // IDs của media cần xóa
   title?: string;
   description?: string;
   location?: string;
@@ -172,6 +175,9 @@ export async function updateEvent(eventId: number, payload: UpdateEventPayload):
   if (payload.startTime != null) form.append("startTime", payload.startTime);
   if (payload.endTime != null) form.append("endTime", payload.endTime);
   if (payload.eventTypeId != null) form.append("eventTypeId", String(payload.eventTypeId));
+  if (payload.deleteMediaIds != null && payload.deleteMediaIds.length > 0) {
+    payload.deleteMediaIds.forEach((id) => form.append("deleteMediaIds", String(id)));
+  }
   (payload.images ?? []).forEach((file) => form.append("mediaFiles", file));
   const res = await axiosClient.put<EventData>(`/events/${eventId}`, form, {
     headers: { "Content-Type": "multipart/form-data" },

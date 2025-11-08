@@ -18,6 +18,7 @@ import com.sep490.backendclubmanagement.mapper.EventMapper;
 import com.sep490.backendclubmanagement.repository.ClubMemberShipRepository;
 import com.sep490.backendclubmanagement.repository.EventAttendanceRepository;
 import com.sep490.backendclubmanagement.repository.EventMediaRepository;
+import com.sep490.backendclubmanagement.entity.EventMedia;
 import com.sep490.backendclubmanagement.repository.EventRepository;
 import com.sep490.backendclubmanagement.repository.UserRepository;
 import com.sep490.backendclubmanagement.shared.ModelMapperUtils;
@@ -80,7 +81,7 @@ public class EventService {
         List<EventData> list = events.stream()
                 .map(event -> {
                     EventData dto = eventMapper.toDto(event);
-                    dto.setMediaUrls(eventMediaRepository.findMediaUrlsByEventId(event.getId()));
+                    setMediaUrlsAndTypes(dto, event.getId());
                     dto.setClubId(event.getClub() != null ? event.getClub().getId() : null);
                     return dto;
                 })
@@ -99,13 +100,20 @@ public class EventService {
         return ModelMapperUtils.mapList(eventTypes, EventTypesDto.class);
     }
 
+    private void setMediaUrlsAndTypes(EventData dto, Long eventId) {
+        List<EventMedia> mediaList = eventMediaRepository.findByEventIdOrderByDisplayOrder(eventId);
+        dto.setMediaUrls(mediaList.stream().map(EventMedia::getMediaUrl).toList());
+        dto.setMediaTypes(mediaList.stream().map(m -> m.getMediaType() != null ? m.getMediaType().name() : "IMAGE").toList());
+        dto.setMediaIds(mediaList.stream().map(EventMedia::getId).toList());
+    }
+
     public EventData getEventById(Long id) {
         Optional<Event> event = eventRepository.findById(id);
         if(event.isEmpty()){
             throw new NotFoundException("Event not found");
         }
         EventData dto = eventMapper.toDto(event.get());
-        dto.setMediaUrls(eventMediaRepository.findMediaUrlsByEventId(event.get().getId()));
+        setMediaUrlsAndTypes(dto, event.get().getId());
         return dto;
     }
 
@@ -122,7 +130,7 @@ public class EventService {
                 .stream()
                 .map(event -> {
                     EventData dto = eventMapper.toDto(event);
-                    dto.setMediaUrls(eventMediaRepository.findMediaUrlsByEventId(event.getId()));
+                    setMediaUrlsAndTypes(dto, event.getId());
                     dto.setClubId(event.getClub() != null ? event.getClub().getId() : null);
                     return dto;
                 })
@@ -135,7 +143,7 @@ public class EventService {
                 .stream()
                 .map(event -> {
                     EventData dto = eventMapper.toDto(event);
-                    dto.setMediaUrls(eventMediaRepository.findMediaUrlsByEventId(event.getId()));
+                    setMediaUrlsAndTypes(dto, event.getId());
                     dto.setClubId(event.getClub() != null ? event.getClub().getId() : null);
                     return dto;
                 })
@@ -148,7 +156,7 @@ public class EventService {
                 .stream()
                 .map(event -> {
                     EventData dto = eventMapper.toDto(event);
-                    dto.setMediaUrls(eventMediaRepository.findMediaUrlsByEventId(event.getId()));
+                    setMediaUrlsAndTypes(dto, event.getId());
                     dto.setClubId(event.getClub() != null ? event.getClub().getId() : null);
                     return dto;
                 })

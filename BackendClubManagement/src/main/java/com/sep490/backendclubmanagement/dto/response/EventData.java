@@ -21,6 +21,8 @@ public class EventData {
     private Long clubId;
     private String clubName;
     private List<String> mediaUrls;
+    private List<String> mediaTypes; // "IMAGE" or "VIDEO" - maps to mediaUrls by index
+    private List<Long> mediaIds; // IDs của media - maps to mediaUrls by index
     private Long eventTypeId;
     private String eventTypeName;
 

@@ -16,4 +16,5 @@ public class UpdateEventRequest {
     private Long eventTypeId;
     // ClubId không cho đổi trong flow hiện tại
     private List<MultipartFile> mediaFiles; // ảnh mới (append thêm)
+    private List<Long> deleteMediaIds; // IDs của media cần xóa
 }
