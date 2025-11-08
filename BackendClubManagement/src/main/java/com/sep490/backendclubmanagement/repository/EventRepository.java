@@ -80,4 +80,10 @@ public interface EventRepository extends JpaRepository<Event, Long> {
     @Query("SELECT e FROM Event e LEFT JOIN RequestEvent re ON re.event = e AND re.status IN :pendingStatuses " +
            "WHERE e.isDraft = true AND e.club.id = :clubId AND re.id IS NULL")
     List<Event> findCancelledByStaffAndClubIdExcludingPending(Long clubId, java.util.List<com.sep490.backendclubmanagement.entity.RequestStatus> pendingStatuses);
+
+    /**
+     * Lấy draft events không có club (toàn trường) - cho STAFF
+     */
+    @Query("SELECT e FROM Event e WHERE e.isDraft = true AND e.club IS NULL")
+    List<Event> findByIsDraftTrueAndClubIsNull();
 }

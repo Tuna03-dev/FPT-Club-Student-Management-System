@@ -99,7 +99,7 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
         }))
         let all: Event[] = mappedEvents
         const userUpper = roleUpper
-        if (userUpper === "CLUB_PRESIDENT" || userUpper === "CLUB_OFFICER") {
+        if (userUpper === "CLUB_OFFICER" || userUpper === "TEAM_OFFICER" || userUpper === "STAFF") {
           try {
             const drafts = await getMyDraftEvents(clubId && clubId > 0 ? clubId : undefined)
             const mappedDrafts: Event[] = (drafts ?? []).map((d: MyDraftEventDto) => ({
@@ -179,7 +179,7 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
       
       let all: Event[] = mappedEvents
 
-      if (roleUpper === "CLUB_PRESIDENT" || roleUpper === "CLUB_OFFICER") {
+      if (roleUpper === "CLUB_OFFICER" || roleUpper === "TEAM_OFFICER" || roleUpper === "STAFF") {
         try {
           const drafts = await getMyDraftEvents(clubId && clubId > 0 ? clubId : undefined)
           const mappedDrafts: Event[] = (drafts ?? []).map((d: MyDraftEventDto) => ({
@@ -239,12 +239,12 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
     })()
   }, [])
 
-  // Load pending requests (STAFF/CLUB_PRESIDENT) and cancelled events (STAFF)
+  // Load pending requests (STAFF/CLUB_OFFICER) and cancelled events (STAFF)
   useEffect(() => {
     const user = authService.getCurrentUser()
     if (!user) return
     const roleUpper = user.systemRole ? String(user.systemRole).trim().toUpperCase() : ""
-    const isReviewer = roleUpper === "STAFF" || isPresidentOfCurrentClub
+    const isReviewer = roleUpper === "STAFF" || roleUpper === "CLUB_OFFICER" || isPresidentOfCurrentClub
     if (isReviewer) {
       setLoadingPending(true)
       getPendingRequests()
@@ -499,7 +499,7 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
                 </Button>
                 {(() => {
                   const user = authService.getCurrentUser()
-                  const canCreate = !!user && ["STAFF", "CLUB_PRESIDENT", "CLUB_OFFICER"].includes(user.systemRole)
+                  const canCreate = !!user && ["STAFF", "CLUB_OFFICER", "TEAM_OFFICER"].includes(user.systemRole)
                   
                   return (
                     <>
@@ -554,7 +554,7 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
                       onClick={() => {
                         if (!day) return
                         const user = authService.getCurrentUser()
-                        const canCreate = !!user && ["STAFF", "CLUB_PRESIDENT", "CLUB_OFFICER"].includes(user.systemRole)
+                        const canCreate = !!user && ["STAFF", "CLUB_OFFICER", "TEAM_OFFICER"].includes(user.systemRole)
                         if (!canCreate) return
                         const start = new Date(currentDate.getFullYear(), currentDate.getMonth(), day, 8, 0, 0)
                         const end = new Date(start.getTime() + 2 * 60 * 60 * 1000)
@@ -634,7 +634,7 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
                   </div>
               {(() => {
                 const user = authService.getCurrentUser()
-                const showPending = !!user && ["CLUB_PRESIDENT", "CLUB_OFFICER"].includes(user.systemRole)
+                const showPending = !!user && ["CLUB_OFFICER", "TEAM_OFFICER"].includes(user.systemRole)
                 if (!showPending) return null
                 return (
                   <div className="flex items-center gap-3">
@@ -647,11 +647,11 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
             
             
           </Card>
-          {/* Pending requests card (STAFF/CLUB_PRESIDENT) */}
+          {/* Pending requests card (STAFF/CLUB_OFFICER) */}
           {(() => {
             const user = authService.getCurrentUser()
             const roleUpper = user?.systemRole ? String(user.systemRole).trim().toUpperCase() : ""
-            const canReview = !!user && (roleUpper === "STAFF" || isPresidentOfCurrentClub)
+            const canReview = !!user && (roleUpper === "STAFF" || roleUpper === "CLUB_OFFICER" || isPresidentOfCurrentClub)
             if (!canReview) return null
             const items = (pendingRequests ?? []).filter((req) => {
               // Nếu có clubId được chọn (>0), chỉ hiển thị các request thuộc đúng CLB đó
@@ -677,7 +677,7 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
                       const user = authService.getCurrentUser()
                       const roleUpper = user?.systemRole ? String(user.systemRole).trim().toUpperCase() : undefined
                       const reqStatusUpper = req.status ? String(req.status).trim().toUpperCase() : undefined
-                      const isPresidentActionable = roleUpper === "CLUB_PRESIDENT" && reqStatusUpper === "PENDING_CLUB"
+                      const isPresidentActionable = roleUpper === "CLUB_OFFICER" && reqStatusUpper === "PENDING_CLUB"
                       const isStaffActionable = roleUpper === "STAFF" && reqStatusUpper === "PENDING_UNIVERSITY"
                       const showActions = isPresidentActionable || isStaffActionable
                       // Debug: check console to verify values
@@ -740,7 +740,7 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
                                     await approveByUniversity(req.requestEventId, true)
                                     setPendingRequests((prev) => (prev ?? []).filter(x => x.requestEventId !== req.requestEventId))
                                     toast.success("Đã duyệt sự kiện thành công")
-                                  } else if (userNow.systemRole === "CLUB_PRESIDENT") {
+                                  } else if (userNow.systemRole === "CLUB_OFFICER") {
                                     await approveByClub(req.requestEventId, true)
                                     setPendingRequests((prev) => (prev ?? []).map(x => x.requestEventId === req.requestEventId ? { ...x, status: "PENDING_UNIVERSITY" } : x))
                                     toast.success("Đã duyệt sự kiện. Đang chờ duyệt từ Nhà trường")
@@ -768,7 +768,7 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
                                     await approveByUniversity(req.requestEventId, false)
                                     setPendingRequests((prev) => (prev ?? []).filter(x => x.requestEventId !== req.requestEventId))
                                     toast.success("Đã từ chối sự kiện")
-                                  } else if (userNow.systemRole === "CLUB_PRESIDENT") {
+                                  } else if (userNow.systemRole === "CLUB_OFFICER") {
                                     await approveByClub(req.requestEventId, false)
                                     setPendingRequests((prev) => (prev ?? []).map(x => x.requestEventId === req.requestEventId ? { ...x, status: "REJECTED_CLUB" } : x))
                                     toast.success("Đã từ chối sự kiện")

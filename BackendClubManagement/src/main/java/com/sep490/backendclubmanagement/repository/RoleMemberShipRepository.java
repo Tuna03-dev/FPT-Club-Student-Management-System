@@ -351,7 +351,7 @@ SELECT CASE WHEN EXISTS (
           AND COALESCE(rm.isActive, TRUE) = TRUE
           AND rm.team IS NULL
           AND UPPER(TRIM(COALESCE(cr.roleName, ''))) IN (
-              'CLUB_PRESIDENT','PRESIDENT',
+              'CLUB_OFFICER','CLUB_PRESIDENT','PRESIDENT',
               'CHỦ NHIỆM','CHU NHIEM'
           )
     ) THEN TRUE ELSE FALSE END
@@ -370,7 +370,7 @@ SELECT CASE WHEN EXISTS (
           AND COALESCE(rm.isActive, TRUE) = TRUE
           AND rm.team IS NULL
           AND UPPER(TRIM(COALESCE(cr.roleName, ''))) IN (
-              'CLUB_OFFICER','OFFICER',
+              'TEAM_OFFICER','CLUB_OFFICER','OFFICER',
               'CÁN BỘ','CAN BO'
           )
     ) THEN TRUE ELSE FALSE END
@@ -391,7 +391,7 @@ SELECT CASE WHEN EXISTS (
           AND COALESCE(rm.isActive, TRUE) = TRUE
           AND rm.team IS NULL
           AND UPPER(TRIM(COALESCE(cr.roleName, ''))) IN (
-              'CLUB_OFFICER','OFFICER',
+              'TEAM_OFFICER','CLUB_OFFICER','OFFICER',
               'CÁN BỘ','CAN BO'
           )
     ) THEN TRUE ELSE FALSE END
@@ -408,11 +408,11 @@ SELECT CASE WHEN EXISTS (
             @Param("clubId") Long clubId
     );
 
-    // Lấy danh sách club_id mà user là CLUB_PRESIDENT dựa theo users.system_role
+    // Lấy danh sách club_id mà user là CLUB_OFFICER dựa theo users.system_role
     @Query(value = "SELECT DISTINCT cms.club_id FROM club_memberships cms " +
            "JOIN users u ON cms.user_id = u.id " +
            "JOIN system_roles sr ON u.system_role_id = sr.id " +
-           "WHERE cms.user_id = :userId AND sr.role_name = 'CLUB_PRESIDENT'",
+           "WHERE cms.user_id = :userId AND sr.role_name = 'CLUB_OFFICER'",
            nativeQuery = true)
     List<Long> findPresidentClubIdsByUserId(@Param("userId") Long userId);
 }

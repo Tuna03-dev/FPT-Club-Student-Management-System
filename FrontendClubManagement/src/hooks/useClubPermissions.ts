@@ -14,7 +14,7 @@ export interface ClubPermissions {
  * Hook to check if user has permissions to manage club recruitment
  * Requires: 
  * - User must be an ACTIVE member of the club
- * - User must have CLUB_PRESIDENT club role in the current semester
+ * - User must have CLUB_OFFICER club role in the current semester
  */
 export function useClubPermissions(clubId: number | undefined): ClubPermissions {
   const [user, setUser] = useState<UserInfo | null>(null);
@@ -38,14 +38,14 @@ export function useClubPermissions(clubId: number | undefined): ClubPermissions 
   // Check if user is a member of this club
   const isClubMember = !!userClub;
 
-  // Check if user has CLUB_PRESIDENT role in this club
+  // Check if user has CLUB_OFFICER role in this club
   const isClubPresident = !!(
     userClub &&
     userClub.clubRoles &&
-    userClub.clubRoles.includes("CLUB_PRESIDENT")
+    userClub.clubRoles.includes("CLUB_OFFICER")
   );
 
-  // User has permission if they have CLUB_PRESIDENT role in this club
+  // User has permission if they have CLUB_OFFICER role in this club
   const hasPermission = isClubPresident;
 
   return {

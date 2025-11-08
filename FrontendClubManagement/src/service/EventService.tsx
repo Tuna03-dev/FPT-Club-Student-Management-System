@@ -185,6 +185,13 @@ export async function deleteEvent(eventId: number): Promise<void> {
   await axiosClient.delete(`/events/${eventId}`);
 }
 
+// ===== Staff Publish Event =====
+export async function publishEventByStaff(eventId: number): Promise<EventData> {
+  const res = await axiosClient.post<EventData>(`/events/${eventId}/publish`);
+  if (!res.data) throw new Error("Publish event failed");
+  return res.data;
+}
+
 // ===== Pending Requests =====
 export interface PendingRequestDto {
   requestEventId: number;

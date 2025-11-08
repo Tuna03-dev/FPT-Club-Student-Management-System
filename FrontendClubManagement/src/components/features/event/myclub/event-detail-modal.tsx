@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { UpdateEventForm, type UpdateEventFormData } from "./update-event-form"
-import { updateEvent, deleteEvent, getEventById, registerForEvent, cancelEventRegistration, getRegistrationStatus, cancelClubEventByStaff } from "@/service/EventService"
+import { updateEvent, deleteEvent, getEventById, registerForEvent, cancelEventRegistration, getRegistrationStatus, cancelClubEventByStaff, publishEventByStaff } from "@/service/EventService"
 import { authService } from "@/services/authService"
 import { toast } from "sonner"
 import React from "react"
@@ -45,6 +45,7 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
   const [openUpdate, setOpenUpdate] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [isPublishing, setIsPublishing] = useState(false)
   const [images, setImages] = useState<string[]>(event.images ?? [])
   const [isRegistered, setIsRegistered] = useState(false)
   const [isRegistering, setIsRegistering] = useState(false)
@@ -55,8 +56,8 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
   // Get clubId from props or URL params
   const currentClubId = clubId || (params.clubId ? parseInt(params.clubId as string, 10) : undefined)
   const user = authService.getCurrentUser()
-  const isClubPresident = user?.systemRole === "CLUB_PRESIDENT"
-  const isClubOfficer = user?.systemRole === "CLUB_OFFICER"
+  const isClubPresident = user?.systemRole === "CLUB_OFFICER"
+  const isClubOfficer = user?.systemRole === "TEAM_OFFICER"
   const isStaff = user?.systemRole === "STAFF"
   const canMarkAttendance = isClubPresident || isClubOfficer
   const canManageMeeting = canMarkAttendance // FE: lãnh đạo CLB có quyền quản lý MEETING
@@ -270,6 +271,62 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
           {/* Actions */}
         {!readOnly && (event.isMyDraft ? (
             <div className="flex gap-2 pt-2">
+              {/* Nút Public cho STAFF draft events (toàn trường, không có club) */}
+              {isStaff && eventClubId == null && (
+                <Button
+                  className="flex-1 bg-green-600 hover:bg-green-700 text-white h-10 text-sm gap-2"
+                  disabled={isPublishing}
+                  onClick={async () => {
+                    try {
+                      setIsPublishing(true)
+                      const published = await publishEventByStaff(Number(event.id))
+                      toast.success("Đã public sự kiện thành công!")
+                      // Cập nhật event state
+                      onUpdated?.({
+                        id: String(published.id),
+                        title: published.title,
+                        description: published.description,
+                        startDate: new Date(published.startTime),
+                        endDate: new Date(published.endTime),
+                        location: published.location,
+                        attendees: event.attendees,
+                        status: (() => {
+                          const now = new Date()
+                          const s = new Date(published.startTime)
+                          const e = new Date(published.endTime)
+                          if (now < s) return "upcoming"
+                          if (now >= s && now <= e) return "ongoing"
+                          return "completed"
+                        })(),
+                        images: published.mediaUrls || [],
+                        isMyDraft: false,
+                        requestStatus: undefined,
+                      })
+                      // Thông báo cho calendar refetch lại dữ liệu
+                      try {
+                        window.dispatchEvent(new CustomEvent('events:refetch'))
+                      } catch {}
+                    } catch (error: unknown) {
+                      console.error("Error publishing event:", error)
+                      toast.error(getErrorMessage(error, "Không thể public sự kiện. Vui lòng thử lại."))
+                    } finally {
+                      setIsPublishing(false)
+                    }
+                  }}
+                >
+                  {isPublishing ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Đang public...
+                    </>
+                  ) : (
+                    <>
+                      <Users className="w-4 h-4" />
+                      Public
+                    </>
+                  )}
+                </Button>
+              )}
               <Button
                 className="flex-1 bg-blue-600 hover:bg-blue-700 text-white h-10 text-sm gap-2"
                 onClick={() => setOpenUpdate(true)}
@@ -374,7 +431,7 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
                       Hủy sự kiện
                     </Button>
                   )}
-              {/* Nút Điểm danh/Xem điểm danh - chỉ hiện cho CLUB_PRESIDENT và CLUB_OFFICER */}
+              {/* Nút Điểm danh/Xem điểm danh - chỉ hiện cho CLUB_OFFICER và TEAM_OFFICER */}
               {canMarkAttendance && currentClubId && (
                 <Button
                   className={`${(!isEventEnded || isWithinOneDayAfterEnd) ? "flex-1" : "flex-1"} h-10 text-sm gap-2 ${

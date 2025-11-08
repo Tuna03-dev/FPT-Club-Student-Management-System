@@ -59,6 +59,10 @@ public class EventManagementService {
             club = getClubById(request.getClubId());
         }
 
+        // STAFF tạo event ở trạng thái draft, cần publish sau
+        // MEETING vẫn public ngay
+        boolean shouldBeDraft = isStaff && !isMeeting;
+        
         Event event = Event.builder()
                 .title(request.getTitle())
                 .description(request.getDescription())
@@ -67,7 +71,7 @@ public class EventManagementService {
                 .endTime(request.getEndTime())
                 .club(club)
                 .eventType(eventType)
-                .isDraft(false)
+                .isDraft(shouldBeDraft)
                 .build();
         
         Event savedEvent = eventRepository.save(event);
@@ -76,11 +80,14 @@ public class EventManagementService {
             uploadAndSaveEventMedia(savedEvent, request.getMediaFiles());
         }
         
-        if (isStaff || isMeeting) {
-            log.info("Event created directly (STAFF or MEETING)");
+        if (isMeeting) {
+            log.info("Event created directly (MEETING)");
+            return eventMapper.toDto(savedEvent);
+        } else if (isStaff) {
+            log.info("Event created as draft (STAFF)");
             return eventMapper.toDto(savedEvent);
         } else if (isClubPresident) {
-            // CLUB_PRESIDENT: Gửi lên STAFF
+            // CLUB_OFFICER: Gửi lên STAFF
             savedEvent.setIsDraft(true);
             eventRepository.save(savedEvent);
             
@@ -97,7 +104,7 @@ public class EventManagementService {
             return eventMapper.toDto(savedEvent);
             
         } else if (isClubOfficer) {
-            // CLUB_OFFICER: Gửi lên CLUB_PRESIDENT
+            // TEAM_OFFICER: Gửi lên CLUB_OFFICER
             savedEvent.setIsDraft(true);
             eventRepository.save(savedEvent);
             
@@ -179,7 +186,7 @@ public class EventManagementService {
                 .orElseThrow(() -> new NotFoundException("Request event not found"));
         
         if (!roleService.isClubPresident(userId, requestEvent.getEvent().getClub().getId())) {
-            throw new ForbiddenException("Chỉ CLUB_PRESIDENT mới có quyền duyệt");
+            throw new ForbiddenException("Chỉ CLUB_OFFICER mới có quyền duyệt");
         }
         
         // Kiểm tra status
@@ -248,8 +255,28 @@ public class EventManagementService {
 
     /**
      * Lấy các event và trạng thái request chờ duyệt mà user này tạo (theo club)
+     * Hoặc draft events của STAFF (không có club)
      */
     public List<MyDraftEventDto> getMyDraftEvents(Long userId, Long clubId) {
+        // STAFF: Lấy draft events không có club (toàn trường)
+        // STAFF tạo event không có RequestEvent, chỉ có isDraft = true và clubId = null
+        if (roleService.isStaff(userId)) {
+            List<Event> staffDrafts = eventRepository.findByIsDraftTrueAndClubIsNull();
+            return staffDrafts.stream()
+                .filter(e -> {
+                    // Chỉ lấy events do user này tạo (thông qua RequestEvent hoặc trực tiếp)
+                    // Vì STAFF tạo event không có RequestEvent, cần check creator
+                    // Tạm thời lấy tất cả draft events không có club (vì không có createdBy trong Event)
+                    // Có thể cần thêm field createdBy vào Event entity sau
+                    return true;
+                })
+                .map(e -> MyDraftEventDto.builder()
+                    .event(eventMapper.toDto(e))
+                    .requestStatus(null) // STAFF draft events không có RequestStatus
+                    .build())
+                .toList();
+        }
+        
         List<RequestStatus> statuses;
         
         // Check role theo clubId nếu có, nếu không thì check global role
@@ -300,8 +327,11 @@ public class EventManagementService {
         // Lấy clubId từ event
         Long clubId = event.getClub() != null ? event.getClub().getId() : null;
 
-        if (Boolean.FALSE.equals(event.getIsDraft()) && event.getClub() == null && roleService.isStaff(userId)) {
-            if (event.getStartTime().isBefore(LocalDateTime.now())) {
+        // STAFF: Update draft events (isDraft = true, club = null) hoặc published events (isDraft = false, club = null)
+        if (event.getClub() == null && roleService.isStaff(userId)) {
+            // Draft events: cho phép update bất cứ lúc nào
+            // Published events: chỉ cho update trước khi bắt đầu
+            if (Boolean.FALSE.equals(event.getIsDraft()) && event.getStartTime().isBefore(LocalDateTime.now())) {
                 throw new ForbiddenException("Sự kiện đã bắt đầu, không thể cập nhật");
             }
             Event eventToUpdate = event;
@@ -442,8 +472,11 @@ public class EventManagementService {
         // Lấy clubId từ event
         Long clubId = event.getClub() != null ? event.getClub().getId() : null;
 
-        if (Boolean.FALSE.equals(event.getIsDraft()) && event.getClub() == null && roleService.isStaff(userId)) {
-            if (event.getStartTime().isBefore(LocalDateTime.now())) {
+        // STAFF: Delete draft events (isDraft = true, club = null) hoặc published events (isDraft = false, club = null)
+        if (event.getClub() == null && roleService.isStaff(userId)) {
+            // Draft events: cho phép xóa bất cứ lúc nào
+            // Published events: chỉ cho xóa trước khi bắt đầu
+            if (Boolean.FALSE.equals(event.getIsDraft()) && event.getStartTime().isBefore(LocalDateTime.now())) {
                 throw new ForbiddenException("Sự kiện đã bắt đầu, không thể xóa");
             }
             eventMediaRepository.deleteByEvent_Id(event.getId());
@@ -546,6 +579,28 @@ public class EventManagementService {
         }
         event.setIsDraft(false);
         eventRepository.save(event);
+    }
+
+    @Transactional
+    public EventData publishEventByStaff(Long eventId, Long userId) {
+        if (!roleService.isStaff(userId)) {
+            throw new ForbiddenException("Chỉ STAFF mới có quyền publish sự kiện");
+        }
+        Event event = eventRepository.findById(eventId)
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy sự kiện"));
+        
+        // Chỉ publish được event draft do STAFF tạo (không có club hoặc club = null)
+        if (event.getClub() != null) {
+            throw new ForbiddenException("Chỉ publish được sự kiện toàn trường (không thuộc CLB)");
+        }
+        
+        if (Boolean.FALSE.equals(event.getIsDraft())) {
+            throw new ForbiddenException("Sự kiện đã được publish rồi");
+        }
+        
+        event.setIsDraft(false);
+        Event saved = eventRepository.save(event);
+        return eventMapper.toDto(saved);
     }
 
     @Transactional(readOnly = true)

@@ -135,6 +135,12 @@ public class EventController {
         return ApiResponse.success();
     }
 
+    @PostMapping("/{eventId}/publish")
+    public ApiResponse<EventData> publishEventByStaff(@PathVariable Long eventId) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        return ApiResponse.success(eventManagementService.publishEventByStaff(eventId, userId));
+    }
+
 
     @GetMapping("/staff/cancelled")
     public ApiResponse<List<EventData>> getStaffCancelledEvents(@RequestParam(value = "clubId", required = false) Long clubId) {

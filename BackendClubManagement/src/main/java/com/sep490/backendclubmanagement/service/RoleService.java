@@ -36,42 +36,42 @@ public class RoleService {
 
 
     /**
-     * Kiểm tra user có phải CLUB_PRESIDENT không (dựa vào system role)
+     * Kiểm tra user có phải CLUB_OFFICER không (dựa vào system role)
      */
     public boolean isClubPresident(Long userId, Long clubId) {
         // Ưu tiên truy vấn trực tiếp role trong CLB
         String role = roleMemberShipRepository.findSystemRoleByUserIdAndClubId(userId, clubId)
                 .map(r -> r == null ? "" : r.trim().toUpperCase())
                 .orElse("");
-        if ("CLUB_PRESIDENT".equals(role)) return true;
+        if ("CLUB_OFFICER".equals(role)) return true;
         // fallback: logic tổng hợp (bao quát nhiều alias quyền president)
         return roleMemberShipRepository.isClubAdmin(userId, clubId, null);
     }
 
         /**
-         * Kiểm tra user có phải CLUB_PRESIDENT không (không phụ thuộc club)
+         * Kiểm tra user có phải CLUB_OFFICER không (không phụ thuộc club)
          */
         public boolean isClubPresident(Long userId) {
             // True nếu user là PRESIDENT ở bất kỳ CLB nào
             if (roleMemberShipRepository.existsPresidentSomewhere(userId)) return true;
             String systemRole = getUserSystemRole(userId);
-            return "CLUB_PRESIDENT".equals(systemRole);
+            return "CLUB_OFFICER".equals(systemRole);
         }
     
     /**
-     * Kiểm tra user có phải CLUB_OFFICER không (dựa vào system role)
+     * Kiểm tra user có phải TEAM_OFFICER không (dựa vào system role)
      */
     public boolean isClubOfficer(Long userId) {
         if (roleMemberShipRepository.existsOfficerSomewhere(userId)) return true;
         String systemRole = getUserSystemRole(userId);
-        return "CLUB_OFFICER".equals(systemRole);
+        return "TEAM_OFFICER".equals(systemRole);
     }
     public boolean isClubOfficer(Long userId, Long clubId) {
         // Ưu tiên theo CLB cụ thể
         String role = roleMemberShipRepository.findSystemRoleByUserIdAndClubId(userId, clubId)
                 .map(r -> r == null ? "" : r.trim().toUpperCase())
                 .orElse("");
-        if ("CLUB_OFFICER".equals(role)) return true;
+        if ("TEAM_OFFICER".equals(role)) return true;
         return roleMemberShipRepository.isClubOfficer(userId, clubId);
     }
     
@@ -93,8 +93,8 @@ public class RoleService {
         }
         // Các role khác check từ club membership
         String systemRole = getUserSystemRole(userId);
-        return "CLUB_PRESIDENT".equals(systemRole) || 
-               "CLUB_OFFICER".equals(systemRole);
+        return "CLUB_OFFICER".equals(systemRole) || 
+               "TEAM_OFFICER".equals(systemRole);
     }
     
     /**
