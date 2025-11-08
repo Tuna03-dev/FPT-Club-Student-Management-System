@@ -187,11 +187,13 @@ public class ClubManagementService {
             } else {
                 // Lấy tất cả roles của user trong club này
                 for (RoleMemberShip rm : roleMemberships) {
-                    // Với fetch join, team và clubRole đã được load
+                    // Với fetch join, team, clubRole và systemRole đã được load
                     Long teamId = rm.getTeam() != null ? rm.getTeam().getId() : null;
                     Long clubRoleId = rm.getClubRole() != null ? rm.getClubRole().getId() : null;
                     String clubRoleName = rm.getClubRole() != null ? rm.getClubRole().getRoleName() : null;
-                    String clubRoleCode = rm.getClubRole() != null ? rm.getClubRole().getRoleCode() : null;
+                    // Lấy roleName từ SystemRole thay vì roleCode từ ClubRole
+                    String systemRoleName = rm.getClubRole() != null && rm.getClubRole().getSystemRole() != null 
+                            ? rm.getClubRole().getSystemRole().getRoleName() : null;
                     
                     // Nếu có clubRole thì thêm vào kết quả (bất kể có team hay không)
                     // Vì clubRole là role ở cấp độ club, còn team chỉ là thông tin bổ sung
@@ -200,7 +202,7 @@ public class ClubManagementService {
                                 .clubId(club.getClubId())
                                 .clubName(club.getClubName())
                                 .clubRole(clubRoleName)
-                                .systemRole(clubRoleCode)
+                                .systemRole(systemRoleName)
                                 .build());
                     }
                 }

@@ -34,24 +34,37 @@ type ReportStatus =
   | "needs-review"
   | "not-submitted";
 
+// Helper function to check if status is a university status (from school)
+function isUniversityStatus(status: string | null | undefined): boolean {
+  if (!status) return false;
+  return (
+    status === "PENDING_UNIVERSITY" ||
+    status === "APPROVED_UNIVERSITY" ||
+    status === "REJECTED_UNIVERSITY" ||
+    status === "RESUBMITTED_UNIVERSITY"
+  );
+}
+
 // Helper function to map backend status to frontend status
-function mapBackendStatusToFrontend(backendStatus: string): ReportStatus {
-  switch (backendStatus) {
-    case "PENDING":
-      return "not-submitted";
-    case "SUBMITTED":
-      return "submitted";
-    case "APPROVED":
-      return "approved";
-    case "REJECTED":
-      return "rejected";
-    case "DRAFT":
-      return "draft";
-    case "UPDATED":
-      return "draft"; // UPDATED maps to draft in frontend for display
-    default:
-      return "not-submitted";
+function mapBackendStatusToFrontend(backendStatus: string | null | undefined): ReportStatus {
+  if (backendStatus && isUniversityStatus(backendStatus)) {
+    // If it's a university status, map it appropriately
+    switch (backendStatus) {
+      case "PENDING_UNIVERSITY":
+        return "submitted"; // Chờ phê duyệt nhà trường
+      case "APPROVED_UNIVERSITY":
+        return "approved"; // Đã duyệt nhà trường
+      case "REJECTED_UNIVERSITY":
+        return "rejected"; // Bị từ chối nhà trường
+      case "RESUBMITTED_UNIVERSITY":
+        return "submitted"; // Đã nộp lại nhà trường
+      default:
+        return "not-submitted";
+    }
   }
+  // For all other statuses (DRAFT, PENDING_CLUB, APPROVED_CLUB, REJECTED_CLUB, UPDATED_PENDING_CLUB, null, etc.)
+  // return "not-submitted"
+  return "not-submitted";
 }
 
 interface Report {
@@ -84,6 +97,7 @@ interface Club {
 
 interface ClubWithReport extends Club {
   reportStatus: ReportStatus;
+  backendStatus: string | null; // Store the original backend status
   hasReport: boolean;
   report?: Report;
   clubRequirementId: number;
@@ -104,6 +118,34 @@ export function PeriodicReportClubs() {
   );
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingReport, setIsLoadingReport] = useState(false);
+  
+  // Function to refresh clubs data
+  const refreshClubsData = async () => {
+    if (!reportId) return;
+    
+    try {
+      const requirementId = parseInt(reportId);
+      const clubs = await getClubsByReportRequirement(requirementId);
+      
+      const clubsWithReportsData: ClubWithReport[] = clubs.map((club) => ({
+        id: club.clubId.toString(),
+        name: club.clubName,
+        code: club.clubCode,
+        avatar: "",
+        description: "",
+        reportStatus: mapBackendStatusToFrontend(club.status),
+        backendStatus: club.status || null,
+        hasReport: isUniversityStatus(club.status),
+        clubRequirementId: club.id,
+        clubId: club.clubId,
+      }));
+      
+      setClubsWithReports(clubsWithReportsData);
+    } catch (error: any) {
+      console.error("Error refreshing clubs data:", error);
+      toast.error("Không thể làm mới dữ liệu");
+    }
+  };
 
   // Fetch report requirement details and clubs
   useEffect(() => {
@@ -154,10 +196,9 @@ export function PeriodicReportClubs() {
           avatar: "",
           description: "",
           reportStatus: mapBackendStatusToFrontend(club.status),
-          hasReport:
-            club.status === "SUBMITTED" ||
-            club.status === "APPROVED" ||
-            club.status === "REJECTED",
+          backendStatus: club.status || null, // Store the original backend status
+          // Only allow viewing report if status is from university (school)
+          hasReport: isUniversityStatus(club.status),
           clubRequirementId: club.id,
           clubId: club.clubId,
         }));
@@ -213,40 +254,46 @@ export function PeriodicReportClubs() {
     setIsClubReportModalOpen(false);
   };
 
-  const getStatusLabel = (status: ReportStatus) => {
-    switch (status) {
-      case "not-submitted":
-        return "Chưa nộp";
-      case "approved":
-        return "Đã phê duyệt";
-      case "needs-review":
-        return "Cần xem xét";
-      case "rejected":
-        return "Bị từ chối";
-      case "submitted":
-        return "Đã nộp";
-      case "draft":
-        return "Bản nháp";
-      default:
-        return status;
+  const getStatusLabel = (status: ReportStatus, backendStatus?: string | null) => {
+    // If we have the backend status and it's a university status, use the proper label
+    if (backendStatus && isUniversityStatus(backendStatus)) {
+      switch (backendStatus) {
+        case "PENDING_UNIVERSITY":
+          return "Chờ phê duyệt nhà trường";
+        case "APPROVED_UNIVERSITY":
+          return "Đã duyệt nhà trường";
+        case "REJECTED_UNIVERSITY":
+          return "Bị từ chối nhà trường";
+        case "RESUBMITTED_UNIVERSITY":
+          return "Đã nộp lại nhà trường";
+        default:
+          return "Chưa nộp";
+      }
     }
+    
+    // For all other cases, show "Chưa nộp"
+    return "Chưa nộp";
   };
 
-  const getStatusColor = (status: ReportStatus) => {
-    switch (status) {
-      case "approved":
-        return "bg-green-100 text-green-700";
-      case "needs-review":
-        return "bg-yellow-100 text-yellow-700";
-      case "rejected":
-        return "bg-red-100 text-red-700";
-      case "submitted":
-        return "bg-blue-100 text-blue-700";
-      case "not-submitted":
-        return "bg-red-100 text-red-700";
-      default:
-        return "bg-gray-100 text-gray-700";
+  const getStatusColor = (status: ReportStatus, backendStatus?: string | null) => {
+    // If we have the backend status and it's a university status, use specific colors
+    if (backendStatus && isUniversityStatus(backendStatus)) {
+      switch (backendStatus) {
+        case "PENDING_UNIVERSITY":
+          return "bg-blue-100 text-blue-700";
+        case "APPROVED_UNIVERSITY":
+          return "bg-green-100 text-green-700";
+        case "REJECTED_UNIVERSITY":
+          return "bg-red-100 text-red-700";
+        case "RESUBMITTED_UNIVERSITY":
+          return "bg-blue-100 text-blue-700";
+        default:
+          return "bg-red-100 text-red-700"; // Chưa nộp
+      }
     }
+    
+    // For all other cases (not submitted), use red color
+    return "bg-red-100 text-red-700";
   };
 
   const formatDate = (dateString: string) => {
@@ -477,103 +524,107 @@ export function PeriodicReportClubs() {
                       <div className="flex flex-col md:flex-row items-start md:items-center gap-2 ml-auto">
                         <div
                           className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium whitespace-nowrap ${getStatusColor(
-                            club.reportStatus
+                            club.reportStatus,
+                            club.backendStatus
                           )}`}
                         >
-                          <span>{getStatusLabel(club.reportStatus)}</span>
+                          <span>{getStatusLabel(club.reportStatus, club.backendStatus)}</span>
                         </div>
 
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={async () => {
-                            if (!reportId || !club.hasReport) return;
+                        {/* Only show "View Report" button if status is from university (school) */}
+                        {club.hasReport && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={async () => {
+                              if (!reportId || !club.hasReport) return;
 
-                            setIsLoadingReport(true);
-                            try {
-                              const requirementId = parseInt(reportId);
-                              const reportDetail =
-                                await getClubReportByRequirement(
-                                  requirementId,
-                                  club.clubId
+                              setIsLoadingReport(true);
+                              try {
+                                const requirementId = parseInt(reportId);
+                                const reportDetail =
+                                  await getClubReportByRequirement(
+                                    requirementId,
+                                    club.clubId
+                                  );
+
+                                if (reportDetail) {
+                                  // Convert ReportDetailResponse to Report format for modal
+                                  const reportForModal: Report = {
+                                    id: reportDetail.id.toString(),
+                                    title: reportDetail.reportTitle,
+                                    type: "periodic",
+                                    status: mapBackendStatusToFrontend(
+                                      reportDetail.status
+                                    ),
+                                    submittedBy:
+                                      reportDetail.createdBy?.fullName || "N/A",
+                                    submittedByAvatar: "",
+                                    department: reportDetail.club?.clubName || "",
+                                    createdAt: reportDetail.submittedDate
+                                      ? new Date(
+                                          reportDetail.submittedDate
+                                        ).toLocaleDateString("vi-VN")
+                                      : reportDetail.createdAt
+                                      ? new Date(
+                                          reportDetail.createdAt
+                                        ).toLocaleDateString("vi-VN")
+                                      : "",
+                                    dueDate: reportDetail.reportRequirement
+                                      ?.dueDate
+                                      ? new Date(
+                                          reportDetail.reportRequirement.dueDate
+                                        ).toLocaleDateString("vi-VN")
+                                      : "",
+                                    content: reportDetail.content || "",
+                                    fileUrl: reportDetail.fileUrl,
+                                    reviewer: reportDetail.reviewedDate
+                                      ? "Staff"
+                                      : undefined,
+                                    reviewDate: reportDetail.reviewedDate
+                                      ? new Date(
+                                          reportDetail.reviewedDate
+                                        ).toLocaleDateString("vi-VN")
+                                      : undefined,
+                                    approvalNotes:
+                                      reportDetail.status !== "REJECTED_UNIVERSITY" &&
+                                      reportDetail.reviewerFeedback &&
+                                      reportDetail.reviewedDate
+                                        ? reportDetail.reviewerFeedback
+                                        : undefined,
+                                    rejectionReason:
+                                      reportDetail.status === "REJECTED_UNIVERSITY" &&
+                                      reportDetail.reviewerFeedback
+                                        ? reportDetail.reviewerFeedback
+                                        : undefined,
+                                    clubId: club.id,
+                                  };
+
+                                  setSelectedReport(reportForModal);
+                                  setSelectedClub(club);
+                                  setIsClubReportModalOpen(true);
+                                } else {
+                                  toast.error("Không tìm thấy báo cáo");
+                                }
+                              } catch (error: any) {
+                                console.error(
+                                  "Error fetching report detail:",
+                                  error
                                 );
-
-                              if (reportDetail) {
-                                // Convert ReportDetailResponse to Report format for modal
-                                const reportForModal: Report = {
-                                  id: reportDetail.id.toString(),
-                                  title: reportDetail.reportTitle,
-                                  type: "periodic",
-                                  status: mapBackendStatusToFrontend(
-                                    reportDetail.status
-                                  ),
-                                  submittedBy:
-                                    reportDetail.createdBy?.fullName || "N/A",
-                                  submittedByAvatar: "",
-                                  department: reportDetail.club?.clubName || "",
-                                  createdAt: reportDetail.submittedDate
-                                    ? new Date(
-                                        reportDetail.submittedDate
-                                      ).toLocaleDateString("vi-VN")
-                                    : reportDetail.createdAt
-                                    ? new Date(
-                                        reportDetail.createdAt
-                                      ).toLocaleDateString("vi-VN")
-                                    : "",
-                                  dueDate: reportDetail.reportRequirement
-                                    ?.dueDate
-                                    ? new Date(
-                                        reportDetail.reportRequirement.dueDate
-                                      ).toLocaleDateString("vi-VN")
-                                    : "",
-                                  content: reportDetail.content || "",
-                                  fileUrl: reportDetail.fileUrl,
-                                  reviewer: reportDetail.reviewedDate
-                                    ? "Staff"
-                                    : undefined,
-                                  reviewDate: reportDetail.reviewedDate
-                                    ? new Date(
-                                        reportDetail.reviewedDate
-                                      ).toLocaleDateString("vi-VN")
-                                    : undefined,
-                                  approvalNotes:
-                                    reportDetail.status !== "REJECTED" &&
-                                    reportDetail.reviewerFeedback &&
-                                    reportDetail.reviewedDate
-                                      ? reportDetail.reviewerFeedback
-                                      : undefined,
-                                  rejectionReason:
-                                    reportDetail.status === "REJECTED" &&
-                                    reportDetail.reviewerFeedback
-                                      ? reportDetail.reviewerFeedback
-                                      : undefined,
-                                  clubId: club.id,
-                                };
-
-                                setSelectedReport(reportForModal);
-                                setSelectedClub(club);
-                                setIsClubReportModalOpen(true);
-                              } else {
-                                toast.error("Không tìm thấy báo cáo");
+                                toast.error(
+                                  error.message || "Không thể tải báo cáo"
+                                );
+                              } finally {
+                                setIsLoadingReport(false);
                               }
-                            } catch (error: any) {
-                              console.error(
-                                "Error fetching report detail:",
-                                error
-                              );
-                              toast.error(
-                                error.message || "Không thể tải báo cáo"
-                              );
-                            } finally {
-                              setIsLoadingReport(false);
-                            }
-                          }}
-                          className="gap-2"
-                          disabled={!club.hasReport || isLoadingReport}
-                        >
-                          <Eye className="h-4 w-4" />
-                          <span className="hidden md:inline">Xem báo cáo</span>
-                        </Button>
+                            }}
+                            className="gap-2"
+                            disabled={isLoadingReport}
+                          >
+                            <Eye className="h-4 w-4" />
+                            <span className="hidden md:inline">Xem báo cáo</span>
+                          </Button>
+                        )}
                       </div>
                     </div>
                   </CardContent>
@@ -593,7 +644,13 @@ export function PeriodicReportClubs() {
         {selectedReport && selectedClub && (
           <ClubReportModal
             open={isClubReportModalOpen}
-            onOpenChange={setIsClubReportModalOpen}
+            onOpenChange={(open) => {
+              setIsClubReportModalOpen(open);
+              // Refresh data when modal closes (after successful review)
+              if (!open) {
+                refreshClubsData();
+              }
+            }}
             club={selectedClub}
             report={selectedReport}
             onApprove={(feedback) => {

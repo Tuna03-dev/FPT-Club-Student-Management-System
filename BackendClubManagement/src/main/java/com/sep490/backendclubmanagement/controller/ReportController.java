@@ -123,7 +123,7 @@ public class ReportController {
     }
 
     /**
-     * Submit a draft report (club president only)
+     * Submit a draft report (club president or team officer who is the creator)
      */
     @PostMapping("/club/submit")
     public ApiResponse<ReportDetailResponse> submitReport(
@@ -219,6 +219,30 @@ public class ReportController {
     ) {
         Long userId = SecurityUtils.getCurrentUserId();
         ReportDetailResponse data = reportService.getClubReportByRequirement(requirementId, clubId, userId);
+        return ApiResponse.success(data);
+    }
+
+    /**
+     * Delete a draft report (only creator can delete their own draft)
+     */
+    @DeleteMapping("/club/{reportId}")
+    public ApiResponse<Void> deleteReport(@PathVariable Long reportId) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        reportService.deleteReport(reportId, userId);
+        return ApiResponse.success();
+    }
+
+    /**
+     * Review (approve/reject) a report at club level (for club president only)
+     * Approve: PENDING_CLUB -> PENDING_UNIVERSITY
+     * Reject: PENDING_CLUB -> REJECTED_CLUB
+     */
+    @PostMapping(value = "/club/review", consumes = "application/json")
+    public ApiResponse<ReportDetailResponse> reviewReportByClub(
+            @RequestBody @Valid ReportReviewRequest request
+    ) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        ReportDetailResponse data = reportService.reviewReportByClub(request, userId);
         return ApiResponse.success(data);
     }
 }

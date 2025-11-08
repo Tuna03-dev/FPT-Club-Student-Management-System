@@ -84,7 +84,7 @@ public interface ReportServiceInterface {
     ReportDetailResponse updateReport(Long reportId, UpdateReportRequest request, Long userId);
 
     /**
-     * Submit a draft report (club president only)
+     * Submit a draft report (club president or team officer who is the creator)
      * @param request Submit request containing report ID
      * @param userId Current user ID
      * @return Submitted report detail response
@@ -159,5 +159,22 @@ public interface ReportServiceInterface {
      * @return Report detail response if exists, null otherwise
      */
     ReportDetailResponse getClubReportByRequirementForOfficer(Long requirementId, Long clubId, Long userId);
+
+    /**
+     * Delete a draft report (only creator or team officer can delete their own draft)
+     * @param reportId Report ID
+     * @param userId Current user ID
+     */
+    void deleteReport(Long reportId, Long userId);
+
+    /**
+     * Review (approve/reject) a report at club level (for club president only)
+     * Approve: PENDING_CLUB -> PENDING_UNIVERSITY
+     * Reject: PENDING_CLUB -> REJECTED_CLUB
+     * @param request Review request containing report ID, status, and optional feedback
+     * @param userId Current user ID
+     * @return Updated report detail response
+     */
+    ReportDetailResponse reviewReportByClub(ReportReviewRequest request, Long userId);
 }
 

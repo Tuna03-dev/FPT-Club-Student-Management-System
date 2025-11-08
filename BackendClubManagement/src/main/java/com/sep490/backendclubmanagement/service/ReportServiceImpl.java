@@ -343,7 +343,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
 
         // Check if a report already exists for this ClubReportRequirement
         if (clubReportRequirement.getReport() != null) {
-            throw new ForbiddenException("A report already exists for this requirement. Please update the existing report instead.");
+            throw new ForbiddenException("Báo cáo cho yêu cầu này đã tồn tại. Vui lòng chỉnh sửa báo cáo đã có.");
         }
 
         // Determine status based on role and autoSubmit flag
@@ -464,8 +464,8 @@ public class ReportServiceImpl implements ReportServiceInterface {
                     userId, report.getClubReportRequirement().getClub().getId(), currentSemester.getId());
         }
 
-        if (!isCreator && !isClubPresident) {
-            throw new ForbiddenException("Bạn không có quyền cập nhật báo cáo này");
+        if (!isCreator) {
+            throw new ForbiddenException("Bạn không có quyền cập nhật báo cáo này. Chỉ người tạo mới được chỉnh sửa.");
         }
 
         // Update report
@@ -481,7 +481,8 @@ public class ReportServiceImpl implements ReportServiceInterface {
     }
 
     /**
-     * Submit a draft report or resubmit a rejected report (club president only)
+     * Submit a draft report or resubmit a rejected report
+     * Allowed for: club president OR team officer who is the creator
      */
     @Override
     @Transactional
@@ -509,13 +510,23 @@ public class ReportServiceImpl implements ReportServiceInterface {
             throw new NotFoundException("Report must have an associated club");
         }
 
+        Long clubId = report.getClubReportRequirement().getClub().getId();
         boolean isClubPresident = roleMemberShipRepository.isClubPresidentInCurrentSemester(
-                userId, report.getClubReportRequirement().getClub().getId(), currentSemester.getId());
+                userId, clubId, currentSemester.getId());
+        
+        // Check if user is team officer and creator of the report
+        boolean isTeamOfficer = false;
+        boolean isCreator = report.getCreatedBy() != null && report.getCreatedBy().getId().equals(userId);
+        
+        if (currentSemester != null && isCreator) {
+            isTeamOfficer = roleMemberShipRepository.isClubOfficerOrTeamOfficerInCurrentSemester(
+                    userId, clubId, currentSemester.getId());
+        }
 
-        if (!isClubPresident) {
+        if (!isClubPresident && !(isTeamOfficer && isCreator)) {
             throw new ForbiddenException(
-                    "Chỉ chủ nhiệm câu lạc bộ (club president) trong kỳ hiện tại và đang hoạt động " +
-                    "mới có quyền nộp báo cáo."
+                    "Chỉ chủ nhiệm câu lạc bộ (club president) hoặc cán bộ ban (team officer) là người tạo " +
+                    "trong kỳ hiện tại và đang hoạt động mới có quyền nộp báo cáo."
             );
         }
 
@@ -542,7 +553,8 @@ public class ReportServiceImpl implements ReportServiceInterface {
 
         Report submittedReport = reportRepository.save(report);
 
-        log.info("Club president {} submitted/resubmitted report {} with status {}", userId, request.getReportId(), newStatus);
+        String userRole = isClubPresident ? "Club president" : "Team officer (creator)";
+        log.info("{} {} submitted/resubmitted report {} with status {}", userRole, userId, request.getReportId(), newStatus);
 
         return reportMapper.toDetail(submittedReport);
     }
@@ -927,6 +939,110 @@ public class ReportServiceImpl implements ReportServiceInterface {
 
         Report report = reportOptional.get();
         return reportMapper.toDetail(report);
+    }
+
+    /**
+     * Delete a draft report (only creator or team officer can delete their own draft)
+     */
+    @Override
+    @Transactional
+    public void deleteReport(Long reportId, Long userId) {
+        // Get report with relations
+        Report report = reportRepository.findByIdWithRelations(reportId)
+                .orElseThrow(() -> new NotFoundException("Report not found with ID: " + reportId));
+
+        // Only allow deleting draft reports
+        if (report.getStatus() != ReportStatus.DRAFT) {
+            throw new ForbiddenException(
+                    "Chỉ có thể xóa báo cáo ở trạng thái nháp (DRAFT). " +
+                    "Trạng thái hiện tại: " + report.getStatus()
+            );
+        }
+
+        // Check if user is the creator
+        boolean isCreator = report.getCreatedBy() != null && report.getCreatedBy().getId().equals(userId);
+        
+        if (!isCreator) {
+            throw new ForbiddenException("Bạn không có quyền xóa báo cáo này. Chỉ người tạo mới được xóa.");
+        }
+
+        // Delete the report
+        reportRepository.delete(report);
+
+        log.info("User {} deleted draft report {}", userId, reportId);
+    }
+
+    /**
+     * Review (approve/reject) a report at club level (for club president only)
+     * Approve: PENDING_CLUB -> PENDING_UNIVERSITY
+     * Reject: PENDING_CLUB -> REJECTED_CLUB
+     */
+    @Override
+    @Transactional
+    public ReportDetailResponse reviewReportByClub(ReportReviewRequest request, Long userId) {
+        // Get report with relations
+        Report report = reportRepository.findByIdWithRelations(request.getReportId())
+                .orElseThrow(() -> new NotFoundException("Report not found with ID: " + request.getReportId()));
+
+        // Only allow reviewing reports with status PENDING_CLUB or UPDATED_PENDING_CLUB
+        if (report.getStatus() != ReportStatus.PENDING_CLUB
+                && report.getStatus() != ReportStatus.UPDATED_PENDING_CLUB) {
+            throw new ForbiddenException(
+                    "Chỉ có thể duyệt/từ chối báo cáo ở trạng thái chờ CLB phê duyệt (PENDING_CLUB hoặc UPDATED_PENDING_CLUB). " +
+                    "Trạng thái hiện tại: " + report.getStatus()
+            );
+        }
+
+        // Get current semester
+        Semester currentSemester = semesterRepository.findCurrentSemester()
+                .orElseThrow(() -> new NotFoundException("Current semester not found"));
+
+        // Check if user is club president in current semester and active
+        if (report.getClubReportRequirement() == null || report.getClubReportRequirement().getClub() == null) {
+            throw new NotFoundException("Report must have an associated club");
+        }
+
+        Long clubId = report.getClubReportRequirement().getClub().getId();
+        boolean isClubPresident = roleMemberShipRepository.isClubPresidentInCurrentSemester(
+                userId, clubId, currentSemester.getId());
+
+        if (!isClubPresident) {
+            throw new ForbiddenException(
+                    "Chỉ chủ nhiệm câu lạc bộ (club president) trong kỳ hiện tại và đang hoạt động " +
+                    "mới có quyền duyệt/từ chối báo cáo ở cấp CLB."
+            );
+        }
+
+        // Validate status and update report status accordingly
+        ReportStatus newReportStatus;
+        
+        if (request.getStatus() == ReportStatus.APPROVED_CLUB) {
+            // Approve: chuyển sang PENDING_UNIVERSITY để chờ nhà trường duyệt
+            newReportStatus = ReportStatus.PENDING_UNIVERSITY;
+        } else if (request.getStatus() == ReportStatus.REJECTED_CLUB) {
+            // Reject: chuyển sang REJECTED_CLUB
+            newReportStatus = ReportStatus.REJECTED_CLUB;
+        } else {
+            throw new ForbiddenException(
+                    "Club president chỉ có thể duyệt (APPROVED_CLUB) hoặc từ chối (REJECTED_CLUB) báo cáo. " +
+                    "Status được cung cấp: " + request.getStatus()
+            );
+        }
+        
+        // Update report status
+        report.setStatus(newReportStatus);
+        report.setReviewedDate(LocalDateTime.now());
+        
+        // Set feedback if provided
+        if (request.getReviewerFeedback() != null && !request.getReviewerFeedback().trim().isEmpty()) {
+            report.setReviewerFeedback(request.getReviewerFeedback());
+        }
+
+        Report reviewedReport = reportRepository.save(report);
+
+        log.info("Club president {} reviewed report {} with status {}", userId, request.getReportId(), newReportStatus);
+
+        return reportMapper.toDetail(reviewedReport);
     }
 }
 

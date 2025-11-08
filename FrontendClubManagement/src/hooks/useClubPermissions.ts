@@ -3,6 +3,7 @@ import { authService, type UserInfo } from "@/services/authService";
 
 export interface ClubPermissions {
   isClubPresident: boolean;
+  isTeamOfficer: boolean;
   isClubMember: boolean;
   hasPermission: boolean;
   loading: boolean;
@@ -45,9 +46,19 @@ export function useClubPermissions(
     if (!clubRole) return false;
 
     // Kiểm tra theo tên tiếng Việt
-    const isPresident = clubRole.clubRole === "Chủ nhiệm";
+    const isPresident = clubRole.systemRole === "CLUB_PRESIDENT";
 
     return isPresident;
+  }, [clubRole]);
+
+  // Check if user has TEAM_OFFICER role in this club
+  const isTeamOfficer = useMemo(() => {
+    if (!clubRole) return false;
+
+    // Kiểm tra theo systemRole
+    const isOfficer = clubRole.systemRole === "TEAM_OFFICER";
+
+    return isOfficer;
   }, [clubRole]);
 
   // User has permission if they have CLUB_PRESIDENT role in this club
@@ -55,6 +66,7 @@ export function useClubPermissions(
 
   return {
     isClubPresident,
+    isTeamOfficer,
     isClubMember,
     hasPermission,
     loading,

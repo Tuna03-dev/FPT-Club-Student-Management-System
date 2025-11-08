@@ -12,8 +12,6 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import {
-  Download,
-  Share2,
   MessageSquare,
   Calendar,
   CheckCircle,
@@ -21,8 +19,11 @@ import {
   ThumbsUp,
   ThumbsDown,
   FileText,
+  Eye,
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
+import { reviewReportByStaff, type ReviewReportByStaffRequest } from "@/services/reportService";
+import { toast } from "sonner";
 
 type ReportStatus =
   | "draft"
@@ -130,35 +131,59 @@ export function ClubReportModal({
   // Handler functions for approval/rejection
   const handleApprove = async () => {
     if (!feedback.trim()) {
-      alert("Vui lòng nhập phản hồi");
+      toast.error("Vui lòng nhập phản hồi");
       return;
     }
     setIsSubmitting(true);
-    setTimeout(() => {
+    try {
+      const request: ReviewReportByStaffRequest = {
+        reportId: parseInt(report.id),
+        status: "APPROVED_UNIVERSITY",
+        reviewerFeedback: feedback.trim(),
+      };
+      await reviewReportByStaff(request);
+      toast.success("Báo cáo đã được chấp nhận");
       onApprove?.(feedback);
-      setIsSubmitting(false);
       setShowFeedback(null);
       setFeedback("");
-    }, 500);
+      onOpenChange(false); // Close modal after successful review
+    } catch (error: any) {
+      console.error("Error approving report:", error);
+      toast.error(error.message || "Không thể chấp nhận báo cáo");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleReject = async () => {
     if (!feedback.trim()) {
-      alert("Vui lòng nhập lý do từ chối");
+      toast.error("Vui lòng nhập lý do từ chối");
       return;
     }
     setIsSubmitting(true);
-    setTimeout(() => {
+    try {
+      const request: ReviewReportByStaffRequest = {
+        reportId: parseInt(report.id),
+        status: "REJECTED_UNIVERSITY",
+        reviewerFeedback: feedback.trim(),
+      };
+      await reviewReportByStaff(request);
+      toast.success("Báo cáo đã bị từ chối");
       onReject?.(feedback);
-      setIsSubmitting(false);
       setShowFeedback(null);
       setFeedback("");
-    }, 500);
+      onOpenChange(false); // Close modal after successful review
+    } catch (error: any) {
+      console.error("Error rejecting report:", error);
+      toast.error(error.message || "Không thể từ chối báo cáo");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="!max-w-5xl max-h-[95vh] overflow-y-auto w-[95vw]">
         <DialogHeader>
           <div className="flex items-start gap-4 pb-4 border-b">
             <div className="w-12 h-12 rounded-full bg-secondary flex items-center justify-center flex-shrink-0">
@@ -236,7 +261,7 @@ export function ClubReportModal({
           {report.fileUrl && (
             <div>
               <h4 className="font-semibold mb-3 flex items-center gap-2">
-                <Download className="h-4 w-4" />
+                <FileText className="h-4 w-4" />
                 Tệp đính kèm
               </h4>
               <Card>
@@ -260,8 +285,8 @@ export function ClubReportModal({
                       size="sm"
                       onClick={() => window.open(report.fileUrl, "_blank")}
                     >
-                      <Download className="h-4 w-4 mr-2" />
-                      Tải xuống
+                      <Eye className="h-4 w-4 mr-2" />
+                      Xem
                     </Button>
                   </div>
                 </CardContent>
@@ -391,14 +416,6 @@ export function ClubReportModal({
             (report.status === "submitted" ||
               report.status === "needs-review") && (
               <div className="flex gap-2 justify-end pt-4 border-t">
-                <Button variant="outline">
-                  <Download className="h-4 w-4 mr-2" />
-                  Tải xuống
-                </Button>
-                <Button variant="outline">
-                  <Share2 className="h-4 w-4 mr-2" />
-                  Chia sẻ
-                </Button>
                 <Button
                   onClick={() => setShowFeedback("reject")}
                   variant="outline"
@@ -416,20 +433,6 @@ export function ClubReportModal({
                 </Button>
               </div>
             )}
-
-          {/* Additional Actions */}
-          {!showFeedback && !report.reviewer && (
-            <div className="flex gap-2 justify-end pt-4 border-t">
-              <Button variant="outline">
-                <Download className="h-4 w-4 mr-2" />
-                Tải xuống
-              </Button>
-              <Button variant="outline">
-                <Share2 className="h-4 w-4 mr-2" />
-                Chia sẻ
-              </Button>
-            </div>
-          )}
         </div>
       </DialogContent>
     </Dialog>

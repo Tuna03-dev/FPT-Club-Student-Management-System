@@ -284,3 +284,58 @@ export async function submitReport(
   return response.data;
 }
 
+/**
+ * Delete a draft report (only creator can delete their own draft)
+ */
+export async function deleteReport(reportId: number): Promise<void> {
+  const response = await axiosClient.delete<void>(
+    `/reports/club/${reportId}`
+  );
+  if (response.code !== 200) {
+    throw new Error(response.message || "Failed to delete report");
+  }
+}
+
+/**
+ * Review (approve/reject) a report at club level (for club president only)
+ */
+export interface ReviewReportByClubRequest {
+  reportId: number;
+  status: "APPROVED_CLUB" | "REJECTED_CLUB";
+  reviewerFeedback?: string;
+}
+
+export async function reviewReportByClub(
+  request: ReviewReportByClubRequest
+): Promise<ReportDetailResponse> {
+  const response = await axiosClient.post<ReportDetailResponse>(
+    "/reports/club/review",
+    request
+  );
+  if (!response.data) {
+    throw new Error("Failed to review report");
+  }
+  return response.data;
+}
+
+/**
+ * Review (approve/reject) a report at university level (for staff only)
+ */
+export interface ReviewReportByStaffRequest {
+  reportId: number;
+  status: "APPROVED_UNIVERSITY" | "REJECTED_UNIVERSITY";
+  reviewerFeedback?: string;
+}
+
+export async function reviewReportByStaff(
+  request: ReviewReportByStaffRequest
+): Promise<void> {
+  const response = await axiosClient.post<void>(
+    "/reports/staff/review",
+    request
+  );
+  if (response.code !== 200) {
+    throw new Error(response.message || "Failed to review report");
+  }
+}
+
