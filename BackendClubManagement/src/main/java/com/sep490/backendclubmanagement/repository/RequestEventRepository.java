@@ -67,5 +67,9 @@ public interface RequestEventRepository extends JpaRepository<RequestEvent, Long
     Optional<RequestEvent> findByEventIdAndCreatorWithEventAndStatusIn(@Param("eventId") Long eventId,
                                                                        @Param("userId") Long userId,
                                                                        @Param("statuses") List<RequestStatus> statuses);
+
+    @Query("SELECT re FROM RequestEvent re JOIN FETCH re.event e WHERE e.id = :eventId AND re.createdBy.id = :userId")
+    Optional<RequestEvent> findByEventIdAndCreatedById(@Param("eventId") Long eventId,
+                                                       @Param("userId") Long userId);
 }
 

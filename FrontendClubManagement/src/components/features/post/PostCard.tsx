@@ -4,12 +4,14 @@ import {
   MoreHorizontal,
   ChevronLeft,
   ChevronRight,
+  Send,
   Image as ImageIcon,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import { useTranslation } from "react-i18next";
 import { useState, useEffect } from "react";
 
@@ -24,8 +26,24 @@ interface PostCardProps {
   timestamp: string;
   likes: number;
   comments: number;
-  shares: number;
   maxLength?: number; // Độ dài tối đa trước khi truncate
+}
+
+interface Reply {
+  id: string;
+  author: { name: string; avatar?: string };
+  content: string;
+  timestamp: string;
+  likes: number;
+}
+
+interface Comment {
+  id: string;
+  author: { name: string; avatar?: string };
+  content: string;
+  timestamp: string;
+  likes: number;
+  replies: Reply[];
 }
 
 export const PostCard = ({
@@ -42,6 +60,37 @@ export const PostCard = ({
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [imageErrors, setImageErrors] = useState<boolean[]>([]);
+  const [showComments, setShowComments] = useState(false);
+  const [commentText, setCommentText] = useState("");
+  const [replyingTo, setReplyingTo] = useState<string | null>(null);
+  const [replyText, setReplyText] = useState("");
+  const [commentsList, setCommentsList] = useState<Comment[]>([
+    {
+      id: "1",
+      author: { name: "Phạm Văn D", avatar: undefined },
+      content: "Chúc mừng CLB! Hy vọng sẽ ngày càng phát triển hơn nữa! 🎉",
+      timestamp: "1 giờ trước",
+      likes: 12,
+      replies: [
+        {
+          id: "1-1",
+          author: { name: "Nguyễn Văn A", avatar: undefined },
+          content:
+            "Cảm ơn bạn! Hy vọng bạn sẽ tiếp tục đồng hành cùng chúng mình.",
+          timestamp: "45 phút trước",
+          likes: 5,
+        },
+      ],
+    },
+    {
+      id: "2",
+      author: { name: "Hoàng Thị E", avatar: undefined },
+      content: "Tuyệt vời quá! 🎊",
+      timestamp: "30 phút trước",
+      likes: 8,
+      replies: [],
+    },
+  ]);
 
   const shouldTruncate = content.length > maxLength;
   const displayContent =
@@ -60,10 +109,12 @@ export const PostCard = ({
   }, [images]);
 
   const nextImage = () => {
+    if (images.length === 0) return;
     setCurrentImageIndex((prev) => (prev + 1) % images.length);
   };
 
   const prevImage = () => {
+    if (images.length === 0) return;
     setCurrentImageIndex((prev) => (prev - 1 + images.length) % images.length);
   };
 
@@ -179,11 +230,174 @@ export const PostCard = ({
           variant="ghost"
           className="flex-1 gap-1 rounded-none border-x border-border py-2"
           size="sm"
+          onClick={() => setShowComments(!showComments)}
         >
           <MessageCircle className="h-4 w-4" />
           <span className="hidden sm:inline text-sm">Bình luận</span>
         </Button>
       </div>
+
+      {/* Comments Section */}
+      {showComments && (
+        <div className="border-t border-border">
+          <div className="max-h-96 overflow-auto">
+            <div className="p-4 space-y-4">
+              {/* Comment Input */}
+              <div className="flex gap-2">
+                <Avatar className="h-8 w-8">
+                  <AvatarFallback className="bg-primary text-primary-foreground text-xs">
+                    T
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex-1 flex gap-2">
+                  <Textarea
+                    placeholder="Viết bình luận..."
+                    value={commentText}
+                    onChange={(e) => setCommentText(e.target.value)}
+                    className="min-h-[60px] resize-none"
+                  />
+                  <Button
+                    size="icon"
+                    onClick={() => {
+                      if (!commentText.trim()) return;
+                      const newComment: Comment = {
+                        id: Date.now().toString(),
+                        author: { name: "Tôi", avatar: undefined },
+                        content: commentText,
+                        timestamp: "Vừa xong",
+                        likes: 0,
+                        replies: [],
+                      };
+                      setCommentsList([newComment, ...commentsList]);
+                      setCommentText("");
+                    }}
+                    disabled={!commentText.trim()}
+                  >
+                    <Send className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+
+              {/* Comments List */}
+              {commentsList.map((comment) => (
+                <div key={comment.id} className="space-y-2">
+                  <div className="flex gap-2">
+                    <Avatar className="h-8 w-8">
+                      <AvatarImage src={comment.author.avatar} />
+                      <AvatarFallback className="bg-primary text-primary-foreground text-xs">
+                        {comment.author.name.charAt(0)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1">
+                      <div className="bg-muted rounded-lg p-3">
+                        <div className="font-semibold text-sm">
+                          {comment.author.name}
+                        </div>
+                        <p className="text-sm mt-1">{comment.content}</p>
+                      </div>
+                      <div className="flex gap-3 mt-1 text-xs text-muted-foreground px-3">
+                        <button className="hover:underline">
+                          {comment.timestamp}
+                        </button>
+                        <button className="hover:underline font-semibold">
+                          Thích ({comment.likes})
+                        </button>
+                        <button
+                          className="hover:underline font-semibold"
+                          onClick={() =>
+                            setReplyingTo(
+                              replyingTo === comment.id ? null : comment.id
+                            )
+                          }
+                        >
+                          Trả lời
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Replies */}
+                  {comment.replies.length > 0 && (
+                    <div className="ml-10 space-y-2">
+                      {comment.replies.map((reply) => (
+                        <div key={reply.id} className="flex gap-2">
+                          <Avatar className="h-7 w-7">
+                            <AvatarImage src={reply.author.avatar} />
+                            <AvatarFallback className="bg-primary text-primary-foreground text-xs">
+                              {reply.author.name.charAt(0)}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1">
+                            <div className="bg-muted rounded-lg p-2.5">
+                              <div className="font-semibold text-xs">
+                                {reply.author.name}
+                              </div>
+                              <p className="text-xs mt-1">{reply.content}</p>
+                            </div>
+                            <div className="flex gap-3 mt-1 text-xs text-muted-foreground px-2.5">
+                              <button className="hover:underline">
+                                {reply.timestamp}
+                              </button>
+                              <button className="hover:underline font-semibold">
+                                Thích ({reply.likes})
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Reply Input */}
+                  {replyingTo === comment.id && (
+                    <div className="ml-10 flex gap-2">
+                      <Avatar className="h-7 w-7">
+                        <AvatarFallback className="bg-primary text-primary-foreground text-xs">
+                          T
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 flex gap-2">
+                        <Textarea
+                          placeholder={`Trả lời ${comment.author.name}...`}
+                          value={replyText}
+                          onChange={(e) => setReplyText(e.target.value)}
+                          className="min-h-[50px] resize-none text-sm"
+                        />
+                        <Button
+                          size="icon"
+                          className="h-[50px]"
+                          onClick={() => {
+                            if (!replyText.trim()) return;
+                            const newReply: Reply = {
+                              id: Date.now().toString(),
+                              author: { name: "Tôi", avatar: undefined },
+                              content: replyText,
+                              timestamp: "Vừa xong",
+                              likes: 0,
+                            };
+                            setCommentsList(
+                              commentsList.map((c) =>
+                                c.id === comment.id
+                                  ? { ...c, replies: [...c.replies, newReply] }
+                                  : c
+                              )
+                            );
+                            setReplyText("");
+                            setReplyingTo(null);
+                          }}
+                          disabled={!replyText.trim()}
+                        >
+                          <Send className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Image Lightbox */}
       <Dialog open={lightboxOpen} onOpenChange={setLightboxOpen}>

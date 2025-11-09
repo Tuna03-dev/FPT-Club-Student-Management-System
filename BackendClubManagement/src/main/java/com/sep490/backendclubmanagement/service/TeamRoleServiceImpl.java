@@ -35,20 +35,31 @@ public class TeamRoleServiceImpl implements TeamRoleService {
         // 2) Học kỳ hiện tại (nếu có)
         Long semesterId = semesterRepo.findCurrentSemester().map(Semester::getId).orElse(null);
 
-        // 3) Vai trò của chính mình trong team
-        List<String> myRoles = rmRepo.findMyRoles(me, teamId, semesterId);
-        boolean isMember = !myRoles.isEmpty() || guard.isStaff(me);
+        // 3) Lấy role theo team (đang có sẵn)
+        List<String> teamRoles = rmRepo.findMyRoles(me, teamId, semesterId);
 
-        // 4) Danh sách thành viên + count
+        // 4) Lấy role theo CLB (mới thêm)
+        List<String> clubRoles = rmRepo.findMyClubRoleNames(me, clubId, semesterId);
+
+        // 5) Gộp lại thành myRoles (không trùng)
+        List<String> myRoles = java.util.stream.Stream.concat(clubRoles.stream(), teamRoles.stream())
+                .distinct()
+                .toList();
+
+        // 6) Xác định có phải thành viên của chính team này không
+        //    -> dùng isMyTeam cho đúng nghĩa "member của team", không lẫn Staff
+        boolean isMember = rmRepo.isMyTeam(me, clubId, teamId, semesterId);
+
+        // 7) Danh sách thành viên + count
         List<TeamMemberDTO> membersDto = rmRepo.findMembersByTeamIdAndSemesterId(teamId, semesterId);
 
-        // 5) Build output (format đúng JSON FE đang xài)
+        // 8) Build output đúng schema FE đang dùng
         return MyTeamRoleResponse.builder()
                 .teamId(team.getId())
                 .teamName(team.getTeamName())
                 .description(team.getDescription())
                 .member(isMember)
-                .myRoles(myRoles.isEmpty() && guard.isStaff(me) ? List.of("STAFF") : myRoles)
+                .myRoles(myRoles) // <-- giờ đã có cả "Chủ nhiệm", "Phó chủ nhiệm", "Trưởng ban", "Phó ban", ...
                 .memberCount(membersDto.size())
                 .members(membersDto.stream().map(m ->
                         MyTeamRoleResponse.MemberBrief.builder()
@@ -62,4 +73,5 @@ public class TeamRoleServiceImpl implements TeamRoleService {
                 ).toList())
                 .build();
     }
+
 }

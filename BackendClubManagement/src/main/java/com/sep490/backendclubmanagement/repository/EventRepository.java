@@ -55,6 +55,33 @@ public interface EventRepository extends JpaRepository<Event, Long> {
     @Query("SELECT e FROM Event e WHERE (e.club.id = :clubId OR e.club.id IS NULL ) AND e.isDraft = false")
     List<Event> findByClubIdAndIsDraftFalse(Long clubId);
 
+    @Query("SELECT e FROM Event e WHERE e.isDraft = false")
+    List<Event> findByIsDraftFalse();
+
+    /**
+     * Lấy tất cả events cho Staff (không bao gồm MEETING)
+     */
+    @Query("SELECT e FROM Event e WHERE e.isDraft = false " +
+           "AND (e.eventType IS NULL OR UPPER(TRIM(e.eventType.typeName)) <> 'MEETING')")
+    List<Event> findStaffAllEventsExcludingMeeting();
+
+    /**
+     * Lấy events theo clubId cho Staff (không bao gồm MEETING)
+     */
+    @Query("SELECT e FROM Event e WHERE (e.club.id = :clubId OR e.club.id IS NULL) " +
+           "AND e.isDraft = false " +
+           "AND (e.eventType IS NULL OR UPPER(TRIM(e.eventType.typeName)) <> 'MEETING')")
+    List<Event> findStaffEventsByClubIdExcludingMeeting(Long clubId);
+
+    // STAFF: các sự kiện CLB đã hủy (isDraft = true, không còn chờ duyệt)
+    @Query("SELECT e FROM Event e LEFT JOIN RequestEvent re ON re.event = e AND re.status IN :pendingStatuses " +
+           "WHERE e.isDraft = true AND e.club IS NOT NULL AND re.id IS NULL")
+    List<Event> findCancelledByStaffExcludingPending(java.util.List<com.sep490.backendclubmanagement.entity.RequestStatus> pendingStatuses);
+
+    @Query("SELECT e FROM Event e LEFT JOIN RequestEvent re ON re.event = e AND re.status IN :pendingStatuses " +
+           "WHERE e.isDraft = true AND e.club.id = :clubId AND re.id IS NULL")
+    List<Event> findCancelledByStaffAndClubIdExcludingPending(Long clubId, java.util.List<com.sep490.backendclubmanagement.entity.RequestStatus> pendingStatuses);
+
     /**
      * Lấy danh sách events chưa được yêu cầu nộp báo cáo
      * Event chưa có yêu cầu báo cáo khi:

@@ -5,15 +5,24 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { postService, type CreatePostRequest } from "@/services/postService";
 import { toast } from "sonner";
 
 interface CreatePostProps {
   onPostCreated?: () => void;
+  clubId?: number;
 }
 
-export const CreatePost = ({ onPostCreated }: CreatePostProps) => {
+export const CreatePost = ({
+  onPostCreated,
+  clubId: clubIdProp,
+}: CreatePostProps) => {
   const [isCreating, setIsCreating] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [content, setContent] = useState("");
@@ -24,20 +33,20 @@ export const CreatePost = ({ onPostCreated }: CreatePostProps) => {
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const clubId = 1; // TODO: Get from context/route
+  const clubId = clubIdProp ?? 1; // prefer prop, fallback to 1
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || []);
-    setSelectedFiles(prev => [...prev, ...files]);
-    
+    setSelectedFiles((prev) => [...prev, ...files]);
+
     // Create URLs for preview
-    const newImages = files.map(file => URL.createObjectURL(file));
-    setSelectedImages(prev => [...prev, ...newImages]);
+    const newImages = files.map((file) => URL.createObjectURL(file));
+    setSelectedImages((prev) => [...prev, ...newImages]);
   };
 
   const removeFile = (index: number) => {
-    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
-    setSelectedImages(prev => {
+    setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
+    setSelectedImages((prev) => {
       // Revoke the object URL
       URL.revokeObjectURL(prev[index]);
       return prev.filter((_, i) => i !== index);
@@ -67,13 +76,13 @@ export const CreatePost = ({ onPostCreated }: CreatePostProps) => {
     const newImages = [...selectedImages];
     const draggedFile = newFiles[draggedIndex];
     const draggedImage = newImages[draggedIndex];
-    
+
     newFiles.splice(draggedIndex, 1);
     newFiles.splice(index, 0, draggedFile);
-    
+
     newImages.splice(draggedIndex, 1);
     newImages.splice(index, 0, draggedImage);
-    
+
     setSelectedFiles(newFiles);
     setSelectedImages(newImages);
     setDraggedIndex(index);
@@ -85,7 +94,7 @@ export const CreatePost = ({ onPostCreated }: CreatePostProps) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!content.trim()) {
       toast.error("Vui lòng nhập nội dung bài viết");
       return;
@@ -105,18 +114,18 @@ export const CreatePost = ({ onPostCreated }: CreatePostProps) => {
       };
 
       await postService.createPostWithMedia(request, selectedFiles);
-      
+
       toast.success("Đăng bài thành công!");
-      
-  // Reset form
-  setContent("");
+
+      // Reset form
+      setContent("");
       setSelectedFiles([]);
       // Clean up object URLs
-      selectedImages.forEach(url => URL.revokeObjectURL(url));
+      selectedImages.forEach((url) => URL.revokeObjectURL(url));
       setSelectedImages([]);
       setClubWide(true);
       setShowForm(false);
-      
+
       // Notify parent component
       onPostCreated?.();
     } catch (error) {
@@ -131,7 +140,7 @@ export const CreatePost = ({ onPostCreated }: CreatePostProps) => {
     setContent("");
     setSelectedFiles([]);
     // Clean up object URLs
-    selectedImages.forEach(url => URL.revokeObjectURL(url));
+    selectedImages.forEach((url) => URL.revokeObjectURL(url));
     setSelectedImages([]);
     setClubWide(true);
     setShowForm(false);
@@ -147,7 +156,7 @@ export const CreatePost = ({ onPostCreated }: CreatePostProps) => {
               CP
             </AvatarFallback>
           </Avatar>
-          <button 
+          <button
             onClick={() => setShowForm(true)}
             className="flex-1 text-left px-4 py-3 bg-secondary hover:bg-secondary/80 rounded-full text-muted-foreground transition-colors"
           >
@@ -171,12 +180,14 @@ export const CreatePost = ({ onPostCreated }: CreatePostProps) => {
           <div className="flex-1 space-y-3">
             <div>
               <Label htmlFor="content">Nội dung *</Label>
-              <Textarea 
+              <Textarea
                 id="content"
                 placeholder="Bạn đang nghĩ gì?"
                 className="min-h-[80px] resize-none border-muted mt-1"
                 value={content}
-                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setContent(e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+                  setContent(e.target.value)
+                }
                 required
               />
             </div>
@@ -184,14 +195,18 @@ export const CreatePost = ({ onPostCreated }: CreatePostProps) => {
             {/* Image Preview Grid - Show max 4 images */}
             {selectedImages.length > 0 && (
               <div className="relative">
-                <div className={`grid gap-2 ${getGridClass(Math.min(selectedImages.length, 4))}`}>
+                <div
+                  className={`grid gap-2 ${getGridClass(
+                    Math.min(selectedImages.length, 4)
+                  )}`}
+                >
                   {selectedImages.slice(0, 4).map((image, index) => (
-                    <div 
-                      key={index} 
+                    <div
+                      key={index}
                       className="relative group aspect-square overflow-hidden rounded-lg bg-muted"
                     >
-                      <img 
-                        src={image} 
+                      <img
+                        src={image}
                         alt={`Preview ${index + 1}`}
                         className="w-full h-full object-cover"
                       />
@@ -239,10 +254,10 @@ export const CreatePost = ({ onPostCreated }: CreatePostProps) => {
                   className="hidden"
                   onChange={handleFileSelect}
                 />
-                <Button 
+                <Button
                   type="button"
-                  variant="ghost" 
-                  size="sm" 
+                  variant="ghost"
+                  size="sm"
                   className="gap-2 text-muted-foreground hover:text-foreground"
                   onClick={handleImageButtonClick}
                 >
@@ -281,18 +296,18 @@ export const CreatePost = ({ onPostCreated }: CreatePostProps) => {
           </DialogHeader>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-4">
             {selectedImages.map((image, index) => (
-              <div 
-                key={index} 
+              <div
+                key={index}
                 draggable
                 onDragStart={() => handleDragStart(index)}
                 onDragOver={(e) => handleDragOver(e, index)}
                 onDragEnd={handleDragEnd}
                 className={`relative group aspect-square overflow-hidden rounded-lg bg-muted cursor-move transition-opacity ${
-                  draggedIndex === index ? 'opacity-50' : 'opacity-100'
+                  draggedIndex === index ? "opacity-50" : "opacity-100"
                 }`}
               >
-                <img 
-                  src={image} 
+                <img
+                  src={image}
                   alt={`Image ${index + 1}`}
                   className="w-full h-full object-cover pointer-events-none"
                 />
@@ -304,7 +319,9 @@ export const CreatePost = ({ onPostCreated }: CreatePostProps) => {
                   <X className="h-4 w-4" />
                 </button>
                 <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <span className="text-white text-sm">Ảnh {index + 1} - Kéo để sắp xếp</span>
+                  <span className="text-white text-sm">
+                    Ảnh {index + 1} - Kéo để sắp xếp
+                  </span>
                 </div>
               </div>
             ))}
@@ -314,4 +331,3 @@ export const CreatePost = ({ onPostCreated }: CreatePostProps) => {
     </Card>
   );
 };
-

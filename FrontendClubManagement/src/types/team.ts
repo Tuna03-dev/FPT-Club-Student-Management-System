@@ -24,3 +24,19 @@ export interface MyTeamDetailDTO {
   memberCount: number;     // tổng TV distinct
   members: TeamMemberDTO[];// danh sách thành viên (admin xem được hết)
 }
+export interface CreateTeamPayload {
+  clubId: number;
+  teamName: string;
+  description?: string;
+  linkGroupChat?: string;
+  leaderUserId?: number;
+  viceLeaderUserId?: number;
+  memberUserIds?: number[];
+}
+
+export interface TeamResponse {
+  id: number;
+  teamName: string;
+  description: string;
+  linkGroupChat: string | null;
+}

@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 @Repository
 public interface UserRepository extends JpaRepository<User, Long> {
@@ -22,6 +23,11 @@ public interface UserRepository extends JpaRepository<User, Long> {
           AND UPPER(u.systemRole.roleName) IN ('STAFF','ADMIN')
     """)
     boolean isStaffOrAdmin(@Param("id") Long id);
+
+    @Query("SELECT u.id FROM User u WHERE LOWER(u.email) = LOWER(:email)")
+    Optional<Long> findIdByEmail(@Param("email") String email);
+    List<User> findByIdIn(List<Long> ids);
+
 }
 
 
