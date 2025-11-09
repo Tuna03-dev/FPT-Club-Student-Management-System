@@ -417,6 +417,47 @@ export function ClubReportManagement() {
     fetchAllClubReports();
   }, [clubId, activeTab, isClubPresident]);
 
+  // Helper function to refresh all tabs data after actions
+  const refreshAllTabsData = async () => {
+    if (!clubId) return;
+
+    try {
+      // Always refresh requests tab
+      const requirements = await getClubReportRequirementsForOfficer(clubId);
+      const mappedRequests: ReportRequest[] = requirements.map((req) =>
+        mapRequirementToReportRequest(req)
+      );
+      setReportRequests(mappedRequests);
+
+      // Always refresh submissions tab (my reports)
+      try {
+        const reports = await getMyReports(clubId);
+        setMyReports(reports);
+      } catch (err) {
+        // If API doesn't exist, get all club reports and filter by current user
+        const allReports = await getClubReports(clubId);
+        const currentUser = authService.getCurrentUser();
+        if (currentUser?.id) {
+          const filtered = allReports.filter(
+            (report) => report.createdBy?.id === currentUser.id
+          );
+          setMyReports(filtered);
+        } else {
+          setMyReports([]);
+        }
+      }
+
+      // Always refresh approval tab (all club reports) if user is club president
+      if (isClubPresident) {
+        const reports = await getClubReports(clubId);
+        setAllClubReports(reports);
+      }
+    } catch (err) {
+      console.error("Error refreshing tabs data:", err);
+      // Don't show error toast here as it might be called multiple times
+    }
+  };
+
   // Mock data for submissions (to be replaced later - currently using API data)
   // Commented out as we're using API data now
   /*
@@ -799,15 +840,8 @@ export function ClubReportManagement() {
       setDraftFile(null);
       setIsResubmitMode(false);
 
-      // Refresh report requirements to update status
-      if (activeTab === "requests") {
-        const requirements = await getClubReportRequirementsForOfficer(clubId);
-        // Re-map and update state
-        const mappedRequests: ReportRequest[] = requirements.map((req) =>
-          mapRequirementToReportRequest(req)
-        );
-        setReportRequests(mappedRequests);
-      }
+      // Refresh all tabs data to update status
+      await refreshAllTabsData();
     } catch (err) {
       console.error("Error saving draft:", err);
       const errorMessage =
@@ -834,14 +868,8 @@ export function ClubReportManagement() {
       await submitReport(submitRequest);
       toast.success("Báo cáo đã được nộp thành công");
 
-      // Refresh report requirements to update status
-      if (clubId && activeTab === "requests") {
-        const requirements = await getClubReportRequirementsForOfficer(clubId);
-        const mappedRequests: ReportRequest[] = requirements.map((req) =>
-          mapRequirementToReportRequest(req)
-        );
-        setReportRequests(mappedRequests);
-      }
+      // Refresh all tabs data to update status
+      await refreshAllTabsData();
     } catch (err) {
       console.error("Error submitting report:", err);
       const errorMessage =
@@ -2149,21 +2177,11 @@ export function ClubReportManagement() {
                             toast.success(
                               "Báo cáo đã được nộp lên để phê duyệt"
                             );
-                            setShowDetailModal(false);
-                            setSelectedReportDetail(null);
+                              setShowDetailModal(false);
+                              setSelectedReportDetail(null);
 
-                            // Refresh report requirements to update status
-                            if (clubId && activeTab === "requests") {
-                              const requirements =
-                                await getClubReportRequirementsForOfficer(
-                                  clubId
-                                );
-                              const mappedRequests: ReportRequest[] =
-                                requirements.map((req) =>
-                                  mapRequirementToReportRequest(req)
-                                );
-                              setReportRequests(mappedRequests);
-                            }
+                            // Refresh all tabs data to update status
+                            await refreshAllTabsData();
                           } catch (err) {
                             console.error("Error submitting report:", err);
                             const errorMessage =
@@ -2226,21 +2244,11 @@ export function ClubReportManagement() {
                             setDeletingReport(true);
                             await deleteReport(selectedReportDetail.id);
                             toast.success("Báo cáo đã được xóa thành công");
-                            setShowDetailModal(false);
-                            setSelectedReportDetail(null);
+                              setShowDetailModal(false);
+                              setSelectedReportDetail(null);
 
-                            // Refresh report requirements to update status
-                            if (clubId && activeTab === "requests") {
-                              const requirements =
-                                await getClubReportRequirementsForOfficer(
-                                  clubId
-                                );
-                              const mappedRequests: ReportRequest[] =
-                                requirements.map((req) =>
-                                  mapRequirementToReportRequest(req)
-                                );
-                              setReportRequests(mappedRequests);
-                            }
+                            // Refresh all tabs data to update status
+                            await refreshAllTabsData();
                           } catch (err) {
                             console.error("Error deleting report:", err);
                             const errorMessage =
@@ -2334,18 +2342,8 @@ export function ClubReportManagement() {
                               setShowDetailModal(false);
                               setSelectedReportDetail(null);
 
-                              // Refresh report requirements to update status
-                              if (clubId && activeTab === "requests") {
-                                const requirements =
-                                  await getClubReportRequirementsForOfficer(
-                                    clubId
-                                  );
-                                const mappedRequests: ReportRequest[] =
-                                  requirements.map((req) =>
-                                    mapRequirementToReportRequest(req)
-                                  );
-                                setReportRequests(mappedRequests);
-                              }
+                            // Refresh all tabs data to update status
+                            await refreshAllTabsData();
                             } catch (err) {
                               console.error("Error approving report:", err);
                               const errorMessage =
@@ -2418,18 +2416,8 @@ export function ClubReportManagement() {
                               setShowDetailModal(false);
                               setSelectedReportDetail(null);
 
-                              // Refresh report requirements to update status
-                              if (clubId && activeTab === "requests") {
-                                const requirements =
-                                  await getClubReportRequirementsForOfficer(
-                                    clubId
-                                  );
-                                const mappedRequests: ReportRequest[] =
-                                  requirements.map((req) =>
-                                    mapRequirementToReportRequest(req)
-                                  );
-                                setReportRequests(mappedRequests);
-                              }
+                            // Refresh all tabs data to update status
+                            await refreshAllTabsData();
                             } catch (err) {
                               console.error("Error deleting report:", err);
                               const errorMessage =
@@ -2472,21 +2460,11 @@ export function ClubReportManagement() {
                             toast.success(
                               "Báo cáo đã được chấp nhận và nộp lên trường"
                             );
-                            setShowDetailModal(false);
-                            setSelectedReportDetail(null);
+                              setShowDetailModal(false);
+                              setSelectedReportDetail(null);
 
-                            // Refresh report requirements to update status
-                            if (clubId && activeTab === "requests") {
-                              const requirements =
-                                await getClubReportRequirementsForOfficer(
-                                  clubId
-                                );
-                              const mappedRequests: ReportRequest[] =
-                                requirements.map((req) =>
-                                  mapRequirementToReportRequest(req)
-                                );
-                              setReportRequests(mappedRequests);
-                            }
+                            // Refresh all tabs data to update status
+                            await refreshAllTabsData();
                           } catch (err) {
                             console.error("Error approving report:", err);
                             const errorMessage =
@@ -2808,16 +2786,8 @@ export function ClubReportManagement() {
                       setSelectedReportDetail(null);
                       setRejectReason("");
 
-                      // Refresh report requirements to update status
-                      if (clubId && activeTab === "requests") {
-                        const requirements =
-                          await getClubReportRequirementsForOfficer(clubId);
-                        const mappedRequests: ReportRequest[] =
-                          requirements.map((req) =>
-                            mapRequirementToReportRequest(req)
-                          );
-                        setReportRequests(mappedRequests);
-                      }
+                      // Refresh all tabs data to update status
+                      await refreshAllTabsData();
                     } catch (err) {
                       console.error("Error rejecting report:", err);
                       const errorMessage =
@@ -3102,16 +3072,8 @@ export function ClubReportManagement() {
                           setDraftContent("");
                           setDraftFileUrl("");
 
-                          // Refresh data
-                          if (clubId && activeTab === "requests") {
-                            const requirements =
-                              await getClubReportRequirementsForOfficer(clubId);
-                            const mappedRequests: ReportRequest[] =
-                              requirements.map((req) =>
-                                mapRequirementToReportRequest(req)
-                              );
-                            setReportRequests(mappedRequests);
-                          }
+                          // Refresh all tabs data to update status
+                          await refreshAllTabsData();
                         } catch (err) {
                           console.error("Error saving report:", err);
                           const errorMessage =
@@ -3264,16 +3226,8 @@ export function ClubReportManagement() {
                           setDraftContent("");
                           setDraftFileUrl("");
 
-                          // Refresh data
-                          if (clubId && activeTab === "requests") {
-                            const requirements =
-                              await getClubReportRequirementsForOfficer(clubId);
-                            const mappedRequests: ReportRequest[] =
-                              requirements.map((req) =>
-                                mapRequirementToReportRequest(req)
-                              );
-                            setReportRequests(mappedRequests);
-                          }
+                          // Refresh all tabs data to update status
+                          await refreshAllTabsData();
                         } catch (err) {
                           console.error("Error submitting report:", err);
                           const errorMessage =
@@ -3369,16 +3323,8 @@ export function ClubReportManagement() {
                           setEditingReportId(null);
                           setDraftFile(null);
 
-                          // Refresh data
-                          if (clubId && activeTab === "requests") {
-                            const requirements =
-                              await getClubReportRequirementsForOfficer(clubId);
-                            const mappedRequests: ReportRequest[] =
-                              requirements.map((req) =>
-                                mapRequirementToReportRequest(req)
-                              );
-                            setReportRequests(mappedRequests);
-                          }
+                          // Refresh all tabs data to update status
+                          await refreshAllTabsData();
                         } catch (err) {
                           console.error("Error submitting report:", err);
                           const errorMessage =
@@ -3687,18 +3633,8 @@ export function ClubReportManagement() {
                             setDraftFile(null);
                             setIsResubmitMode(false);
 
-                            // Refresh data
-                            if (clubId && activeTab === "requests") {
-                              const requirements =
-                                await getClubReportRequirementsForOfficer(
-                                  clubId
-                                );
-                              const mappedRequests: ReportRequest[] =
-                                requirements.map((req) =>
-                                  mapRequirementToReportRequest(req)
-                                );
-                              setReportRequests(mappedRequests);
-                            }
+                            // Refresh all tabs data to update status
+                            await refreshAllTabsData();
                           } catch (err) {
                             console.error("Error resubmitting report:", err);
                             const errorMessage =
@@ -3749,50 +3685,136 @@ export function ClubReportManagement() {
                       <CheckCircle className="h-4 w-4 mr-2" />
                       {savingDraft ? "Đang lưu..." : "Lưu thay đổi"}
                     </Button>
-                    {editingReportId && (
-                      <Button
-                        onClick={async () => {
-                          try {
-                            setSubmittingReport(true);
-                            const submitRequest: SubmitReportRequest = {
-                              reportId: editingReportId,
-                            };
-                            await submitReport(submitRequest);
-                            toast.success("Báo cáo đã được nộp thành công");
-                            setShowEditDialog(false);
-                            setEditingReportId(null);
-                            setIsResubmitMode(false);
+                    {editingReportId && (() => {
+                      // Kiểm tra nếu user là club officer và report status là PENDING_CLUB hoặc UPDATED_PENDING_CLUB
+                      const rawStatus = selectedReportDetail?.status || "";
+                      const reportStatus = rawStatus.toUpperCase().trim();
+                      const isPendingClub =
+                        reportStatus === "PENDING_CLUB" ||
+                        reportStatus === "UPDATED_PENDING_CLUB";
+                      const shouldSubmitToSchool =
+                        !permissionsLoading &&
+                        isClubPresident &&
+                        isPendingClub;
 
-                            // Refresh data
-                            if (clubId && activeTab === "requests") {
-                              const requirements =
-                                await getClubReportRequirementsForOfficer(
-                                  clubId
-                                );
-                              const mappedRequests: ReportRequest[] =
-                                requirements.map((req) =>
-                                  mapRequirementToReportRequest(req)
-                                );
-                              setReportRequests(mappedRequests);
+                      return (
+                        <Button
+                          onClick={async () => {
+                            try {
+                              setSubmittingReport(true);
+                              
+                              if (shouldSubmitToSchool) {
+                                // Nếu là club officer và status là PENDING_CLUB, cần lưu thay đổi trước (nếu có) rồi mới nộp lên trường
+                                // Kiểm tra xem có thay đổi không (file mới hoặc nội dung thay đổi)
+                                let finalFileUrl = draftFileUrl;
+                                
+                                // Nếu có file mới, upload lên Cloudinary trước
+                                if (draftFile) {
+                                  try {
+                                    const formData = new FormData();
+                                    formData.append("file", draftFile);
+
+                                    interface UploadResult {
+                                      url: string;
+                                      publicId: string;
+                                      format: string;
+                                      bytes: number;
+                                    }
+
+                                    const uploadResponse =
+                                      await axiosClient.post<UploadResult>(
+                                        "/uploads/file",
+                                        formData,
+                                        {
+                                          headers: {
+                                            "Content-Type": "multipart/form-data",
+                                          },
+                                          timeout: 60000,
+                                        }
+                                      );
+
+                                    if (
+                                      uploadResponse.code === 200 &&
+                                      uploadResponse.data &&
+                                      uploadResponse.data.url
+                                    ) {
+                                      finalFileUrl = uploadResponse.data.url;
+                                    } else {
+                                      throw new Error(
+                                        uploadResponse.message ||
+                                          "Upload file failed: No URL returned"
+                                      );
+                                    }
+                                  } catch (err) {
+                                    console.error("Error uploading file:", err);
+                                    const errorMessage =
+                                      err instanceof Error
+                                        ? err.message
+                                        : "Không thể tải lên file";
+                                    toast.error(
+                                      `Lỗi khi tải file: ${errorMessage}`
+                                    );
+                                    setSubmittingReport(false);
+                                    return;
+                                  }
+                                }
+
+                                // Cập nhật báo cáo nếu có thay đổi
+                                const updateRequest: UpdateReportRequest = {
+                                  reportTitle: draftTitle,
+                                  content: draftContent,
+                                  fileUrl: finalFileUrl || undefined,
+                                };
+                                await updateReport(editingReportId, updateRequest);
+
+                                // Sau đó gọi API reviewReportByClub với status APPROVED_CLUB để nộp lên trường
+                                const reviewRequest: ReviewReportByClubRequest = {
+                                  reportId: editingReportId,
+                                  status: "APPROVED_CLUB",
+                                };
+                                await reviewReportByClub(reviewRequest);
+                                toast.success("Báo cáo đã được nộp lên trường thành công");
+                              } else {
+                                // Nếu không, gọi API submitReport như bình thường
+                                const submitRequest: SubmitReportRequest = {
+                                  reportId: editingReportId,
+                                };
+                                await submitReport(submitRequest);
+                                toast.success("Báo cáo đã được nộp thành công");
+                              }
+                              
+                              setShowEditDialog(false);
+                              setEditingReportId(null);
+                              setIsResubmitMode(false);
+                              setDraftFile(null);
+
+                              // Refresh all tabs data to update status
+                              await refreshAllTabsData();
+                            } catch (err) {
+                              console.error("Error submitting report:", err);
+                              const errorMessage =
+                                err instanceof Error
+                                  ? err.message
+                                  : shouldSubmitToSchool
+                                  ? "Không thể nộp báo cáo lên trường"
+                                  : "Không thể nộp báo cáo";
+                              toast.error(errorMessage);
+                            } finally {
+                              setSubmittingReport(false);
                             }
-                          } catch (err) {
-                            console.error("Error submitting report:", err);
-                            const errorMessage =
-                              err instanceof Error
-                                ? err.message
-                                : "Không thể nộp báo cáo";
-                            toast.error(errorMessage);
-                          } finally {
-                            setSubmittingReport(false);
-                          }
-                        }}
-                        className="bg-green-600 hover:bg-green-700"
-                        disabled={savingDraft || submittingReport}
-                      >
-                        <CheckCircle className="h-4 w-4 mr-2" />
-                        {submittingReport ? "Đang nộp..." : "Nộp báo cáo"}
-                      </Button>
-                    )}
+                          }}
+                          className="bg-green-600 hover:bg-green-700"
+                          disabled={savingDraft || submittingReport}
+                        >
+                          <CheckCircle className="h-4 w-4 mr-2" />
+                          {submittingReport
+                            ? "Đang nộp..."
+                            : shouldSubmitToSchool
+                            ? "Nộp báo cáo lên trường"
+                            : "Nộp báo cáo"}
+                        </Button>
+                      );
+                    })()}
                   </>
                 )}
               </div>
