@@ -41,19 +41,21 @@ public class CommentServiceImpl implements ICommentService {
         if (user == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found");
         }
+        Comment parent = null;
+        Long rootParentId = null;
 
-        Comment c = Comment.builder()
-                .post(post)
-                .user(user)
-                .content(content.trim())
-                .isEdited(false)
-                .build();
 
         if (parentId != null) {
-            Comment parent = commentRepo.findActiveById(parentId);
+             parent = commentRepo.findActiveById(parentId);
             // parent phải tồn tại và cùng post
             if (parent == null || !parent.getPost().getId().equals(postId))
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid parent comment");
+
+            rootParentId = (parent.getRootParentCommentId() != null)
+                    ? parent.getRootParentCommentId()
+                    : parent.getId();
+
+
 
             // ✅ Chuẩn hoá về 2 cấp:
             // nếu parent là reply (có parentComment != null) thì gắn về cha top-level của nó
@@ -66,8 +68,16 @@ public class CommentServiceImpl implements ICommentService {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid parent comment");
             }
 
-            c.setParentComment(parent);
+
         }
+        Comment c = Comment.builder()
+                .post(post)
+                .user(user)
+                .content(content.trim())
+                .isEdited(false)
+                .parentComment(parent)          // 👈 set parent luôn ở đây
+                .rootParentCommentId(rootParentId) // 👈 NEW: set root cha cấp 1 cho reply
+                .build();
 
 
         Comment saved = commentRepo.save(c);

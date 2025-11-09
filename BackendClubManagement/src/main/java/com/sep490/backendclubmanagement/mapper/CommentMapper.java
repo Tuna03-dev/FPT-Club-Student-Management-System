@@ -16,6 +16,7 @@ public class CommentMapper {
                 .id(c.getId())
                 .postId(c.getPost().getId())
                 .parentId(c.getParentComment() != null ? c.getParentComment().getId() : null)
+                .rootParentId(c.getRootParentCommentId())
                 .userId(c.getUser().getId())
                 .userName(c.getUser().getFullName())
                 .userAvatar(c.getUser().getAvatarUrl())
