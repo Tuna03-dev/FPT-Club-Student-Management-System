@@ -38,7 +38,6 @@ import type {
   ReportType,
   CreateReportRequirementRequest,
   ReportListItemResponse,
-  ReportStatus,
 } from "@/types/dto/reportRequirement.dto";
 import {
   mapBackendToFrontendReportType,
@@ -70,11 +69,8 @@ interface ReportRequirementDisplay {
 export function StaffReportManagement() {
   const navigate = useNavigate();
   const [reports, setReports] = useState<ReportRequirementDisplay[]>([]);
-  const [reportsFullData, setReportsFullData] = useState<
-    Map<number, ReportRequirementResponse>
-  >(new Map());
-  const [selectedReport, setSelectedReport] =
-    useState<ReportRequirementResponse | null>(null);
+
+  const [selectedReport] = useState<ReportRequirementResponse | null>(null);
   const [isSubmitDialogOpen, setIsSubmitDialogOpen] = useState(false);
   const [isReportContentModalOpen, setIsReportContentModalOpen] =
     useState(false);
@@ -126,9 +122,12 @@ export function StaffReportManagement() {
     setIsLoading(true);
     try {
       // Only map if activeTab is not "reports"
-      const backendType = activeTab !== "reports" 
-        ? mapFrontendToBackendReportType(activeTab as "periodic" | "post-event" | "other")
-        : undefined;
+      const backendType =
+        activeTab !== "reports"
+          ? mapFrontendToBackendReportType(
+              activeTab as "periodic" | "post-event" | "other"
+            )
+          : undefined;
       const response = await getAllReportRequirements({
         page: currentPage,
         size: pageSize,
@@ -157,7 +156,6 @@ export function StaffReportManagement() {
       response.content.forEach((req) => {
         fullDataMap.set(req.id, req);
       });
-      setReportsFullData(fullDataMap);
 
       setReports(mappedReports);
       setTotalPages(response.totalPages);
@@ -302,11 +300,6 @@ export function StaffReportManagement() {
   };
 
   const handlePeriodicReportView = (report: ReportRequirementDisplay) => {
-    navigate(`/staff/report/${report.id}/clubs`);
-  };
-
-  const handleReportRequirementView = (report: ReportRequirementDisplay) => {
-    // Navigate to clubs list page for all report types (periodic, post-event, and other)
     navigate(`/staff/report/${report.id}/clubs`);
   };
 

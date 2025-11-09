@@ -1023,6 +1023,59 @@ public class ReportServiceImpl implements ReportServiceInterface {
     }
 
     /**
+     * Get report detail by report ID for club officers (CLUB_OFFICER or TEAM_OFFICER)
+     */
+    @Override
+    public ReportDetailResponse getClubReportDetail(Long reportId, Long clubId, Long userId) {
+        // Validate club exists
+        Club club = clubRepository.findById(clubId)
+                .orElseThrow(() -> new NotFoundException("Club not found with ID: " + clubId));
+
+        // Get report with relations
+        Report report = reportRepository.findByIdWithRelations(reportId)
+                .orElseThrow(() -> new NotFoundException("Report not found with ID: " + reportId));
+
+        // Verify report belongs to the club
+        if (report.getClubReportRequirement() == null || 
+            !report.getClubReportRequirement().getClub().getId().equals(clubId)) {
+            throw new ForbiddenException("Báo cáo không thuộc về câu lạc bộ này");
+        }
+
+        // Get current semester
+        Semester currentSemester = semesterRepository.findCurrentSemester()
+                .orElse(null);
+
+        // Check if user is CLUB_OFFICER or TEAM_OFFICER in current semester
+        boolean isClubOfficerOrTeamOfficer = false;
+        boolean isClubPresident = false;
+
+        if (currentSemester != null) {
+            isClubOfficerOrTeamOfficer = roleMemberShipRepository.isClubOfficerOrTeamOfficerInCurrentSemester(
+                    userId, clubId, currentSemester.getId());
+            isClubPresident = roleMemberShipRepository.isClubPresidentInCurrentSemester(
+                    userId, clubId, currentSemester.getId());
+        }
+
+        // Check permissions
+        if (!isClubOfficerOrTeamOfficer && !isClubPresident) {
+            throw new ForbiddenException(
+                    "Chỉ cán bộ câu lạc bộ (CLUB_OFFICER), cán bộ ban (TEAM_OFFICER) " +
+                    "hoặc chủ nhiệm câu lạc bộ (CLUB_PRESIDENT) trong kỳ hiện tại " +
+                    "và đang hoạt động mới có quyền xem chi tiết báo cáo."
+            );
+        }
+
+        // If user is team officer, only allow viewing their own reports
+        if (isClubOfficerOrTeamOfficer && !isClubPresident) {
+            if (report.getCreatedBy() == null || !report.getCreatedBy().getId().equals(userId)) {
+                throw new ForbiddenException("Bạn chỉ có thể xem báo cáo do chính bạn tạo");
+            }
+        }
+
+        return reportMapper.toDetail(report);
+    }
+
+    /**
      * Review (approve/reject) a report at club level (for club president only)
      * Approve: PENDING_CLUB -> PENDING_UNIVERSITY
      * Reject: PENDING_CLUB -> REJECTED_CLUB

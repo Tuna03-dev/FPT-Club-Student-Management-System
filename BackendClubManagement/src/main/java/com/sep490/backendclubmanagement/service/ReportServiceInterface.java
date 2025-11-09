@@ -176,5 +176,14 @@ public interface ReportServiceInterface {
      * @return Updated report detail response
      */
     ReportDetailResponse reviewReportByClub(ReportReviewRequest request, Long userId);
+
+    /**
+     * Get report detail by report ID for club officers (CLUB_OFFICER or TEAM_OFFICER)
+     * @param reportId Report ID
+     * @param clubId Club ID
+     * @param userId Current user ID
+     * @return Report detail response
+     */
+    ReportDetailResponse getClubReportDetail(Long reportId, Long clubId, Long userId);
 }
 

@@ -197,6 +197,19 @@ public class ReportController {
     }
 
     /**
+     * Get report detail by report ID for club officers (CLUB_OFFICER or TEAM_OFFICER)
+     */
+    @GetMapping("/club/{clubId}/reports/{reportId}")
+    public ApiResponse<ReportDetailResponse> getClubReportDetail(
+            @PathVariable Long clubId,
+            @PathVariable Long reportId
+    ) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        ReportDetailResponse data = reportService.getClubReportDetail(reportId, clubId, userId);
+        return ApiResponse.success(data);
+    }
+
+    /**
      * Get list of clubs that need to submit reports for a specific report requirement (for staff only)
      */
     @GetMapping("/staff/requirements/{requirementId}/clubs")

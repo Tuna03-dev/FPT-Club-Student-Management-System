@@ -365,3 +365,49 @@ export async function getReportDetail(
   return response.data;
 }
 
+/**
+ * Get all reports for a club (club president can see all, team officer can see their own)
+ */
+export async function getClubReports(
+  clubId: number
+): Promise<ReportListItemResponse[]> {
+  const response = await axiosClient.get<ReportListItemResponse[]>(
+    `/reports/club/${clubId}`
+  );
+  if (!response.data) {
+    throw new Error("Failed to get club reports");
+  }
+  return response.data;
+}
+
+/**
+ * Get my reports for a club (all reports created by current user)
+ */
+export async function getMyReports(
+  clubId: number
+): Promise<ReportListItemResponse[]> {
+  const response = await axiosClient.get<ReportListItemResponse[]>(
+    `/reports/club/${clubId}/my-reports`
+  );
+  if (!response.data) {
+    throw new Error("Failed to get my reports");
+  }
+  return response.data;
+}
+
+/**
+ * Get report detail by report ID for club officers
+ */
+export async function getClubReportDetail(
+  reportId: number,
+  clubId: number
+): Promise<ReportDetailResponse> {
+  const response = await axiosClient.get<ReportDetailResponse>(
+    `/reports/club/${clubId}/reports/${reportId}`
+  );
+  if (!response.data) {
+    throw new Error("Failed to get report detail");
+  }
+  return response.data;
+}
+

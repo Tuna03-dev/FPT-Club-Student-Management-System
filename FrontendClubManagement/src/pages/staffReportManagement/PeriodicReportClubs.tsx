@@ -28,11 +28,7 @@ import {
   getClubReportByRequirement,
   getAllReportRequirements,
 } from "@/services/reportService";
-import type {
-  ClubRequirementInfo,
-  ReportRequirementResponse,
-  ReportDetailResponse,
-} from "@/types/dto/reportRequirement.dto";
+import type { ReportRequirementResponse } from "@/types/dto/reportRequirement.dto";
 import { toast } from "sonner";
 
 type ReportStatus =
@@ -55,7 +51,9 @@ function isUniversityStatus(status: string | null | undefined): boolean {
 }
 
 // Helper function to map backend status to frontend status
-function mapBackendStatusToFrontend(backendStatus: string | null | undefined): ReportStatus {
+function mapBackendStatusToFrontend(
+  backendStatus: string | null | undefined
+): ReportStatus {
   if (backendStatus && isUniversityStatus(backendStatus)) {
     // If it's a university status, map it appropriately
     switch (backendStatus) {
@@ -129,15 +127,15 @@ export function PeriodicReportClubs() {
   );
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingReport, setIsLoadingReport] = useState(false);
-  
+
   // Function to refresh clubs data
   const refreshClubsData = async () => {
     if (!reportId) return;
-    
+
     try {
       const requirementId = parseInt(reportId);
       const clubs = await getClubsByReportRequirement(requirementId);
-      
+
       const clubsWithReportsData: ClubWithReport[] = clubs.map((club) => ({
         id: club.clubId.toString(),
         name: club.clubName,
@@ -151,7 +149,7 @@ export function PeriodicReportClubs() {
         clubRequirementId: club.id,
         clubId: club.clubId,
       }));
-      
+
       setClubsWithReports(clubsWithReportsData);
     } catch (error: any) {
       console.error("Error refreshing clubs data:", error);
@@ -267,7 +265,10 @@ export function PeriodicReportClubs() {
     setIsClubReportModalOpen(false);
   };
 
-  const getStatusLabel = (status: ReportStatus, backendStatus?: string | null, mustResubmit?: boolean) => {
+  const getStatusLabel = (
+    backendStatus?: string | null,
+    mustResubmit?: boolean
+  ) => {
     // If we have the backend status and it's a university status, use the proper label
     if (backendStatus && isUniversityStatus(backendStatus)) {
       switch (backendStatus) {
@@ -283,7 +284,7 @@ export function PeriodicReportClubs() {
           return "Đang yêu cầu nộp lại";
       }
     }
-    
+
     // For all other cases (not university statuses)
     // If mustResubmit is true, show "Đang yêu cầu nộp lại"
     // Otherwise, show "Chưa nộp"
@@ -293,7 +294,10 @@ export function PeriodicReportClubs() {
     return "Chưa nộp";
   };
 
-  const getStatusColor = (status: ReportStatus, backendStatus?: string | null, mustResubmit?: boolean) => {
+  const getStatusColor = (
+    backendStatus?: string | null,
+    mustResubmit?: boolean
+  ) => {
     // If we have the backend status and it's a university status, use specific colors
     if (backendStatus && isUniversityStatus(backendStatus)) {
       switch (backendStatus) {
@@ -309,7 +313,7 @@ export function PeriodicReportClubs() {
           return "bg-orange-100 text-orange-700"; // Đang yêu cầu nộp lại
       }
     }
-    
+
     // For all other cases (not university statuses)
     // If mustResubmit is true, use orange color for "Đang yêu cầu nộp lại"
     // Otherwise, use red color for "Chưa nộp"
@@ -521,11 +525,21 @@ export function PeriodicReportClubs() {
               <Table>
                 <TableHeader className="bg-muted/50">
                   <TableRow className="border-b-2 border-border hover:bg-muted/50">
-                    <TableHead className="w-[250px] font-semibold text-foreground">Tên câu lạc bộ</TableHead>
-                    <TableHead className="w-[150px] font-semibold text-foreground">Mã CLB</TableHead>
-                    <TableHead className="w-[200px] font-semibold text-foreground">Mô tả</TableHead>
-                    <TableHead className="w-[180px] font-semibold text-foreground">Trạng thái</TableHead>
-                    <TableHead className="w-[120px] text-right font-semibold text-foreground">Hành động</TableHead>
+                    <TableHead className="w-[250px] font-semibold text-foreground">
+                      Tên câu lạc bộ
+                    </TableHead>
+                    <TableHead className="w-[150px] font-semibold text-foreground">
+                      Mã CLB
+                    </TableHead>
+                    <TableHead className="w-[200px] font-semibold text-foreground">
+                      Mô tả
+                    </TableHead>
+                    <TableHead className="w-[180px] font-semibold text-foreground">
+                      Trạng thái
+                    </TableHead>
+                    <TableHead className="w-[120px] text-right font-semibold text-foreground">
+                      Hành động
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -554,13 +568,11 @@ export function PeriodicReportClubs() {
                       <TableCell>
                         <Badge
                           className={`${getStatusColor(
-                            club.reportStatus,
                             club.backendStatus,
                             club.mustResubmit
                           )} whitespace-nowrap`}
                         >
                           {getStatusLabel(
-                            club.reportStatus,
                             club.backendStatus,
                             club.mustResubmit
                           )}
@@ -596,7 +608,8 @@ export function PeriodicReportClubs() {
                                     submittedBy:
                                       reportDetail.createdBy?.fullName || "N/A",
                                     submittedByAvatar: "",
-                                    department: reportDetail.club?.clubName || "",
+                                    department:
+                                      reportDetail.club?.clubName || "",
                                     createdAt: reportDetail.submittedDate
                                       ? new Date(
                                           reportDetail.submittedDate
@@ -623,13 +636,15 @@ export function PeriodicReportClubs() {
                                         ).toLocaleDateString("vi-VN")
                                       : undefined,
                                     approvalNotes:
-                                      reportDetail.status !== "REJECTED_UNIVERSITY" &&
+                                      reportDetail.status !==
+                                        "REJECTED_UNIVERSITY" &&
                                       reportDetail.reviewerFeedback &&
                                       reportDetail.reviewedDate
                                         ? reportDetail.reviewerFeedback
                                         : undefined,
                                     rejectionReason:
-                                      reportDetail.status === "REJECTED_UNIVERSITY" &&
+                                      reportDetail.status ===
+                                        "REJECTED_UNIVERSITY" &&
                                       reportDetail.reviewerFeedback
                                         ? reportDetail.reviewerFeedback
                                         : undefined,
@@ -658,7 +673,9 @@ export function PeriodicReportClubs() {
                             disabled={isLoadingReport}
                           >
                             <Eye className="h-4 w-4" />
-                            <span className="hidden sm:inline">Xem báo cáo</span>
+                            <span className="hidden sm:inline">
+                              Xem báo cáo
+                            </span>
                           </Button>
                         )}
                       </TableCell>
