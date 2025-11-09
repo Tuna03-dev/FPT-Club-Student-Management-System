@@ -41,8 +41,8 @@ import TeamCreatePage from "@/pages/myclub/teams/TeamCreatePage";
 import ClubOfficerGuard from "@/components/guards/ClubOfficerGuard";
 import ForbiddenPage from "@/pages/ForbiddenPage";
 
-import { StaffReportManagement } from "@/pages/staffReportManagement/StaffReport";
-import { PeriodicReportClubs } from "@/pages/staffReportManagement/PeriodicReportClubs";
+import { StaffReportManagement } from "@/pages/myclub/staff/reportManagement/StaffReport";
+import { PeriodicReportClubs } from "@/pages/myclub/staff/reportManagement/PeriodicReportClubs";
 import { ClubReportManagement } from "@/pages/myclub/report/ReportManagement";
 export const router = createBrowserRouter([
   {
@@ -76,11 +76,15 @@ export const router = createBrowserRouter([
       },
       {
         path: "achievements",
-        element: <div className="container mx-auto px-4 py-8">Trang Thành tích</div>,
+        element: (
+          <div className="container mx-auto px-4 py-8">Trang Thành tích</div>
+        ),
       },
       {
         path: "contact",
-        element: <div className="container mx-auto px-4 py-8">Trang Liên hệ</div>,
+        element: (
+          <div className="container mx-auto px-4 py-8">Trang Liên hệ</div>
+        ),
       },
 
       { path: "myRecruitmentApplication", element: <StudentRecruitment /> },
@@ -121,22 +125,6 @@ export const router = createBrowserRouter([
     element: (
       <ProtectedRoute>
         <StaffNewsEditor />
-      </ProtectedRoute>
-    ),
-  },
-  {
-    path: "/staff/report",
-    element: (
-      <ProtectedRoute>
-        <StaffReportManagement />
-      </ProtectedRoute>
-    ),
-  },
-  {
-    path: "/staff/report/:reportId/clubs",
-    element: (
-      <ProtectedRoute>
-        <PeriodicReportClubs />
       </ProtectedRoute>
     ),
   },
@@ -201,7 +189,7 @@ export const router = createBrowserRouter([
 
   // 404
   {
-    path: "/myclub/staff",
+    path: "/staff",
     element: (
       <ProtectedRoute>
         <StaffLayout />
@@ -210,6 +198,14 @@ export const router = createBrowserRouter([
     children: [
       { path: "events", element: <StaffEventList /> },
       { path: "settings", element: <Settings /> },
+      {
+        path: "reports",
+        element: <StaffReportManagement />,
+      },
+      {
+        path: "report/:reportId/clubs",
+        element: <PeriodicReportClubs />,
+      },
     ],
   },
 
