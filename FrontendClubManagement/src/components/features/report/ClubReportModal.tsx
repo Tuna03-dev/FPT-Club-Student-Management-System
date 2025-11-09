@@ -20,6 +20,8 @@ import {
   ThumbsDown,
   FileText,
   Eye,
+  ClipboardList,
+  Download,
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { reviewReportByStaff, type ReviewReportByStaffRequest } from "@/services/reportService";
@@ -61,6 +63,18 @@ interface Report {
   rejectionReason?: string;
   clubId?: string;
   fileUrl?: string;
+  reportRequirement?: {
+    id: number;
+    title: string;
+    description?: string;
+    dueDate: string;
+    reportType?: string;
+    templateUrl?: string;
+    createdBy?: {
+      fullName: string;
+      email: string;
+    };
+  };
 }
 
 interface ClubReportModalProps {
@@ -199,6 +213,85 @@ export function ClubReportModal({
         </DialogHeader>
 
         <div className="space-y-6">
+          {/* Report Requirement Info */}
+          {report.reportRequirement && (
+            <div>
+              <h4 className="font-semibold mb-2 flex items-center gap-2 text-sm">
+                <ClipboardList className="h-3.5 w-3.5" />
+                Thông tin yêu cầu báo cáo
+              </h4>
+              <Card className="bg-blue-50/50 border-blue-200">
+                <CardContent className="p-3">
+                  <div className="space-y-2">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                      <div>
+                        <p className="text-muted-foreground mb-0.5">Tiêu đề</p>
+                        <p className="font-medium text-foreground truncate">
+                          {report.reportRequirement.title}
+                        </p>
+                      </div>
+                      {report.reportRequirement.reportType && (
+                        <div>
+                          <p className="text-muted-foreground mb-0.5">Loại báo cáo</p>
+                          <p className="font-medium text-foreground">
+                            {report.reportRequirement.reportType === "SEMESTER"
+                              ? "Báo cáo Định kỳ"
+                              : report.reportRequirement.reportType === "EVENT"
+                              ? "Báo cáo Sau sự kiện"
+                              : "Loại khác"}
+                          </p>
+                        </div>
+                      )}
+                      <div>
+                        <p className="text-muted-foreground mb-0.5 flex items-center gap-1">
+                          <Calendar className="h-3 w-3" />
+                          Hạn nộp
+                        </p>
+                        <p className="font-medium text-foreground">
+                          {new Date(report.reportRequirement.dueDate).toLocaleDateString("vi-VN")}
+                        </p>
+                      </div>
+                      {report.reportRequirement.createdBy && (
+                        <div>
+                          <p className="text-muted-foreground mb-0.5">Người tạo</p>
+                          <p className="font-medium text-foreground truncate">
+                            {report.reportRequirement.createdBy.fullName}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                    {report.reportRequirement.description && (
+                      <div className="pt-1 border-t">
+                        <p className="text-muted-foreground mb-0.5 text-xs">Mô tả</p>
+                        <p className="text-xs text-foreground line-clamp-2">
+                          {report.reportRequirement.description}
+                        </p>
+                      </div>
+                    )}
+                    {report.reportRequirement.templateUrl && (
+                      <div className="pt-1 border-t">
+                        <div className="flex items-center gap-1.5">
+                          <FileText className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                          <span className="text-xs text-foreground truncate flex-1">
+                            {report.reportRequirement.templateUrl.split("/").pop() || "Template file"}
+                          </span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => window.open(report.reportRequirement!.templateUrl, "_blank")}
+                            className="h-6 px-2 flex-shrink-0"
+                          >
+                            <Download className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
           {/* Status and Info */}
           <div>
             <div className="flex items-center gap-3 mb-4">

@@ -3,36 +3,57 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Plus,
-  Eye,
-  Search,
-} from "lucide-react";
+import { Plus, Eye, Search, AlertCircle, Calendar } from "lucide-react";
 import {
   ReportSubmissionModal,
   type SubmissionFormData,
 } from "@/components/features/report/ReportSubmissionModal";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { getAllReportRequirements, createReportRequirement, getAllClubsForReport } from "@/services/reportService";
+import {
+  getAllReportRequirements,
+  createReportRequirement,
+  getAllClubsForReport,
+  getAllReports,
+  getReportDetail,
+} from "@/services/reportService";
 import { getEventById } from "@/service/EventService";
 import type {
   ReportRequirementResponse,
   ReportType,
   CreateReportRequirementRequest,
+  ReportListItemResponse,
+  ReportStatus,
 } from "@/types/dto/reportRequirement.dto";
 import {
   mapBackendToFrontendReportType,
   mapFrontendToBackendReportType,
 } from "@/types/dto/reportRequirement.dto";
+import { ClubReportModal } from "@/components/features/report/ClubReportModal";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
-type FrontendReportType = "periodic" | "post-event" | "other";
+type FrontendReportType = "periodic" | "post-event" | "other" | "reports";
 
 interface ReportRequirementDisplay {
   id: number;
@@ -60,15 +81,28 @@ export function StaffReportManagement() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeTab, setActiveTab] = useState<FrontendReportType>("periodic");
+  const [activeTab, setActiveTab] = useState<FrontendReportType>("reports");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize] = useState(10);
   const [totalPages, setTotalPages] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
 
+  // State for reports tab
+  const [reportList, setReportList] = useState<ReportListItemResponse[]>([]);
+  const [reportListPage, setReportListPage] = useState(1);
+  const [reportListTotalPages, setReportListTotalPages] = useState(0);
+  const [reportListTotalElements, setReportListTotalElements] = useState(0);
+  const [reportListLoading, setReportListLoading] = useState(false);
+  const [reportSearchQuery, setReportSearchQuery] = useState("");
+  const [reportStatusFilter, setReportStatusFilter] = useState<string>("");
+  const [debouncedReportSearchQuery, setDebouncedReportSearchQuery] =
+    useState("");
+  const [selectedReportDetail, setSelectedReportDetail] = useState<any>(null);
+  const [isReportDetailModalOpen, setIsReportDetailModalOpen] = useState(false);
+
   // Debounce search query
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
-  
+
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearchQuery(searchQuery);
@@ -78,10 +112,23 @@ export function StaffReportManagement() {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
+  // Debounce report search query
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedReportSearchQuery(reportSearchQuery);
+      setReportListPage(1); // Reset to first page when search changes
+    }, 500); // 500ms debounce
+
+    return () => clearTimeout(timer);
+  }, [reportSearchQuery]);
+
   const fetchReportRequirements = useCallback(async () => {
     setIsLoading(true);
     try {
-      const backendType = mapFrontendToBackendReportType(activeTab);
+      // Only map if activeTab is not "reports"
+      const backendType = activeTab !== "reports" 
+        ? mapFrontendToBackendReportType(activeTab as "periodic" | "post-event" | "other")
+        : undefined;
       const response = await getAllReportRequirements({
         page: currentPage,
         size: pageSize,
@@ -126,20 +173,62 @@ export function StaffReportManagement() {
 
   // Fetch report requirements from API
   useEffect(() => {
-    fetchReportRequirements();
-  }, [fetchReportRequirements]);
+    if (activeTab !== "reports") {
+      fetchReportRequirements();
+    }
+  }, [fetchReportRequirements, activeTab]);
+
+  // Fetch reports
+  const fetchReports = useCallback(async () => {
+    setReportListLoading(true);
+    try {
+      const response = await getAllReports({
+        page: reportListPage,
+        size: pageSize,
+        sort: ["submittedDate,desc"],
+        status:
+          reportStatusFilter && reportStatusFilter !== "ALL"
+            ? reportStatusFilter
+            : undefined,
+        keyword: debouncedReportSearchQuery || undefined,
+      });
+
+      setReportList(response.content);
+      setReportListTotalPages(response.totalPages);
+      setReportListTotalElements(response.totalElements);
+    } catch (error: any) {
+      console.error("Error fetching reports:", error);
+      toast.error("Không thể tải danh sách báo cáo");
+      setReportList([]);
+    } finally {
+      setReportListLoading(false);
+    }
+  }, [
+    reportListPage,
+    pageSize,
+    reportStatusFilter,
+    debouncedReportSearchQuery,
+  ]);
+
+  // Fetch reports when tab changes or filters change
+  useEffect(() => {
+    if (activeTab === "reports") {
+      fetchReports();
+    }
+  }, [activeTab, fetchReports]);
 
   const handleSubmitReport = async (formData: SubmissionFormData) => {
     setIsSubmitting(true);
     try {
       // Get file from attachments if available
-      const file = formData.attachments && formData.attachments.length > 0 
-        ? formData.attachments[0].file 
-        : undefined;
+      const file =
+        formData.attachments && formData.attachments.length > 0
+          ? formData.attachments[0].file
+          : undefined;
 
       // Determine club IDs based on report type
       let clubIds: number[] = [];
-      
+
       if (formData.type === "periodic") {
         // For periodic reports, get all clubs
         const allClubs = await getAllClubsForReport();
@@ -166,7 +255,10 @@ export function StaffReportManagement() {
         }
       } else if (formData.type === "other") {
         // For other reports, use selected clubs
-        if (!formData.selectedClubIds || formData.selectedClubIds.length === 0) {
+        if (
+          !formData.selectedClubIds ||
+          formData.selectedClubIds.length === 0
+        ) {
           toast.error("Vui lòng chọn ít nhất một câu lạc bộ");
           return;
         }
@@ -195,9 +287,9 @@ export function StaffReportManagement() {
 
       // Create report requirement with file
       await createReportRequirement(request, file);
-      
+
       toast.success("Tạo yêu cầu báo cáo thành công!");
-      
+
       // Reload list after successful creation
       await fetchReportRequirements();
       setIsSubmitDialogOpen(false);
@@ -227,6 +319,134 @@ export function StaffReportManagement() {
     }
   };
 
+  const isDeadlinePassed = (deadline: string) => {
+    return new Date(deadline) < new Date();
+  };
+
+  const getReportTypeLabel = (type: FrontendReportType) => {
+    switch (type) {
+      case "periodic":
+        return "Báo cáo Định kỳ";
+      case "post-event":
+        return "Báo cáo Sau sự kiện";
+      case "other":
+        return "Loại báo cáo khác";
+      default:
+        return type;
+    }
+  };
+
+  // Helper functions for reports tab
+  const getReportStatusLabel = (status: string) => {
+    switch (status) {
+      case "PENDING_UNIVERSITY":
+        return "Chờ phê duyệt";
+      case "APPROVED_UNIVERSITY":
+        return "Đã chấp nhận";
+      case "REJECTED_UNIVERSITY":
+        return "Đã từ chối";
+      case "RESUBMITTED_UNIVERSITY":
+        return "Đã nộp lại";
+      default:
+        return status;
+    }
+  };
+
+  const getReportStatusColor = (status: string) => {
+    switch (status) {
+      case "PENDING_UNIVERSITY":
+        return "bg-blue-100 text-blue-700 border-blue-300";
+      case "APPROVED_UNIVERSITY":
+        return "bg-green-100 text-green-700 border-green-300";
+      case "REJECTED_UNIVERSITY":
+        return "bg-red-100 text-red-700 border-red-300";
+      case "RESUBMITTED_UNIVERSITY":
+        return "bg-yellow-100 text-yellow-700 border-yellow-300";
+      default:
+        return "bg-gray-100 text-gray-700 border-gray-300";
+    }
+  };
+
+  const handleViewReport = async (report: ReportListItemResponse) => {
+    try {
+      const reportDetail = await getReportDetail(report.id);
+
+      // Convert to format expected by ClubReportModal
+      const reportForModal = {
+        id: reportDetail.id.toString(),
+        title: reportDetail.reportTitle,
+        type:
+          mapBackendToFrontendReportType(
+            reportDetail.reportRequirement?.reportType
+          ) || "periodic",
+        status:
+          reportDetail.status === "PENDING_UNIVERSITY" ||
+          reportDetail.status === "RESUBMITTED_UNIVERSITY"
+            ? "submitted"
+            : reportDetail.status === "APPROVED_UNIVERSITY"
+            ? "approved"
+            : reportDetail.status === "REJECTED_UNIVERSITY"
+            ? "rejected"
+            : "submitted",
+        submittedBy: reportDetail.createdBy?.fullName || "N/A",
+        submittedByAvatar: "",
+        department: reportDetail.club?.clubName || "",
+        createdAt: reportDetail.submittedDate
+          ? new Date(reportDetail.submittedDate).toLocaleDateString("vi-VN")
+          : reportDetail.createdAt
+          ? new Date(reportDetail.createdAt).toLocaleDateString("vi-VN")
+          : "",
+        dueDate: reportDetail.reportRequirement?.dueDate
+          ? new Date(reportDetail.reportRequirement.dueDate).toLocaleDateString(
+              "vi-VN"
+            )
+          : "",
+        content: reportDetail.content || "",
+        fileUrl: reportDetail.fileUrl,
+        reviewer: reportDetail.reviewedDate ? "Staff" : undefined,
+        reviewDate: reportDetail.reviewedDate
+          ? new Date(reportDetail.reviewedDate).toLocaleDateString("vi-VN")
+          : undefined,
+        approvalNotes:
+          reportDetail.status !== "REJECTED_UNIVERSITY" &&
+          reportDetail.reviewerFeedback &&
+          reportDetail.reviewedDate
+            ? reportDetail.reviewerFeedback
+            : undefined,
+        rejectionReason:
+          reportDetail.status === "REJECTED_UNIVERSITY" &&
+          reportDetail.reviewerFeedback
+            ? reportDetail.reviewerFeedback
+            : undefined,
+        clubId: reportDetail.club?.id.toString(),
+        reportRequirement: reportDetail.reportRequirement
+          ? {
+              id: reportDetail.reportRequirement.id,
+              title: reportDetail.reportRequirement.title,
+              description: reportDetail.reportRequirement.description,
+              dueDate: reportDetail.reportRequirement.dueDate,
+              reportType: reportDetail.reportRequirement.reportType,
+              templateUrl: reportDetail.reportRequirement.templateUrl,
+              createdBy: reportDetail.reportRequirement.createdBy,
+            }
+          : undefined,
+      };
+
+      const clubForModal = {
+        id: reportDetail.club?.id.toString() || "",
+        name: reportDetail.club?.clubName || "",
+        code: reportDetail.club?.clubCode || "",
+        avatar: "",
+        description: "",
+      };
+
+      setSelectedReportDetail({ report: reportForModal, club: clubForModal });
+      setIsReportDetailModalOpen(true);
+    } catch (error: any) {
+      console.error("Error fetching report detail:", error);
+      toast.error(error.message || "Không thể tải chi tiết báo cáo");
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background p-4 md:p-8">
@@ -236,21 +456,26 @@ export function StaffReportManagement() {
           <div>
             <h1 className="text-3xl font-bold">Quản lý yêu cầu báo cáo</h1>
             <p className="text-muted-foreground mt-1">
-              Hiển thị 1 yêu cầu trên 1
+              {activeTab === "reports"
+                ? "Danh sách báo cáo đã nộp cho nhà trường"
+                : "Hiển thị 1 yêu cầu trên 1"}
             </p>
           </div>
-          <Button
-            onClick={() => setIsSubmitDialogOpen(true)}
-            className="bg-primary text-primary-foreground"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Tạo yêu cầu mới
-          </Button>
+          {activeTab !== "reports" && (
+            <Button
+              onClick={() => setIsSubmitDialogOpen(true)}
+              className="bg-primary text-primary-foreground"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Tạo yêu cầu mới
+            </Button>
+          )}
         </div>
 
         {/* Tab Navigation */}
         <div className="flex gap-2 border-b border-border overflow-x-auto">
           {[
+            { id: "reports", label: "Danh sách báo cáo" },
             { id: "periodic", label: "Báo cáo Định kỳ" },
             { id: "post-event", label: "Báo cáo Sau sự kiện" },
             { id: "other", label: "Loại báo cáo khác" },
@@ -259,7 +484,8 @@ export function StaffReportManagement() {
               key={tab.id}
               onClick={() => {
                 setActiveTab(tab.id as FrontendReportType);
-                setCurrentPage(1); // Reset to first page when changing tab
+                setCurrentPage(1);
+                setReportListPage(1);
               }}
               className={`px-4 py-2 font-medium text-sm whitespace-nowrap transition-colors ${
                 activeTab === tab.id
@@ -273,144 +499,391 @@ export function StaffReportManagement() {
         </div>
 
         {/* Search and Filters */}
-        <div className="flex gap-2 items-center">
-          <div className="flex items-center bg-secondary rounded-lg px-4 py-2 flex-1">
-            <Search className="h-4 w-4 text-muted-foreground mr-3" />
-            <Input
-              placeholder="Tìm kiếm theo tiêu đề, người nộp, bộ phận..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="border-0 bg-transparent focus-visible:ring-0 flex-1"
-            />
+        {activeTab === "reports" ? (
+          <div className="flex gap-2 items-center">
+            <div className="flex items-center bg-secondary rounded-lg px-4 py-2 flex-1">
+              <Search className="h-4 w-4 text-muted-foreground mr-3" />
+              <Input
+                placeholder="Tìm kiếm theo tiêu đề, câu lạc bộ, người nộp..."
+                value={reportSearchQuery}
+                onChange={(e) => setReportSearchQuery(e.target.value)}
+                className="border-0 bg-transparent focus-visible:ring-0 flex-1"
+              />
+            </div>
+            <Select
+              value={reportStatusFilter || undefined}
+              onValueChange={(value) => {
+                setReportStatusFilter(value === "ALL" ? "" : value);
+                setReportListPage(1);
+              }}
+            >
+              <SelectTrigger className="w-[200px]">
+                <SelectValue placeholder="Tất cả trạng thái" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">Tất cả trạng thái</SelectItem>
+                <SelectItem value="PENDING_UNIVERSITY">
+                  Chờ phê duyệt
+                </SelectItem>
+                <SelectItem value="APPROVED_UNIVERSITY">
+                  Đã chấp nhận
+                </SelectItem>
+                <SelectItem value="REJECTED_UNIVERSITY">Đã từ chối</SelectItem>
+                <SelectItem value="RESUBMITTED_UNIVERSITY">
+                  Đã nộp lại
+                </SelectItem>
+              </SelectContent>
+            </Select>
           </div>
-
-        </div>
-
-        {/* Reports List */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">
-              Hiển thị {reports.length} / {totalElements} yêu cầu nộp báo cáo
-            </p>
+        ) : (
+          <div className="flex gap-2 items-center">
+            <div className="flex items-center bg-secondary rounded-lg px-4 py-2 flex-1">
+              <Search className="h-4 w-4 text-muted-foreground mr-3" />
+              <Input
+                placeholder="Tìm kiếm theo tiêu đề, người nộp, bộ phận..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="border-0 bg-transparent focus-visible:ring-0 flex-1"
+              />
+            </div>
           </div>
+        )}
 
-          {isLoading ? (
-            <Card>
-              <CardContent className="p-8 text-center text-muted-foreground">
-                Đang tải...
-              </CardContent>
-            </Card>
-          ) : reports.length > 0 ? (
-            <>
-              <div className="space-y-3">
-                {reports.map((report) => {
-                  return (
-                    <Card
-                      key={report.id}
-                      className="hover:shadow-md transition-shadow"
-                    >
-                      <CardContent className="py-2.5 px-3 md:py-3 md:px-4">
-                        <div className="flex flex-col md:flex-row md:items-center gap-2.5">
-                          {/* Avatar */}
-                          <div className="w-9 h-9 rounded-full bg-secondary flex-shrink-0 flex items-center justify-center">
-                            <span className="text-xs font-semibold">
-                              {report.createdBy?.charAt(0) || "?"}
+        {/* Content based on active tab */}
+        {activeTab === "reports" ? (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">
+                Hiển thị {reportList.length} / {reportListTotalElements} báo cáo
+              </p>
+            </div>
+
+            {reportListLoading ? (
+              <Card>
+                <CardContent className="p-8 text-center text-muted-foreground">
+                  Đang tải...
+                </CardContent>
+              </Card>
+            ) : reportList.length > 0 ? (
+              <>
+                <Card>
+                  <Table>
+                    <TableHeader className="bg-muted/50">
+                      <TableRow className="border-b-2 border-border hover:bg-muted/50">
+                        <TableHead className="w-[250px] font-semibold text-foreground">
+                          Tiêu đề báo cáo
+                        </TableHead>
+                        <TableHead className="w-[150px] font-semibold text-foreground">
+                          Câu lạc bộ
+                        </TableHead>
+                        <TableHead className="w-[150px] font-semibold text-foreground">
+                          Người nộp
+                        </TableHead>
+                        <TableHead className="w-[120px] font-semibold text-foreground">
+                          Ngày nộp
+                        </TableHead>
+                        <TableHead className="w-[120px] font-semibold text-foreground">
+                          Ngày duyệt
+                        </TableHead>
+                        <TableHead className="w-[150px] font-semibold text-foreground">
+                          Trạng thái
+                        </TableHead>
+                        <TableHead className="w-[100px] text-right font-semibold text-foreground">
+                          Hành động
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {reportList.map((report) => (
+                        <TableRow key={report.id}>
+                          <TableCell className="font-medium">
+                            <span className="truncate">
+                              {report.reportTitle}
                             </span>
-                          </div>
-
-                          {/* Content */}
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-start gap-2 mb-0.5">
-                              <h3 className="font-semibold text-base text-foreground truncate">
-                                {report.title}
-                              </h3>
-                            </div>
-
-                            <div className="flex flex-wrap gap-2 text-sm text-muted-foreground">
-                              <span className="flex items-center gap-1">
-                                <span className="font-medium">
-                                  {report.createdBy || "N/A"}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <div className="w-8 h-8 rounded-full bg-secondary flex-shrink-0 flex items-center justify-center">
+                                <span className="text-xs font-semibold">
+                                  {report.club?.clubCode?.charAt(0) || "?"}
                                 </span>
+                              </div>
+                              <span className="text-sm">
+                                {report.club?.clubName || "N/A"}
                               </span>
-                              <span>Tạo: {formatDate(report.createdAt)}</span>
-                              <span>Hạn: {formatDate(report.dueDate)}</span>
-                              {report.clubCount !== undefined && (
-                                <span>
-                                  {report.clubCount} câu lạc bộ
-                                </span>
-                              )}
                             </div>
-
-                            {/* Actions - Mobile */}
-                            <div className="flex flex-row items-center gap-2 mt-2 md:hidden">
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() =>
-                                  handlePeriodicReportView(report)
-                                }
-                                className="gap-2"
-                              >
-                                <Eye className="h-4 w-4" />
-                                <span>Xem</span>
-                              </Button>
-                            </div>
-                          </div>
-
-                          {/* Actions - Desktop */}
-                          <div className="hidden md:flex flex-row items-center gap-2 ml-auto">
+                          </TableCell>
+                          <TableCell>
+                            <span className="text-sm text-muted-foreground">
+                              {report.createdBy?.fullName || "N/A"}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <span className="text-sm text-muted-foreground">
+                              {report.submittedDate
+                                ? formatDate(report.submittedDate)
+                                : "—"}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <span className="text-sm text-muted-foreground">
+                              {report.reviewedDate
+                                ? formatDate(report.reviewedDate)
+                                : "—"}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              className={getReportStatusColor(report.status)}
+                            >
+                              {getReportStatusLabel(report.status)}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
                             <Button
                               size="sm"
                               variant="ghost"
-                              onClick={() => handlePeriodicReportView(report)}
+                              onClick={() => handleViewReport(report)}
                               className="gap-2"
                             >
                               <Eye className="h-4 w-4" />
-                              <span>Xem</span>
+                              <span className="hidden sm:inline">Xem</span>
                             </Button>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  );
-                })}
-              </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </Card>
 
-              {/* Pagination */}
-              {totalPages > 1 && (
-                <div className="flex items-center justify-center gap-2 pt-4">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-                    disabled={currentPage === 1 || isLoading}
-                  >
-                    Trước
-                  </Button>
-                  <span className="text-sm text-muted-foreground">
-                    Trang {currentPage} / {totalPages}
-                  </span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() =>
-                      setCurrentPage((prev) => Math.min(totalPages, prev + 1))
-                    }
-                    disabled={currentPage === totalPages || isLoading}
-                  >
-                    Sau
-                  </Button>
-                </div>
-              )}
-            </>
-          ) : (
-            <Card>
-              <CardContent className="p-8 text-center text-muted-foreground">
-                Không tìm thấy yêu cầu nộp báo cáo nào
-              </CardContent>
-            </Card>
-          )}
-        </div>
+                {/* Pagination */}
+                {reportListTotalPages > 1 && (
+                  <div className="flex items-center justify-center gap-2 pt-4">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        setReportListPage((prev) => Math.max(1, prev - 1))
+                      }
+                      disabled={reportListPage === 1 || reportListLoading}
+                    >
+                      Trước
+                    </Button>
+                    <span className="text-sm text-muted-foreground">
+                      Trang {reportListPage} / {reportListTotalPages}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        setReportListPage((prev) =>
+                          Math.min(reportListTotalPages, prev + 1)
+                        )
+                      }
+                      disabled={
+                        reportListPage === reportListTotalPages ||
+                        reportListLoading
+                      }
+                    >
+                      Sau
+                    </Button>
+                  </div>
+                )}
+              </>
+            ) : (
+              <Card>
+                <CardContent className="p-8 text-center text-muted-foreground">
+                  Không tìm thấy báo cáo nào
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">
+                Hiển thị {reports.length} / {totalElements} yêu cầu nộp báo cáo
+              </p>
+            </div>
+
+            {isLoading ? (
+              <Card>
+                <CardContent className="p-8 text-center text-muted-foreground">
+                  Đang tải...
+                </CardContent>
+              </Card>
+            ) : reports.length > 0 ? (
+              <>
+                <Card>
+                  <Table>
+                    <TableHeader className="bg-muted/50">
+                      <TableRow className="border-b-2 border-border hover:bg-muted/50">
+                        <TableHead className="w-[300px] font-semibold text-foreground">
+                          Tiêu đề
+                        </TableHead>
+                        <TableHead className="w-[150px] font-semibold text-foreground">
+                          Loại báo cáo
+                        </TableHead>
+                        <TableHead className="w-[150px] font-semibold text-foreground">
+                          Người tạo
+                        </TableHead>
+                        <TableHead className="w-[120px] font-semibold text-foreground">
+                          Ngày tạo
+                        </TableHead>
+                        <TableHead className="w-[120px] font-semibold text-foreground">
+                          Hạn nộp
+                        </TableHead>
+                        <TableHead className="w-[100px] font-semibold text-foreground">
+                          Số CLB
+                        </TableHead>
+                        <TableHead className="w-[120px] font-semibold text-foreground">
+                          Trạng thái
+                        </TableHead>
+                        <TableHead className="w-[100px] text-right font-semibold text-foreground">
+                          Hành động
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {reports.map((report) => {
+                        const isDeadlineExp = isDeadlinePassed(report.dueDate);
+
+                        return (
+                          <TableRow
+                            key={report.id}
+                            className={
+                              isDeadlineExp
+                                ? "bg-red-50/30 hover:bg-red-50/50"
+                                : ""
+                            }
+                          >
+                            <TableCell className="font-medium">
+                              <div className="flex items-center gap-2">
+                                <span className="truncate">{report.title}</span>
+                                {isDeadlineExp && (
+                                  <Badge className="bg-red-100 text-red-700 border-red-300 flex-shrink-0">
+                                    <AlertCircle className="h-3 w-3 mr-1" />
+                                    Quá hạn
+                                  </Badge>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <span className="text-sm text-muted-foreground">
+                                {getReportTypeLabel(report.type)}
+                              </span>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <div className="w-8 h-8 rounded-full bg-secondary flex-shrink-0 flex items-center justify-center">
+                                  <span className="text-xs font-semibold">
+                                    {report.createdBy?.charAt(0) || "?"}
+                                  </span>
+                                </div>
+                                <span className="text-sm">
+                                  {report.createdBy || "N/A"}
+                                </span>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <span className="text-sm text-muted-foreground">
+                                {formatDate(report.createdAt)}
+                              </span>
+                            </TableCell>
+                            <TableCell>
+                              <div
+                                className={`flex items-center gap-1 ${
+                                  isDeadlineExp
+                                    ? "text-red-600 font-semibold"
+                                    : "text-muted-foreground"
+                                }`}
+                              >
+                                <Calendar
+                                  className={`h-3 w-3 ${
+                                    isDeadlineExp ? "text-red-600" : ""
+                                  }`}
+                                />
+                                <span className="text-sm">
+                                  {formatDate(report.dueDate)}
+                                </span>
+                                {isDeadlineExp && (
+                                  <AlertCircle className="h-3 w-3 text-red-600" />
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <span className="text-sm text-muted-foreground">
+                                {report.clubCount || 0}
+                              </span>
+                            </TableCell>
+                            <TableCell>
+                              {isDeadlineExp ? (
+                                <Badge className="bg-red-100 text-red-700 border-red-300">
+                                  <AlertCircle className="h-3 w-3 mr-1" />
+                                  Quá hạn
+                                </Badge>
+                              ) : (
+                                <Badge className="bg-green-100 text-green-700 border-green-300">
+                                  Đang hoạt động
+                                </Badge>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handlePeriodicReportView(report)}
+                                className="gap-2"
+                              >
+                                <Eye className="h-4 w-4" />
+                                <span className="hidden sm:inline">Xem</span>
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </Card>
+
+                {/* Pagination */}
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-center gap-2 pt-4">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        setCurrentPage((prev) => Math.max(1, prev - 1))
+                      }
+                      disabled={currentPage === 1 || isLoading}
+                    >
+                      Trước
+                    </Button>
+                    <span className="text-sm text-muted-foreground">
+                      Trang {currentPage} / {totalPages}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        setCurrentPage((prev) => Math.min(totalPages, prev + 1))
+                      }
+                      disabled={currentPage === totalPages || isLoading}
+                    >
+                      Sau
+                    </Button>
+                  </div>
+                )}
+              </>
+            ) : (
+              <Card>
+                <CardContent className="p-8 text-center text-muted-foreground">
+                  Không tìm thấy yêu cầu nộp báo cáo nào
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        )}
 
         {/* Submission Modal */}
         <ReportSubmissionModal
@@ -419,6 +892,18 @@ export function StaffReportManagement() {
           onSubmit={handleSubmitReport}
           isLoading={isSubmitting}
         />
+
+        {/* Report Detail Modal */}
+        {selectedReportDetail && (
+          <ClubReportModal
+            open={isReportDetailModalOpen}
+            onOpenChange={(open) => {
+              setIsReportDetailModalOpen(open);
+            }}
+            club={selectedReportDetail.club}
+            report={selectedReportDetail.report}
+          />
+        )}
 
         {/* Report Requirement Detail Modal */}
         {selectedReport && (
@@ -480,7 +965,8 @@ export function StaffReportManagement() {
                   selectedReport.clubRequirements.length > 0 && (
                     <div className="space-y-2">
                       <p className="text-sm font-medium">
-                        Danh sách câu lạc bộ ({selectedReport.clubRequirements.length})
+                        Danh sách câu lạc bộ (
+                        {selectedReport.clubRequirements.length})
                       </p>
                       <div className="border rounded-lg max-h-[300px] overflow-y-auto">
                         {selectedReport.clubRequirements.map((clubReq) => (
@@ -536,7 +1022,6 @@ export function StaffReportManagement() {
             </DialogContent>
           </Dialog>
         )}
-
       </div>
     </div>
   );

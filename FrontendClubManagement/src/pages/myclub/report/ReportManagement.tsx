@@ -964,16 +964,13 @@ export function ClubReportManagement() {
                             </ul>
                           </div>
 
-                          {/* Hiển thị thông báo dựa trên trạng thái yêu cầu (requirement status) */}
-                          {/* Status là null hoặc UNSUBMITTED khi chưa có report */}
-                          {(request.status === "UNSUBMITTED" ||
-                            !request.status) &&
-                            isDeadlineExp && (
-                              <div className="p-3 bg-red-50 border border-red-200 rounded text-sm text-red-800">
-                                <AlertCircle className="h-4 w-4 inline mr-2" />
-                                Đã quá hạn nộp báo cáo
-                              </div>
-                            )}
+                          {/* Hiển thị thông báo quá hạn cho tất cả các yêu cầu đã quá hạn */}
+                          {isDeadlineExp && (
+                            <div className="p-3 bg-red-50 border border-red-200 rounded text-sm text-red-800">
+                              <AlertCircle className="h-4 w-4 inline mr-2" />
+                              Đã quá hạn nộp báo cáo
+                            </div>
+                          )}
 
                           {/* Báo cáo đang ở trạng thái nháp */}
                           {request.status === "DRAFT" && (
@@ -1061,7 +1058,7 @@ export function ClubReportManagement() {
                             {/* Nếu là club_president và status là DRAFT, không hiển thị nút */}
                             {isClubPresident &&
                             request.status ===
-                              "DRAFT" ? null : request.report || // Không hiển thị nút cho club_president khi status là DRAFT
+                              "DRAFT" ? null : request.report || // Nếu có report, hiển thị nút xem (luôn hiển thị, kể cả khi quá hạn)
                               (request.status &&
                                 request.status !== "UNSUBMITTED" &&
                                 request.status !== null) ? (
@@ -1122,23 +1119,26 @@ export function ClubReportManagement() {
                                 })()}
                               </Button>
                             ) : (
-                              <Button
-                                size="sm"
-                                onClick={() =>
-                                  handleSubmitReport(request.request_id)
-                                }
-                                className="bg-blue-600 hover:bg-blue-700"
-                                disabled={
-                                  request.status === "APPROVED_UNIVERSITY" ||
+                              // Chỉ ẩn nút "Tạo báo cáo" nếu đã quá hạn
+                              !isDeadlineExp && (
+                                <Button
+                                  size="sm"
+                                  onClick={() =>
+                                    handleSubmitReport(request.request_id)
+                                  }
+                                  className="bg-blue-600 hover:bg-blue-700"
+                                  disabled={
+                                    request.status === "APPROVED_UNIVERSITY" ||
+                                    request.status === "APPROVED_CLUB"
+                                  }
+                                >
+                                  <Plus className="h-4 w-4 mr-1" />
+                                  {request.status === "APPROVED_UNIVERSITY" ||
                                   request.status === "APPROVED_CLUB"
-                                }
-                              >
-                                <Plus className="h-4 w-4 mr-1" />
-                                {request.status === "APPROVED_UNIVERSITY" ||
-                                request.status === "APPROVED_CLUB"
-                                  ? "Đã duyệt"
-                                  : "Tạo báo cáo"}
-                              </Button>
+                                    ? "Đã duyệt"
+                                    : "Tạo báo cáo"}
+                                </Button>
+                              )
                             )}
                           </div>
                         </div>
@@ -1701,6 +1701,17 @@ export function ClubReportManagement() {
 
               {/* Action buttons for DRAFT status */}
               {(() => {
+                // Kiểm tra nếu đã quá hạn và báo cáo không được đánh dấu là đã nộp lại
+                const reportRequirement = selectedReportDetail.reportRequirement;
+                const deadline = reportRequirement?.dueDate;
+                const isDeadlinePassed = deadline
+                  ? new Date(deadline) < new Date()
+                  : false;
+                const shouldHideButtons =
+                  isDeadlinePassed &&
+                  selectedReportDetail &&
+                  selectedReportDetail.mustResubmit !== true;
+
                 // Kiểm tra status - normalize và trim để tránh lỗi
                 const rawStatus = selectedReportDetail.status || "";
                 const reportStatus = rawStatus.toUpperCase().trim();
@@ -1718,6 +1729,11 @@ export function ClubReportManagement() {
                 const currentUser = authService.getCurrentUser();
                 const isCreator =
                   selectedReportDetail.createdBy?.id === currentUser?.id;
+
+                // Ẩn các nút nếu đã quá hạn và báo cáo không được đánh dấu là đã nộp lại
+                if (shouldHideButtons) {
+                  return null;
+                }
 
                 // Tính toán điều kiện hiển thị cho club_president
                 const shouldShowForPresident =
@@ -1879,6 +1895,17 @@ export function ClubReportManagement() {
 
               {/* Action buttons for PENDING_CLUB status when user is club_president */}
               {(() => {
+                // Kiểm tra nếu đã quá hạn và báo cáo không được đánh dấu là đã nộp lại
+                const reportRequirement = selectedReportDetail.reportRequirement;
+                const deadline = reportRequirement?.dueDate;
+                const isDeadlinePassed = deadline
+                  ? new Date(deadline) < new Date()
+                  : false;
+                const shouldHideButtons =
+                  isDeadlinePassed &&
+                  selectedReportDetail &&
+                  selectedReportDetail.mustResubmit !== true;
+
                 const rawStatus = selectedReportDetail.status || "";
                 const reportStatus = rawStatus.toUpperCase().trim();
                 const isPendingClub =
@@ -1895,6 +1922,11 @@ export function ClubReportManagement() {
                 const currentUser = authService.getCurrentUser();
                 const isCreator =
                   selectedReportDetail.createdBy?.id === currentUser?.id;
+
+                // Ẩn các nút nếu đã quá hạn và báo cáo không được đánh dấu là đã nộp lại
+                if (shouldHideButtons) {
+                  return null;
+                }
 
                 const shouldShowForPresident =
                   !permissionsLoading &&
@@ -2123,6 +2155,17 @@ export function ClubReportManagement() {
 
               {/* Action buttons for REJECTED_CLUB status when user is team officer */}
               {(() => {
+                // Kiểm tra nếu đã quá hạn và báo cáo không được đánh dấu là đã nộp lại
+                const reportRequirement = selectedReportDetail.reportRequirement;
+                const deadline = reportRequirement?.dueDate;
+                const isDeadlinePassed = deadline
+                  ? new Date(deadline) < new Date()
+                  : false;
+                const shouldHideButtons =
+                  isDeadlinePassed &&
+                  selectedReportDetail &&
+                  selectedReportDetail.mustResubmit !== true;
+
                 const rawStatus = selectedReportDetail.status || "";
                 const reportStatus = rawStatus.toUpperCase().trim();
                 const isRejectedClub = reportStatus === "REJECTED_CLUB";
@@ -2137,6 +2180,11 @@ export function ClubReportManagement() {
                 const currentUser = authService.getCurrentUser();
                 const isCreator =
                   selectedReportDetail.createdBy?.id === currentUser?.id;
+
+                // Ẩn các nút nếu đã quá hạn và báo cáo không được đánh dấu là đã nộp lại
+                if (shouldHideButtons) {
+                  return null;
+                }
 
                 // Tính toán điều kiện hiển thị cho Team_officer (chỉ khi là creator)
                 const shouldShowForTeamOfficer =
@@ -2186,6 +2234,17 @@ export function ClubReportManagement() {
 
               {/* Action buttons for REJECTED_UNIVERSITY status when user is creator */}
               {(() => {
+                // Kiểm tra nếu đã quá hạn và báo cáo không được đánh dấu là đã nộp lại
+                const reportRequirement = selectedReportDetail.reportRequirement;
+                const deadline = reportRequirement?.dueDate;
+                const isDeadlinePassed = deadline
+                  ? new Date(deadline) < new Date()
+                  : false;
+                const shouldHideButtons =
+                  isDeadlinePassed &&
+                  selectedReportDetail &&
+                  selectedReportDetail.mustResubmit !== true;
+
                 const rawStatus = selectedReportDetail.status || "";
                 const reportStatus = rawStatus.toUpperCase().trim();
                 const isRejectedUniversity = reportStatus === "REJECTED_UNIVERSITY";
@@ -2200,6 +2259,11 @@ export function ClubReportManagement() {
                 const currentUser = authService.getCurrentUser();
                 const isCreator =
                   selectedReportDetail.createdBy?.id === currentUser?.id;
+
+                // Ẩn các nút nếu đã quá hạn và báo cáo không được đánh dấu là đã nộp lại
+                if (shouldHideButtons) {
+                  return null;
+                }
 
                 // Nếu là creator và là club officer
                 const shouldShowForClubOfficer =

@@ -3,6 +3,15 @@ import { useParams, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import {
   Eye,
   ArrowLeft,
   Search,
@@ -85,6 +94,7 @@ interface Report {
   approvalNotes?: string;
   rejectionReason?: string;
   clubId?: string;
+  fileUrl?: string;
 }
 
 interface Club {
@@ -379,113 +389,112 @@ export function PeriodicReportClubs() {
 
         {/* Report Requirement Info Card */}
         <Card>
-          <CardContent className="p-6">
-            <div className="space-y-4">
-              {/* Info Grid - Moved to top */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <CardContent className="p-4">
+            <div className="space-y-3">
+              {/* Info Grid - Compact layout */}
+              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
                 {/* Created By */}
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-                    <User className="h-3.5 w-3.5" />
+                <div>
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-0.5">
+                    <User className="h-3 w-3" />
                     <span>Người tạo</span>
                   </div>
-                  <p className="text-sm font-semibold text-foreground">
+                  <p className="text-sm font-medium text-foreground">
                     {periodicReport.createdBy?.fullName || "N/A"}
                   </p>
                 </div>
 
                 {/* Created Date */}
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-                    <Calendar className="h-3.5 w-3.5" />
+                <div>
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-0.5">
+                    <Calendar className="h-3 w-3" />
                     <span>Ngày tạo</span>
                   </div>
-                  <p className="text-sm font-semibold text-foreground">
+                  <p className="text-sm font-medium text-foreground">
                     {formatDate(periodicReport.createdAt)}
                   </p>
                 </div>
 
                 {/* Due Date */}
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-                    <Calendar className="h-3.5 w-3.5" />
+                <div>
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-0.5">
+                    <Calendar className="h-3 w-3" />
                     <span>Hạn chót</span>
                   </div>
-                  <p className="text-sm font-semibold text-foreground">
+                  <p className="text-sm font-medium text-foreground">
                     {formatDate(periodicReport.dueDate)}
                   </p>
                 </div>
 
                 {/* Report Type */}
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-                    <FileText className="h-3.5 w-3.5" />
+                <div>
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-0.5">
+                    <FileText className="h-3 w-3" />
                     <span>Loại báo cáo</span>
                   </div>
-                  <p className="text-sm font-semibold text-foreground">
+                  <p className="text-sm font-medium text-foreground">
                     {getReportTypeLabel(periodicReport.reportType)}
+                  </p>
+                </div>
+
+                {/* Club Count - Integrated into grid */}
+                <div className="col-span-2 md:col-span-2 lg:col-span-2">
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-0.5">
+                    <Users className="h-3 w-3" />
+                    <span>Số CLB cần nộp</span>
+                  </div>
+                  <p className="text-sm font-medium text-foreground">
+                    {clubsWithReports.length} câu lạc bộ
                   </p>
                 </div>
               </div>
 
-              {/* File Attachment - If available */}
-              {periodicReport.templateUrl && (
-                <div className="space-y-2 pt-2 border-t">
-                  <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                    <Download className="h-4 w-4" />
-                    <span>File đính kèm</span>
-                  </div>
-                  <div className="flex items-center gap-3 p-3 bg-secondary/50 rounded-lg">
-                    <div className="w-10 h-10 rounded bg-secondary flex items-center justify-center">
-                      <FileText className="h-5 w-5 text-muted-foreground" />
+              {/* File Attachment and Description - Compact inline layout */}
+              {(periodicReport.templateUrl || periodicReport.description) && (
+                <div className="flex flex-col sm:flex-row gap-3 pt-2 border-t">
+                  {/* File Attachment - If available */}
+                  {periodicReport.templateUrl && (
+                    <div className="flex-1">
+                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1.5">
+                        <Download className="h-3 w-3" />
+                        <span>File đính kèm</span>
+                      </div>
+                      <div className="flex items-center gap-2 p-2 bg-secondary/50 rounded-md">
+                        <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium text-foreground truncate">
+                            {periodicReport.templateUrl.split("/").pop() ||
+                              "Template file"}
+                          </p>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() =>
+                            window.open(periodicReport.templateUrl, "_blank")
+                          }
+                          className="flex-shrink-0 h-7 px-2"
+                        >
+                          <Download className="h-3 w-3" />
+                        </Button>
+                      </div>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-foreground truncate">
-                        {periodicReport.templateUrl.split("/").pop() ||
-                          "Template file"}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        File template
+                  )}
+
+                  {/* Description - Compact */}
+                  {periodicReport.description && (
+                    <div className="flex-1">
+                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1.5">
+                        <FileText className="h-3 w-3" />
+                        <span>Mô tả</span>
+                      </div>
+                      <p className="text-xs text-foreground bg-secondary/50 p-2 rounded-md line-clamp-2">
+                        {periodicReport.description}
                       </p>
                     </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() =>
-                        window.open(periodicReport.templateUrl, "_blank")
-                      }
-                      className="flex-shrink-0"
-                    >
-                      <Download className="h-4 w-4 mr-2" />
-                      Tải xuống
-                    </Button>
-                  </div>
+                  )}
                 </div>
               )}
-
-              {/* Description - Moved to bottom */}
-              {periodicReport.description && (
-                <div className="space-y-2 pt-2 border-t">
-                  <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                    <FileText className="h-4 w-4" />
-                    <span>Mô tả yêu cầu</span>
-                  </div>
-                  <p className="text-sm text-foreground bg-secondary/50 p-3 rounded-lg whitespace-pre-wrap">
-                    {periodicReport.description}
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {/* Club Count */}
-            <div className="flex items-center gap-2 pt-2 border-t">
-              <Users className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm text-muted-foreground">
-                Tổng số câu lạc bộ cần nộp báo cáo:
-              </span>
-              <span className="text-sm font-semibold text-foreground">
-                {clubsWithReports.length}
-              </span>
             </div>
           </CardContent>
         </Card>
@@ -508,43 +517,56 @@ export function PeriodicReportClubs() {
           </p>
 
           {filteredClubs.length > 0 ? (
-            <div className="space-y-3">
-              {filteredClubs.map((club) => (
-                <Card
-                  key={club.id}
-                  className="hover:shadow-md transition-shadow"
-                >
-                  <CardContent className="py-2.5 px-3 md:py-3 md:px-4">
-                    <div className="flex flex-col md:flex-row md:items-center gap-2.5">
-                      {/* Club Info */}
-                      <div className="flex items-center gap-2.5 flex-1 min-w-0">
-                        <div className="w-9 h-9 rounded-full bg-secondary flex-shrink-0 flex items-center justify-center">
-                          <span className="text-xs font-semibold">
-                            {club.avatar}
-                          </span>
+            <Card>
+              <Table>
+                <TableHeader className="bg-muted/50">
+                  <TableRow className="border-b-2 border-border hover:bg-muted/50">
+                    <TableHead className="w-[250px] font-semibold text-foreground">Tên câu lạc bộ</TableHead>
+                    <TableHead className="w-[150px] font-semibold text-foreground">Mã CLB</TableHead>
+                    <TableHead className="w-[200px] font-semibold text-foreground">Mô tả</TableHead>
+                    <TableHead className="w-[180px] font-semibold text-foreground">Trạng thái</TableHead>
+                    <TableHead className="w-[120px] text-right font-semibold text-foreground">Hành động</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredClubs.map((club) => (
+                    <TableRow key={club.id}>
+                      <TableCell className="font-medium">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-full bg-secondary flex-shrink-0 flex items-center justify-center">
+                            <span className="text-xs font-semibold">
+                              {club.avatar || club.name.charAt(0).toUpperCase()}
+                            </span>
+                          </div>
+                          <span className="truncate">{club.name}</span>
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <h3 className="font-semibold text-base text-foreground truncate mb-0.5">
-                            {club.name}
-                          </h3>
-                          <p className="text-xs text-muted-foreground truncate">
-                            {club.description}
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Status and Actions */}
-                      <div className="flex flex-col md:flex-row items-start md:items-center gap-2 ml-auto">
-                        <div
-                          className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium whitespace-nowrap ${getStatusColor(
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-sm text-muted-foreground">
+                          {club.code}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-sm text-muted-foreground truncate block">
+                          {club.description || "—"}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          className={`${getStatusColor(
                             club.reportStatus,
                             club.backendStatus,
                             club.mustResubmit
-                          )}`}
+                          )} whitespace-nowrap`}
                         >
-                          <span>{getStatusLabel(club.reportStatus, club.backendStatus, club.mustResubmit)}</span>
-                        </div>
-
+                          {getStatusLabel(
+                            club.reportStatus,
+                            club.backendStatus,
+                            club.mustResubmit
+                          )}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
                         {/* Only show "View Report" button if status is from university (school) */}
                         {club.hasReport && (
                           <Button
@@ -636,15 +658,15 @@ export function PeriodicReportClubs() {
                             disabled={isLoadingReport}
                           >
                             <Eye className="h-4 w-4" />
-                            <span className="hidden md:inline">Xem báo cáo</span>
+                            <span className="hidden sm:inline">Xem báo cáo</span>
                           </Button>
                         )}
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </Card>
           ) : (
             <Card>
               <CardContent className="p-8 text-center text-muted-foreground">

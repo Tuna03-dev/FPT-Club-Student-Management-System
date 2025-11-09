@@ -160,3 +160,44 @@ export function mapBackendToFrontendReportType(
   }
 }
 
+// Report Status enum
+export enum ReportStatus {
+  DRAFT = "DRAFT",
+  PENDING_CLUB = "PENDING_CLUB",
+  APPROVED_CLUB = "APPROVED_CLUB",
+  REJECTED_CLUB = "REJECTED_CLUB",
+  UPDATED_PENDING_CLUB = "UPDATED_PENDING_CLUB",
+  PENDING_UNIVERSITY = "PENDING_UNIVERSITY",
+  APPROVED_UNIVERSITY = "APPROVED_UNIVERSITY",
+  REJECTED_UNIVERSITY = "REJECTED_UNIVERSITY",
+  RESUBMITTED_UNIVERSITY = "RESUBMITTED_UNIVERSITY",
+}
+
+// Report List Item Response (for staff to view all reports)
+export interface ReportListItemResponse {
+  id: number;
+  reportTitle: string;
+  content?: string;
+  fileUrl?: string;
+  status: string; // ReportStatus enum
+  submittedDate?: string;
+  reviewedDate?: string;
+  mustResubmit?: boolean;
+  createdAt: string;
+  club?: ClubInfo;
+  semester?: SemesterInfo;
+  createdBy?: UserInfo;
+}
+
+// Filter request for getting reports (for staff)
+export interface ReportFilterRequest {
+  page?: number;
+  size?: number;
+  sort?: string[];
+  status?: ReportStatus | string; // Can be ReportStatus enum or string
+  clubId?: number;
+  semesterId?: number;
+  reportType?: ReportType;
+  keyword?: string;
+}
+

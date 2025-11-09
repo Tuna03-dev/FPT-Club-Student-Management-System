@@ -6,6 +6,8 @@ import type {
   ReportRequirementFilterRequest,
   PageResponse,
   ClubRequirementInfo,
+  ReportFilterRequest,
+  ReportListItemResponse,
 } from "@/types/dto/reportRequirement.dto";
 import type { ClubDto } from "@/service/EventService";
 import type { ReportDetailResponse } from "@/types/dto/reportRequirement.dto";
@@ -19,42 +21,34 @@ export async function createReportRequirement(
   request: CreateReportRequirementRequest,
   file?: File
 ): Promise<ReportRequirementResponse> {
+  // Always use FormData since backend endpoint requires multipart/form-data
+  const formData = new FormData();
+  
+  // Create a Blob for the JSON request with correct content-type
+  const requestBlob = new Blob([JSON.stringify(request)], {
+    type: "application/json",
+  });
+  formData.append("request", requestBlob, "request.json");
+  
+  // Only append file if provided (file is optional)
   if (file) {
-    // Upload with file using FormData
-    const formData = new FormData();
-    
-    // Create a Blob for the JSON request with correct content-type
-    const requestBlob = new Blob([JSON.stringify(request)], {
-      type: "application/json",
-    });
-    formData.append("request", requestBlob, "request.json");
     formData.append("file", file);
-
-    const response = await axiosClient.post<ReportRequirementResponse>(
-      "/reports/staff/requirements",
-      formData,
-      {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
-        timeout: 60000, // Increase timeout for file uploads
-      }
-    );
-    if (!response.data) {
-      throw new Error("Failed to create report requirement");
-    }
-    return response.data;
-  } else {
-    // Upload without file using JSON
-    const response = await axiosClient.post<ReportRequirementResponse>(
-      "/reports/staff/requirements",
-      request
-    );
-    if (!response.data) {
-      throw new Error("Failed to create report requirement");
-    }
-    return response.data;
   }
+
+  const response = await axiosClient.post<ReportRequirementResponse>(
+    "/reports/staff/requirements",
+    formData,
+    {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+      timeout: 60000, // Increase timeout for file uploads
+    }
+  );
+  if (!response.data) {
+    throw new Error("Failed to create report requirement");
+  }
+  return response.data;
 }
 
 /**
@@ -337,5 +331,37 @@ export async function reviewReportByStaff(
   if (response.code !== 200) {
     throw new Error(response.message || "Failed to review report");
   }
+}
+
+/**
+ * Get all reports with filters and pagination (for staff only)
+ * Only returns reports with university-level status: PENDING_UNIVERSITY, APPROVED_UNIVERSITY, REJECTED_UNIVERSITY, RESUBMITTED_UNIVERSITY
+ */
+export async function getAllReports(
+  request: ReportFilterRequest
+): Promise<PageResponse<ReportListItemResponse>> {
+  const response = await axiosClient.post<PageResponse<ReportListItemResponse>>(
+    "/reports/staff/filter",
+    request
+  );
+  if (!response.data) {
+    throw new Error("Failed to get reports");
+  }
+  return response.data;
+}
+
+/**
+ * Get report detail by ID (for staff only)
+ */
+export async function getReportDetail(
+  reportId: number
+): Promise<ReportDetailResponse> {
+  const response = await axiosClient.get<ReportDetailResponse>(
+    `/reports/staff/${reportId}`
+  );
+  if (!response.data) {
+    throw new Error("Failed to get report detail");
+  }
+  return response.data;
 }
 

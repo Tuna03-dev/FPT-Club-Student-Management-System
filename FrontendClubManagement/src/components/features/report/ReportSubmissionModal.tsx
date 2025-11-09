@@ -9,6 +9,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -145,6 +152,7 @@ export function ReportSubmissionModal({
   const [clubs, setClubs] = useState<ClubDto[]>([]);
   const [eventSearchQuery, setEventSearchQuery] = useState("");
   const [clubSearchQuery, setClubSearchQuery] = useState("");
+  const [selectedClubIdForEvent, setSelectedClubIdForEvent] = useState<number | "all">("all");
   const [loadingEvents, setLoadingEvents] = useState(false);
   const [loadingClubs, setLoadingClubs] = useState(false);
 
@@ -164,6 +172,24 @@ export function ReportSubmissionModal({
         })
         .finally(() => {
           setLoadingEvents(false);
+        });
+    }
+  }, [formData.type, open]);
+
+  // Fetch clubs when type is post-event (for filtering events)
+  useEffect(() => {
+    if (formData.type === "post-event" && open) {
+      setLoadingClubs(true);
+      getAllClubs()
+        .then((data) => {
+          setClubs(data || []);
+        })
+        .catch((error) => {
+          console.error("Error fetching clubs:", error);
+          setClubs([]);
+        })
+        .finally(() => {
+          setLoadingClubs(false);
         });
     }
   }, [formData.type, open]);
@@ -309,11 +335,18 @@ export function ReportSubmissionModal({
     onOpenChange(false);
   };
 
-  const filteredEvents = events.filter(
-    (event) =>
+  const filteredEvents = events.filter((event) => {
+    // Filter by club if selected
+    const matchesClub =
+      selectedClubIdForEvent === "all" || event.clubId === selectedClubIdForEvent;
+    
+    // Filter by search query
+    const matchesSearch =
       event.eventTitle.toLowerCase().includes(eventSearchQuery.toLowerCase()) ||
-      event.clubName.toLowerCase().includes(eventSearchQuery.toLowerCase())
-  );
+      event.clubName.toLowerCase().includes(eventSearchQuery.toLowerCase());
+    
+    return matchesClub && matchesSearch;
+  });
 
   const filteredClubs = clubs.filter((club) =>
     club.clubName.toLowerCase().includes(clubSearchQuery.toLowerCase())
@@ -358,6 +391,7 @@ export function ReportSubmissionModal({
       setErrors({});
       setEventSearchQuery("");
       setClubSearchQuery("");
+      setSelectedClubIdForEvent("all");
     }
   }, [open]);
 
@@ -487,6 +521,7 @@ export function ReportSubmissionModal({
                             selectedEventId: undefined,
                           });
                           setEventSearchQuery("");
+                          setSelectedClubIdForEvent("all");
                         }}
                         className="h-8 text-xs"
                       >
@@ -497,6 +532,30 @@ export function ReportSubmissionModal({
                 ) : (
                   // Show event list
                   <>
+                    {/* Club Filter Dropdown */}
+                    <div className="space-y-1">
+                      <Label className="text-sm">Lọc theo câu lạc bộ</Label>
+                      <Select
+                        value={selectedClubIdForEvent === "all" ? "all" : selectedClubIdForEvent.toString()}
+                        onValueChange={(value) => {
+                          setSelectedClubIdForEvent(value === "all" ? "all" : parseInt(value));
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Tất cả câu lạc bộ" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">Tất cả câu lạc bộ</SelectItem>
+                          {clubs.map((club) => (
+                            <SelectItem key={club.id} value={club.id.toString()}>
+                              {club.clubName}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Event Search */}
                     <div className="relative">
                       <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                       <Input
