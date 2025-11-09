@@ -454,24 +454,22 @@ export function StaffReportManagement() {
                 : "Hiển thị 1 yêu cầu trên 1"}
             </p>
           </div>
-          {activeTab !== "reports" && (
-            <Button
-              onClick={() => setIsSubmitDialogOpen(true)}
-              className="bg-primary text-primary-foreground"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Tạo yêu cầu mới
-            </Button>
-          )}
+          <Button
+            onClick={() => setIsSubmitDialogOpen(true)}
+            className="bg-primary text-primary-foreground"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Tạo yêu cầu mới
+          </Button>
         </div>
 
         {/* Tab Navigation */}
         <div className="flex gap-2 border-b border-border overflow-x-auto">
           {[
             { id: "reports", label: "Danh sách báo cáo" },
-            { id: "periodic", label: "Báo cáo Định kỳ" },
-            { id: "post-event", label: "Báo cáo Sau sự kiện" },
-            { id: "other", label: "Loại báo cáo khác" },
+            { id: "periodic", label: "Yêu cầu Định kỳ" },
+            { id: "post-event", label: "Yêu cầu Sau sự kiện" },
+            { id: "other", label: "Yêu cầu khác" },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -892,9 +890,20 @@ export function StaffReportManagement() {
             open={isReportDetailModalOpen}
             onOpenChange={(open) => {
               setIsReportDetailModalOpen(open);
+              if (!open) {
+                setSelectedReportDetail(null);
+              }
             }}
             club={selectedReportDetail.club}
             report={selectedReportDetail.report}
+            onApprove={async () => {
+              // Refresh reports list after approval
+              await fetchReports();
+            }}
+            onReject={async () => {
+              // Refresh reports list after rejection
+              await fetchReports();
+            }}
           />
         )}
 

@@ -531,13 +531,10 @@ export function PeriodicReportClubs() {
                     <TableHead className="w-[150px] font-semibold text-foreground">
                       Mã CLB
                     </TableHead>
-                    <TableHead className="w-[200px] font-semibold text-foreground">
-                      Mô tả
-                    </TableHead>
                     <TableHead className="w-[180px] font-semibold text-foreground">
                       Trạng thái
                     </TableHead>
-                    <TableHead className="w-[120px] text-right font-semibold text-foreground">
+                    <TableHead className="w-[120px] text-center font-semibold text-foreground">
                       Hành động
                     </TableHead>
                   </TableRow>
@@ -561,11 +558,6 @@ export function PeriodicReportClubs() {
                         </span>
                       </TableCell>
                       <TableCell>
-                        <span className="text-sm text-muted-foreground truncate block">
-                          {club.description || "—"}
-                        </span>
-                      </TableCell>
-                      <TableCell>
                         <Badge
                           className={`${getStatusColor(
                             club.backendStatus,
@@ -578,7 +570,7 @@ export function PeriodicReportClubs() {
                           )}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-center">
                         {/* Only show "View Report" button if status is from university (school) */}
                         {club.hasReport && (
                           <Button
