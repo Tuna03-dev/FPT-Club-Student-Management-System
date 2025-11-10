@@ -467,6 +467,10 @@ public class EventManagementService {
 
         Event saved = eventRepository.save(eventToUpdate);
 
+        if (request.getDeleteMediaIds() != null && !request.getDeleteMediaIds().isEmpty()) {
+            eventMediaRepository.deleteAllById(request.getDeleteMediaIds());
+        }
+
         if (request.getMediaFiles() != null && !request.getMediaFiles().isEmpty()) {
             uploadAndSaveEventMedia(saved, request.getMediaFiles()); // append ảnh mới
         }
