@@ -57,11 +57,20 @@ export interface CreatePostRequest {
 }
 
 export interface UpdatePostRequest {
+  clubId: number; // Required
   title?: string;
   content?: string;
   teamId?: number;
   clubWide?: boolean;
   withinClub?: boolean;
+  status?: string;
+  deleteMediaIds?: number[];
+  newMediasMeta?: Array<{
+    title?: string;
+    caption?: string;
+    displayOrder?: number;
+    mediaType?: string;
+  }>;
 }
 
 export interface PostSearchParams {

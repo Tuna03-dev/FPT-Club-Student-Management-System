@@ -1,10 +1,19 @@
 import { axiosClient, type ApiResponse } from "@/api/axiosClient";
 import type { Fee, CreateFeeRequest, UpdateFeeRequest } from "@/types/fee";
 import type { PayOSCreatePaymentResponse } from "./payosService";
+import type { PageResponse } from "@/types";
 
 export const feeService = {
-  async getFees(clubId: number): Promise<ApiResponse<Fee[]>> {
+  async getFees(
+    clubId: number,
+    params: { page?: number; size?: number } = {}
+  ): Promise<ApiResponse<PageResponse<Fee>>> {
     const url = `/clubs/${clubId}/fees`;
+    return axiosClient.get<PageResponse<Fee>>(url, { params });
+  },
+
+  async getDraftFees(clubId: number): Promise<ApiResponse<Fee[]>> {
+    const url = `/clubs/${clubId}/fees/drafts`;
     return axiosClient.get<Fee[]>(url);
   },
 
@@ -33,12 +42,6 @@ export const feeService = {
     return Boolean(res?.data);
   },
 
-  async lockFee(clubId: number, feeId: number, isLocked: boolean): Promise<ApiResponse<Fee>> {
-    const url = `/clubs/${clubId}/fees/${feeId}/lock`;
-    return axiosClient.patch<Fee>(url, { isLocked });
-  },
-
-  
   async generatePaymentQR(
     clubId: number,
     feeId: number,
@@ -54,10 +57,22 @@ export const feeService = {
     const url = `/clubs/${clubId}/fees/unpaid`;
     return axiosClient.get<Fee[]>(url, { params: { userId } });
   },
-  async getPaidFees(clubId: number, userId: number): Promise<ApiResponse<Fee[]>> {
+  async getPaidFees(
+    clubId: number,
+    userId: number,
+    page: number = 0,
+    size: number = 10
+  ): Promise<ApiResponse<PageResponse<Fee>>> {
     const url = `/clubs/${clubId}/fees/paid`;
-    return axiosClient.get<Fee[]>(url, { params: { userId } });
-}
+    return axiosClient.get<PageResponse<Fee>>(url, {
+      params: { userId, page, size },
+    });
+  },
+
+  async publishFee(clubId: number, feeId: number): Promise<ApiResponse<Fee>> {
+    const url = `/clubs/${clubId}/fees/${feeId}/publish`;
+    return axiosClient.patch<Fee>(url, {});
+  }
 };
 
 export default feeService;

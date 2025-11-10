@@ -1,5 +1,5 @@
 // src/pages/Finance.tsx (or wherever the main component is)
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -10,13 +10,16 @@ import { FeesTable } from "@/components/features/finance/FeesTable";
 import { PayOSIntegration } from "@/components/features/finance/PayOsIntegration";
 // import { mockTransactions } from "@/components/features/finance/mocks";
 import type { Fee } from "@/types/fee";
+import type { PageResponse } from "@/types";
 import feeService from "@/services/feeService";
+
+const PAGE_SIZE = 10;
 
 export default function Finance() {
   const { clubId } = useParams();
   const numericClubId = Number(clubId);
   // const [transactions, setTransactions] = useState(mockTransactions);
-  const [fees, setFees] = useState<Fee[]>([]);
+  const [feesPage, setFeesPage] = useState<PageResponse<Fee> | null>(null);
   const [feesLoading, setFeesLoading] = useState<boolean>(false);
   // const [isAddTransactionOpen, setIsAddTransactionOpen] = useState(false);
   const [isAddFeeOpen, setIsAddFeeOpen] = useState(false);
@@ -24,6 +27,63 @@ export default function Finance() {
   const [apiKey, setApiKey] = useState("");
   const [checksumKey, setChecksumKey] = useState("");
   const [payosLoading, setPayosLoading] = useState(false);
+  const [currentPage, setCurrentPage] = useState(0);
+
+  const fetchFees = useCallback(
+    async (page: number = 0) => {
+      if (!Number.isFinite(numericClubId) || numericClubId <= 0) {
+        setFeesPage(null);
+        return;
+      }
+      try {
+        setFeesLoading(true);
+        const res = await feeService.getFees(numericClubId, {
+          page,
+          size: PAGE_SIZE,
+        });
+        if (res.code === 200 && res.data) {
+          const pageData = res.data;
+          if (
+            page > 0 &&
+            Array.isArray(pageData.content) &&
+            pageData.content.length === 0 &&
+            pageData.totalPages > 0 &&
+            page >= pageData.totalPages
+          ) {
+            await fetchFees(pageData.totalPages - 1);
+            return;
+          }
+          setFeesPage(pageData);
+          setCurrentPage(pageData.pageNumber ?? page);
+        } else {
+          setFeesPage({
+            content: [],
+            pageNumber: page,
+            pageSize: PAGE_SIZE,
+            totalElements: 0,
+            totalPages: 0,
+            hasNext: false,
+            hasPrevious: false,
+          });
+        }
+      } catch (e) {
+        console.error("Failed to fetch fees", e);
+        toast.error("Không thể tải danh sách khoản phí");
+        setFeesPage({
+          content: [],
+          pageNumber: page,
+          pageSize: PAGE_SIZE,
+          totalElements: 0,
+          totalPages: 0,
+          hasNext: false,
+          hasPrevious: false,
+        });
+      } finally {
+        setFeesLoading(false);
+      }
+    },
+    [numericClubId]
+  );
 
   useEffect(() => {
     if (!Number.isFinite(numericClubId) || numericClubId <= 0) return;
@@ -39,29 +99,38 @@ export default function Finance() {
   }, [numericClubId]);
 
   useEffect(() => {
-    if (!Number.isFinite(numericClubId) || numericClubId <= 0) return;
-    (async () => {
-      try {
-        setFeesLoading(true);
-        const res = await feeService.getFees(numericClubId);
-        const feeList = res.data;
-        if (Array.isArray(feeList)) setFees(feeList);
-      } catch (e) {
-        // handle error or show toast
-        console.error("Failed to fetch fees", e);
-      } finally {
-        setFeesLoading(false);
-      }
-    })();
-  }, [numericClubId]);
+    void fetchFees(0);
+  }, [fetchFees]);
+
+  const handleReloadFees = useCallback(
+    async (page?: number) => {
+      const targetPage = page ?? currentPage;
+      await fetchFees(targetPage);
+    },
+    [currentPage, fetchFees]
+  );
+
+  const handlePageChange = useCallback(
+    async (page: number) => {
+      await fetchFees(page);
+    },
+    [fetchFees]
+  );
 
   // const handleDeleteTransaction = (id: string) => {
   //   setTransactions(transactions.filter((t) => t.id !== id));
   //   toast("Đã xóa giao dịch");
   // };
 
-  const handleDeleteFee = (id: string) => {
-    setFees((prev) => prev.filter((f) => f.id !== id));
+  const handleFeeRemovedLocally = (id: string) => {
+    setFeesPage((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        content: prev.content.filter((fee) => String(fee.id) !== String(id)),
+        totalElements: prev.totalElements > 0 ? prev.totalElements - 1 : 0,
+      };
+    });
     toast("Đã xóa khoản phí");
   };
 
@@ -79,8 +148,16 @@ export default function Finance() {
   //   toast("Đã từ chối giao dịch");
   // };
 
-  const handleFeeCreated = (newFee: Fee) =>
-    setFees((prev) => [newFee, ...prev]);
+  const handleFeeCreated = (newFee: Fee) => {
+    setFeesPage((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        content: [newFee, ...prev.content],
+        totalElements: prev.totalElements + 1,
+      };
+    });
+  };
 
   // const totalIncome = transactions
   //   .filter((t) => t.type === "income" && t.status === "completed")
@@ -125,15 +202,20 @@ export default function Finance() {
 
           <TabsContent value="fees" className="space-y-4">
             <FeesTable
-              fees={fees}
+              fees={feesPage?.content ?? []}
               loading={feesLoading}
               onAddFee={() => setIsAddFeeOpen(true)}
-              onDeleteFee={handleDeleteFee}
+              onDeleteFee={handleFeeRemovedLocally}
               isAddOpen={isAddFeeOpen}
               setIsAddOpen={setIsAddFeeOpen}
               onFeeCreated={handleFeeCreated}
               clubId={numericClubId}
-              onReloadFees={(list) => setFees(list)}
+              onReloadFees={handleReloadFees}
+              pageNumber={feesPage?.pageNumber ?? 0}
+              pageSize={feesPage?.pageSize ?? PAGE_SIZE}
+              totalPages={feesPage?.totalPages ?? 0}
+              totalElements={feesPage?.totalElements ?? 0}
+              onPageChange={handlePageChange}
             />
           </TabsContent>
 

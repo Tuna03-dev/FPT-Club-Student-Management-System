@@ -6,54 +6,68 @@ import {
   ChevronRight,
   Send,
   Image as ImageIcon,
+  ZoomIn,
+  ZoomOut,
+  X,
+  Trash2,
+  Edit,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { useTranslation } from "react-i18next";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { toast } from "sonner";
+import { Skeleton } from "@/components/ui/skeleton";
+import commentService, { type CommentDTO } from "@/services/commentService";
+import { authService } from "@/services/authService";
+import { useWebSocket, type WebSocketMessage } from "@/hooks/useWebSocket";
+import { formatDistanceToNow } from "date-fns";
+import { vi } from "date-fns/locale";
+import { postService } from "@/services/postService";
+import { EditPostDialog } from "./EditPostDialog";
 
 interface PostCardProps {
+  postId: number;
+  clubId?: number;
   author: {
+    id?: number; // Author ID for permission check
     name: string;
     avatar?: string;
     role: string;
   };
   content: string;
-  images?: string[];
+  images?: string[]; // Image URLs
+  imageIds?: number[]; // Media IDs for deletion (optional, same order as images)
   timestamp: string;
   likes: number;
   comments: number;
-  maxLength?: number; // Độ dài tối đa trước khi truncate
-}
-
-interface Reply {
-  id: string;
-  author: { name: string; avatar?: string };
-  content: string;
-  timestamp: string;
-  likes: number;
-}
-
-interface Comment {
-  id: string;
-  author: { name: string; avatar?: string };
-  content: string;
-  timestamp: string;
-  likes: number;
-  replies: Reply[];
+  maxLength?: number;
+  onPostUpdated?: () => void; // Callback when post is updated
+  onPostDeleted?: () => void; // Callback when post is deleted
 }
 
 export const PostCard = ({
+  postId,
+  clubId,
   author,
   content,
   images = [],
+  imageIds = [],
   timestamp,
   likes,
-  comments,
+  comments: initialCommentsCount, // Used for display count before loading
   maxLength = 150,
+  onPostUpdated,
+  onPostDeleted,
 }: PostCardProps) => {
   const { t } = useTranslation("common");
   const [isExpanded, setIsExpanded] = useState(false);
@@ -62,35 +76,420 @@ export const PostCard = ({
   const [imageErrors, setImageErrors] = useState<boolean[]>([]);
   const [showComments, setShowComments] = useState(false);
   const [commentText, setCommentText] = useState("");
-  const [replyingTo, setReplyingTo] = useState<string | null>(null);
+  const [replyingTo, setReplyingTo] = useState<number | null>(null);
   const [replyText, setReplyText] = useState("");
-  const [commentsList, setCommentsList] = useState<Comment[]>([
-    {
-      id: "1",
-      author: { name: "Phạm Văn D", avatar: undefined },
-      content: "Chúc mừng CLB! Hy vọng sẽ ngày càng phát triển hơn nữa! 🎉",
-      timestamp: "1 giờ trước",
-      likes: 12,
-      replies: [
-        {
-          id: "1-1",
-          author: { name: "Nguyễn Văn A", avatar: undefined },
-          content:
-            "Cảm ơn bạn! Hy vọng bạn sẽ tiếp tục đồng hành cùng chúng mình.",
-          timestamp: "45 phút trước",
-          likes: 5,
-        },
-      ],
+  const [replyTargetName, setReplyTargetName] = useState<string | null>(null);
+  const replyInputRefs = useRef<Map<number, HTMLDivElement>>(new Map());
+  const [imageZoom, setImageZoom] = useState(1);
+  const [imagePosition, setImagePosition] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [commentsList, setCommentsList] = useState<CommentDTO[]>([]);
+  const [loadingComments, setLoadingComments] = useState(false);
+  const [submittingComment, setSubmittingComment] = useState(false);
+  const [editingCommentId, setEditingCommentId] = useState<number | null>(null);
+  const [editText, setEditText] = useState("");
+  const [isDeletingPost, setIsDeletingPost] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  // --- THÊM STATE CHO DIALOG XÓA COMMENT ---
+  const [deleteCommentId, setDeleteCommentId] = useState<number | null>(null);
+  const [isDeletingComment, setIsDeletingComment] = useState(false);
+  const deleteTargetIsReply = commentsList
+    .flatMap((c) => c.replies || [])
+    .find((rep) => rep.id === deleteCommentId);
+
+  // 1. Tạo ref cho Textarea editing
+  const editTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  const currentUser = authService.getCurrentUser();
+  const canEditPost =
+    currentUser?.id && author.id && currentUser.id === author.id;
+  const token = localStorage.getItem("accessToken");
+  const { isConnected, subscribeToClub, send } = useWebSocket(token);
+
+  // Format timestamp
+  const formatTimestamp = (dateString: string) => {
+    try {
+      return formatDistanceToNow(new Date(dateString), {
+        addSuffix: true,
+        locale: vi,
+      });
+    } catch {
+      return dateString;
+    }
+  };
+
+  // Helper function to find parent comment in tree
+  const findParentComment = useCallback(
+    (parentId: number, comments: CommentDTO[]): CommentDTO | null => {
+      for (const comment of comments) {
+        if (comment.id === parentId) {
+          return comment;
+        }
+        if (comment.replies) {
+          const found = findParentComment(parentId, comment.replies);
+          if (found) return found;
+        }
+      }
+      return null;
     },
-    {
-      id: "2",
-      author: { name: "Hoàng Thị E", avatar: undefined },
-      content: "Tuyệt vời quá! 🎊",
-      timestamp: "30 phút trước",
-      likes: 8,
-      replies: [],
+    []
+  );
+
+  // Load comments
+  const loadComments = useCallback(async () => {
+    if (!postId) return;
+    setLoadingComments(true);
+    try {
+      const response = await commentService.getAllFlat(postId);
+      if (response.code === 200 && response.data) {
+        // Build tree structure from flat list
+        const flatComments = response.data;
+        const commentMap = new Map<number, CommentDTO>();
+        const rootComments: CommentDTO[] = [];
+
+        // First pass: create map
+        flatComments.forEach((comment) => {
+          comment.replies = [];
+          commentMap.set(comment.id, comment);
+        });
+
+        // Second pass: build tree
+        flatComments.forEach((comment) => {
+          if (comment.parentId === null) {
+            rootComments.push(comment);
+          } else {
+            const parent = commentMap.get(comment.parentId);
+            if (parent) {
+              if (!parent.replies) parent.replies = [];
+              parent.replies.push(comment);
+            }
+          }
+        });
+
+        setCommentsList(rootComments);
+      }
+    } catch (error) {
+      console.error("Failed to load comments:", error);
+      toast.error("Không thể tải bình luận");
+    } finally {
+      setLoadingComments(false);
+    }
+  }, [postId]);
+
+  // Load comments when showing comments section
+  useEffect(() => {
+    if (showComments && postId) {
+      loadComments();
+    }
+  }, [showComments, postId, loadComments]);
+
+  // WebSocket subscription for realtime updates
+  useEffect(() => {
+    if (!isConnected || !clubId || !showComments) return;
+
+    const unsubscribe = subscribeToClub(clubId, (message: WebSocketMessage) => {
+      if (message.type === "POST" && message.payload) {
+        const payload = message.payload as {
+          comment: CommentDTO;
+          postId: number;
+          action: string;
+        };
+
+        if (payload.postId !== postId) return;
+
+        if (message.action === "COMMENT_NEW") {
+          // Add new comment to list
+          setCommentsList((prev) => {
+            const exists = prev.some((c) => c.id === payload.comment.id);
+            if (exists) return prev;
+
+            if (payload.comment.parentId === null) {
+              return [payload.comment, ...prev];
+            } else {
+              // Add as reply
+              return prev.map((c) => {
+                if (c.id === payload.comment.parentId) {
+                  return {
+                    ...c,
+                    replies: [...(c.replies || []), payload.comment],
+                  };
+                }
+                return c;
+              });
+            }
+          });
+        } else if (message.action === "COMMENT_EDIT") {
+          // Update comment - merge fields and preserve replies array to avoid losing nested replies
+          setCommentsList((prev) => {
+            const mergeComment = (
+              old: CommentDTO | undefined,
+              updated: CommentDTO
+            ) => {
+              return {
+                ...(old || {}),
+                ...updated,
+                replies: (old && old.replies) || updated.replies || [],
+              } as CommentDTO;
+            };
+
+            const updateComment = (comments: CommentDTO[]): CommentDTO[] => {
+              return comments.map((c) => {
+                if (c.id === payload.comment.id) {
+                  return mergeComment(c, payload.comment);
+                }
+                if (c.replies) {
+                  return { ...c, replies: updateComment(c.replies) };
+                }
+                return c;
+              });
+            };
+
+            return updateComment(prev);
+          });
+        } else if (message.action === "COMMENT_DELETE") {
+          // Remove comment
+          setCommentsList((prev) => {
+            const removeComment = (comments: CommentDTO[]): CommentDTO[] => {
+              return comments
+                .filter((c) => c.id !== payload.comment.id)
+                .map((c) => {
+                  if (c.replies) {
+                    return { ...c, replies: removeComment(c.replies) };
+                  }
+                  return c;
+                });
+            };
+            return removeComment(prev);
+          });
+        }
+      }
+    });
+
+    return unsubscribe;
+  }, [isConnected, clubId, postId, showComments, subscribeToClub]);
+
+  // Handle create comment
+  const handleCreateComment = useCallback(async () => {
+    if (!commentText.trim() || !currentUser?.id || !postId) return;
+
+    setSubmittingComment(true);
+    try {
+      const response = await commentService.create(postId, {
+        userId: currentUser.id,
+        content: commentText.trim(),
+        parentId: null,
+      });
+
+      if (response.code === 200 && response.data) {
+        setCommentText("");
+        // WebSocket will handle the update, no need to reload
+        toast.success("Đã thêm bình luận");
+      } else {
+        toast.error("Không thể tạo bình luận");
+      }
+    } catch (error) {
+      console.error("Failed to create comment:", error);
+      toast.error("Không thể tạo bình luận");
+    } finally {
+      setSubmittingComment(false);
+    }
+  }, [commentText, currentUser, postId]);
+
+  // Helper to find top-level parent comment ID
+  const findTopLevelParentId = useCallback(
+    (commentId: number, comments: CommentDTO[]): number | null => {
+      for (const comment of comments) {
+        if (comment.id === commentId) {
+          return comment.id; // This is top-level
+        }
+        if (comment.replies) {
+          for (const reply of comment.replies) {
+            if (reply.id === commentId) {
+              return comment.id; // Return parent top-level
+            }
+          }
+        }
+      }
+      return null;
     },
-  ]);
+    []
+  );
+
+  // Handle create reply
+  const handleCreateReply = useCallback(
+    async (targetCommentId: number) => {
+      if (!replyText.trim() || !currentUser?.id || !postId) return;
+
+      // Find top-level parent ID (backend requires replying to top-level comment)
+      const topLevelParentId = findTopLevelParentId(
+        targetCommentId,
+        commentsList
+      );
+      if (!topLevelParentId) {
+        toast.error("Không tìm thấy comment cha");
+        return;
+      }
+
+      setSubmittingComment(true);
+      try {
+        const response = await commentService.create(postId, {
+          userId: currentUser.id,
+          content: replyText.trim(),
+          parentId: topLevelParentId,
+        });
+
+        if (response.code === 200 && response.data) {
+          setReplyText("");
+          setReplyingTo(null);
+          setReplyTargetName(null);
+          // WebSocket will handle the update, no need to reload
+          toast.success("Đã thêm phản hồi");
+        } else {
+          toast.error("Không thể tạo phản hồi");
+        }
+      } catch (error) {
+        console.error("Failed to create reply:", error);
+        toast.error("Không thể tạo phản hồi");
+      } finally {
+        setSubmittingComment(false);
+      }
+    },
+    [replyText, currentUser, postId, commentsList, findTopLevelParentId]
+  );
+
+  // Handle edit comment
+  const handleEditComment = useCallback(
+    async (commentId: number) => {
+      if (!editText.trim()) return;
+
+      setSubmittingComment(true);
+      try {
+        const response = await commentService.edit(commentId, {
+          content: editText.trim(),
+        });
+
+        if (response.code === 200 && response.data) {
+          const updatedComment = response.data;
+
+          // Optimistically update local comment tree (merge to preserve replies)
+          setCommentsList((prev) => {
+            const mergeComment = (
+              old: CommentDTO | undefined,
+              updated: CommentDTO
+            ) => {
+              return {
+                ...(old || {}),
+                ...updated,
+                replies: (old && old.replies) || updated.replies || [],
+              } as CommentDTO;
+            };
+
+            const updateComment = (comments: CommentDTO[]): CommentDTO[] => {
+              return comments.map((c) => {
+                if (c.id === updatedComment.id) {
+                  return mergeComment(c, updatedComment);
+                }
+                if (c.replies) {
+                  return { ...c, replies: updateComment(c.replies) };
+                }
+                return c;
+              });
+            };
+
+            return updateComment(prev);
+          });
+
+          // If connected, publish edit event to club topic so other clients receive it
+          try {
+            if (isConnected && send && clubId) {
+              send(`/topic/club/${clubId}`, {
+                type: "POST",
+                action: "COMMENT_EDIT",
+                payload: { comment: updatedComment, postId },
+              });
+            }
+          } catch (err) {
+            // Non-fatal; just log
+            console.warn("Failed to send websocket edit message", err);
+          }
+
+          setEditingCommentId(null);
+          setEditText("");
+        } else {
+          toast.error("Không thể sửa bình luận");
+        }
+      } catch (error) {
+        console.error("Failed to edit comment:", error);
+        toast.error("Không thể sửa bình luận");
+      } finally {
+        setSubmittingComment(false);
+      }
+    },
+    [editText, clubId, isConnected, postId, send]
+  );
+
+  // SỬA LẠI handleDeleteComment: KHÔNG confirm, chỉ xóa với id được truyền (hứng từ dialog)
+  const handleDeleteComment = useCallback(async (commentId: number) => {
+    try {
+      const response = await commentService.delete(commentId);
+      if (response.code === 200) {
+        toast.success("Đã xóa bình luận!");
+      } else {
+        toast.error("Không thể xóa bình luận");
+      }
+    } catch (error) {
+      console.log("Failed to delete comment:", error);
+      toast.error("Không thể xóa bình luận");
+    }
+  }, []);
+
+  // Handle reply click - auto tag
+  const handleReplyClick = useCallback(
+    (comment: CommentDTO) => {
+      // Find top-level parent ID for this comment
+      const topLevelParentId = findTopLevelParentId(comment.id, commentsList);
+      const targetId =
+        topLevelParentId && topLevelParentId !== comment.id
+          ? topLevelParentId
+          : comment.id;
+
+      setReplyingTo(targetId);
+      setReplyTargetName(comment.userName);
+      setReplyText(`@${comment.userName} `);
+
+      // Scroll to reply input after a short delay to ensure it's rendered
+      setTimeout(() => {
+        const inputElement = replyInputRefs.current.get(targetId);
+        inputElement?.scrollIntoView({
+          behavior: "smooth",
+          block: "nearest",
+        });
+      }, 100);
+    },
+    [commentsList, findTopLevelParentId]
+  );
+
+  // Handle delete post
+  const handleDeletePost = useCallback(async () => {
+    if (!confirm("Bạn có chắc muốn xóa bài viết này?")) return;
+
+    setIsDeletingPost(true);
+    try {
+      const response = await postService.deletePost(postId);
+      if (response.code === 200) {
+        toast.success("Đã xóa bài viết");
+        onPostDeleted?.();
+      } else {
+        toast.error("Không thể xóa bài viết");
+      }
+    } catch (error) {
+      console.error("Failed to delete post:", error);
+      toast.error("Không thể xóa bài viết");
+    } finally {
+      setIsDeletingPost(false);
+    }
+  }, [postId, onPostDeleted]);
 
   const shouldTruncate = content.length > maxLength;
   const displayContent =
@@ -101,12 +500,20 @@ export const PostCard = ({
   const openLightbox = (index: number) => {
     setCurrentImageIndex(index);
     setLightboxOpen(true);
+    setImageZoom(1);
+    setImagePosition({ x: 0, y: 0 });
   };
 
   useEffect(() => {
-    // reset image error state when images change
     setImageErrors(new Array(images.length).fill(false));
   }, [images]);
+
+  useEffect(() => {
+    if (!lightboxOpen) {
+      setImageZoom(1);
+      setImagePosition({ x: 0, y: 0 });
+    }
+  }, [lightboxOpen, currentImageIndex]);
 
   const nextImage = () => {
     if (images.length === 0) return;
@@ -118,46 +525,118 @@ export const PostCard = ({
     setCurrentImageIndex((prev) => (prev - 1 + images.length) % images.length);
   };
 
+  const handleZoomIn = () => {
+    setImageZoom((prev) => Math.min(prev + 0.5, 4));
+  };
+
+  const handleZoomOut = () => {
+    setImageZoom((prev) => Math.max(prev - 0.5, 1));
+    if (imageZoom <= 1.5) {
+      setImagePosition({ x: 0, y: 0 });
+    }
+  };
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (imageZoom > 1) {
+      setIsDragging(true);
+      setDragStart({
+        x: e.clientX - imagePosition.x,
+        y: e.clientY - imagePosition.y,
+      });
+    }
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (isDragging && imageZoom > 1) {
+      setImagePosition({
+        x: e.clientX - dragStart.x,
+        y: e.clientY - dragStart.y,
+      });
+    }
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  const handleWheel = (e: React.WheelEvent) => {
+    e.preventDefault();
+    if (e.deltaY < 0) {
+      handleZoomIn();
+    } else {
+      handleZoomOut();
+    }
+  };
+
   const getGridLayout = (count: number) => {
     if (count === 1) return "grid-cols-1";
     if (count === 2) return "grid-cols-2";
     if (count === 3) return "grid-cols-2";
     return "grid-cols-2";
   };
+
+  // 2. Khi mở edit comment, focus + select ngay Textarea
+  useEffect(() => {
+    if (editingCommentId && editTextareaRef.current) {
+      editTextareaRef.current.focus();
+      editTextareaRef.current.select();
+    }
+  }, [editingCommentId]);
+
   return (
-    <Card className="overflow-hidden shadow-soft hover:shadow-medium transition-shadow py-0 gap-0 max-w-lg mx-auto">
+    <Card className="overflow-hidden shadow-soft hover:shadow-medium transition-shadow py-0 gap-0 w-full max-w-4xl mx-auto">
       {/* Header */}
-      <div className="flex items-start justify-between p-3">
-        <div className="flex gap-2">
-          <Avatar className="h-8 w-8">
+      <div className="flex items-start justify-between p-4 sm:p-5">
+        <div className="flex gap-3">
+          <Avatar className="h-10 w-10 sm:h-12 sm:w-12">
             <AvatarImage src={author.avatar} />
-            <AvatarFallback className="bg-primary text-primary-foreground text-xs">
+            <AvatarFallback className="bg-primary text-primary-foreground text-sm">
               {author.name?.charAt(0) ?? "?"}
             </AvatarFallback>
           </Avatar>
           <div>
-            <h3 className="font-semibold text-foreground text-sm">
+            <h3 className="font-semibold text-foreground text-sm sm:text-base">
               {author.name ?? "Người dùng"}
             </h3>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs sm:text-sm text-muted-foreground">
               {author.role} · {timestamp}
             </p>
           </div>
         </div>
-        <Button variant="ghost" size="icon" className="h-8 w-8">
-          <MoreHorizontal className="h-4 w-4" />
-        </Button>
+        {canEditPost && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-9 w-9">
+                <MoreHorizontal className="h-5 w-5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => setIsEditDialogOpen(true)}>
+                <Edit className="h-4 w-4 mr-2" />
+                Chỉnh sửa
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                variant="destructive"
+                onClick={handleDeletePost}
+                disabled={isDeletingPost}
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                {isDeletingPost ? "Đang xóa..." : "Xóa"}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
       </div>
 
       {/* Content */}
-      <div className="px-3 pb-2">
-        <p className="text-foreground whitespace-pre-wrap text-sm">
+      <div className="px-4 sm:px-5 pb-3">
+        <p className="text-foreground whitespace-pre-wrap text-sm sm:text-base leading-relaxed">
           {displayContent}
         </p>
         {shouldTruncate && (
           <Button
             variant="link"
-            className="p-0 h-auto text-primary hover:text-primary/80 font-medium text-sm"
+            className="p-0 h-auto text-primary hover:text-primary/80 font-medium text-sm sm:text-base mt-1"
             onClick={() => setIsExpanded(!isExpanded)}
           >
             {isExpanded ? t("post.seeLess") : t("post.seeMore")}
@@ -209,10 +688,15 @@ export const PostCard = ({
       )}
 
       {/* Stats */}
-      <div className="flex items-center justify-between px-3 py-2 text-xs text-muted-foreground border-t border-border">
+      <div className="flex items-center justify-between px-4 sm:px-5 py-2.5 text-xs sm:text-sm text-muted-foreground border-t border-border">
         <span>{likes} lượt thích</span>
         <div className="flex gap-3">
-          <span>{comments} bình luận</span>
+          <span>
+            {showComments && commentsList.length > 0
+              ? commentsList.length
+              : initialCommentsCount}{" "}
+            bình luận
+          </span>
         </div>
       </div>
 
@@ -220,20 +704,20 @@ export const PostCard = ({
       <div className="flex items-center border-t border-border">
         <Button
           variant="ghost"
-          className="flex-1 gap-1 rounded-none py-2"
+          className="flex-1 gap-2 rounded-none py-2.5 sm:py-3"
           size="sm"
         >
-          <Heart className="h-4 w-4" />
-          <span className="hidden sm:inline text-sm">Thích</span>
+          <Heart className="h-4 w-4 sm:h-5 sm:w-5" />
+          <span className="text-sm sm:text-base">Thích</span>
         </Button>
         <Button
           variant="ghost"
-          className="flex-1 gap-1 rounded-none border-x border-border py-2"
+          className="flex-1 gap-2 rounded-none border-x border-border py-2.5 sm:py-3"
           size="sm"
           onClick={() => setShowComments(!showComments)}
         >
-          <MessageCircle className="h-4 w-4" />
-          <span className="hidden sm:inline text-sm">Bình luận</span>
+          <MessageCircle className="h-4 w-4 sm:h-5 sm:w-5" />
+          <span className="text-sm sm:text-base">Bình luận</span>
         </Button>
       </div>
 
@@ -241,181 +725,378 @@ export const PostCard = ({
       {showComments && (
         <div className="border-t border-border">
           <div className="max-h-96 overflow-auto">
-            <div className="p-4 space-y-4">
+            <div className="p-4 sm:p-5 space-y-4">
               {/* Comment Input */}
-              <div className="flex gap-2">
-                <Avatar className="h-8 w-8">
-                  <AvatarFallback className="bg-primary text-primary-foreground text-xs">
-                    T
-                  </AvatarFallback>
-                </Avatar>
-                <div className="flex-1 flex gap-2">
-                  <Textarea
-                    placeholder="Viết bình luận..."
-                    value={commentText}
-                    onChange={(e) => setCommentText(e.target.value)}
-                    className="min-h-[60px] resize-none"
-                  />
-                  <Button
-                    size="icon"
-                    onClick={() => {
-                      if (!commentText.trim()) return;
-                      const newComment: Comment = {
-                        id: Date.now().toString(),
-                        author: { name: "Tôi", avatar: undefined },
-                        content: commentText,
-                        timestamp: "Vừa xong",
-                        likes: 0,
-                        replies: [],
-                      };
-                      setCommentsList([newComment, ...commentsList]);
-                      setCommentText("");
-                    }}
-                    disabled={!commentText.trim()}
-                  >
-                    <Send className="h-4 w-4" />
-                  </Button>
+              {currentUser && (
+                <div className="flex gap-2 sm:gap-3">
+                  <Avatar className="h-8 w-8 sm:h-9 sm:w-9">
+                    <AvatarImage src={currentUser.avatarUrl} />
+                    <AvatarFallback className="bg-primary text-primary-foreground text-xs sm:text-sm">
+                      {currentUser.fullName?.charAt(0) ?? "U"}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 flex gap-2">
+                    <Textarea
+                      placeholder="Viết bình luận..."
+                      value={commentText}
+                      onChange={(e) => setCommentText(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                          e.preventDefault();
+                          handleCreateComment();
+                        }
+                      }}
+                      className="min-h-[60px] resize-none text-sm sm:text-base"
+                    />
+                    <Button
+                      size="icon"
+                      onClick={handleCreateComment}
+                      disabled={!commentText.trim() || submittingComment}
+                    >
+                      <Send className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Comments List */}
-              {commentsList.map((comment) => (
-                <div key={comment.id} className="space-y-2">
-                  <div className="flex gap-2">
-                    <Avatar className="h-8 w-8">
-                      <AvatarImage src={comment.author.avatar} />
-                      <AvatarFallback className="bg-primary text-primary-foreground text-xs">
-                        {comment.author.name.charAt(0)}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1">
-                      <div className="bg-muted rounded-lg p-3">
-                        <div className="font-semibold text-sm">
-                          {comment.author.name}
-                        </div>
-                        <p className="text-sm mt-1">{comment.content}</p>
-                      </div>
-                      <div className="flex gap-3 mt-1 text-xs text-muted-foreground px-3">
-                        <button className="hover:underline">
-                          {comment.timestamp}
-                        </button>
-                        <button className="hover:underline font-semibold">
-                          Thích ({comment.likes})
-                        </button>
-                        <button
-                          className="hover:underline font-semibold"
-                          onClick={() =>
-                            setReplyingTo(
-                              replyingTo === comment.id ? null : comment.id
-                            )
-                          }
-                        >
-                          Trả lời
-                        </button>
+              {loadingComments ? (
+                <div className="space-y-4">
+                  {[...Array(3)].map((_, idx) => (
+                    <div key={idx} className="flex gap-3">
+                      <Skeleton className="h-9 w-9 rounded-full" />
+                      <div className="flex-1 space-y-2">
+                        <Skeleton className="h-4 w-32" />
+                        <Skeleton className="h-16 w-full rounded-lg" />
+                        <Skeleton className="h-3 w-24" />
                       </div>
                     </div>
-                  </div>
-
-                  {/* Replies */}
-                  {comment.replies.length > 0 && (
-                    <div className="ml-10 space-y-2">
-                      {comment.replies.map((reply) => (
-                        <div key={reply.id} className="flex gap-2">
-                          <Avatar className="h-7 w-7">
-                            <AvatarImage src={reply.author.avatar} />
-                            <AvatarFallback className="bg-primary text-primary-foreground text-xs">
-                              {reply.author.name.charAt(0)}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div className="flex-1">
-                            <div className="bg-muted rounded-lg p-2.5">
-                              <div className="font-semibold text-xs">
-                                {reply.author.name}
-                              </div>
-                              <p className="text-xs mt-1">{reply.content}</p>
-                            </div>
-                            <div className="flex gap-3 mt-1 text-xs text-muted-foreground px-2.5">
-                              <button className="hover:underline">
-                                {reply.timestamp}
-                              </button>
-                              <button className="hover:underline font-semibold">
-                                Thích ({reply.likes})
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Reply Input */}
-                  {replyingTo === comment.id && (
-                    <div className="ml-10 flex gap-2">
-                      <Avatar className="h-7 w-7">
-                        <AvatarFallback className="bg-primary text-primary-foreground text-xs">
-                          T
+                  ))}
+                </div>
+              ) : commentsList.length === 0 ? (
+                <div className="text-center py-4 text-muted-foreground text-sm">
+                  Chưa có bình luận nào. Hãy là người đầu tiên bình luận!
+                </div>
+              ) : (
+                commentsList.map((comment) => (
+                  <div key={comment.id} className="space-y-2">
+                    <div className="flex gap-2 sm:gap-3">
+                      <Avatar className="h-8 w-8 sm:h-9 sm:w-9">
+                        <AvatarImage src={comment.userAvatar || undefined} />
+                        <AvatarFallback className="bg-primary text-primary-foreground text-xs sm:text-sm">
+                          {comment.userName?.charAt(0) ?? "U"}
                         </AvatarFallback>
                       </Avatar>
-                      <div className="flex-1 flex gap-2">
-                        <Textarea
-                          placeholder={`Trả lời ${comment.author.name}...`}
-                          value={replyText}
-                          onChange={(e) => setReplyText(e.target.value)}
-                          className="min-h-[50px] resize-none text-sm"
-                        />
-                        <Button
-                          size="icon"
-                          className="h-[50px]"
-                          onClick={() => {
-                            if (!replyText.trim()) return;
-                            const newReply: Reply = {
-                              id: Date.now().toString(),
-                              author: { name: "Tôi", avatar: undefined },
-                              content: replyText,
-                              timestamp: "Vừa xong",
-                              likes: 0,
-                            };
-                            setCommentsList(
-                              commentsList.map((c) =>
-                                c.id === comment.id
-                                  ? { ...c, replies: [...c.replies, newReply] }
-                                  : c
-                              )
-                            );
-                            setReplyText("");
-                            setReplyingTo(null);
-                          }}
-                          disabled={!replyText.trim()}
-                        >
-                          <Send className="h-3.5 w-3.5" />
-                        </Button>
+                      <div className="flex-1">
+                        <div className="bg-muted rounded-lg p-3">
+                          <div className="font-semibold text-sm sm:text-base">
+                            {comment.userName}
+                            {comment.edited && (
+                              <span className="text-xs text-muted-foreground ml-2">
+                                (đã chỉnh sửa)
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Inline edit like Facebook: show textarea inside bubble when editing */}
+                          {editingCommentId === comment.id ? (
+                            <div className="mt-2">
+                              <Textarea
+                                ref={editTextareaRef}
+                                value={editText}
+                                onChange={(e) => setEditText(e.target.value)}
+                                className="min-h-[54px] resize-none text-sm"
+                              />
+                              <div className="flex gap-2 justify-end mt-2">
+                                <Button
+                                  size="sm"
+                                  onClick={() => handleEditComment(comment.id)}
+                                  disabled={
+                                    !editText.trim() || submittingComment
+                                  }
+                                >
+                                  Lưu
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => {
+                                    setEditingCommentId(null);
+                                    setEditText("");
+                                  }}
+                                >
+                                  Hủy
+                                </Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <p className="text-sm sm:text-base mt-1 whitespace-pre-wrap">
+                              {comment.content}
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex gap-3 mt-1 text-xs sm:text-sm text-muted-foreground px-3">
+                          <span>{formatTimestamp(comment.createdAt)}</span>
+                          <button
+                            className="hover:underline font-semibold"
+                            onClick={() => handleReplyClick(comment)}
+                          >
+                            Trả lời
+                          </button>
+                          {currentUser?.id === comment.userId && (
+                            <>
+                              <button
+                                className="hover:underline font-semibold"
+                                onClick={() => {
+                                  setEditingCommentId(comment.id);
+                                  setEditText(comment.content);
+                                }}
+                              >
+                                <Edit className="h-3 w-3 inline mr-1" />
+                                Sửa
+                              </button>
+                              <button
+                                className="hover:underline font-semibold text-destructive"
+                                onClick={() => setDeleteCommentId(comment.id)}
+                              >
+                                <Trash2 className="h-3 w-3 inline mr-1" />
+                                Xóa
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  )}
-                </div>
-              ))}
+
+                    {/* removed separate edit block; edit UI now inline inside bubble */}
+
+                    {/* Replies */}
+                    {comment.replies && comment.replies.length > 0 && (
+                      <div className="ml-8 sm:ml-12 space-y-2">
+                        {comment.replies.map((reply) => (
+                          <div key={reply.id} className="flex gap-2">
+                            <Avatar className="h-7 w-7 sm:h-8 sm:w-8">
+                              <AvatarImage
+                                src={reply.userAvatar || undefined}
+                              />
+                              <AvatarFallback className="bg-primary text-primary-foreground text-xs">
+                                {reply.userName?.charAt(0) ?? "U"}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div className="flex-1">
+                              <div className="bg-muted rounded-lg p-2.5">
+                                <div className="font-semibold text-xs sm:text-sm">
+                                  {reply.userName}
+                                  {reply.edited && (
+                                    <span className="text-xs text-muted-foreground ml-2">
+                                      (đã chỉnh sửa)
+                                    </span>
+                                  )}
+                                </div>
+                                {reply.parentId &&
+                                  (() => {
+                                    const parentComment = findParentComment(
+                                      reply.parentId,
+                                      commentsList
+                                    );
+                                    if (parentComment) {
+                                      return (
+                                        <div className="text-xs text-muted-foreground">
+                                          Trả lời{" "}
+                                          <span className="font-medium text-primary">
+                                            @{parentComment.userName}
+                                          </span>
+                                        </div>
+                                      );
+                                    }
+                                    return null;
+                                  })()}
+                                {/* Inline edit for reply (Facebook-like) */}
+                                {editingCommentId === reply.id ? (
+                                  <div className="mt-1">
+                                    <Textarea
+                                      ref={editTextareaRef}
+                                      value={editText}
+                                      onChange={(e) =>
+                                        setEditText(e.target.value)
+                                      }
+                                      className="min-h-[46px] resize-none text-sm"
+                                    />
+                                    <div className="flex gap-2 justify-end mt-2">
+                                      <Button
+                                        size="sm"
+                                        onClick={() =>
+                                          handleEditComment(reply.id)
+                                        }
+                                        disabled={
+                                          !editText.trim() || submittingComment
+                                        }
+                                      >
+                                        Lưu
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => {
+                                          setEditingCommentId(null);
+                                          setEditText("");
+                                        }}
+                                      >
+                                        Hủy
+                                      </Button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <p className="text-xs sm:text-sm mt-1 whitespace-pre-wrap">
+                                    {reply.content}
+                                  </p>
+                                )}
+                              </div>
+                              <div className="flex gap-3 mt-1 text-xs text-muted-foreground px-2.5">
+                                <span>{formatTimestamp(reply.createdAt)}</span>
+                                <button
+                                  className="hover:underline font-semibold"
+                                  onClick={() => handleReplyClick(reply)}
+                                >
+                                  Trả lời
+                                </button>
+                                {currentUser?.id === reply.userId && (
+                                  <>
+                                    <button
+                                      className="hover:underline font-semibold"
+                                      onClick={() => {
+                                        setEditingCommentId(reply.id);
+                                        setEditText(reply.content);
+                                      }}
+                                    >
+                                      <Edit className="h-3 w-3 inline mr-1" />
+                                      Sửa
+                                    </button>
+                                    <button
+                                      className="hover:underline font-semibold text-destructive"
+                                      onClick={() =>
+                                        setDeleteCommentId(reply.id)
+                                      }
+                                    >
+                                      <Trash2 className="h-3 w-3 inline mr-1" />
+                                      Xóa
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                            {/* removed separate reply edit block; handled inline above */}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Reply Input */}
+                    {replyingTo === comment.id && (
+                      <div
+                        ref={(el) => {
+                          if (el) {
+                            replyInputRefs.current.set(comment.id, el);
+                          } else {
+                            replyInputRefs.current.delete(comment.id);
+                          }
+                        }}
+                        className="ml-8 sm:ml-12 flex gap-2 mt-2"
+                      >
+                        <Avatar className="h-7 w-7 sm:h-8 sm:w-8">
+                          <AvatarImage src={currentUser?.avatarUrl} />
+                          <AvatarFallback className="bg-primary text-primary-foreground text-xs">
+                            {currentUser?.fullName?.charAt(0) ?? "U"}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 flex gap-2">
+                          <Textarea
+                            placeholder={`Trả lời ${
+                              replyTargetName || comment.userName
+                            }...`}
+                            value={replyText}
+                            onChange={(e) => setReplyText(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (
+                                e.key === "Enter" &&
+                                (e.metaKey || e.ctrlKey)
+                              ) {
+                                e.preventDefault();
+                                handleCreateReply(comment.id);
+                              }
+                            }}
+                            className="min-h-[50px] resize-none text-sm"
+                            autoFocus
+                          />
+                          <div className="flex flex-col gap-1">
+                            <Button
+                              size="sm"
+                              onClick={() => handleCreateReply(comment.id)}
+                              disabled={!replyText.trim() || submittingComment}
+                            >
+                              <Send className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => {
+                                setReplyingTo(null);
+                                setReplyText("");
+                                setReplyTargetName(null);
+                              }}
+                            >
+                              Hủy
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>
       )}
 
-      {/* Image Lightbox */}
+      {/* Image Lightbox with Zoom */}
       <Dialog open={lightboxOpen} onOpenChange={setLightboxOpen}>
-        <DialogContent className="max-w-7xl w-[95vw] h-[95vh] p-0 bg-black/95 border-none">
-          <div className="relative w-full h-full flex items-center justify-center">
+        <DialogContent className="w-[min(95vw,1200px)] max-w-6xl min-w-0 xl:min-w-[48rem] h-[90vh] p-0 bg-black/95 border-none mx-auto">
+          <div className="relative w-full h-full flex items-center justify-center overflow-hidden">
             {!imageErrors[currentImageIndex] ? (
-              <img
-                src={images[currentImageIndex]}
-                alt={`Image ${currentImageIndex + 1}`}
-                className="max-w-full max-h-full object-contain"
-                onError={() =>
-                  setImageErrors((prev) => {
-                    const copy = [...prev];
-                    copy[currentImageIndex] = true;
-                    return copy;
-                  })
-                }
-              />
+              <div
+                className="relative w-full h-full flex items-center justify-center cursor-move"
+                onMouseDown={handleMouseDown}
+                onMouseMove={handleMouseMove}
+                onMouseUp={handleMouseUp}
+                onMouseLeave={handleMouseUp}
+                onWheel={handleWheel}
+              >
+                <img
+                  src={images[currentImageIndex]}
+                  alt={`Image ${currentImageIndex + 1}`}
+                  className="max-w-full max-h-full object-contain transition-transform duration-200"
+                  style={{
+                    transform: `scale(${imageZoom}) translate(${
+                      imagePosition.x / imageZoom
+                    }px, ${imagePosition.y / imageZoom}px)`,
+                    cursor:
+                      imageZoom > 1
+                        ? isDragging
+                          ? "grabbing"
+                          : "grab"
+                        : "default",
+                  }}
+                  onError={() =>
+                    setImageErrors((prev) => {
+                      const copy = [...prev];
+                      copy[currentImageIndex] = true;
+                      return copy;
+                    })
+                  }
+                  draggable={false}
+                />
+              </div>
             ) : (
               <div className="w-full h-full flex items-center justify-center bg-muted/40 text-muted-foreground">
                 <div className="flex flex-col items-center gap-2">
@@ -425,32 +1106,141 @@ export const PostCard = ({
               </div>
             )}
 
-            {images.length > 1 && (
-              <>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="absolute left-4 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white z-10"
-                  onClick={prevImage}
-                >
-                  <ChevronLeft className="h-8 w-8" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="absolute right-4 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white z-10"
-                  onClick={nextImage}
-                >
-                  <ChevronRight className="h-8 w-8" />
-                </Button>
-                <div className="absolute bottom-6 left-1/2 -translate-x-1/2 text-white text-sm bg-black/50 px-4 py-2 rounded-full backdrop-blur-sm">
-                  {currentImageIndex + 1} / {images.length}
-                </div>
-              </>
-            )}
+            {/* Close Button */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute top-4 right-4 bg-black/50 hover:bg-black/70 text-white z-20"
+              onClick={() => setLightboxOpen(false)}
+            >
+              <X className="h-6 w-6" />
+            </Button>
+
+            {/* Horizontal control bar (prev / zoom-out / percent / zoom-in / next) */}
+            <div className="absolute bottom-4 left-0 right-0 flex items-center justify-center gap-3 z-20">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="bg-black/40 text-white hover:bg-black/60"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  prevImage();
+                }}
+              >
+                <ChevronLeft className="h-6 w-6" />
+              </Button>
+
+              <Button
+                variant="ghost"
+                size="icon"
+                className="bg-black/40 text-white hover:bg-black/60"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleZoomOut();
+                }}
+                disabled={imageZoom <= 1}
+              >
+                <ZoomOut className="h-5 w-5" />
+              </Button>
+
+              <div className="px-3 py-1 rounded bg-black/50 text-white text-sm">
+                {Math.round(imageZoom * 100)}%
+              </div>
+
+              <Button
+                variant="ghost"
+                size="icon"
+                className="bg-black/40 text-white hover:bg-black/60"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleZoomIn();
+                }}
+                disabled={imageZoom >= 4}
+              >
+                <ZoomIn className="h-5 w-5" />
+              </Button>
+
+              <Button
+                variant="ghost"
+                size="icon"
+                className="bg-black/40 text-white hover:bg-black/60"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  nextImage();
+                }}
+              >
+                <ChevronRight className="h-6 w-6" />
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Dialog confirm XÓA COMMENT dùng shadcn/ui Dialog */}
+      <Dialog
+        open={!!deleteCommentId}
+        onOpenChange={(val) => !val && setDeleteCommentId(null)}
+      >
+        <DialogContent className="max-w-xs sm:max-w-sm">
+          <DialogTitle>Bạn có chắc muốn xóa bình luận?</DialogTitle>
+          <div className="py-2 text-muted-foreground text-sm">
+            {deleteTargetIsReply
+              ? "Thao tác này sẽ xóa phản hồi vĩnh viễn."
+              : "Thao tác này sẽ xóa bình luận chính và toàn bộ các phản hồi con."}
+          </div>
+          <div className="flex gap-2 justify-end mt-4">
+            <Button
+              variant="ghost"
+              onClick={() => setDeleteCommentId(null)}
+              disabled={isDeletingComment}
+            >
+              Hủy
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={isDeletingComment}
+              onClick={async () => {
+                if (!deleteCommentId) return;
+                setIsDeletingComment(true);
+                try {
+                  await handleDeleteComment(deleteCommentId);
+                  setDeleteCommentId(null);
+                } finally {
+                  setIsDeletingComment(false);
+                }
+              }}
+            >
+              {isDeletingComment ? (
+                <span className="flex items-center gap-2">
+                  <span className="animate-spin h-4 w-4 border-2 border-white/80 border-t-transparent rounded-full"></span>
+                  Đang xóa...
+                </span>
+              ) : (
+                "Xóa"
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Post Dialog */}
+      {clubId && (
+        <EditPostDialog
+          open={isEditDialogOpen}
+          onOpenChange={setIsEditDialogOpen}
+          postId={postId}
+          clubId={clubId}
+          initialContent={content}
+          initialImages={images.map((url, idx) => ({
+            url,
+            id: imageIds[idx],
+          }))}
+          onPostUpdated={() => {
+            onPostUpdated?.();
+            setIsEditDialogOpen(false);
+          }}
+        />
+      )}
     </Card>
   );
 };
