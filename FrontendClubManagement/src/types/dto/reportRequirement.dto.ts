@@ -1,10 +1,7 @@
 // DTOs for Report Requirement feature
 
-export enum ReportType {
-  SEMESTER = "SEMESTER",
-  EVENT = "EVENT",
-  OTHER = "OTHER",
-}
+// report-types.ts
+export type ReportType = "SEMESTER" | "EVENT" | "OTHER";
 
 export interface CreateReportRequirementRequest {
   title: string;
@@ -134,11 +131,11 @@ export function mapFrontendToBackendReportType(
 ): ReportType | undefined {
   switch (type) {
     case "periodic":
-      return ReportType.SEMESTER;
+      return "SEMESTER";
     case "post-event":
-      return ReportType.EVENT;
+      return "EVENT";
     case "other":
-      return ReportType.OTHER;
+      return "OTHER";
     default:
       return undefined;
   }
@@ -149,11 +146,11 @@ export function mapBackendToFrontendReportType(
   type?: ReportType
 ): FrontendReportType {
   switch (type) {
-    case ReportType.SEMESTER:
+    case "SEMESTER":
       return "periodic";
-    case ReportType.EVENT:
+    case "EVENT":
       return "post-event";
-    case ReportType.OTHER:
+    case "OTHER":
       return "other";
     default:
       return "periodic";
@@ -161,17 +158,17 @@ export function mapBackendToFrontendReportType(
 }
 
 // Report Status enum
-export enum ReportStatus {
-  DRAFT = "DRAFT",
-  PENDING_CLUB = "PENDING_CLUB",
-  APPROVED_CLUB = "APPROVED_CLUB",
-  REJECTED_CLUB = "REJECTED_CLUB",
-  UPDATED_PENDING_CLUB = "UPDATED_PENDING_CLUB",
-  PENDING_UNIVERSITY = "PENDING_UNIVERSITY",
-  APPROVED_UNIVERSITY = "APPROVED_UNIVERSITY",
-  REJECTED_UNIVERSITY = "REJECTED_UNIVERSITY",
-  RESUBMITTED_UNIVERSITY = "RESUBMITTED_UNIVERSITY",
-}
+// report-status.ts
+export type ReportStatus =
+  | "DRAFT"
+  | "PENDING_CLUB"
+  | "APPROVED_CLUB"
+  | "REJECTED_CLUB"
+  | "UPDATED_PENDING_CLUB"
+  | "PENDING_UNIVERSITY"
+  | "APPROVED_UNIVERSITY"
+  | "REJECTED_UNIVERSITY"
+  | "RESUBMITTED_UNIVERSITY";
 
 // Report List Item Response (for staff to view all reports)
 export interface ReportListItemResponse {
@@ -200,4 +197,3 @@ export interface ReportFilterRequest {
   reportType?: ReportType;
   keyword?: string;
 }
-
