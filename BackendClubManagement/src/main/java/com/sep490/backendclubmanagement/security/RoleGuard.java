@@ -2,11 +2,15 @@ package com.sep490.backendclubmanagement.security;
 
 import com.sep490.backendclubmanagement.entity.News;
 import com.sep490.backendclubmanagement.entity.Team;
+import com.sep490.backendclubmanagement.exception.AccessDeniedException;
 import com.sep490.backendclubmanagement.repository.RoleMemberShipRepository;
 import com.sep490.backendclubmanagement.repository.SemesterRepository;
 import com.sep490.backendclubmanagement.repository.TeamRepository;
 import com.sep490.backendclubmanagement.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -106,5 +110,38 @@ public class RoleGuard {
         var ids = rmRepo.findLeadTeamIdsInClub(userId, clubId); // ✅ dùng rmRepo
         if (ids.isEmpty()) return Optional.empty();
         return teamRepo.findById(ids.get(0));
+    }
+    public Long getCurrentUserId() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !auth.isAuthenticated()) {
+            throw new AccessDeniedException("Không thể xác định người dùng hiện tại (chưa đăng nhập).");
+        }
+
+        Object principal = auth.getPrincipal();
+        String email;
+
+        // Case A: principal là UserDetails (username của bạn chính là email)
+        if (principal instanceof UserDetails ud) {
+            email = ud.getUsername();
+        }
+        // Case B: principal là chuỗi (nhiều cấu hình để email ở đây)
+        else if (principal instanceof String s) {
+            email = s;
+        }
+        else {
+            throw new AccessDeniedException("Không thể xác định email từ principal.");
+        }
+
+        return userRepo.findIdByEmail(email)
+                .orElseThrow(() -> new AccessDeniedException("Không tìm thấy người dùng có email: " + email));
+    }
+
+    private static String asString(Object v) {
+        return v == null ? null : v.toString();
+    }
+
+    private static String firstNonBlank(String... vals) {
+        for (String s : vals) if (s != null && !s.isBlank()) return s;
+        return null;
     }
 }

@@ -1,26 +1,33 @@
 import { useEffect, useState } from "react";
 import { getVisibleTeams } from "@/api/teams";
 import type { VisibleTeamDTO } from "@/types/team";
+import { isCanceled } from "@/utils/isCanceled";
 
-export function useTeams(clubId?: number) {
+export function useTeams(clubId?: number, semesterId?: number) {
   const [data, setData] = useState<VisibleTeamDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!clubId) return; // ⛔ KHÔNG gọi khi chưa có clubId
+    if (!clubId) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
-    getVisibleTeams(clubId)
+    getVisibleTeams(clubId, semesterId)
       .then((res) => {
         setData(res);
         setError(null);
       })
       .catch((err) => {
+        if (isCanceled(err)) return; // ✅ bỏ qua cancel
         console.error("getVisibleTeams error:", err);
-        setError("Failed to fetch teams");
+        if (err.response?.status === 403)
+          setError("Bạn không có quyền xem các phòng ban của CLB này.");
+        else setError("Không thể tải danh sách phòng ban.");
       })
       .finally(() => setLoading(false));
-  }, [clubId]);
+  }, [clubId, semesterId]);
 
   return { data, loading, error };
 }

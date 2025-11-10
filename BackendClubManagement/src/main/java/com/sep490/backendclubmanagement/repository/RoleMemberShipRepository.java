@@ -211,6 +211,7 @@ SELECT CASE WHEN EXISTS (
                                       @Param("clubId") Long clubId,
                                       @Param("semesterId") Long semesterId);
 
+    // ---- User có thuộc team này không? (cho phép xem DETAIL nếu không phải CLUB_PRESIDENT)
     @Query("""
         SELECT CASE WHEN COUNT(rm.id) > 0 THEN TRUE ELSE FALSE END
         FROM RoleMemberShip rm
@@ -226,6 +227,7 @@ SELECT CASE WHEN EXISTS (
                      @Param("teamId") Long teamId,
                      @Param("semesterId") Long semesterId);
 
+    // ---- Đếm distinct member của 1 team
     @Query("""
         SELECT COUNT(DISTINCT rm.clubMemberShip.id)
         FROM RoleMemberShip rm
@@ -236,6 +238,7 @@ SELECT CASE WHEN EXISTS (
     Long countDistinctMembers(@Param("teamId") Long teamId,
                               @Param("semesterId") Long semesterId);
 
+    // ---- Các role của user trong 1 team (để gắn vào myRoles ở DETAIL)
     @Query("""
         SELECT DISTINCT COALESCE(cr.roleName, 'Thành viên')
         FROM RoleMemberShip rm
@@ -299,10 +302,12 @@ SELECT CASE WHEN EXISTS (
         FROM RoleMemberShip rm
         JOIN rm.clubMemberShip cm
         JOIN rm.clubRole cr
+        JOIN rm.semester s
         WHERE cm.user.id = :userId
           AND rm.team.id = :teamId
           AND COALESCE(rm.isActive, TRUE) = TRUE
-          AND ( cr.roleCode LIKE %:headSuffix OR cr.roleLevel = 3 )
+          AND ( cr.roleCode LIKE %:headSuffix OR cr.roleLevel <= 3 )
+          AND s.isCurrent = true
     """)
     boolean existsTeamLeader(@Param("userId") Long userId,
                              @Param("teamId") Long teamId,
@@ -310,18 +315,18 @@ SELECT CASE WHEN EXISTS (
 
     // RoleMemberShipRepository.java
     @Query("""
-SELECT CASE WHEN COUNT(rm) > 0 THEN true ELSE false END
-FROM RoleMemberShip rm
-JOIN rm.clubMemberShip c
-JOIN rm.clubRole cr
-JOIN rm.semester s
-WHERE c.user.id = :userId
-  AND c.club.id = :clubId
-  AND rm.team IS NULL
-  AND COALESCE(rm.isActive, TRUE) = TRUE
-  AND cr.roleLevel <= 2
-  AND s.isCurrent = true
-""")
+    SELECT CASE WHEN COUNT(rm) > 0 THEN true ELSE false END
+    FROM RoleMemberShip rm
+    JOIN rm.clubMemberShip c
+    JOIN rm.clubRole cr
+    JOIN rm.semester s
+    WHERE c.user.id = :userId
+      AND c.club.id = :clubId
+      AND rm.team IS NULL
+      AND COALESCE(rm.isActive, TRUE) = TRUE
+      AND cr.roleLevel <= 2
+      AND s.isCurrent = true
+    """)
     boolean existsClubAdmin(@Param("userId") Long userId,
                             @Param("clubId") Long clubId);
 
@@ -417,5 +422,55 @@ WHERE c.user.id = :userId
            "WHERE cms.user_id = :userId AND sr.role_name = 'CLUB_PRESIDENT'",
            nativeQuery = true)
     List<Long> findPresidentClubIdsByUserId(@Param("userId") Long userId);
+
+
+
+//tao phong ban
+
+    @Query(value = """
+        SELECT DISTINCT cm.user_id
+        FROM role_memberships rm
+        JOIN club_memberships cm ON rm.club_membership_id = cm.id
+        WHERE cm.club_id = :clubId
+          AND rm.semester_id = :semesterId
+          AND rm.is_active = TRUE
+          AND rm.team_id IS NOT NULL
+          AND cm.user_id IN (:userIds)
+        """, nativeQuery = true)
+    List<Long> findExistingTeamMembersInSemester(
+            @Param("clubId") Long clubId,
+            @Param("semesterId") Long semesterId,
+            @Param("userIds") List<Long> userIds
+    );
+    @Query("""
+SELECT cm.user.id
+FROM ClubMemberShip cm
+LEFT JOIN RoleMemberShip rm 
+  ON rm.clubMemberShip.id = cm.id 
+  AND rm.semester.id = :semesterId
+WHERE cm.club.id = :clubId
+  AND (rm.team.id IS NULL OR rm.isActive = FALSE)
+""")
+    List<Long> findAvailableMemberUserIds(@Param("clubId") Long clubId,
+                                          @Param("semesterId") Long semesterId);
+
+    @Query("""
+    SELECT DISTINCT COALESCE(cr.roleName, 'Thành viên')
+    FROM RoleMemberShip rm
+    LEFT JOIN rm.clubRole cr
+    JOIN rm.clubMemberShip cm
+    WHERE cm.user.id = :userId
+      AND cm.club.id = :clubId
+      AND rm.team IS NULL
+      AND (:semesterId IS NULL OR rm.semester.id = :semesterId)
+      AND COALESCE(rm.isActive, TRUE) = TRUE
+""")
+    List<String> findMyClubRoleNames(@Param("userId") Long userId,
+                                     @Param("clubId") Long clubId,
+                                     @Param("semesterId") Long semesterId);
+
+
+
 }
+
 
