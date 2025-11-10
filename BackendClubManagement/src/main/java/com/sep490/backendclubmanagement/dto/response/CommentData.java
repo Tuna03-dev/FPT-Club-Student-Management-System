@@ -9,6 +9,7 @@ public class CommentData {
     private String content;
     private Boolean isEdited;
     private Long parentCommentId;
+    private Long rootParentCommentId;
 
     private Long userId;
     private String userName;
