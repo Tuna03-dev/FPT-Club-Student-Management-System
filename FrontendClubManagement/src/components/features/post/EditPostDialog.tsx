@@ -9,7 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { postService, type UpdatePostRequest, type PostMediaData } from "@/services/postService";
+import { postService, type UpdatePostRequest } from "@/services/postService";
 import { toast } from "sonner";
 
 interface EditPostDialogProps {
@@ -129,7 +129,7 @@ export const EditPostDialog = ({
     return "grid-cols-2";
   };
 
-  const allImages = [...existingImages, ...newImagePreviews.map(url => ({ url }))];
+  // const allImages = [...existingImages, ...newImagePreviews.map(url => ({ url }))];
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

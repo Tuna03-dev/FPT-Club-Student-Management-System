@@ -52,8 +52,8 @@ export default function RoleManagement() {
       setEditingRole(role);
       setFormData({
         roleName: role.roleName,
-        roleCode: role.roleCode,
-        description: role.description,
+        roleCode: role.roleCode || "",
+        description: role.description || "",
         roleLevel: role.roleLevel,
         systemRoleId: role.systemRoleId,
       });
