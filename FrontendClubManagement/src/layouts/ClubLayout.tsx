@@ -57,13 +57,43 @@ const navItems = [
 
 const managementItems = [
   { key: "club_news", url: "/news", icon: Newspaper, label: "Yêu cầu tin tức" },
-  { key: "permissions", url: "/permissions", icon: Shield, label: "Phân quyền" },
-  { key: "pending_posts", url: "/pending-posts", icon: FileText, label: "Bài viết chờ duyệt" },
-  { key: "manage_members", url: "/members", icon: Users, label: "Quản lý thành viên" },
-  { key: "manage_events", url: "/events", icon: Calendar, label: "Quản lý sự kiện" },
-  { key: "manage_recruitments", url: "/recruitments", icon: Briefcase, label: "Quản lý tuyển thành viên" },
-  { key: "manage_finance", url: "/finance", icon: DollarSign, label: "Quản lý tài chính" },
-  { key: "pending_requests", url: "/pending-requests", icon: Clock, label: "Yêu cầu chờ duyệt" },
+  { key: "permissions", url: "/roles", icon: Shield, label: "Phân quyền" },
+  {
+    key: "pending_posts",
+    url: "/pending-posts",
+    icon: FileText,
+    label: "Bài viết chờ duyệt",
+  },
+  {
+    key: "manage_members",
+    url: "/members",
+    icon: Users,
+    label: "Quản lý thành viên",
+  },
+  {
+    key: "manage_events",
+    url: "/events",
+    icon: Calendar,
+    label: "Quản lý sự kiện",
+  },
+  {
+    key: "manage_recruitments",
+    url: "/recruitments",
+    icon: Briefcase,
+    label: "Quản lý tuyển thành viên",
+  },
+  {
+    key: "manage_finance",
+    url: "/finance",
+    icon: DollarSign,
+    label: "Quản lý tài chính",
+  },
+  {
+    key: "pending_requests",
+    url: "/pending-requests",
+    icon: Clock,
+    label: "Yêu cầu chờ duyệt",
+  },
 ];
 
 const managementColors: Record<string, string> = {
@@ -112,12 +142,16 @@ export const ClubLayout = () => {
           JSON.stringify({ value: teams[0].teamId, at: Date.now() })
         );
       }
-    } catch { /* empty */ } 
+    } catch {
+      /* empty */
+    }
   }
 
   // kiểm tra officer CN/PCN (dựa trên team-level API, có fallback)
-  const { isOfficer, loading: officerLoading } =
-    useClubOfficer(validClubId ? numericClubId : undefined, teamIdFromUrl);
+  const { isOfficer, loading: officerLoading } = useClubOfficer(
+    validClubId ? numericClubId : undefined,
+    teamIdFromUrl
+  );
 
   // filter menu: chỉ CN/PCN mới thấy "Yêu cầu tin tức"
   const filteredManagementItems = useMemo(
@@ -212,7 +246,11 @@ export const ClubLayout = () => {
                     <Settings className="h-5 w-5" />
                   </Button>
                 </NavLink>
-                <Button variant="ghost" size="icon" className="rounded-full relative">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="rounded-full relative"
+                >
                   <Bell className="h-5 w-5" />
                   <span className="absolute top-1 right-1 h-2 w-2 bg-destructive rounded-full" />
                 </Button>
@@ -249,7 +287,9 @@ export const ClubLayout = () => {
                             onClick={() => setIsMobileMenuOpen(false)}
                           >
                             <div
-                              className={`h-6 w-6 rounded-lg ${managementColors[item.key]} flex items-center justify-center text-white shadow-sm`}
+                              className={`h-6 w-6 rounded-lg ${
+                                managementColors[item.key]
+                              } flex items-center justify-center text-white shadow-sm`}
                             >
                               <item.icon className="h-3 w-3" />
                             </div>
@@ -289,7 +329,9 @@ export const ClubLayout = () => {
                         }
                       >
                         <div
-                          className={`h-8 w-8 rounded-lg ${managementColors[item.key]} flex items-center justify-center text-white shadow-sm`}
+                          className={`h-8 w-8 rounded-lg ${
+                            managementColors[item.key]
+                          } flex items-center justify-center text-white shadow-sm`}
                         >
                           <item.icon className="h-4 w-4" />
                         </div>
@@ -314,7 +356,9 @@ export const ClubLayout = () => {
                         variant="outline"
                         size="sm"
                         className="w-full justify-center border-dashed"
-                        onClick={() => navigate(`/myclub/${clubId}/teams/create`)}
+                        onClick={() =>
+                          navigate(`/myclub/${clubId}/teams/create`)
+                        }
                       >
                         <Plus className="h-4 w-4 mr-2" />
                         Tạo phòng ban
@@ -323,10 +367,14 @@ export const ClubLayout = () => {
                   )}
 
                   {teamsLoading && (
-                    <p className="px-3 text-xs text-muted-foreground">Đang tải…</p>
+                    <p className="px-3 text-xs text-muted-foreground">
+                      Đang tải…
+                    </p>
                   )}
                   {teamsError && (
-                    <p className="px-3 text-xs text-red-600">{String(teamsError)}</p>
+                    <p className="px-3 text-xs text-red-600">
+                      {String(teamsError)}
+                    </p>
                   )}
 
                   {teams?.map((team) => {
