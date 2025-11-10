@@ -42,6 +42,9 @@ import RoleManagement from "@/pages/myclub/RoleManagement";
 import ClubOfficerGuard from "@/components/guards/ClubOfficerGuard";
 import ForbiddenPage from "@/pages/ForbiddenPage";
 
+import { StaffReportManagement } from "@/pages/myclub/staff/reportManagement/StaffReport";
+import { PeriodicReportClubs } from "@/pages/myclub/staff/reportManagement/PeriodicReportClubs";
+import { ClubReportManagement } from "@/pages/myclub/report/ReportManagement";
 export const router = createBrowserRouter([
   {
     path: "/",
@@ -171,9 +174,12 @@ export const router = createBrowserRouter([
       { path: "notifications", element: <Notifications /> },
       { path: "settings", element: <Settings /> },
       { path: "teams/:teamId", element: <TeamDetailPage /> },
+      { path: "reports", element: <ClubReportManagement /> },
 
       { path: "myclub", element: <Navigate to="." replace /> },
       { path: "teams/:teamId/news-drafts", element: <TeamNewsDrafts /> },
+      { path: "teams/:teamId/news-requests", element: <TeamNewsRequests /> },
+      { path: "teams/:teamId/news-editor", element: <TeamNewsEditor /> },
       { path: "teams/:teamId/news-requests", element: <TeamNewsRequests /> },
       { path: "teams/:teamId/news-editor", element: <TeamNewsEditor /> },
 
@@ -192,7 +198,7 @@ export const router = createBrowserRouter([
 
   // 404
   {
-    path: "/myclub/staff",
+    path: "/staff",
     element: (
       <ProtectedRoute>
         <StaffLayout />
@@ -201,6 +207,14 @@ export const router = createBrowserRouter([
     children: [
       { path: "events", element: <StaffEventList /> },
       { path: "settings", element: <Settings /> },
+      {
+        path: "reports",
+        element: <StaffReportManagement />,
+      },
+      {
+        path: "report/:reportId/clubs",
+        element: <PeriodicReportClubs />,
+      },
     ],
   },
 

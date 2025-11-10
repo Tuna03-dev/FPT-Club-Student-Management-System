@@ -610,7 +610,7 @@ public class RecruitmentService implements RecruitmentServiceInterface {
                 .orElseThrow(() -> new AppException(ErrorCode.INTERNAL_SERVER_ERROR));
         
         // Check if user is CLUB_PRESIDENT of the club in the current semester
-        boolean isClubPresident = clubMemberShipRepository.isClubPresidentInSemester(
+        boolean isClubPresident = roleMembershipRepository.isClubPresidentInCurrentSemester(
                 userId, clubId, currentSemester.getId()
         );
         

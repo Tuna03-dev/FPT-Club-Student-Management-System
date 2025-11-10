@@ -83,6 +83,12 @@ const managementItems = [
     label: "Quản lý tuyển thành viên",
   },
   {
+    key: "manage_reports",
+    url: "/reports",
+    icon: FileText,
+    label: "Quản lý báo cáo",
+  },
+  {
     key: "manage_finance",
     url: "/finance",
     icon: DollarSign,
@@ -104,6 +110,7 @@ const managementColors: Record<string, string> = {
   manage_recruitments: "bg-gradient-to-br from-red-500 to-red-600",
   manage_finance: "bg-gradient-to-br from-emerald-500 to-emerald-600",
   pending_requests: "bg-gradient-to-br from-orange-500 to-orange-600",
+  manage_reports: "bg-gradient-to-br from-pink-500 to-pink-600",
   club_news: "bg-gradient-to-br from-indigo-500 to-indigo-600",
 };
 

@@ -90,9 +90,6 @@ public class Club extends BaseEntity {
     private Set<Recruitment> recruitments;
 
     @OneToMany(mappedBy = "club", cascade = CascadeType.ALL)
-    private Set<Report> reports;
-
-    @OneToMany(mappedBy = "club", cascade = CascadeType.ALL)
     private Set<ClubProposal> clubProposals;
 
     @OneToMany(mappedBy = "club", cascade = CascadeType.ALL)

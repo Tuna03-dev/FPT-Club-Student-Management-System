@@ -6,15 +6,11 @@ import axios, {
 } from "axios";
 
 // Import AuthenticationResponse type
+import type { UserInfo } from "@/services/authService";
+
 interface AuthenticationResponse {
   accessToken: string;
-  user: {
-    id: number;
-    email: string;
-    fullName: string;
-    avatarUrl: string;
-    systemRole: string;
-  };
+  user: UserInfo;
 }
 
 // ===== Token Helpers =====
@@ -89,6 +85,16 @@ axiosInstance.interceptors.response.use(
         if (refreshResponse.data.code === 200 && refreshResponse.data.data) {
           const authData = refreshResponse.data.data;
           setAccessToken(authData.accessToken);
+
+          // ✅ Cập nhật user info với roles mới khi refresh token
+          if (authData.user) {
+            // Import authService dynamically để tránh circular dependency
+            const { authService } = await import("../services/authService");
+            authService.setUser(authData.user);
+            
+            // Dispatch event để notify các components về sự thay đổi
+            window.dispatchEvent(new Event("auth-state-changed"));
+          }
 
           originalRequest.headers = {
             ...originalRequest.headers,

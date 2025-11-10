@@ -1,6 +1,7 @@
 package com.sep490.backendclubmanagement.repository;
 
 import com.sep490.backendclubmanagement.dto.request.EventRequest;
+import com.sep490.backendclubmanagement.dto.response.EventWithoutReportRequirementDto;
 import com.sep490.backendclubmanagement.dto.response.UpcomingEventDTO;
 import com.sep490.backendclubmanagement.entity.Club;
 import com.sep490.backendclubmanagement.entity.Event;
@@ -80,4 +81,25 @@ public interface EventRepository extends JpaRepository<Event, Long> {
     @Query("SELECT e FROM Event e LEFT JOIN RequestEvent re ON re.event = e AND re.status IN :pendingStatuses " +
            "WHERE e.isDraft = true AND e.club.id = :clubId AND re.id IS NULL")
     List<Event> findCancelledByStaffAndClubIdExcludingPending(Long clubId, java.util.List<com.sep490.backendclubmanagement.entity.RequestStatus> pendingStatuses);
+
+    /**
+     * Lấy danh sách events chưa được yêu cầu nộp báo cáo
+     * Event chưa có yêu cầu báo cáo khi:
+     * - Event có club (không null)
+     * - Event không phải draft
+     * - Không tồn tại SubmissionReportRequirement với ClubReportRequirement cho club tổ chức sự kiện
+     */
+    @Query("SELECT new com.sep490.backendclubmanagement.dto.response.EventWithoutReportRequirementDto(" +
+            "e.id, e.title, c.id, c.clubName) " +
+            "FROM Event e " +
+            "JOIN e.club c " +
+            "WHERE e.club IS NOT NULL " +
+            "AND e.isDraft = false " +
+            "AND NOT EXISTS (" +
+            "    SELECT 1 FROM SubmissionReportRequirement srr " +
+            "    JOIN ClubReportRequirement crr ON crr.submissionReportRequirement.id = srr.id " +
+            "    WHERE srr.event.id = e.id AND crr.club.id = c.id" +
+            ") " +
+            "ORDER BY e.id DESC")
+    List<EventWithoutReportRequirementDto> findEventsWithoutReportRequirement();
 }
