@@ -5,7 +5,7 @@ import com.sep490.backendclubmanagement.entity.Comment;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.AfterMapping;
-import org.mapstruct.MappingTarget;
+//import org.mapstruct.MappingTarget;
 
 import java.util.List;
 
@@ -18,6 +18,7 @@ public interface CommentMapper {
     @Mapping(source = "user.fullName", target = "userName")
     @Mapping(source = "user.avatarUrl", target = "userAvatar")
     @Mapping(source = "isEdited", target = "edited")
+    @Mapping(source = "rootParentCommentId", target = "rootParentId")
     @Mapping(target = "replies", ignore = true)
     CommentDTO toDTO(Comment comment);
 
