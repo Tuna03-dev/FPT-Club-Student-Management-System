@@ -1,3 +1,4 @@
+// src/router.tsx
 import { createBrowserRouter, Navigate } from "react-router-dom";
 import MainLayout from "@/layouts/MainLayout";
 import HomePage from "@/pages/HomePage";
@@ -24,10 +25,9 @@ import { RecruitmentManagement } from "@/pages/myclub/recruitmentManagement/Recr
 import Finance from "@/pages/myclub/finance/Finance";
 import { StudentRecruitment } from "@/pages/studentRecruitment/StudentRecruitment";
 import { ClubDetail } from "@/pages/clubDetail/ClubDetail";
-
 import LoginPage from "@/pages/login/Login";
-
-// ✅ Dùng alias @ cho thống nhất
+import ClubDetailPage from "@/pages/myclub/ClubDetailPage";
+import ClubsPage from "@/pages/myclub/ClubsPage";
 import PresidentNewsList from "@/pages/news/PresidentNewsList";
 import PresidentNewsEditor from "@/pages/news/PresidentNewsEditor";
 import StaffNewsList from "@/pages/news/StaffNewsList";
@@ -36,6 +36,11 @@ import TeamNewsDrafts from "@/pages/news/TeamNewsDrafts";
 import TeamNewsRequests from "@/pages/news/TeamNewsRequests";
 import TeamNewsEditor from "@/pages/news/TeamNewsEditor";
 import Payment from "@/pages/myclub/payments/MemberPaymentPage";
+import TeamCreatePage from "@/pages/myclub/teams/TeamCreatePage";
+
+import ClubOfficerGuard from "@/components/guards/ClubOfficerGuard";
+import ForbiddenPage from "@/pages/ForbiddenPage";
+
 export const router = createBrowserRouter([
   {
     path: "/",
@@ -61,23 +66,18 @@ export const router = createBrowserRouter([
 
       {
         path: "clubs",
-        element: (
-          <div className="container mx-auto px-4 py-8">
-            Trang Câu lạc bộ/Hội nhóm
-          </div>
-        ),
+        children: [
+          { index: true, element: <ClubsPage /> },
+          { path: ":id", element: <ClubDetailPage /> },
+        ],
       },
       {
         path: "achievements",
-        element: (
-          <div className="container mx-auto px-4 py-8">Trang Thành tích</div>
-        ),
+        element: <div className="container mx-auto px-4 py-8">Trang Thành tích</div>,
       },
       {
         path: "contact",
-        element: (
-          <div className="container mx-auto px-4 py-8">Trang Liên hệ</div>
-        ),
+        element: <div className="container mx-auto px-4 py-8">Trang Liên hệ</div>,
       },
 
       { path: "myRecruitmentApplication", element: <StudentRecruitment /> },
@@ -87,7 +87,6 @@ export const router = createBrowserRouter([
 
   { path: "/login", element: <LoginPage /> },
 
-  // Auto-redirect vào CLB của mình
   {
     path: "/myclub",
     element: (
@@ -106,7 +105,6 @@ export const router = createBrowserRouter([
     ),
   },
 
-  // ✅ Khu staff (tuyệt đối, có dấu /)
   {
     path: "/staff/news",
     element: (
@@ -124,7 +122,6 @@ export const router = createBrowserRouter([
     ),
   },
 
-  // ✅ Khu CLB
   {
     path: "/myclub/:clubId",
     element: (
@@ -135,9 +132,22 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <Dashboard /> },
 
-      // 🔥 Hai route của chủ nhiệm CLB để tạo/list news & draft
-      { path: "news", element: <PresidentNewsList /> },
-      { path: "news-editor", element: <PresidentNewsEditor /> },
+      {
+        path: "news",
+        element: (
+          <ClubOfficerGuard>
+            <PresidentNewsList />
+          </ClubOfficerGuard>
+        ),
+      },
+      {
+        path: "news-editor",
+        element: (
+          <ClubOfficerGuard>
+            <PresidentNewsEditor />
+          </ClubOfficerGuard>
+        ),
+      },
 
       { path: "members", element: <MemberList /> },
       { path: "events", element: <EventList /> },
@@ -151,12 +161,23 @@ export const router = createBrowserRouter([
 
       { path: "myclub", element: <Navigate to="." replace /> },
       { path: "teams/:teamId/news-drafts", element: <TeamNewsDrafts /> },
-{ path: "teams/:teamId/news-requests", element: <TeamNewsRequests /> },
-{ path: "teams/:teamId/news-editor", element: <TeamNewsEditor /> },
+      { path: "teams/:teamId/news-requests", element: <TeamNewsRequests /> },
+      { path: "teams/:teamId/news-editor", element: <TeamNewsEditor /> },
 
+      {
+        path: "teams/create",
+        element: (
+          <ClubOfficerGuard>
+            <TeamCreatePage />
+          </ClubOfficerGuard>
+        ),
+      },
     ],
   },
 
+  { path: "/403", element: <ForbiddenPage /> },
+
+  // 404
   {
     path: "/myclub/staff",
     element: (

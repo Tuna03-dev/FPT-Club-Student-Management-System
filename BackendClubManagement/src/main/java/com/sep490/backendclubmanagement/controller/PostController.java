@@ -32,6 +32,7 @@ public class PostController {
     private final UserService userService;
     private final EntityManager entityManager;
 
+
     // 1) Bài toàn CLB (club-wide)
     // GET /posts/{clubId}/club-wide?Pageable...
     @GetMapping("/{clubId}/club-wide")
@@ -169,6 +170,8 @@ public ApiResponse<PostWithRelationsData> updatePost(
         postRepository.save(p);
         return ApiResponse.success(null);
     }
+
+
 
 
 

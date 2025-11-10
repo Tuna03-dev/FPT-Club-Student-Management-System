@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/clubs/{clubId}/teams") // nhớ có dấu '/'
+@RequestMapping("/api/clubs/{clubId}/teams")
 public class TeamRoleController {
 
     private final TeamRoleService teamRoleService;

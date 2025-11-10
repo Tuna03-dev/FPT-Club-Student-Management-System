@@ -12,37 +12,15 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { User, Users, LogOut, Shield } from "lucide-react";
-import { toast } from "sonner";
-
-// Mock data for clubs
-const mockClubs = [
-  {
-    clubId: 1,
-    clubName: "CLB HÍT HÀ DRAMA FU 2.0",
-    logoUrl: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='12' fill='%2348a9f0'/%3E%3Cpath d='M30 50 L50 30 L70 50 L50 70 Z' fill='white'/%3E%3C/svg%3E",
-  },
-  {
-    clubId: 2,
-    clubName: "FU - Hòa Lạc",
-    logoUrl: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='12' fill='%23ff69b4'/%3E%3Ctext x='50' y='60' font-size='36' font-weight='bold' text-anchor='middle' fill='white'%3E2025%3C/text%3E%3C/svg%3E",
-  },
-  {
-    clubId: 3,
-    clubName: "DỊCH VỤ SUPPORT COURSERA và UDEMY-OFFICIAL OPEN SOURCE...",
-    logoUrl: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='12' fill='%23ffd700'/%3E%3Ccircle cx='25' cy='50' r='15' fill='%23ff69b4'/%3E%3Ccircle cx='50' cy='50' r='15' fill='%23ffff00'/%3E%3Ccircle cx='75' cy='50' r='15' fill='%2348a9f0'/%3E%3C/svg%3E",
-  },
-  {
-    clubId: 4,
-    clubName: "FUOverflow | Cộng đồng sinh viên Đại",
-    logoUrl: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='12' fill='%23a855f7'/%3E%3Ctext x='50' y='60' font-size='32' font-weight='bold' text-anchor='middle' fill='white'%3EJO%3C/text%3E%3C/svg%3E",
-  },
-];
+import useMyClubs from "@/hooks/useMyClubs";
 
 const Header: React.FC = () => {
   const [user, setUser] = useState<UserInfo | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [showClubsList, setShowClubsList] = useState(false);
   const navigate = useNavigate();
+
+  const { data: clubs, loading: clubsLoading, error: clubsError } = useMyClubs();
 
   useEffect(() => {
     const checkAuth = () => {
@@ -51,18 +29,10 @@ const Header: React.FC = () => {
       setUser(currentUser);
       setIsAuthenticated(authenticated);
     };
-
     checkAuth();
-
-    // Listen for storage changes (e.g., when user logs in/out in another tab)
     window.addEventListener("storage", checkAuth);
-
-    // Listen for custom auth state change events (for same-tab updates)
-    const handleAuthChange = () => {
-      checkAuth();
-    };
+    const handleAuthChange = () => checkAuth();
     window.addEventListener("auth-state-changed", handleAuthChange);
-
     return () => {
       window.removeEventListener("storage", checkAuth);
       window.removeEventListener("auth-state-changed", handleAuthChange);
@@ -72,150 +42,136 @@ const Header: React.FC = () => {
   const handleLogout = async () => {
     try {
       await authService.logoutWithApi();
-      setUser(null);
-      setIsAuthenticated(false);
-      toast.success("Đăng xuất thành công!", { duration: 1000 });
-      navigate("/");
-    } catch (error) {
-      console.error("Logout error:", error);
-      // Even if API fails, clear local state and redirect
-      setUser(null);
-      setIsAuthenticated(false);
-      toast.success("Đăng xuất thành công!", { duration: 1000 });
-      navigate("/");
-    }
+    } catch {}
+    setUser(null);
+    setIsAuthenticated(false);
+    navigate("/");
   };
 
   const isAdmin =
     user?.systemRole === "ADMIN" || user?.systemRole === "MANAGER";
 
-  // Get initials for avatar fallback
-  const getInitials = (name: string) => {
-    return name
+  const getInitials = (name: string) =>
+    name
       .split(" ")
       .map((n) => n[0])
       .join("")
       .toUpperCase()
       .slice(0, 2);
-  };
 
   return (
-    <header className="bg-white shadow sticky top-0 z-40">
+    <header className="bg-white shadow-sm sticky top-0 z-40">
       <div className="container mx-auto px-6">
-        <div className="flex items-center justify-between py-4">
+        <div className="flex items-center justify-between py-3">
+          {/* Logo */}
           <Link to="/" className="flex items-center gap-3">
             <img
               src="/Logo_Trường_Đại_học_FPT.svg"
               alt="FPT"
               className="h-10"
             />
-            <div className="hidden sm:block">
-              <div className="text-sm font-semibold text-orange-600">
+            <div className="hidden sm:block leading-tight">
+              <div className="text-[14px] font-semibold text-orange-600">
                 TỔ CHỨC GIÁO DỤC FPT
               </div>
-              <div className="text-xs text-gray-500">Clubs & Events</div>
+              <div className="text-[12px] text-gray-500">Clubs & Events</div>
             </div>
           </Link>
 
-          <nav className="hidden md:flex items-center gap-8">
-            <Link
-              to="/"
-              className="text-gray-700 hover:text-orange-600 font-medium"
-            >
-              Trang chủ
-            </Link>
-            <Link
-              to="/clubs"
-              className="text-gray-700 hover:text-orange-600 font-medium"
-            >
-              Câu lạc bộ
-            </Link>
-            <Link
-              to="/myclub/select"
-              className="text-gray-700 hover:text-orange-600 font-medium"
-            >
-              CLB của tôi
-            </Link>
-            <Link
-              to="/events"
-              className="text-gray-700 hover:text-orange-600 font-medium"
-            >
-              Sự kiện
-            </Link>
-
-            <Link
-              to="/news"
-              className="text-gray-700 hover:text-orange-600 font-medium"
-            >
-              Tin tức
-            </Link>
-            <Link
-              to="/about"
-              className="text-gray-700 hover:text-orange-600 font-medium"
-            >
-              Giới thiệu
-            </Link>
+          {/* Navbar */}
+          <nav className="hidden md:flex items-center gap-7">
+            {[
+              { path: "/", label: "Trang chủ" },
+              { path: "/clubs", label: "Câu lạc bộ" },
+              { path: "/myclub/select", label: "CLB của tôi" },
+              { path: "/events", label: "Sự kiện" },
+              { path: "/news", label: "Tin tức" },
+              { path: "/about", label: "Giới thiệu" },
+            ].map((item) => (
+              <Link
+                key={item.path}
+                to={item.path}
+                className="text-[15px] font-medium text-gray-700 hover:text-orange-600 transition-colors"
+              >
+                {item.label}
+              </Link>
+            ))}
           </nav>
 
-          <div className="flex items-center gap-4 ">
+          {/* Avatar / Login */}
+          <div className="flex items-center gap-3">
             {isAuthenticated && user ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button className="group flex items-center gap-3 hover:bg-orange-50 transition-colors rounded-lg p-2 cursor-pointer">
-                    <Avatar className="h-10 w-10">
+                  <button className="flex items-center gap-2 rounded-md px-2 py-1 hover:bg-orange-50 transition">
+                    <Avatar className="h-9 w-9">
                       <AvatarImage src={user.avatarUrl} alt={user.fullName} />
-                      <AvatarFallback className="bg-orange-100 text-orange-600">
+                      <AvatarFallback className="bg-orange-100 text-orange-600 text-sm">
                         {getInitials(user.fullName)}
                       </AvatarFallback>
                     </Avatar>
-                    <span className="hidden sm:block text-gray-700 group-hover:text-orange-600 font-medium transition-colors">
+                    <span className="hidden sm:block text-[15px] font-medium text-gray-700 group-hover:text-orange-600">
                       {user.fullName}
                     </span>
                   </button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56 max-h-[32rem] overflow-y-auto">
+
+                <DropdownMenuContent
+                  align="end"
+                  className="w-60 max-h-[30rem] overflow-y-auto rounded-md shadow-lg"
+                >
                   <DropdownMenuLabel>
-                    <div className="flex flex-col space-y-1">
-                      <p className="text-sm font-medium">{user.fullName}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {user.email}
+                    <div className="flex flex-col space-y-0.5">
+                      <p className="text-[14px] font-semibold text-gray-800">
+                        {user.fullName}
                       </p>
+                      <p className="text-[13px] text-gray-500">{user.email}</p>
                     </div>
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
+
                   {!showClubsList ? (
                     <>
                       <DropdownMenuItem
                         onClick={() => navigate("/profile")}
-                        className="cursor-pointer"
+                        className="cursor-pointer text-[14px] text-gray-700"
                       >
-                        <User className="mr-2 h-4 w-4" />
-                        <span>Thông tin cá nhân</span>
+                        <User className="mr-2 h-4 w-4 text-orange-500" />
+                        Thông tin cá nhân
                       </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => setShowClubsList(true)}
-                        onSelect={(e) => e.preventDefault()}
-                        className="cursor-pointer"
-                      >
-                        <Users className="mr-2 h-4 w-4" />
-                        <span>Câu lạc bộ của tôi</span>
-                      </DropdownMenuItem>
+
+                      {/* Hiển thị “Câu lạc bộ của tôi” chỉ khi có CLB */}
+                      {!clubsLoading &&
+                        !clubsError &&
+                        clubs &&
+                        clubs.length > 0 && (
+                          <DropdownMenuItem
+                            onClick={() => setShowClubsList(true)}
+                            onSelect={(e) => e.preventDefault()}
+                            className="cursor-pointer text-[14px] text-gray-700"
+                          >
+                            <Users className="mr-2 h-4 w-4 text-orange-500" />
+                            Câu lạc bộ của tôi
+                          </DropdownMenuItem>
+                        )}
+
                       {isAdmin && (
                         <DropdownMenuItem
                           onClick={() => navigate("/admin")}
-                          className="cursor-pointer"
+                          className="cursor-pointer text-[14px] text-gray-700"
                         >
-                          <Shield className="mr-2 h-4 w-4" />
-                          <span>Trang quản trị</span>
+                          <Shield className="mr-2 h-4 w-4 text-orange-500" />
+                          Trang quản trị
                         </DropdownMenuItem>
                       )}
+
                       <DropdownMenuSeparator />
                       <DropdownMenuItem
                         onClick={handleLogout}
-                        className="cursor-pointer text-red-600 "
+                        className="cursor-pointer text-[14px] text-red-600"
                       >
                         <LogOut className="mr-2 h-4 w-4" />
-                        <span>Đăng xuất</span>
+                        Đăng xuất
                       </DropdownMenuItem>
                     </>
                   ) : (
@@ -223,40 +179,70 @@ const Header: React.FC = () => {
                       <DropdownMenuItem
                         onClick={() => setShowClubsList(false)}
                         onSelect={(e) => e.preventDefault()}
-                        className="cursor-pointer"
+                        className="cursor-pointer text-[13px] text-gray-500"
                       >
-                        <span className="text-xs text-gray-500">← Quay lại</span>
+                        ← Quay lại
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
-                      <DropdownMenuLabel className="px-3 py-2 text-base font-semibold">
-                        Lối tắt của bạn
+                      <DropdownMenuLabel className="px-3 py-1.5 text-[14px] font-semibold text-gray-800">
+                        CLB của bạn
                       </DropdownMenuLabel>
-                      {mockClubs.map((club) => (
-                        <DropdownMenuItem
-                          key={club.clubId}
-                          onClick={() => navigate(`/myclub/${club.clubId}`)}
-                          className="cursor-pointer"
-                        >
-                          <div className="flex items-center gap-3 w-full">
-                            {club.logoUrl ? (
-                              <img
-                                src={club.logoUrl}
-                                alt={club.clubName}
-                                className="h-10 w-10 rounded-md flex-shrink-0 object-cover"
-                              />
-                            ) : (
-                              <div className="h-10 w-10 rounded-md bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center flex-shrink-0">
-                                <span className="text-white font-bold text-sm">
-                                  {club.clubName.charAt(0)}
-                                </span>
-                              </div>
-                            )}
-                            <span className="text-sm truncate flex-1">
-                              {club.clubName}
-                            </span>
+
+                      {/* Trạng thái tải */}
+                      {clubsLoading && (
+                        <div className="px-3 py-2 text-[14px] text-gray-500">
+                          Đang tải danh sách CLB…
+                        </div>
+                      )}
+                      {clubsError && (
+                        <div className="px-3 py-2 text-[14px] text-red-600">
+                          {clubsError}
+                        </div>
+                      )}
+                      {!clubsLoading &&
+                        !clubsError &&
+                        (!clubs || clubs.length === 0) && (
+                          <div className="px-3 py-2 text-[14px] text-gray-500">
+                            Bạn chưa thuộc CLB nào.
                           </div>
-                        </DropdownMenuItem>
-                      ))}
+                        )}
+
+                      {/* Danh sách CLB thực tế */}
+                      {!clubsLoading &&
+                        !clubsError &&
+                        clubs?.map((club) => (
+                          <DropdownMenuItem
+                            key={club.clubId}
+                            onClick={() => {
+                              localStorage.setItem(
+                                "lastClubId",
+                                String(club.clubId)
+                              );
+                              setShowClubsList(false);
+                              navigate(`/myclub/${club.clubId}`);
+                            }}
+                            className="cursor-pointer"
+                          >
+                            <div className="flex items-center gap-3 w-full">
+                              {club.logoUrl ? (
+                                <img
+                                  src={club.logoUrl}
+                                  alt={club.clubName}
+                                  className="h-9 w-9 rounded-md object-cover"
+                                />
+                              ) : (
+                                <div className="h-9 w-9 rounded-md bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center">
+                                  <span className="text-white font-bold text-sm">
+                                    {club.clubName?.charAt(0) || "C"}
+                                  </span>
+                                </div>
+                              )}
+                              <span className="text-[14px] truncate text-gray-700">
+                                {club.clubName}
+                              </span>
+                            </div>
+                          </DropdownMenuItem>
+                        ))}
                     </>
                   )}
                 </DropdownMenuContent>
@@ -264,7 +250,7 @@ const Header: React.FC = () => {
             ) : (
               <Link
                 to="/login"
-                className="hidden sm:inline-block bg-transparent border border-orange-500 text-orange-500 px-4 py-2 rounded-md font-medium hover:bg-orange-50 text-center"
+                className="hidden sm:inline-block border border-orange-500 text-orange-500 text-[14px] px-4 py-1.5 rounded-md font-medium hover:bg-orange-50 transition"
               >
                 Đăng nhập
               </Link>
