@@ -1,10 +1,7 @@
-"use client";
-
 import type React from "react";
 
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -32,15 +29,9 @@ import {
   Search,
   Check,
 } from "lucide-react";
-import {
-  getAllClubs,
-  type ClubDto,
-} from "@/service/EventService";
-import {
-  getEventsWithoutReportRequirement,
-  type EventWithoutReportRequirementDto,
-} from "@/services/reportService";
-
+import { getAllClubs, type ClubDto } from "@/service/EventService";
+import { getEventsWithoutReportRequirement } from "@/services/reportService";
+import { type EventWithoutReportRequirementDto } from "@/types/dto/reportRequirement.dto";
 type ReportType = "periodic" | "post-event" | "other";
 
 interface ReportSubmissionModalProps {
@@ -152,7 +143,9 @@ export function ReportSubmissionModal({
   const [clubs, setClubs] = useState<ClubDto[]>([]);
   const [eventSearchQuery, setEventSearchQuery] = useState("");
   const [clubSearchQuery, setClubSearchQuery] = useState("");
-  const [selectedClubIdForEvent, setSelectedClubIdForEvent] = useState<number | "all">("all");
+  const [selectedClubIdForEvent, setSelectedClubIdForEvent] = useState<
+    number | "all"
+  >("all");
   const [loadingEvents, setLoadingEvents] = useState(false);
   const [loadingClubs, setLoadingClubs] = useState(false);
 
@@ -338,13 +331,14 @@ export function ReportSubmissionModal({
   const filteredEvents = events.filter((event) => {
     // Filter by club if selected
     const matchesClub =
-      selectedClubIdForEvent === "all" || event.clubId === selectedClubIdForEvent;
-    
+      selectedClubIdForEvent === "all" ||
+      event.clubId === selectedClubIdForEvent;
+
     // Filter by search query
     const matchesSearch =
       event.eventTitle.toLowerCase().includes(eventSearchQuery.toLowerCase()) ||
       event.clubName.toLowerCase().includes(eventSearchQuery.toLowerCase());
-    
+
     return matchesClub && matchesSearch;
   });
 
@@ -399,399 +393,417 @@ export function ReportSubmissionModal({
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="!max-w-[calc(100%-2rem)] sm:!max-w-5xl max-h-[90vh] overflow-y-auto p-0">
-        <div className="sticky top-0 bg-background border-b z-10">
-          <DialogHeader className="p-6 pb-4">
-            <DialogTitle className="text-2xl">
-              Yêu cầu nộp báo cáo mới
-            </DialogTitle>
-            <DialogDescription>
-              Tạo báo cáo định kỳ hoặc báo cáo sau sự kiện cho nhà trường
-            </DialogDescription>
-          </DialogHeader>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-6 p-6 pt-0">
-          {/* Report Type Selection */}
-          <div className="space-y-2">
-            <Label htmlFor="reportType" className="text-base font-semibold">
-              Loại báo cáo <span className="text-red-500">*</span>
-            </Label>
-            <select
-              id="reportType"
-              value={formData.type}
-              onChange={(e) => {
-                const newType = e.target.value as ReportType;
-                setFormData({
-                  ...formData,
-                  type: newType,
-                  selectedEventId: undefined,
-                  selectedClubIds: undefined,
-                });
-              }}
-              className="w-full px-3 py-2 border rounded-md text-sm bg-background"
-            >
-              {REPORT_TYPES.map((type) => (
-                <option key={type.value} value={type.value}>
-                  {type.label}
-                </option>
-              ))}
-            </select>
+          <div className="sticky top-0 bg-background border-b z-10">
+            <DialogHeader className="p-6 pb-4">
+              <DialogTitle className="text-2xl">
+                Yêu cầu nộp báo cáo mới
+              </DialogTitle>
+              <DialogDescription>
+                Tạo báo cáo định kỳ hoặc báo cáo sau sự kiện cho nhà trường
+              </DialogDescription>
+            </DialogHeader>
           </div>
 
-          {/* Notice for periodic report */}
-          {formData.type === "periodic" && (
-            <p className="text-sm text-blue-800">
-              ℹ️ Yêu cầu sẽ được gửi đến tất cả câu lạc bộ
-            </p>
-          )}
-
-          {/* Basic Information */}
-          <div className="space-y-4">
-            <h3 className="font-semibold text-base flex items-center gap-2">
-              <FileText className="h-4 w-4" />
-              Thông tin cơ bản
-            </h3>
-
+          <form onSubmit={handleSubmit} className="space-y-6 p-6 pt-0">
+            {/* Report Type Selection */}
             <div className="space-y-2">
-              <Label htmlFor="title">
-                Tiêu đề báo cáo <span className="text-red-500">*</span>
+              <Label htmlFor="reportType" className="text-base font-semibold">
+                Loại báo cáo <span className="text-red-500">*</span>
               </Label>
-              <Input
-                id="title"
-                placeholder="VD: Báo cáo hoạt động tháng 11/2024"
-                value={formData.title}
+              <select
+                id="reportType"
+                value={formData.type}
                 onChange={(e) => {
-                  setFormData({ ...formData, title: e.target.value });
-                  if (errors.title) setErrors({ ...errors, title: "" });
+                  const newType = e.target.value as ReportType;
+                  setFormData({
+                    ...formData,
+                    type: newType,
+                    selectedEventId: undefined,
+                    selectedClubIds: undefined,
+                  });
                 }}
-                className={errors.title ? "border-red-500" : ""}
-              />
-              {errors.title && (
-                <p className="text-xs text-red-500 flex items-center gap-1">
-                  <AlertCircle className="h-3 w-3" />
-                  {errors.title}
-                </p>
-              )}
+                className="w-full px-3 py-2 border rounded-md text-sm bg-background"
+              >
+                {REPORT_TYPES.map((type) => (
+                  <option key={type.value} value={type.value}>
+                    {type.label}
+                  </option>
+                ))}
+              </select>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="dueDate">
-                Ngày hạn chót <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                id="dueDate"
-                type="date"
-                value={formData.dueDate}
-                onChange={(e) => {
-                  setFormData({ ...formData, dueDate: e.target.value });
-                  if (errors.dueDate) setErrors({ ...errors, dueDate: "" });
-                }}
-                className={errors.dueDate ? "border-red-500" : ""}
-                min={new Date().toISOString().split("T")[0]}
-              />
-              {errors.dueDate && (
-                <p className="text-xs text-red-500 flex items-center gap-1">
-                  <AlertCircle className="h-3 w-3" />
-                  {errors.dueDate}
-                </p>
-              )}
-            </div>
-          </div>
+            {/* Notice for periodic report */}
+            {formData.type === "periodic" && (
+              <p className="text-sm text-blue-800">
+                ℹ️ Yêu cầu sẽ được gửi đến tất cả câu lạc bộ
+              </p>
+            )}
 
-          {/* Event Selection for post-event */}
-          {formData.type === "post-event" && (
+            {/* Basic Information */}
             <div className="space-y-4">
-              <h3 className="font-semibold text-base">Chọn sự kiện</h3>
-              <div className="space-y-2">
-                {formData.selectedEventId ? (
-                  // Show selected event
-                  <div className="border rounded-md p-3 bg-secondary/50">
-                    <div className="flex items-center justify-between">
-                      <p className="font-medium text-sm">
-                        {events.find((e) => e.eventId === formData.selectedEventId)
-                          ?.eventTitle || "Sự kiện đã chọn"}
-                      </p>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          setFormData({
-                            ...formData,
-                            selectedEventId: undefined,
-                          });
-                          setEventSearchQuery("");
-                          setSelectedClubIdForEvent("all");
-                        }}
-                        className="h-8 text-xs"
-                      >
-                        Thay đổi
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  // Show event list
-                  <>
-                    {/* Club Filter Dropdown */}
-                    <div className="space-y-1">
-                      <Label className="text-sm">Lọc theo câu lạc bộ</Label>
-                      <Select
-                        value={selectedClubIdForEvent === "all" ? "all" : selectedClubIdForEvent.toString()}
-                        onValueChange={(value) => {
-                          setSelectedClubIdForEvent(value === "all" ? "all" : parseInt(value));
-                        }}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Tất cả câu lạc bộ" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">Tất cả câu lạc bộ</SelectItem>
-                          {clubs.map((club) => (
-                            <SelectItem key={club.id} value={club.id.toString()}>
-                              {club.clubName}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
+              <h3 className="font-semibold text-base flex items-center gap-2">
+                <FileText className="h-4 w-4" />
+                Thông tin cơ bản
+              </h3>
 
-                    {/* Event Search */}
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        placeholder="Tìm kiếm sự kiện..."
-                        value={eventSearchQuery}
-                        onChange={(e) => setEventSearchQuery(e.target.value)}
-                        className="pl-9"
-                      />
-                    </div>
-                    {loadingEvents ? (
-                      <div className="text-sm text-muted-foreground text-center py-4">
-                        Đang tải...
-                      </div>
-                    ) : filteredEvents.length === 0 ? (
-                      <div className="text-sm text-muted-foreground text-center py-4">
-                        Không tìm thấy sự kiện nào
-                      </div>
-                    ) : (
-                      <div className="border rounded-md max-h-60 overflow-y-auto">
-                        {filteredEvents.map((event) => (
-                          <div
-                            key={event.eventId}
-                            className="p-3 cursor-pointer hover:bg-secondary transition-colors border-b last:border-b-0"
-                            onClick={() => {
-                              setFormData({
-                                ...formData,
-                                selectedEventId: event.eventId,
-                              });
-                              if (errors.selectedEventId) {
-                                setErrors({ ...errors, selectedEventId: "" });
-                              }
-                            }}
-                          >
-                            <p className="font-medium text-sm">{event.eventTitle}</p>
-                            <p className="text-xs text-muted-foreground mt-1">{event.clubName}</p>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </>
-                )}
-                {errors.selectedEventId && (
+              <div className="space-y-2">
+                <Label htmlFor="title">
+                  Tiêu đề báo cáo <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  id="title"
+                  placeholder="VD: Báo cáo hoạt động tháng 11/2024"
+                  value={formData.title}
+                  onChange={(e) => {
+                    setFormData({ ...formData, title: e.target.value });
+                    if (errors.title) setErrors({ ...errors, title: "" });
+                  }}
+                  className={errors.title ? "border-red-500" : ""}
+                />
+                {errors.title && (
                   <p className="text-xs text-red-500 flex items-center gap-1">
                     <AlertCircle className="h-3 w-3" />
-                    {errors.selectedEventId}
+                    {errors.title}
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="dueDate">
+                  Ngày hạn chót <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  id="dueDate"
+                  type="date"
+                  value={formData.dueDate}
+                  onChange={(e) => {
+                    setFormData({ ...formData, dueDate: e.target.value });
+                    if (errors.dueDate) setErrors({ ...errors, dueDate: "" });
+                  }}
+                  className={errors.dueDate ? "border-red-500" : ""}
+                  min={new Date().toISOString().split("T")[0]}
+                />
+                {errors.dueDate && (
+                  <p className="text-xs text-red-500 flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3" />
+                    {errors.dueDate}
                   </p>
                 )}
               </div>
             </div>
-          )}
 
-          {/* Club Selection for other */}
-          {formData.type === "other" && (
-            <div className="space-y-4">
-              <h3 className="font-semibold text-base">
-                Chọn câu lạc bộ <span className="text-red-500">*</span>
-              </h3>
-              <div className="space-y-2">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Tìm kiếm câu lạc bộ..."
-                    value={clubSearchQuery}
-                    onChange={(e) => setClubSearchQuery(e.target.value)}
-                    className="pl-9"
-                  />
-                </div>
-                {loadingClubs ? (
-                  <div className="text-sm text-muted-foreground text-center py-4">
-                    Đang tải...
-                  </div>
-                ) : filteredClubs.length === 0 ? (
-                  <div className="text-sm text-muted-foreground text-center py-4">
-                    Không tìm thấy câu lạc bộ nào
-                  </div>
-                ) : (
-                  <div className="border rounded-md max-h-60 overflow-y-auto">
-                    {filteredClubs.map((club) => {
-                      const isSelected =
-                        formData.selectedClubIds?.includes(club.id) || false;
-                      return (
-                        <div
-                          key={club.id}
-                          className={`p-3 cursor-pointer hover:bg-secondary transition-colors border-b last:border-b-0 ${
-                            isSelected ? "bg-primary/10 border-primary" : ""
-                          }`}
-                          onClick={() => toggleClubSelection(club.id)}
+            {/* Event Selection for post-event */}
+            {formData.type === "post-event" && (
+              <div className="space-y-4">
+                <h3 className="font-semibold text-base">Chọn sự kiện</h3>
+                <div className="space-y-2">
+                  {formData.selectedEventId ? (
+                    // Show selected event
+                    <div className="border rounded-md p-3 bg-secondary/50">
+                      <div className="flex items-center justify-between">
+                        <p className="font-medium text-sm">
+                          {events.find(
+                            (e) => e.eventId === formData.selectedEventId
+                          )?.eventTitle || "Sự kiện đã chọn"}
+                        </p>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setFormData({
+                              ...formData,
+                              selectedEventId: undefined,
+                            });
+                            setEventSearchQuery("");
+                            setSelectedClubIdForEvent("all");
+                          }}
+                          className="h-8 text-xs"
                         >
-                          <div className="flex items-center justify-between">
-                            <p className="font-medium text-sm">
-                              {club.clubName}
-                            </p>
-                            {isSelected && (
-                              <Check className="h-5 w-5 text-primary" />
-                            )}
-                          </div>
+                          Thay đổi
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    // Show event list
+                    <>
+                      {/* Club Filter Dropdown */}
+                      <div className="space-y-1">
+                        <Label className="text-sm">Lọc theo câu lạc bộ</Label>
+                        <Select
+                          value={
+                            selectedClubIdForEvent === "all"
+                              ? "all"
+                              : selectedClubIdForEvent.toString()
+                          }
+                          onValueChange={(value) => {
+                            setSelectedClubIdForEvent(
+                              value === "all" ? "all" : parseInt(value)
+                            );
+                          }}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Tất cả câu lạc bộ" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">
+                              Tất cả câu lạc bộ
+                            </SelectItem>
+                            {clubs.map((club) => (
+                              <SelectItem
+                                key={club.id}
+                                value={club.id.toString()}
+                              >
+                                {club.clubName}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {/* Event Search */}
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          placeholder="Tìm kiếm sự kiện..."
+                          value={eventSearchQuery}
+                          onChange={(e) => setEventSearchQuery(e.target.value)}
+                          className="pl-9"
+                        />
+                      </div>
+                      {loadingEvents ? (
+                        <div className="text-sm text-muted-foreground text-center py-4">
+                          Đang tải...
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
-                {formData.selectedClubIds &&
-                  formData.selectedClubIds.length > 0 && (
-                    <p className="text-xs text-muted-foreground">
-                      Đã chọn {formData.selectedClubIds.length} câu lạc bộ
+                      ) : filteredEvents.length === 0 ? (
+                        <div className="text-sm text-muted-foreground text-center py-4">
+                          Không tìm thấy sự kiện nào
+                        </div>
+                      ) : (
+                        <div className="border rounded-md max-h-60 overflow-y-auto">
+                          {filteredEvents.map((event) => (
+                            <div
+                              key={event.eventId}
+                              className="p-3 cursor-pointer hover:bg-secondary transition-colors border-b last:border-b-0"
+                              onClick={() => {
+                                setFormData({
+                                  ...formData,
+                                  selectedEventId: event.eventId,
+                                });
+                                if (errors.selectedEventId) {
+                                  setErrors({ ...errors, selectedEventId: "" });
+                                }
+                              }}
+                            >
+                              <p className="font-medium text-sm">
+                                {event.eventTitle}
+                              </p>
+                              <p className="text-xs text-muted-foreground mt-1">
+                                {event.clubName}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
+                  {errors.selectedEventId && (
+                    <p className="text-xs text-red-500 flex items-center gap-1">
+                      <AlertCircle className="h-3 w-3" />
+                      {errors.selectedEventId}
                     </p>
                   )}
-                {errors.selectedClubIds && (
-                  <p className="text-xs text-red-500 flex items-center gap-1">
-                    <AlertCircle className="h-3 w-3" />
-                    {errors.selectedClubIds}
-                  </p>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Content Section */}
-          <div className="space-y-4">
-            <h3 className="font-semibold text-base flex items-center gap-2">
-              <Clock className="h-4 w-4" />
-              Nội dung báo cáo
-            </h3>
-
-            <div className="space-y-2">
-              <Label htmlFor="content">
-                Thông tin cần cung cấp <span className="text-red-500">*</span>
-              </Label>
-              <Textarea
-                id="content"
-                placeholder={template.placeholder}
-                value={formData.content}
-                onChange={(e) => {
-                  setFormData({ ...formData, content: e.target.value });
-                  if (errors.content) setErrors({ ...errors, content: "" });
-                }}
-                rows={8}
-                className={`resize-none ${
-                  errors.content ? "border-red-500" : ""
-                }`}
-              />
-              {errors.content && (
-                <p className="text-xs text-red-500 flex items-center gap-1">
-                  <AlertCircle className="h-3 w-3" />
-                  {errors.content}
-                </p>
-              )}
-            </div>
-          </div>
-
-          {/* File Attachments */}
-          <div className="space-y-4">
-            <h3 className="font-semibold text-base flex items-center gap-2">
-              <Upload className="h-4 w-4" />
-              Tệp đính kèm (tùy chọn)
-            </h3>
-
-            <div className="border-2 border-dashed border-muted rounded-lg p-6 text-center hover:border-primary/50 transition-colors">
-              <label className="cursor-pointer">
-                <div className="flex flex-col items-center gap-2">
-                  <Upload className="h-6 w-6 text-muted-foreground" />
-                  <div className="text-sm">
-                    <p className="font-medium">Kéo thả tệp hoặc nhấp để chọn</p>
-                    <p className="text-xs text-muted-foreground">
-                      Chỉ một tệp hoặc một tệp zip (tối đa 50MB)
-                    </p>
-                  </div>
-                </div>
-                <input
-                  type="file"
-                  onChange={handleFileUpload}
-                  className="hidden"
-                  accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.jpg,.jpeg,.png,.zip"
-                />
-              </label>
-            </div>
-
-            {/* Attached Files List */}
-            {attachedFiles.length > 0 && (
-              <div className="space-y-2">
-                <p className="text-sm font-medium">
-                  Tệp đã đính kèm ({attachedFiles.length})
-                </p>
-                <div className="space-y-2">
-                  {attachedFiles.map((file) => (
-                    <div
-                      key={file.id}
-                      className="flex items-center justify-between bg-muted/50 p-3 rounded-md"
-                    >
-                      <div className="flex items-center gap-2 flex-1 min-w-0">
-                        <FileText className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium truncate">
-                            {file.name}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {formatFileSize(file.size)}
-                          </p>
-                        </div>
-                      </div>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => removeFile(file.id)}
-                        className="flex-shrink-0"
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ))}
                 </div>
               </div>
             )}
-          </div>
 
-          {/* Form Actions */}
-          <div className="flex gap-3 justify-end pt-4 border-t sticky bottom-0 bg-background">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleCancelClick}
-              disabled={isLoading}
-              className="bg-transparent"
-            >
-              Hủy
-            </Button>
-            <Button
-              type="submit"
-              disabled={isLoading}
-              className="bg-primary text-primary-foreground hover:bg-primary/90"
-            >
-              {isLoading ? "Đang gửi..." : "Gửi yêu cầu"}
-            </Button>
-          </div>
-        </form>
+            {/* Club Selection for other */}
+            {formData.type === "other" && (
+              <div className="space-y-4">
+                <h3 className="font-semibold text-base">
+                  Chọn câu lạc bộ <span className="text-red-500">*</span>
+                </h3>
+                <div className="space-y-2">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Tìm kiếm câu lạc bộ..."
+                      value={clubSearchQuery}
+                      onChange={(e) => setClubSearchQuery(e.target.value)}
+                      className="pl-9"
+                    />
+                  </div>
+                  {loadingClubs ? (
+                    <div className="text-sm text-muted-foreground text-center py-4">
+                      Đang tải...
+                    </div>
+                  ) : filteredClubs.length === 0 ? (
+                    <div className="text-sm text-muted-foreground text-center py-4">
+                      Không tìm thấy câu lạc bộ nào
+                    </div>
+                  ) : (
+                    <div className="border rounded-md max-h-60 overflow-y-auto">
+                      {filteredClubs.map((club) => {
+                        const isSelected =
+                          formData.selectedClubIds?.includes(club.id) || false;
+                        return (
+                          <div
+                            key={club.id}
+                            className={`p-3 cursor-pointer hover:bg-secondary transition-colors border-b last:border-b-0 ${
+                              isSelected ? "bg-primary/10 border-primary" : ""
+                            }`}
+                            onClick={() => toggleClubSelection(club.id)}
+                          >
+                            <div className="flex items-center justify-between">
+                              <p className="font-medium text-sm">
+                                {club.clubName}
+                              </p>
+                              {isSelected && (
+                                <Check className="h-5 w-5 text-primary" />
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {formData.selectedClubIds &&
+                    formData.selectedClubIds.length > 0 && (
+                      <p className="text-xs text-muted-foreground">
+                        Đã chọn {formData.selectedClubIds.length} câu lạc bộ
+                      </p>
+                    )}
+                  {errors.selectedClubIds && (
+                    <p className="text-xs text-red-500 flex items-center gap-1">
+                      <AlertCircle className="h-3 w-3" />
+                      {errors.selectedClubIds}
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Content Section */}
+            <div className="space-y-4">
+              <h3 className="font-semibold text-base flex items-center gap-2">
+                <Clock className="h-4 w-4" />
+                Nội dung báo cáo
+              </h3>
+
+              <div className="space-y-2">
+                <Label htmlFor="content">
+                  Thông tin cần cung cấp <span className="text-red-500">*</span>
+                </Label>
+                <Textarea
+                  id="content"
+                  placeholder={template.placeholder}
+                  value={formData.content}
+                  onChange={(e) => {
+                    setFormData({ ...formData, content: e.target.value });
+                    if (errors.content) setErrors({ ...errors, content: "" });
+                  }}
+                  rows={8}
+                  className={`resize-none ${
+                    errors.content ? "border-red-500" : ""
+                  }`}
+                />
+                {errors.content && (
+                  <p className="text-xs text-red-500 flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3" />
+                    {errors.content}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* File Attachments */}
+            <div className="space-y-4">
+              <h3 className="font-semibold text-base flex items-center gap-2">
+                <Upload className="h-4 w-4" />
+                Tệp đính kèm (tùy chọn)
+              </h3>
+
+              <div className="border-2 border-dashed border-muted rounded-lg p-6 text-center hover:border-primary/50 transition-colors">
+                <label className="cursor-pointer">
+                  <div className="flex flex-col items-center gap-2">
+                    <Upload className="h-6 w-6 text-muted-foreground" />
+                    <div className="text-sm">
+                      <p className="font-medium">
+                        Kéo thả tệp hoặc nhấp để chọn
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Chỉ một tệp hoặc một tệp zip (tối đa 50MB)
+                      </p>
+                    </div>
+                  </div>
+                  <input
+                    type="file"
+                    onChange={handleFileUpload}
+                    className="hidden"
+                    accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.jpg,.jpeg,.png,.zip"
+                  />
+                </label>
+              </div>
+
+              {/* Attached Files List */}
+              {attachedFiles.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">
+                    Tệp đã đính kèm ({attachedFiles.length})
+                  </p>
+                  <div className="space-y-2">
+                    {attachedFiles.map((file) => (
+                      <div
+                        key={file.id}
+                        className="flex items-center justify-between bg-muted/50 p-3 rounded-md"
+                      >
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          <FileText className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium truncate">
+                              {file.name}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {formatFileSize(file.size)}
+                            </p>
+                          </div>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeFile(file.id)}
+                          className="flex-shrink-0"
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Form Actions */}
+            <div className="flex gap-3 justify-end pt-4 border-t sticky bottom-0 bg-background">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleCancelClick}
+                disabled={isLoading}
+                className="bg-transparent"
+              >
+                Hủy
+              </Button>
+              <Button
+                type="submit"
+                disabled={isLoading}
+                className="bg-primary text-primary-foreground hover:bg-primary/90"
+              >
+                {isLoading ? "Đang gửi..." : "Gửi yêu cầu"}
+              </Button>
+            </div>
+          </form>
         </DialogContent>
       </Dialog>
 
@@ -809,10 +821,19 @@ export function ReportSubmissionModal({
               <p className="text-sm font-medium">Thông tin yêu cầu:</p>
               <ul className="text-sm text-muted-foreground mt-2 space-y-1">
                 <li>• Tiêu đề: {formData.title || "Chưa có"}</li>
-                <li>• Loại báo cáo: {REPORT_TYPES.find(t => t.value === formData.type)?.label}</li>
+                <li>
+                  • Loại báo cáo:{" "}
+                  {REPORT_TYPES.find((t) => t.value === formData.type)?.label}
+                </li>
                 <li>• Ngày hạn chót: {formData.dueDate || "Chưa có"}</li>
                 {formData.type === "post-event" && formData.selectedEventId && (
-                  <li>• Sự kiện: {events.find(e => e.eventId === formData.selectedEventId)?.eventTitle}</li>
+                  <li>
+                    • Sự kiện:{" "}
+                    {
+                      events.find((e) => e.eventId === formData.selectedEventId)
+                        ?.eventTitle
+                    }
+                  </li>
                 )}
                 {formData.type === "other" && formData.selectedClubIds && (
                   <li>• Số CLB: {formData.selectedClubIds.length}</li>
@@ -851,7 +872,8 @@ export function ReportSubmissionModal({
           <div className="space-y-4 py-4">
             <div className="p-4 rounded-lg bg-destructive/10 border border-destructive/30">
               <p className="text-sm text-destructive font-medium">
-                ⚠️ Lưu ý: Tất cả thông tin đã nhập sẽ bị mất và không thể khôi phục.
+                ⚠️ Lưu ý: Tất cả thông tin đã nhập sẽ bị mất và không thể khôi
+                phục.
               </p>
             </div>
           </div>
@@ -862,10 +884,7 @@ export function ReportSubmissionModal({
             >
               Quay lại
             </Button>
-            <Button
-              variant="destructive"
-              onClick={handleConfirmCancel}
-            >
+            <Button variant="destructive" onClick={handleConfirmCancel}>
               Xác nhận hủy
             </Button>
           </DialogFooter>
