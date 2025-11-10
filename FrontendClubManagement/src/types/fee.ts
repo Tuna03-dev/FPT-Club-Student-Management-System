@@ -8,10 +8,12 @@ export interface Fee {
   feeType: FeeType;
   dueDate: string;
   isMandatory: boolean;
-  isLocked?: boolean;
+  isDraft?: boolean;
   totalMembers?: number;
   paidMembers?: number;
   status?: "active" | "completed" | "overdue";
+  paidDate?: string;
+  transactionReference?: string;
 }
 
 export interface CreateFeeRequest {
@@ -21,7 +23,7 @@ export interface CreateFeeRequest {
   feeType: FeeType;
   dueDate: string;
   isMandatory: boolean;
-  isLocked?: boolean;
+  isDraft?: boolean;
 }
 
 export interface UpdateFeeRequest {
@@ -31,5 +33,5 @@ export interface UpdateFeeRequest {
   feeType: FeeType;
   dueDate: string;
   isMandatory: boolean;
-  isLocked?: boolean;
+  isDraft?: boolean;
 }

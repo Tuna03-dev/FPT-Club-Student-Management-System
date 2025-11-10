@@ -2,16 +2,19 @@ package com.sep490.backendclubmanagement.controller;
 
 import com.sep490.backendclubmanagement.dto.ApiResponse;
 import com.sep490.backendclubmanagement.dto.request.CreateFeeRequest;
-import com.sep490.backendclubmanagement.dto.request.LockFeeRequest;
 import com.sep490.backendclubmanagement.dto.request.UpdateFeeRequest;
 import com.sep490.backendclubmanagement.dto.response.FeeDetailResponse;
 import com.sep490.backendclubmanagement.dto.response.FeeResponse;
+import com.sep490.backendclubmanagement.dto.response.PageResponse;
 import com.sep490.backendclubmanagement.dto.response.PayOSCreatePaymentResponse;
 import com.sep490.backendclubmanagement.exception.AppException;
 import com.sep490.backendclubmanagement.exception.ErrorCode;
 import com.sep490.backendclubmanagement.service.FeeService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Arrays;
@@ -24,8 +27,22 @@ public class FeeController {
     private final FeeService feeService;
 
     @GetMapping
-    public ApiResponse<List<FeeDetailResponse>> getFees(@PathVariable Long clubId) {
-        List<FeeDetailResponse> responses = feeService.getFeesByClubId(clubId);
+    public ApiResponse<PageResponse<FeeDetailResponse>> getFees(
+            @PathVariable Long clubId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size
+    ) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by(
+                Sort.Order.desc("isDraft"),
+                Sort.Order.desc("createdAt")
+        ));
+        PageResponse<FeeDetailResponse> responses = feeService.getFeesByClubId(clubId, pageable);
+        return ApiResponse.success(responses);
+    }
+
+    @GetMapping("/drafts")
+    public ApiResponse<List<FeeDetailResponse>> getDraftFees(@PathVariable Long clubId) {
+        List<FeeDetailResponse> responses = feeService.getDraftFeesByClubId(clubId);
         return ApiResponse.success(responses);
     }
 
@@ -81,19 +98,7 @@ public class FeeController {
         }
     }
 
-    @PatchMapping("/{feeId}/lock")
-    public ApiResponse<FeeDetailResponse> lockFee(
-            @PathVariable Long clubId,
-            @PathVariable Long feeId,
-            @RequestBody LockFeeRequest body
-    ) {
-        try {
-            FeeDetailResponse feeDto = feeService.lockFee(feeId, body.isLocked());
-            return ApiResponse.success(feeDto);
-        } catch (AppException ex) {
-            return ApiResponse.error(ex.getErrorCode(), ex.getMessage(), null);
-        }
-    }
+    
 
 
     @PostMapping("/{feeId}/generate-payment")
@@ -113,6 +118,19 @@ public class FeeController {
         }
     }
 
+    @PatchMapping("/{feeId}/publish")
+    public ApiResponse<FeeDetailResponse> publishFee(
+            @PathVariable Long clubId,
+            @PathVariable Long feeId
+    ) {
+        try {
+            FeeDetailResponse feeDto = feeService.publishFee(feeId);
+            return ApiResponse.success(feeDto);
+        } catch (AppException ex) {
+            return ApiResponse.error(ex.getErrorCode(), ex.getMessage(), null);
+        }
+    }
+
     @GetMapping("/unpaid")
     public ApiResponse<List<FeeDetailResponse>> getUnpaidFees(
             @PathVariable Long clubId,
@@ -123,11 +141,16 @@ public class FeeController {
     }
 
     @GetMapping("/paid")
-    public ApiResponse<List<FeeDetailResponse>> getPaidFees(
+    public ApiResponse<PageResponse<FeeDetailResponse>> getPaidFees(
             @PathVariable Long clubId,
-            @RequestParam Long userId
+            @RequestParam Long userId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size
     ) {
-        List<FeeDetailResponse> paidFees = feeService.getPaidFeesByUser(clubId, userId);
+        // Create Pageable without sorting (sorting is handled in the native query)
+        Pageable pageable = PageRequest.of(page, size);
+        
+        PageResponse<FeeDetailResponse> paidFees = feeService.getPaidFeesByUser(clubId, userId, pageable);
         return ApiResponse.success(paidFees);
     }
 

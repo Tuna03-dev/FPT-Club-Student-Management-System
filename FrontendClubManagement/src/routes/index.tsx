@@ -37,6 +37,7 @@ import TeamNewsRequests from "@/pages/news/TeamNewsRequests";
 import TeamNewsEditor from "@/pages/news/TeamNewsEditor";
 import Payment from "@/pages/myclub/payments/MemberPaymentPage";
 import TeamCreatePage from "@/pages/myclub/teams/TeamCreatePage";
+import RoleManagement from "@/pages/myclub/RoleManagement";
 
 import ClubOfficerGuard from "@/components/guards/ClubOfficerGuard";
 import ForbiddenPage from "@/pages/ForbiddenPage";
@@ -73,11 +74,15 @@ export const router = createBrowserRouter([
       },
       {
         path: "achievements",
-        element: <div className="container mx-auto px-4 py-8">Trang Thành tích</div>,
+        element: (
+          <div className="container mx-auto px-4 py-8">Trang Thành tích</div>
+        ),
       },
       {
         path: "contact",
-        element: <div className="container mx-auto px-4 py-8">Trang Liên hệ</div>,
+        element: (
+          <div className="container mx-auto px-4 py-8">Trang Liên hệ</div>
+        ),
       },
 
       { path: "myRecruitmentApplication", element: <StudentRecruitment /> },
@@ -150,6 +155,14 @@ export const router = createBrowserRouter([
       },
 
       { path: "members", element: <MemberList /> },
+      {
+        path: "roles",
+        element: (
+          <ClubOfficerGuard>
+            <RoleManagement />
+          </ClubOfficerGuard>
+        ),
+      },
       { path: "events", element: <EventList /> },
       { path: "events/attendance/:eventId", element: <EventAttendancePage /> },
       { path: "recruitments", element: <RecruitmentManagement /> },
