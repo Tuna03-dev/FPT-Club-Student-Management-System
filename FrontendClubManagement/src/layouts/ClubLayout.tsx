@@ -57,6 +57,43 @@ const navItems = [
 
 const managementItems = [
   { key: "club_news", url: "/news", icon: Newspaper, label: "Yêu cầu tin tức" },
+  { key: "permissions", url: "/roles", icon: Shield, label: "Phân quyền" },
+  {
+    key: "pending_posts",
+    url: "/pending-posts",
+    icon: FileText,
+    label: "Bài viết chờ duyệt",
+  },
+  {
+    key: "manage_members",
+    url: "/members",
+    icon: Users,
+    label: "Quản lý thành viên",
+  },
+  {
+    key: "manage_events",
+    url: "/events",
+    icon: Calendar,
+    label: "Quản lý sự kiện",
+  },
+  {
+    key: "manage_recruitments",
+    url: "/recruitments",
+    icon: Briefcase,
+    label: "Quản lý tuyển thành viên",
+  },
+  {
+    key: "manage_finance",
+    url: "/finance",
+    icon: DollarSign,
+    label: "Quản lý tài chính",
+  },
+  {
+    key: "pending_requests",
+    url: "/pending-requests",
+    icon: Clock,
+    label: "Yêu cầu chờ duyệt",
+  },
   {
     key: "permissions",
     url: "/permissions",
@@ -154,7 +191,9 @@ export const ClubLayout = () => {
           JSON.stringify({ value: teams[0].teamId, at: Date.now() })
         );
       }
-    } catch {}
+    } catch {
+      /* empty */
+    }
   }
 
   // kiểm tra officer CN/PCN (dựa trên team-level API, có fallback)
