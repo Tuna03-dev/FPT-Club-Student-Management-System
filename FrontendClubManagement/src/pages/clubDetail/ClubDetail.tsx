@@ -24,7 +24,6 @@ import {
   Clock,
   Zap,
   Award,
-  TrendingUp,
   Mail,
   Phone,
   Globe,
@@ -48,7 +47,10 @@ import {
 import { getVisibleTeams } from "@/api/teams";
 import type { VisibleTeamDTO } from "@/types/team";
 import { getEventsByClubId, type EventData } from "@/service/EventService";
-import { getAllNewsByFilter, type NewsData as NewsDataService } from "@/service/NewsService";
+import {
+  getAllNewsByFilter,
+  type NewsData as NewsDataService,
+} from "@/service/NewsService";
 import { ClubApplicationForm } from "./ClubApplication";
 import { useMyClubs } from "@/hooks/useMyClubs";
 import {
@@ -109,7 +111,7 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
   const [club, setClub] = useState<ClubDetailData | null>(null);
   const [recruitments, setRecruitments] = useState<RecruitmentData[]>([]);
   const [recruitmentsLoaded, setRecruitmentsLoaded] = useState(false);
-  const [loadingRecruitments, setLoadingRecruitments] = useState(false);
+  const [, setLoadingRecruitments] = useState(false);
   const [teams, setTeams] = useState<VisibleTeamDTO[]>([]);
   const [teamsLoaded, setTeamsLoaded] = useState(false);
   const [loadingTeams, setLoadingTeams] = useState(false);
@@ -134,26 +136,6 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
     string | null
   >(null);
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
-
-  const formatRecruitmentStatus = (status?: string) => {
-    if (!status) return "";
-    const s = status.toLowerCase();
-    if (s === "open") return "Đang mở";
-    if (s === "closed") return "Đã đóng";
-    if (s === "draft") return "Bản nháp";
-    if (s === "cancelled" || s === "canceled") return "Đã hủy";
-    return status;
-  };
-
-  const normalizeRequirements = (req?: string | string[]) => {
-    if (!req) return [] as string[];
-    if (Array.isArray(req)) return req.filter(Boolean);
-    // Split by line breaks or bullets/semicolons and trim
-    return req
-      .split(/\r?\n|;|•|\u2022|-/)
-      .map((s) => s.trim())
-      .filter(Boolean);
-  };
 
   // Get user's clubs to check if already a member
   const { data: myClubs } = useMyClubs();
@@ -295,23 +277,25 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
       });
 
       // Map NewsDataService to News interface
-      const mappedNews: News[] = newsResponse.data.map((newsData: NewsDataService) => {
-        const updatedDate = new Date(newsData.updatedAt);
-        
-        // Format date as DD/MM/YYYY
-        const dateStr = updatedDate.toLocaleDateString("vi-VN");
-        
-        return {
-          id: newsData.id.toString(),
-          title: newsData.title,
-          content: newsData.content,
-          date: dateStr,
-          author: newsData.clubName || "Câu lạc bộ",
-          image: newsData.thumbnailUrl || "/placeholder.svg",
-          views: 0, // API doesn't provide this
-          likes: 0, // API doesn't provide this
-        };
-      });
+      const mappedNews: News[] = newsResponse.data.map(
+        (newsData: NewsDataService) => {
+          const updatedDate = new Date(newsData.updatedAt);
+
+          // Format date as DD/MM/YYYY
+          const dateStr = updatedDate.toLocaleDateString("vi-VN");
+
+          return {
+            id: newsData.id.toString(),
+            title: newsData.title,
+            content: newsData.content,
+            date: dateStr,
+            author: newsData.clubName || "Câu lạc bộ",
+            image: newsData.thumbnailUrl || "/placeholder.svg",
+            views: 0, // API doesn't provide this
+            likes: 0, // API doesn't provide this
+          };
+        }
+      );
 
       setNews(mappedNews);
       setNewsLoaded(true);
@@ -374,6 +358,17 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
       setActiveTab("events");
     } else if (tab === "news") {
       setActiveTab("news");
+    }
+  }, [searchParams]);
+
+  // Handle recruitmentId from URL query parameter
+  useEffect(() => {
+    const recruitmentIdParam = searchParams.get("recruitmentId");
+    if (recruitmentIdParam) {
+      const recruitmentId = parseInt(recruitmentIdParam, 10);
+      if (!isNaN(recruitmentId)) {
+        setSelectedRecruitmentId(recruitmentId);
+      }
     }
   }, [searchParams]);
 
