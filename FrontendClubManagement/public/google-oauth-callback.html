@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Đang đăng nhập...</title>
+</head>
+<body>
+  <script>
+    // This page handles Google OAuth callback
+    // It extracts the ID token from URL hash and sends it to the parent window
+    
+    try {
+      const hash = window.location.hash.substring(1);
+      const params = new URLSearchParams(hash);
+      const idToken = params.get('id_token');
+      const error = params.get('error');
+      
+      if (error) {
+        // Send error to parent
+        if (window.opener) {
+          window.opener.postMessage(
+            { type: 'GOOGLE_OAUTH_CALLBACK', error: error },
+            window.location.origin
+          );
+        }
+        window.close();
+      } else if (idToken) {
+        // Send ID token to parent window
+        if (window.opener) {
+          window.opener.postMessage(
+            { type: 'GOOGLE_OAUTH_CALLBACK', idToken: idToken },
+            window.location.origin
+          );
+          // Close popup after a short delay to ensure message is sent
+          setTimeout(() => {
+            window.close();
+          }, 100);
+        } else {
+          // If no opener, redirect to login page with token in hash
+          // This handles the case where popup was blocked
+          window.location.href = window.location.origin + '/login' + window.location.hash;
+        }
+      } else {
+        // No token and no error - something went wrong
+        if (window.opener) {
+          window.opener.postMessage(
+            { type: 'GOOGLE_OAUTH_CALLBACK', error: 'No token received' },
+            window.location.origin
+          );
+        }
+        window.close();
+      }
+    } catch (error) {
+      console.error('OAuth callback error:', error);
+      if (window.opener) {
+        window.opener.postMessage(
+          { type: 'GOOGLE_OAUTH_CALLBACK', error: error.message },
+          window.location.origin
+        );
+      }
+      window.close();
+    }
+  </script>
+  <div style="text-align: center; padding: 50px; font-family: Arial, sans-serif;">
+    <p>Đang xử lý đăng nhập...</p>
+    <p>Vui lòng đợi trong giây lát.</p>
+  </div>
+</body>
+</html>
+

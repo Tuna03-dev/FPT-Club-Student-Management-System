@@ -112,22 +112,26 @@ export const Dashboard = () => {
     loadPosts(0, false);
   };
 
-  const convertPostToCard = (post: PostWithRelationsData) => ({
-    id: post.id.toString(),
-    author: {
-      name: post.authorName || "Người dùng",
-      avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=default",
-      role: "Thành viên",
-    },
-    content: post.content || "",
-    images: (post.media || [])
-      .filter((m) => m && m.mediaType === "IMAGE")
-      .map((m) => m.mediaUrl),
-    timestamp: formatTimestamp(post.createdAt || new Date().toISOString()),
-    likes: (post.likes || []).length,
-    comments: (post.comments || []).length,
-    shares: 0,
-  });
+  const convertPostToCard = (post: PostWithRelationsData) => {
+    const imageMedia = (post.media || []).filter((m) => m && m.mediaType === "IMAGE");
+    return {
+      postId: post.id, // ✅ Thêm postId (number)
+      clubId: clubId, // ✅ Thêm clubId
+      author: {
+        id: post.authorId, // ✅ Thêm authorId để check quyền
+        name: post.authorName || "Người dùng",
+        avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=default",
+        role: "Thành viên",
+      },
+      content: post.content || "",
+      images: imageMedia.map((m) => m.mediaUrl),
+      imageIds: imageMedia.map((m) => m.id), // ✅ Thêm imageIds để edit/delete
+      timestamp: formatTimestamp(post.createdAt || new Date().toISOString()),
+      likes: (post.likes || []).length,
+      comments: (post.comments || []).length,
+      shares: 0,
+    };
+  };
 
   const formatTimestamp = (dateString: string) => {
     const date = new Date(dateString);
@@ -149,7 +153,7 @@ export const Dashboard = () => {
 
   return (
     <div className="min-h-full bg-secondary/20">
-      <div className="max-w-lg mx-auto p-4 space-y-4">
+      <div className="max-w-3xl mx-auto p-4 space-y-4">
         <CreatePost onPostCreated={refreshPosts} clubId={clubId} />
 
         {/* Loading State - First Load */}
@@ -195,7 +199,12 @@ export const Dashboard = () => {
         {posts.length > 0 && (
           <div className="space-y-4">
             {posts.map((post) => (
-              <PostCard key={post.id} {...convertPostToCard(post)} />
+              <PostCard
+                key={post.id}
+                {...convertPostToCard(post)}
+                onPostUpdated={refreshPosts}
+                onPostDeleted={refreshPosts}
+              />
             ))}
           </div>
         )}

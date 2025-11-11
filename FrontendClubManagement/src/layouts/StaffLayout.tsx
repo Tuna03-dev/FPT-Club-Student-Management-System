@@ -30,23 +30,17 @@ import {
 import { authService } from "@/services/authService";
 import { useTranslation } from "react-i18next";
 
-/** ===== Top nav items (thanh giữa) =====
- *  Nếu bạn muốn có nút "Tin tức" trên thanh giữa,
- *  để key = "news" và url = "/news".
- *  buildHref() sẽ tự chuyển sang /staff/news.
- */
 const navItems = [
   { key: "events", url: "/events", icon: Calendar, label: "Sự kiện" },
-  { key: "news", url: "/news", icon: Newspaper, label: "Tin tức" }, // ← tùy chọn: có thể xóa nếu không muốn hiện ở top
+  { key: "news", url: "/news", icon: Newspaper, label: "Tin tức" },
 ];
 
-// Management items (sidebar + mobile)
 const managementItems = [
   { key: "manage_events", url: "/events", icon: Calendar, label: "Quản lý sự kiện" },
   { key: "pending_requests", url: "/pending-requests", icon: Clock, label: "Yêu cầu chờ duyệt" },
   { key: "pending_posts", url: "/pending-posts", icon: FileText, label: "Bài viết chờ duyệt" },
   { key: "manage_members", url: "/members", icon: Users, label: "Quản lý thành viên" },
-  { key: "manage_news", url: "/news", icon: Newspaper, label: "Quản lý tin tức" }, // ← cái bạn cần
+  { key: "manage_news", url: "/news", icon: Newspaper, label: "Quản lý tin tức" },
 ];
 
 const managementColors: Record<string, string> = {
@@ -57,16 +51,11 @@ const managementColors: Record<string, string> = {
   manage_news: "bg-gradient-to-br from-purple-500 to-purple-600",
 };
 
-/** Chỉ SỬA đường dẫn của riêng bạn:
- * - Các mục staff “chung” khác vẫn giữ prefix /myclub/staff
- * - Riêng “news” (key = manage_news ở sidebar/mobile, hoặc news ở top-nav)
- *   sẽ chuyển hướng sang /staff/news theo router của bạn.
- */
 function buildHref(item: { key: string; url: string }) {
   if (item.key === "manage_news" || item.key === "news") {
-    return `/staff${item.url}`; // → /staff/news
+    return `/staff${item.url}`;
   }
-  return `/myclub/staff${item.url}`; // mặc định: không ảnh hưởng người khác
+  return `/myclub/staff${item.url}`;
 }
 
 export const StaffLayout = () => {
@@ -77,9 +66,8 @@ export const StaffLayout = () => {
   const handleLogout = async () => {
     try {
       await authService.logoutWithApi();
-    } catch {
-      /* ignore */
-    } finally {
+    } catch {}
+    finally {
       authService.logout();
       navigate("/login", { replace: true });
     }
@@ -90,7 +78,6 @@ export const StaffLayout = () => {
       <div className="h-screen w-full bg-background flex flex-col overflow-hidden">
         <header className="sticky top-0 z-50 w-full border-b border-border bg-card shadow-sm">
           <div className="flex h-14 items-center justify-between px-4 max-w-[1920px] mx-auto">
-            {/* Left: logo + search */}
             <div className="flex items-center gap-4 flex-1 max-w-[320px]">
               <div className="h-10 w-10 rounded-full bg-gradient-to-br from-primary to-primary-glow shadow-lg flex items-center justify-center">
                 <span className="text-white font-bold text-lg">S</span>
@@ -105,7 +92,6 @@ export const StaffLayout = () => {
               </div>
             </div>
 
-            {/* Center: nav */}
             <nav className="hidden md:flex items-center gap-2 flex-1 justify-center max-w-[600px]">
               {navItems.map((item) => (
                 <Tooltip key={item.key}>
@@ -138,7 +124,6 @@ export const StaffLayout = () => {
               ))}
             </nav>
 
-            {/* Right: user */}
             <div className="flex items-center gap-2 flex-1 justify-end max-w-[320px]">
               <NavLink to="/myclub/staff/settings">
                 <Button variant="ghost" size="icon" className="rounded-full">
@@ -159,7 +144,6 @@ export const StaffLayout = () => {
                 </Button>
               </div>
 
-              {/* Mobile menu */}
               <DropdownMenu open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="icon" className="md:hidden">
@@ -194,11 +178,9 @@ export const StaffLayout = () => {
           </div>
         </header>
 
-        {/* Body: sidebar + content */}
         <div className="flex flex-1 w-full max-w-[1920px] mx-auto overflow-hidden">
           <aside className="hidden lg:block w-64 border-r border-border bg-card h-[calc(100vh-56px)] sticky top-14">
             <nav className="pt-2 pb-4 px-4 space-y-6 h-full overflow-y-auto">
-              {/* Management */}
               <div>
                 <div className="px-3 mb-4">
                   <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">

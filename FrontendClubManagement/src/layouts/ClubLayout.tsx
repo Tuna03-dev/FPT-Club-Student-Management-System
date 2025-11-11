@@ -1,6 +1,19 @@
 import {
-  Home, Users, Calendar, Bell, Settings, Search, Menu,
-  Shield, FileText, Clock, Briefcase, DollarSign, Wallet, Plus, Newspaper,
+  Home,
+  Users,
+  Calendar,
+  Bell,
+  Settings,
+  Search,
+  Menu,
+  Shield,
+  FileText,
+  Clock,
+  Briefcase,
+  DollarSign,
+  Wallet,
+  Plus,
+  Newspaper,
 } from "lucide-react";
 import { NavLink, Outlet, useParams, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -9,10 +22,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
-  Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
 } from "@/components/ui/tooltip";
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { authService } from "@/services/authService";
@@ -60,13 +79,16 @@ export const ClubLayout = () => {
   const validClubId = Number.isFinite(numericClubId) && numericClubId > 0;
 
   // ===== Teams for sidebar =====
-  const { data: teams, loading: teamsLoading, error: teamsError } =
-    useTeams(validClubId ? numericClubId : undefined);
-
+  const {
+    data: teams,
+    loading: teamsLoading,
+    error: teamsError,
+  } = useTeams(validClubId ? numericClubId : undefined);
 
   // ===== Club-level officer flag (QUYẾT ĐỊNH HIỂN THỊ NÚT) =====
-  const { amOfficer, checking } =
-    useClubOfficerFlag(validClubId ? numericClubId : undefined);
+  const { amOfficer, checking } = useClubOfficerFlag(
+    validClubId ? numericClubId : undefined
+  );
 
   // Ghi nhớ firstTeamId (chỉ để UX list, không ảnh hưởng permission)
   if (teams?.[0]?.teamId && validClubId) {
@@ -75,12 +97,17 @@ export const ClubLayout = () => {
       const prev = sessionStorage.getItem(key);
       const prevVal = prev ? JSON.parse(prev)?.value : undefined;
       if (prevVal !== teams[0].teamId) {
-        sessionStorage.setItem(key, JSON.stringify({ value: teams[0].teamId, at: Date.now() }));
+        sessionStorage.setItem(
+          key,
+          JSON.stringify({ value: teams[0].teamId, at: Date.now() })
+        );
       }
-    } catch {}
+    } catch {
+      /* empty */
+    }
   }
 
-  // Filter menu: CHỈ hiện "Yêu cầu tin tức" khi amOfficer === true
+  // CHỈ hiện "Quản lí tin tức" khi amOfficer === true
   const filteredManagementItems = useMemo(
     () =>
       managementItems.filter((item) => {
@@ -91,8 +118,11 @@ export const ClubLayout = () => {
   );
 
   const handleLogout = async () => {
-    try { await authService.logoutWithApi(); } catch {}
-    finally {
+    try {
+      await authService.logoutWithApi();
+    } catch {
+      // noop
+    } finally {
       authService.logout();
       toast.success("Đăng xuất thành công!", { duration: 2000 });
       navigate("/", { replace: true });
@@ -108,7 +138,9 @@ export const ClubLayout = () => {
   }
 
   return (
-    <PermissionContext.Provider value={{ isOfficer: amOfficer === true, loading: checking }}>
+    <PermissionContext.Provider
+      value={{ isOfficer: amOfficer === true, loading: checking }}
+    >
       <TooltipProvider delayDuration={200}>
         <div className="h-screen w-full bg-background flex flex-col overflow-hidden">
           {/* ===== HEADER ===== */}
@@ -121,7 +153,11 @@ export const ClubLayout = () => {
                 </div>
                 <div className="relative w-full max-w-[240px] hidden md:block">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input type="search" placeholder={t("search")} className="pl-9 h-9 bg-secondary/50 border-0" />
+                  <Input
+                    type="search"
+                    placeholder={t("search")}
+                    className="pl-9 h-9 bg-secondary/50 border-0"
+                  />
                 </div>
               </div>
 
@@ -135,14 +171,18 @@ export const ClubLayout = () => {
                         end={item.url === ""}
                         className={({ isActive }) =>
                           `flex items-center justify-center px-8 py-2 rounded-lg transition-all relative ${
-                            isActive ? "text-primary" : "text-muted-foreground hover:bg-secondary"
+                            isActive
+                              ? "text-primary"
+                              : "text-muted-foreground hover:bg-secondary"
                           }`
                         }
                       >
                         {({ isActive }) => (
                           <>
                             <item.icon className="h-6 w-6" />
-                            {isActive && <div className="absolute bottom-0 left-0 right-0 h-1 bg-primary rounded-t-md" />}
+                            {isActive && (
+                              <div className="absolute bottom-0 left-0 right-0 h-1 bg-primary rounded-t-md" />
+                            )}
                           </>
                         )}
                       </NavLink>
@@ -161,7 +201,11 @@ export const ClubLayout = () => {
                     <Settings className="h-5 w-5" />
                   </Button>
                 </NavLink>
-                <Button variant="ghost" size="icon" className="rounded-full relative">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="rounded-full relative"
+                >
                   <Bell className="h-5 w-5" />
                   <span className="absolute top-1 right-1 h-2 w-2 bg-destructive rounded-full" />
                 </Button>
@@ -176,7 +220,10 @@ export const ClubLayout = () => {
                 </div>
 
                 {/* Mobile menu */}
-                <DropdownMenu open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
+                <DropdownMenu
+                  open={isMobileMenuOpen}
+                  onOpenChange={setIsMobileMenuOpen}
+                >
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" size="icon" className="md:hidden">
                       <Menu className="h-5 w-5" />
@@ -194,7 +241,9 @@ export const ClubLayout = () => {
                             className="flex items-center gap-3 w-full"
                             onClick={() => setIsMobileMenuOpen(false)}
                           >
-                            <div className={`h-6 w-6 rounded-lg ${managementColors[item.key]} flex items-center justify-center text-white shadow-sm`}>
+                            <div
+                              className={`h-6 w-6 rounded-lg ${managementColors[item.key]} flex items-center justify-center text-white shadow-sm`}
+                            >
                               <item.icon className="h-3 w-3" />
                             </div>
                             <span className="text-sm">{item.label}</span>
@@ -215,7 +264,9 @@ export const ClubLayout = () => {
                 {/* Management */}
                 <div>
                   <div className="px-3 mb-4">
-                    <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">QUẢN LÝ</h2>
+                    <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                      QUẢN LÝ
+                    </h2>
                   </div>
                   <div className="space-y-2">
                     {filteredManagementItems.map((item) => (
@@ -224,11 +275,15 @@ export const ClubLayout = () => {
                         to={`/myclub/${clubId}${item.url}`}
                         className={({ isActive }) =>
                           `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                            isActive ? "bg-primary/10 text-primary shadow-sm" : "text-foreground hover:bg-secondary"
+                            isActive
+                              ? "bg-primary/10 text-primary shadow-sm"
+                              : "text-foreground hover:bg-secondary"
                           }`
                         }
                       >
-                        <div className={`h-8 w-8 rounded-lg ${managementColors[item.key]} flex items-center justify-center text-white shadow-sm`}>
+                        <div
+                          className={`h-8 w-8 rounded-lg ${managementColors[item.key]} flex items-center justify-center text-white shadow-sm`}
+                        >
                           <item.icon className="h-4 w-4" />
                         </div>
                         <span>{item.label}</span>
@@ -240,7 +295,9 @@ export const ClubLayout = () => {
                 {/* Teams */}
                 <div>
                   <div className="px-3 mb-4">
-                    <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Phòng ban</h2>
+                    <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                      Phòng ban
+                    </h2>
                   </div>
 
                   {/* Nút tạo phòng ban: CHỈ hiển thị khi amOfficer === true */}
@@ -250,7 +307,9 @@ export const ClubLayout = () => {
                         variant="outline"
                         size="sm"
                         className="w-full justify-center border-dashed"
-                        onClick={() => navigate(`/myclub/${clubId}/teams/create`)}
+                        onClick={() =>
+                          navigate(`/myclub/${clubId}/teams/create`)
+                        }
                       >
                         <Plus className="h-4 w-4 mr-2" />
                         Tạo phòng ban
@@ -258,8 +317,16 @@ export const ClubLayout = () => {
                     </div>
                   )}
 
-                  {teamsLoading && <p className="px-3 text-xs text-muted-foreground">Đang tải…</p>}
-                  {teamsError && <p className="px-3 text-xs text-red-600">{String(teamsError)}</p>}
+                  {teamsLoading && (
+                    <p className="px-3 text-xs text-muted-foreground">
+                      Đang tải…
+                    </p>
+                  )}
+                  {teamsError && (
+                    <p className="px-3 text-xs text-red-600">
+                      {String(teamsError)}
+                    </p>
+                  )}
 
                   {teams?.map((team) => {
                     const base = `/myclub/${clubId}/teams/${team.teamId}`;
@@ -270,7 +337,9 @@ export const ClubLayout = () => {
                         end
                         className={({ isActive }) =>
                           `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all ${
-                            isActive ? "bg-primary/10 text-primary shadow-sm" : "text-foreground hover:bg-secondary"
+                            isActive
+                              ? "bg-primary/10 text-primary shadow-sm"
+                              : "text-foreground hover:bg-secondary"
                           }`
                         }
                       >
@@ -278,7 +347,9 @@ export const ClubLayout = () => {
                           {team.teamName.charAt(0).toUpperCase()}
                         </div>
                         <div className="flex-1 truncate">{team.teamName}</div>
-                        <span className="text-[10px] text-muted-foreground">{team.memberCount}</span>
+                        <span className="text-[10px] text-muted-foreground">
+                          {team.memberCount}
+                        </span>
                       </NavLink>
                     );
                   })}

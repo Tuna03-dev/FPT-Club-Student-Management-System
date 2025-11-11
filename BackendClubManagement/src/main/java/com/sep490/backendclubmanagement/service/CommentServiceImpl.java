@@ -1,6 +1,7 @@
 package com.sep490.backendclubmanagement.service;
 
 import com.sep490.backendclubmanagement.dto.response.CommentDTO;
+import com.sep490.backendclubmanagement.dto.websocket.CommentWebSocketPayload;
 import com.sep490.backendclubmanagement.entity.Comment;
 import com.sep490.backendclubmanagement.entity.Post;
 import com.sep490.backendclubmanagement.entity.User;
@@ -26,6 +27,7 @@ public class CommentServiceImpl implements ICommentService {
     private final PostRepository postRepo;
     private final UserService userService;      // đã có sẵn trong project bạn
     private final CommentMapper commentMapper;
+    private final WebSocketService webSocketService;
     // 👈 Inject mapper mới tách
 
     /* ====== CREATE ====== */
@@ -41,36 +43,76 @@ public class CommentServiceImpl implements ICommentService {
         if (user == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found");
         }
+        Comment parent = null;
+        Long rootParentId = null;
 
+
+        if (parentId != null) {
+             parent = commentRepo.findActiveById(parentId);
+            // parent phải tồn tại và cùng post
+            if (parent == null || !parent.getPost().getId().equals(postId))
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid parent comment");
+
+            rootParentId = (parent.getRootParentCommentId() != null)
+                    ? parent.getRootParentCommentId()
+                    : parent.getId();
+
+
+
+            // ✅ Chuẩn hoá về 2 cấp:
+            // nếu parent là reply (có parentComment != null) thì gắn về cha top-level của nó
+//            Comment topLevel = (parent.getParentComment() == null)
+//                    ? parent
+//                    : parent.getParentComment();
+
+            // (phòng hờ) đảm bảo vẫn cùng post
+            if (!parent.getPost().getId().equals(postId)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid parent comment");
+            }
+
+
+        }
         Comment c = Comment.builder()
                 .post(post)
                 .user(user)
                 .content(content.trim())
                 .isEdited(false)
+                .parentComment(parent)          // 👈 set parent luôn ở đây
+                .rootParentCommentId(rootParentId) // 👈 NEW: set root cha cấp 1 cho reply
                 .build();
-
-        if (parentId != null) {
-            Comment parent = commentRepo.findActiveById(parentId);
-            // parent phải tồn tại và cùng post
-            if (parent == null || !parent.getPost().getId().equals(postId))
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid parent comment");
-
-            // ✅ Chuẩn hoá về 2 cấp:
-            // nếu parent là reply (có parentComment != null) thì gắn về cha top-level của nó
-            Comment topLevel = (parent.getParentComment() == null)
-                    ? parent
-                    : parent.getParentComment();
-
-            // (phòng hờ) đảm bảo vẫn cùng post
-            if (!topLevel.getPost().getId().equals(postId))
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid parent comment");
-
-            c.setParentComment(topLevel);
-        }
 
 
         Comment saved = commentRepo.save(c);
-        return commentMapper.toDTO(saved); // 👈 dùng mapper
+        CommentDTO commentDTO = commentMapper.toDTO(saved);
+        
+        // Gửi WebSocket notification
+        try {
+            CommentWebSocketPayload payload = CommentWebSocketPayload.builder()
+                    .comment(commentDTO)
+                    .postId(postId)
+                    .action("NEW")
+                    .build();
+            
+            // Broadcast đến club nếu post có club
+            if (post.getClub() != null) {
+                webSocketService.broadcastToClub(
+                        post.getClub().getId(),
+                        "POST",
+                        "COMMENT_NEW",
+                        payload
+                );
+            }
+            
+            // Gửi notification đến author của post (nếu có)
+            if (post.getCreatedBy() != null && post.getCreatedBy().getEmail() != null) {
+                // Có thể gửi notification riêng nếu cần
+            }
+        } catch (Exception e) {
+            // Log error nhưng không throw để không ảnh hưởng đến việc tạo comment
+            System.err.println("Failed to send WebSocket notification: " + e.getMessage());
+        }
+        
+        return commentDTO; // 👈 dùng mapper
     }
 
     /* ====== LIST TOP-LEVEL (không kèm replies) ====== */
@@ -107,7 +149,30 @@ public class CommentServiceImpl implements ICommentService {
 
         c.setContent(newContent.trim());
         c.setIsEdited(true);
-        return commentMapper.toDTO(commentRepo.save(c));
+        Comment saved = commentRepo.save(c);
+        CommentDTO commentDTO = commentMapper.toDTO(saved);
+        
+        // Gửi WebSocket notification cho edit
+        try {
+            CommentWebSocketPayload payload = CommentWebSocketPayload.builder()
+                    .comment(commentDTO)
+                    .postId(c.getPost().getId())
+                    .action("EDIT")
+                    .build();
+            
+            if (c.getPost().getClub() != null) {
+                webSocketService.broadcastToClub(
+                        c.getPost().getClub().getId(),
+                        "POST",
+                        "COMMENT_EDIT",
+                        payload
+                );
+            }
+        } catch (Exception e) {
+            System.err.println("Failed to send WebSocket notification: " + e.getMessage());
+        }
+        
+        return commentDTO;
     }
 
     /* ====== SOFT DELETE ====== */
@@ -135,6 +200,27 @@ public class CommentServiceImpl implements ICommentService {
 
         // Soft delete hàng loạt
         commentRepo.bulkSoftDeleteByIds(toDelete, LocalDateTime.now());
+        
+        // Gửi WebSocket notification cho delete
+        try {
+            CommentDTO deletedDTO = commentMapper.toDTO(c);
+            CommentWebSocketPayload payload = CommentWebSocketPayload.builder()
+                    .comment(deletedDTO)
+                    .postId(c.getPost().getId())
+                    .action("DELETE")
+                    .build();
+            
+            if (c.getPost().getClub() != null) {
+                webSocketService.broadcastToClub(
+                        c.getPost().getClub().getId(),
+                        "POST",
+                        "COMMENT_DELETE",
+                        payload
+                );
+            }
+        } catch (Exception e) {
+            System.err.println("Failed to send WebSocket notification: " + e.getMessage());
+        }
     }
 
     /** Duyệt BFS để gom toàn bộ id con/cháu... (tránh đệ quy sâu) */

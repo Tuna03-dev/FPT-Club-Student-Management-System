@@ -16,13 +16,6 @@ public class ClubReportRequirement extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "status")
-    @Enumerated(EnumType.STRING)
-    private ClubReportRequirementStatus status;
-
-    @Column(name = "note", columnDefinition = "TEXT")
-    private String note;
-
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "club_id", nullable = false)
     private Club club;
@@ -30,4 +23,7 @@ public class ClubReportRequirement extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "submission_report_requirement_id", nullable = false)
     private SubmissionReportRequirement submissionReportRequirement;
+
+    @OneToOne(mappedBy = "clubReportRequirement", cascade = CascadeType.ALL)
+    private Report report;
 }

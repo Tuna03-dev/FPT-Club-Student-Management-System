@@ -4,12 +4,20 @@ export interface GoogleLoginRequest {
   idToken: string;
 }
 
+export interface ClubRoleInfo {
+  clubId: number;
+  clubName: string;
+  clubRole: string; // "thành viên", "Chủ nhiệm"
+  systemRole: string; // "MEMBER", "CLUB_PRESIDENT"
+}
+
 export interface UserInfo {
   id: number | null;
   email: string;
   fullName: string;
   avatarUrl: string;
   systemRole: string;
+  clubRoleList?: ClubRoleInfo[]; // Danh sách club roles của user
 }
 
 export interface AuthenticationResponse {
@@ -63,6 +71,34 @@ export const authService = {
 
   setUser: (user: UserInfo) => {
     localStorage.setItem("user", JSON.stringify(user));
+  },
+
+  setUserWithRoles: (user: UserInfo, clubRoles: ClubRoleInfo[]) => {
+    const userWithRoles = { ...user, clubRoleList: clubRoles };
+    localStorage.setItem("user", JSON.stringify(userWithRoles));
+  },
+
+  refreshUserRoles: async (): Promise<ClubRoleInfo[]> => {
+    try {
+      // Gọi API để lấy role mới nhất
+      const response = await axiosClient.get<ClubRoleInfo[]>("/auth/my-roles");
+      if (response.code === 200 && response.data) {
+        const user = authService.getCurrentUser();
+        if (user) {
+          authService.setUserWithRoles(user, response.data);
+        }
+        return response.data;
+      }
+      return [];
+    } catch (error) {
+      console.error("Error refreshing user roles:", error);
+      return [];
+    }
+  },
+
+  getClubRole: (clubId: number): ClubRoleInfo | null => {
+    const user = authService.getCurrentUser();
+    return user?.clubRoleList?.find((r) => r.clubId === clubId) || null;
   },
 
   isAuthenticated: (): boolean => {

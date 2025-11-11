@@ -26,5 +26,6 @@ public class CreateFeeRequest {
     @NotNull
     private Boolean isMandatory;
 
+    private Boolean isDraft;
 }
 

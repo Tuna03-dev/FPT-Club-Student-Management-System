@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { User, Users, LogOut, Shield } from "lucide-react";
 import useMyClubs from "@/hooks/useMyClubs";
+import { toast } from "sonner";
 
 const Header: React.FC = () => {
   // đọc trạng thái ban đầu để tránh nháy
@@ -22,6 +23,7 @@ const Header: React.FC = () => {
 
   // ❗️CHỈ fetch CLB khi đã đăng nhập
   const { data: clubs, loading: clubsLoading, error: clubsError } = useMyClubs(isAuthenticated);
+
 
   useEffect(() => {
     const checkAuth = () => {
@@ -46,6 +48,7 @@ const Header: React.FC = () => {
     setUser(null);
     setIsAuthenticated(false);
     navigate("/");
+    toast.success("Đăng xuất thành công!", { duration: 2000 });
   };
 
   const isAdmin = user?.systemRole === "ADMIN" || user?.systemRole === "MANAGER";

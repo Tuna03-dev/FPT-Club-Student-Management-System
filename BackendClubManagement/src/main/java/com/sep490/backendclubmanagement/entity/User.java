@@ -80,6 +80,8 @@ public class User extends BaseEntity {
     @OneToMany(mappedBy = "createdBy", cascade = CascadeType.ALL)
     private Set<RequestNews> createdRequestNews;
 
+    @OneToMany(mappedBy = "createdBy", cascade = CascadeType.ALL)
+    private Set<SubmissionReportRequirement> submissionReportRequirements;
 
     @OneToMany(mappedBy = "createdBy", cascade = CascadeType.ALL)
     private Set<RequestEvent> createdRequestEvents;

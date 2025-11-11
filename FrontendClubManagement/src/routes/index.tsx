@@ -36,6 +36,7 @@ import TeamNewsRequests from "@/pages/news/TeamNewsRequests";
 import TeamNewsEditor from "@/pages/news/TeamNewsEditor";
 import Payment from "@/pages/myclub/payments/MemberPaymentPage";
 import TeamCreatePage from "@/pages/myclub/teams/TeamCreatePage";
+import RoleManagement from "@/pages/myclub/RoleManagement";
 
 import ClubOfficerGuard from "@/components/guards/ClubOfficerGuard";
 import ForbiddenPage from "@/pages/ForbiddenPage";
@@ -44,6 +45,10 @@ import DraftDetail from "@/pages/news/DraftDetail";
 import RequestDetail from "@/pages/news/RequestDetail";
 import StaffNewsDetail from "@/pages/news/StaffNewsDetail";
 import StaffNewsEdit from "@/pages/news/StaffNewsEdit";
+
+import { StaffReportManagement } from "@/pages/myclub/staff/reportManagement/StaffReport";
+import { PeriodicReportClubs } from "@/pages/myclub/staff/reportManagement/PeriodicReportClubs";
+import { ClubReportManagement } from "@/pages/myclub/report/ReportManagement";
 
 export const router = createBrowserRouter([
   {
@@ -109,7 +114,6 @@ export const router = createBrowserRouter([
     ),
   },
 
-  /* ========= STAFF LAYOUT CHO TẤT CẢ TRANG STAFF ========= */
   {
     path: "/staff",
     element: (
@@ -118,21 +122,19 @@ export const router = createBrowserRouter([
       </ProtectedRoute>
     ),
     children: [
-      // News (staff)
       { path: "news", element: <StaffNewsList /> },
       { path: "news-editor", element: <StaffNewsEditor /> },
       { path: "news/requests/:id", element: <RequestDetail /> },
       { path: "news/drafts/:draftId", element: <DraftDetail /> },
       { path: "news/:id", element: <StaffNewsDetail /> },
       { path: "news/:id/edit", element: <StaffNewsEdit /> },
-
-      // Bạn có thể thêm các trang staff khác vào đây nếu muốn dùng chung layout
       { path: "events", element: <StaffEventList /> },
       { path: "settings", element: <Settings /> },
+      { path: "reports", element: <StaffReportManagement /> },
+      { path: "report/:reportId/clubs", element: <PeriodicReportClubs /> },
     ],
   },
 
-  /* ========= (Giữ nguyên) MYCLUB STAFF CHO NHÁNH CŨ ========= */
   {
     path: "/myclub/:clubId",
     element: (
@@ -160,7 +162,6 @@ export const router = createBrowserRouter([
         ),
       },
 
-      // Club news detail (draft + request)
       {
         path: "news/drafts/:draftId",
         element: (
@@ -179,6 +180,14 @@ export const router = createBrowserRouter([
       },
 
       { path: "members", element: <MemberList /> },
+      {
+        path: "roles",
+        element: (
+          <ClubOfficerGuard>
+            <RoleManagement />
+          </ClubOfficerGuard>
+        ),
+      },
       { path: "events", element: <EventList /> },
       { path: "events/attendance/:eventId", element: <EventAttendancePage /> },
       { path: "recruitments", element: <RecruitmentManagement /> },
@@ -187,13 +196,12 @@ export const router = createBrowserRouter([
       { path: "notifications", element: <Notifications /> },
       { path: "settings", element: <Settings /> },
       { path: "teams/:teamId", element: <TeamDetailPage /> },
+      { path: "reports", element: <ClubReportManagement /> },
 
-      // Team news (list)
       { path: "teams/:teamId/news-drafts", element: <TeamNewsDrafts /> },
       { path: "teams/:teamId/news-requests", element: <TeamNewsRequests /> },
       { path: "teams/:teamId/news-editor", element: <TeamNewsEditor /> },
 
-      // Team-level detail
       { path: "teams/:teamId/news/drafts/:draftId", element: <DraftDetail /> },
       { path: "teams/:teamId/news/requests/:id", element: <RequestDetail /> },
 
@@ -203,7 +211,6 @@ export const router = createBrowserRouter([
 
   { path: "/403", element: <ForbiddenPage /> },
 
-  // 404
   {
     path: "*",
     element: (

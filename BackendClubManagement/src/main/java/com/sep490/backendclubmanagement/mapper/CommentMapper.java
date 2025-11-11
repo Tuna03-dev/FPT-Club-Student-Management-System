@@ -2,32 +2,25 @@ package com.sep490.backendclubmanagement.mapper;
 
 import com.sep490.backendclubmanagement.dto.response.CommentDTO;
 import com.sep490.backendclubmanagement.entity.Comment;
-import org.springframework.stereotype.Component;
+import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
+import org.mapstruct.AfterMapping;
+//import org.mapstruct.MappingTarget;
 
 import java.util.List;
 
-@Component
-public class CommentMapper {
+@Mapper(componentModel = "spring")
+public interface CommentMapper {
 
-    /** Map 1 Comment entity -> CommentDTO (KHÔNG kèm replies) */
-    public CommentDTO toDTO(Comment c) {
-        if (c == null) return null;
-        return CommentDTO.builder()
-                .id(c.getId())
-                .postId(c.getPost().getId())
-                .parentId(c.getParentComment() != null ? c.getParentComment().getId() : null)
-                .userId(c.getUser().getId())
-                .userName(c.getUser().getFullName())
-                .userAvatar(c.getUser().getAvatarUrl())
-                .content(c.getContent())
-                .edited(Boolean.TRUE.equals(c.getIsEdited()))
-                .createdAt(c.getCreatedAt())
-                .updatedAt(c.getUpdatedAt())
-                .build();
-    }
+    @Mapping(source = "post.id", target = "postId")
+    @Mapping(source = "parentComment.id", target = "parentId")
+    @Mapping(source = "user.id", target = "userId")
+    @Mapping(source = "user.fullName", target = "userName")
+    @Mapping(source = "user.avatarUrl", target = "userAvatar")
+    @Mapping(source = "isEdited", target = "edited")
+    @Mapping(source = "rootParentCommentId", target = "rootParentId")
+    @Mapping(target = "replies", ignore = true)
+    CommentDTO toDTO(Comment comment);
 
-    /** Map danh sách entity -> danh sách DTO (KHÔNG kèm replies) */
-    public List<CommentDTO> toDTOs(List<Comment> entities) {
-        return entities.stream().map(this::toDTO).toList();
-    }
+    List<CommentDTO> toDTOs(List<Comment> comments);
 }

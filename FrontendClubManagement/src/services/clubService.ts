@@ -19,6 +19,22 @@ export interface ClubRoleDTO {
   systemRoleName: string;
 }
 
+export interface CreateClubRoleRequest {
+  roleName: string;
+  roleCode: string;
+  description?: string;
+  roleLevel: number;
+  systemRoleId?: number | null;
+}
+
+export interface UpdateClubRoleRequest {
+  roleName: string;
+  roleCode: string;
+  description?: string;
+  roleLevel: number;
+  systemRoleId?: number | null;
+}
+
 export interface TeamDTO {
   id: number;
   teamName: string;
@@ -46,41 +62,45 @@ export interface ClubDetailData {
   ttUrl: string;
   ytUrl: string;
   status: string;
-  
+
   // Campus info
   campusId: number;
   campusName: string;
   campusCode: string;
-  
+
   // Category info
   categoryId: number;
   categoryName: string;
-  
+
   // Statistics
   totalMembers: number;
   totalEvents: number;
   totalPosts: number;
-  
+
   // Recruitment info
   isRecruiting: boolean; // Câu lạc bộ đang mở đợt tuyển (Backend tự động set)
-  
+
   // President info
   president: ClubPresidentData;
-  
+
   // Timestamps
   createdAt: string;
   updatedAt: string;
 }
 
 // Get club detail by ID
-export async function getClubDetailById(clubId: number): Promise<ClubDetailData> {
+export async function getClubDetailById(
+  clubId: number
+): Promise<ClubDetailData> {
   const res = await axiosClient.get<ClubDetailData>(`/clubs/${clubId}`);
   if (!res.data) throw new Error("Club not found");
   return res.data;
 }
 
 // Get club detail by club code
-export async function getClubDetailByCode(clubCode: string): Promise<ClubDetailData> {
+export async function getClubDetailByCode(
+  clubCode: string
+): Promise<ClubDetailData> {
   const res = await axiosClient.get<ClubDetailData>(`/clubs/code/${clubCode}`);
   if (!res.data) throw new Error("Club not found");
   return res.data;
@@ -93,8 +113,30 @@ export const clubService = {
   },
 
   async getRoles(clubId: number): Promise<ApiResponse<ClubRoleDTO[]>> {
-    const url = `/clubs/${clubId}/roles`;
+    const url = `/management/clubs/${clubId}/roles`;
     return axiosClient.get<ClubRoleDTO[]>(url);
+  },
+
+  async createRole(
+    clubId: number,
+    request: CreateClubRoleRequest
+  ): Promise<ApiResponse<ClubRoleDTO>> {
+    const url = `/management/clubs/${clubId}/roles`;
+    return axiosClient.post<ClubRoleDTO>(url, request);
+  },
+
+  async updateRole(
+    clubId: number,
+    roleId: number,
+    request: UpdateClubRoleRequest
+  ): Promise<ApiResponse<ClubRoleDTO>> {
+    const url = `/management/clubs/${clubId}/roles/${roleId}`;
+    return axiosClient.put<ClubRoleDTO>(url, request);
+  },
+
+  async deleteRole(clubId: number, roleId: number): Promise<ApiResponse<void>> {
+    const url = `/management/clubs/${clubId}/roles/${roleId}`;
+    return axiosClient.delete<void>(url);
   },
 
   async getTeams(clubId: number): Promise<ApiResponse<TeamDTO[]>> {

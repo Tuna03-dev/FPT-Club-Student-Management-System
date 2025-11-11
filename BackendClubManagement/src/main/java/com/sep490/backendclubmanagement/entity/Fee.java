@@ -39,8 +39,8 @@ public class Fee extends BaseEntity {
     @Column(name = "is_mandatory", nullable = false)
     private Boolean isMandatory = false;
 
-    @Column(name = "is_locked", nullable = false)
-    private Boolean isLocked = false;
+    @Column(name = "is_draft", nullable = false)
+    private Boolean isDraft = true;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "club_id", nullable = false)

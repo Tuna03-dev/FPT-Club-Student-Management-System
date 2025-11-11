@@ -8,6 +8,7 @@ import com.sep490.backendclubmanagement.dto.response.EventRegistrationDto;
 import com.sep490.backendclubmanagement.dto.response.EventResponse;
 import com.sep490.backendclubmanagement.dto.response.EventTypesDto;
 import com.sep490.backendclubmanagement.entity.AttendanceStatus;
+import com.sep490.backendclubmanagement.dto.response.EventWithoutReportRequirementDto;
 import com.sep490.backendclubmanagement.entity.Club;
 import com.sep490.backendclubmanagement.entity.Event;
 import com.sep490.backendclubmanagement.entity.EventAttendance;
@@ -161,26 +162,26 @@ public class EventService {
         // Kiểm tra event tồn tại
         Event event = eventRepository.findById(eventId)
                 .orElseThrow(() -> new NotFoundException("Event not found"));
-        
+
         // Kiểm tra event đã được publish chưa
         if (event.getIsDraft() != null && event.getIsDraft()) {
             throw new RuntimeException("Cannot register for draft event");
         }
-        
+
         // Kiểm tra event đã kết thúc chưa
         if (event.getStartTime() != null && event.getStartTime().isBefore(LocalDateTime.now())) {
             throw new RuntimeException("Cannot register for event that has already started");
         }
-        
+
         // Kiểm tra user tồn tại
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new NotFoundException("User not found"));
-        
+
         // Kiểm tra đã đăng ký chưa
         if (eventAttendanceRepository.existsByEventIdAndUserId(eventId, userId)) {
             throw new RuntimeException("You have already registered for this event");
         }
-        
+
         // Tạo event attendance với status REGISTERED
         EventAttendance eventAttendance = EventAttendance.builder()
                 .event(event)
@@ -188,7 +189,7 @@ public class EventService {
                 .registrationTime(LocalDateTime.now())
                 .attendanceStatus(AttendanceStatus.REGISTERED)
                 .build();
-        
+
         eventAttendanceRepository.save(eventAttendance);
     }
 
@@ -197,13 +198,13 @@ public class EventService {
         // Kiểm tra đã đăng ký chưa
         EventAttendance eventAttendance = eventAttendanceRepository.findByEventIdAndUserId(eventId, userId)
                 .orElseThrow(() -> new NotFoundException("You have not registered for this event"));
-        
+
         // Kiểm tra event đã bắt đầu chưa
         Event event = eventAttendance.getEvent();
         if (event.getStartTime() != null && event.getStartTime().isBefore(LocalDateTime.now())) {
             throw new RuntimeException("Cannot cancel registration for event that has already started");
         }
-        
+
         // Xóa đăng ký
         eventAttendanceRepository.delete(eventAttendance);
     }
@@ -217,9 +218,9 @@ public class EventService {
     public List<EventRegistrationDto> getEventRegistrations(Long eventId) {
         Event event = eventRepository.findById(eventId)
                 .orElseThrow(() -> new NotFoundException("Event not found"));
-        
+
         List<EventAttendance> attendances = eventAttendanceRepository.findByEventId(eventId);
-        
+
         return attendances.stream()
                 .map(attendance -> {
                     User user = attendance.getUser();
@@ -231,8 +232,8 @@ public class EventService {
                             .email(user.getEmail())
                             .avatarUrl(user.getAvatarUrl())
                             .registrationTime(attendance.getRegistrationTime())
-                            .attendanceStatus(attendance.getAttendanceStatus() != null 
-                                    ? attendance.getAttendanceStatus().name() 
+                            .attendanceStatus(attendance.getAttendanceStatus() != null
+                                    ? attendance.getAttendanceStatus().name()
                                     : null)
                             .checkInTime(attendance.getCheckInTime())
                             .notes(attendance.getNotes())
@@ -265,42 +266,50 @@ public class EventService {
         // Kiểm tra event tồn tại và thuộc club
         Event event = eventRepository.findById(eventId)
                 .orElseThrow(() -> new NotFoundException("Event not found"));
-        
+
         // Kiểm tra event thuộc club nào
         if (event.getClub() == null) {
             throw new NotFoundException("Event không thuộc về club nào");
         }
-        
+
         // Không cho điểm danh nếu sự kiện đã kết thúc
         if (event.getEndTime() != null && event.getEndTime().isBefore(LocalDateTime.now())) {
             throw new RuntimeException("Event has ended. Attendance can no longer be modified");
         }
-        
+
         if (attendances == null || attendances.isEmpty()) {
             throw new RuntimeException("Danh sách điểm danh không được rỗng");
         }
-        
+
         List<EventAttendance> updatedAttendances = new ArrayList<>();
-        
+
         for (BatchMarkAttendanceRequest.AttendanceItem item : attendances) {
             // Kiểm tra status hợp lệ
-            if (item.getAttendanceStatus() != AttendanceStatus.PRESENT && 
+            if (item.getAttendanceStatus() != AttendanceStatus.PRESENT &&
                 item.getAttendanceStatus() != AttendanceStatus.ABSENT) {
                 throw new RuntimeException("Chỉ có thể điểm danh PRESENT hoặc ABSENT cho userId: " + item.getUserId());
             }
-            
+
             // Kiểm tra user đã đăng ký event chưa
             EventAttendance attendance = eventAttendanceRepository.findByEventIdAndUserId(eventId, item.getUserId())
                     .orElseThrow(() -> new NotFoundException("User với ID " + item.getUserId() + " chưa đăng ký sự kiện này"));
-            
+
             // Cập nhật điểm danh
             attendance.setAttendanceStatus(item.getAttendanceStatus());
             attendance.setCheckInTime(item.getAttendanceStatus() == AttendanceStatus.PRESENT ? LocalDateTime.now() : null);
             attendance.setNotes(item.getNotes());
-            
+
             updatedAttendances.add(attendance);
         }
-        
+
         eventAttendanceRepository.saveAll(updatedAttendances);
+    }
+
+    /**
+     * Lấy danh sách events chưa được yêu cầu nộp báo cáo
+     * @return Danh sách events với id, tên event, id và tên club
+     */
+    public List<EventWithoutReportRequirementDto> getEventsWithoutReportRequirement() {
+        return eventRepository.findEventsWithoutReportRequirement();
     }
 }
