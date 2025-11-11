@@ -8,7 +8,7 @@ export function useMyClubs() {
   const [error, setErr] = useState<string | null>(null);
 
   useEffect(() => {
-    let alive = true;
+    let alive = true; 
     (async () => {
       try {
         const clubs = await getMyClubs();

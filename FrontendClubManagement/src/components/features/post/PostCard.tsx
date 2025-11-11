@@ -76,7 +76,8 @@ export const PostCard = ({
   const [imageErrors, setImageErrors] = useState<boolean[]>([]);
   const [showComments, setShowComments] = useState(false);
   const [commentText, setCommentText] = useState("");
-  const [replyingTo, setReplyingTo] = useState<number | null>(null);
+  const [replyingTo, setReplyingTo] = useState<number | null>(null); // Where to show the input (root comment)
+  const [replyTargetId, setReplyTargetId] = useState<number | null>(null); // Actual comment being replied to
   const [replyText, setReplyText] = useState("");
   const [replyTargetName, setReplyTargetName] = useState<string | null>(null);
   const replyInputRefs = useRef<Map<number, HTMLDivElement>>(new Map());
@@ -143,30 +144,40 @@ export const PostCard = ({
     try {
       const response = await commentService.getAllFlat(postId);
       if (response.code === 200 && response.data) {
-        // Build tree structure from flat list
+        // Group flat comments by root parent (no tree building)
         const flatComments = response.data;
-        const commentMap = new Map<number, CommentDTO>();
+        console.log("📥 Loaded comments:", flatComments);
+
+        // Separate root comments and group replies
         const rootComments: CommentDTO[] = [];
+        const replyGroups = new Map<number, CommentDTO[]>();
 
-        // First pass: create map
-        flatComments.forEach((comment) => {
-          comment.replies = [];
-          commentMap.set(comment.id, comment);
-        });
-
-        // Second pass: build tree
         flatComments.forEach((comment) => {
           if (comment.parentId === null) {
+            // This is a root comment
+            comment.replies = [];
             rootComments.push(comment);
           } else {
-            const parent = commentMap.get(comment.parentId);
-            if (parent) {
-              if (!parent.replies) parent.replies = [];
-              parent.replies.push(comment);
+            // This is a reply - group by root parent
+            const rootId = comment.rootParentId || comment.parentId;
+            console.log(
+              `📍 Reply ${comment.id}: parentId=${comment.parentId}, rootParentId=${comment.rootParentId}, grouping under=${rootId}`
+            );
+
+            if (!replyGroups.has(rootId)) {
+              replyGroups.set(rootId, []);
             }
+            replyGroups.get(rootId)!.push(comment);
           }
         });
 
+        // Attach grouped replies to root comments
+        rootComments.forEach((root) => {
+          root.replies = replyGroups.get(root.id) || [];
+        });
+
+        console.log("🌲 Built structure:", rootComments);
+        console.log("📊 Reply groups:", replyGroups);
         setCommentsList(rootComments);
       }
     } catch (error) {
@@ -207,9 +218,11 @@ export const PostCard = ({
             if (payload.comment.parentId === null) {
               return [payload.comment, ...prev];
             } else {
-              // Add as reply
+              // Add as reply - use rootParentId if it has value, otherwise use parentId
+              const targetParentId =
+                payload.comment.rootParentId || payload.comment.parentId;
               return prev.map((c) => {
-                if (c.id === payload.comment.parentId) {
+                if (c.id === targetParentId) {
                   return {
                     ...c,
                     replies: [...(c.replies || []), payload.comment],
@@ -296,67 +309,36 @@ export const PostCard = ({
     }
   }, [commentText, currentUser, postId]);
 
-  // Helper to find top-level parent comment ID
-  const findTopLevelParentId = useCallback(
-    (commentId: number, comments: CommentDTO[]): number | null => {
-      for (const comment of comments) {
-        if (comment.id === commentId) {
-          return comment.id; // This is top-level
-        }
-        if (comment.replies) {
-          for (const reply of comment.replies) {
-            if (reply.id === commentId) {
-              return comment.id; // Return parent top-level
-            }
-          }
-        }
-      }
-      return null;
-    },
-    []
-  );
-
   // Handle create reply
-  const handleCreateReply = useCallback(
-    async (targetCommentId: number) => {
-      if (!replyText.trim() || !currentUser?.id || !postId) return;
+  const handleCreateReply = useCallback(async () => {
+    if (!replyText.trim() || !currentUser?.id || !postId || !replyTargetId)
+      return;
 
-      // Find top-level parent ID (backend requires replying to top-level comment)
-      const topLevelParentId = findTopLevelParentId(
-        targetCommentId,
-        commentsList
-      );
-      if (!topLevelParentId) {
-        toast.error("Không tìm thấy comment cha");
-        return;
-      }
+    setSubmittingComment(true);
+    try {
+      const response = await commentService.create(postId, {
+        userId: currentUser.id,
+        content: replyText.trim(),
+        parentId: replyTargetId, // Use the actual comment id being replied to
+      });
 
-      setSubmittingComment(true);
-      try {
-        const response = await commentService.create(postId, {
-          userId: currentUser.id,
-          content: replyText.trim(),
-          parentId: topLevelParentId,
-        });
-
-        if (response.code === 200 && response.data) {
-          setReplyText("");
-          setReplyingTo(null);
-          setReplyTargetName(null);
-          // WebSocket will handle the update, no need to reload
-          toast.success("Đã thêm phản hồi");
-        } else {
-          toast.error("Không thể tạo phản hồi");
-        }
-      } catch (error) {
-        console.error("Failed to create reply:", error);
+      if (response.code === 200 && response.data) {
+        setReplyText("");
+        setReplyingTo(null);
+        setReplyTargetId(null);
+        setReplyTargetName(null);
+        // WebSocket will handle the update, no need to reload
+        toast.success("Đã thêm phản hồi");
+      } else {
         toast.error("Không thể tạo phản hồi");
-      } finally {
-        setSubmittingComment(false);
       }
-    },
-    [replyText, currentUser, postId, commentsList, findTopLevelParentId]
-  );
+    } catch (error) {
+      console.error("Failed to create reply:", error);
+      toast.error("Không thể tạo phản hồi");
+    } finally {
+      setSubmittingComment(false);
+    }
+  }, [replyText, currentUser, postId, replyTargetId]);
 
   // Handle edit comment
   const handleEditComment = useCallback(
@@ -446,28 +428,50 @@ export const PostCard = ({
 
   // Handle reply click - auto tag
   const handleReplyClick = useCallback(
-    (comment: CommentDTO) => {
-      // Find top-level parent ID for this comment
-      const topLevelParentId = findTopLevelParentId(comment.id, commentsList);
-      const targetId =
-        topLevelParentId && topLevelParentId !== comment.id
-          ? topLevelParentId
-          : comment.id;
+    (comment: CommentDTO, rootCommentId: number) => {
+      console.log("🔘 handleReplyClick:", {
+        commentId: comment.id,
+        parentId: comment.parentId,
+        rootParentId: comment.rootParentId,
+        passedRootId: rootCommentId,
+        userName: comment.userName,
+      });
 
-      setReplyingTo(targetId);
+      // Use the passed rootCommentId to determine where reply input should appear
+      const inputLocationId = rootCommentId;
+
+      console.log(
+        "📍 Setting replyingTo:",
+        inputLocationId,
+        "replyTargetId:",
+        comment.id
+      );
+      console.log(
+        "📋 Current refs map has keys:",
+        Array.from(replyInputRefs.current.keys())
+      );
+
+      setReplyingTo(inputLocationId); // Where to show the input (root comment)
+      setReplyTargetId(comment.id); // Actual comment being replied to
       setReplyTargetName(comment.userName);
       setReplyText(`@${comment.userName} `);
 
       // Scroll to reply input after a short delay to ensure it's rendered
       setTimeout(() => {
-        const inputElement = replyInputRefs.current.get(targetId);
+        const inputElement = replyInputRefs.current.get(inputLocationId);
+        console.log(
+          "🔍 Looking for input element with id:",
+          inputLocationId,
+          "found:",
+          !!inputElement
+        );
         inputElement?.scrollIntoView({
           behavior: "smooth",
           block: "nearest",
         });
       }, 100);
     },
-    [commentsList, findTopLevelParentId]
+    []
   );
 
   // Handle delete post
@@ -693,7 +697,10 @@ export const PostCard = ({
         <div className="flex gap-3">
           <span>
             {showComments && commentsList.length > 0
-              ? commentsList.length
+              ? commentsList.reduce(
+                  (total, c) => total + 1 + (c.replies?.length || 0),
+                  0
+                )
               : initialCommentsCount}{" "}
             bình luận
           </span>
@@ -839,7 +846,9 @@ export const PostCard = ({
                           <span>{formatTimestamp(comment.createdAt)}</span>
                           <button
                             className="hover:underline font-semibold"
-                            onClick={() => handleReplyClick(comment)}
+                            onClick={() =>
+                              handleReplyClick(comment, comment.id)
+                            }
                           >
                             Trả lời
                           </button>
@@ -894,6 +903,7 @@ export const PostCard = ({
                                   )}
                                 </div>
                                 {reply.parentId &&
+                                  reply.parentId !== comment.id &&
                                   (() => {
                                     const parentComment = findParentComment(
                                       reply.parentId,
@@ -956,7 +966,9 @@ export const PostCard = ({
                                 <span>{formatTimestamp(reply.createdAt)}</span>
                                 <button
                                   className="hover:underline font-semibold"
-                                  onClick={() => handleReplyClick(reply)}
+                                  onClick={() =>
+                                    handleReplyClick(reply, comment.id)
+                                  }
                                 >
                                   Trả lời
                                 </button>
@@ -1022,7 +1034,7 @@ export const PostCard = ({
                                 (e.metaKey || e.ctrlKey)
                               ) {
                                 e.preventDefault();
-                                handleCreateReply(comment.id);
+                                handleCreateReply();
                               }
                             }}
                             className="min-h-[50px] resize-none text-sm"
@@ -1031,7 +1043,7 @@ export const PostCard = ({
                           <div className="flex flex-col gap-1">
                             <Button
                               size="sm"
-                              onClick={() => handleCreateReply(comment.id)}
+                              onClick={() => handleCreateReply()}
                               disabled={!replyText.trim() || submittingComment}
                             >
                               <Send className="h-3.5 w-3.5" />
@@ -1041,6 +1053,7 @@ export const PostCard = ({
                               variant="ghost"
                               onClick={() => {
                                 setReplyingTo(null);
+                                setReplyTargetId(null);
                                 setReplyText("");
                                 setReplyTargetName(null);
                               }}
