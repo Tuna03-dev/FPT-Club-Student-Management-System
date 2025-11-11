@@ -2,6 +2,7 @@ import { useMemo, useState, useEffect } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useTeamDetail } from "@/hooks/useTeamDetail";
 import { useTeamLeadGuard } from "@/hooks/useTeamLeadGuard";
+import { useClubOfficerFlag } from "@/hooks/useClubOfficerFlag";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -184,6 +185,7 @@ export default function TeamDetailPage() {
 
   const { data, loading, error } = useTeamDetail(cId, tId);
   const { allowed: isLead, error: guardErr } = useTeamLeadGuard(cId, tId);
+  const { amOfficer, checking: checkingOfficer } = useClubOfficerFlag(cId);
 
   // Đồng bộ URL → state (khi back/forward hoặc điều hướng từ editor)
   useEffect(() => {
@@ -210,23 +212,22 @@ export default function TeamDetailPage() {
     }
   }, [isLead, activeTab]);
 
-  // Nếu không phải member thì chặn tab posts → chuyển sang members
-  useEffect(() => {
-    const memberFlag = !!data?.member;
-    if (!memberFlag && activeTab === "posts") {
-      setActiveTab("members");
-    }
-  }, [data?.member, activeTab]);
-
-  // ❌ ĐỪNG return sớm trước các hooks khác
-  // Thay vì return, hiển thị loading/error trong JSX bên dưới
-
   const teamName = data?.teamName ?? "";
   const teamDesc = data?.description ?? "";
-  const myRoles = data?.myRoles ?? [];
+  // const myRoles = data?.myRoles ?? [];
   const memberFlag = !!data?.member;
   const rawMembers = data?.members ?? [];
-  const totalCount = (data?.memberCount ?? rawMembers.length) || 0;
+  // const totalCount = (data?.memberCount ?? rawMembers.length) || 0;
+
+  // QUYỀN XEM BÀI ĐĂNG: là member team hoặc là chủ nhiệm CLB
+  const canViewPosts = memberFlag || amOfficer;
+
+  // Chặn truy cập tab "posts" khi đã biết chắc chắn không có quyền
+  useEffect(() => {
+    if (!checkingOfficer && !canViewPosts && activeTab === "posts") {
+      setActiveTab("members");
+    }
+  }, [checkingOfficer, canViewPosts, activeTab]);
 
   // Các useMemo luôn được gọi (kể cả loading/error) để giữ thứ tự hooks ổn định
   const members = useMemo(
@@ -270,21 +271,24 @@ export default function TeamDetailPage() {
     return arr;
   }, [filteredMembers]);
 
-  const mockPosts = useMemo(() => [
-    {
-      author: {
-        name: leader?.name || teamName || "Team",
-        avatar: leader?.avatarUrl || "",
-        role: leader?.roleName || "Trưởng ban",
+  const mockPosts = useMemo(
+    () => [
+      {
+        author: {
+          name: leader?.name || teamName || "Team",
+          avatar: leader?.avatarUrl || "",
+          role: leader?.roleName || "Trưởng ban",
+        },
+        content:
+          "Đội vừa kick-off sprint mới. Mục tiêu: hoàn thiện backlog và onboard thành viên mới.",
+        image: "",
+        timestamp: new Date().toLocaleDateString("vi-VN"),
+        likes: 12,
+        comments: 3,
       },
-      content:
-        "Đội vừa kick-off sprint mới. Mục tiêu: hoàn thiện backlog và onboard thành viên mới.",
-      image: "",
-      timestamp: new Date().toLocaleDateString("vi-VN"),
-      likes: 12,
-      comments: 3,
-    },
-  ], [leader?.name, leader?.avatarUrl, leader?.roleName, teamName]);
+    ],
+    [leader?.name, leader?.avatarUrl, leader?.roleName, teamName]
+  );
 
   return (
     <div className="min-h-screen bg-background">
@@ -337,13 +341,14 @@ export default function TeamDetailPage() {
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
               <div className="flex gap-8">
                 {[
-                  // Posts chỉ hiển thị nếu user thuộc team
-                  { id: "posts", label: "Bài đăng", icon: FileText, show: !!memberFlag },
-                  // Members luôn hiển thị để mọi thành viên CLB xem
+                  // ✅ Posts: member hoặc chủ nhiệm xem được.
+                  // Cho hiển thị khi đang checking để tránh nháy UI; body sẽ tự xử lý.
+                  { id: "posts", label: "Bài đăng", icon: FileText, show: !!memberFlag || !!amOfficer || checkingOfficer },
+                  // Members luôn hiển thị
                   { id: "members", label: "Thành viên", icon: Users, show: true },
                   // Drafts/Requests: chỉ leader
-                  { id: "drafts", label: "Drafts", icon: FileText, show: !!isLead },
-                  { id: "requests", label: "Requests", icon: Clock, show: !!isLead },
+                  { id: "drafts", label: "Bản nháp tin tức", icon: FileText, show: !!isLead },
+                  { id: "requests", label: "Yêu cầu tin tức", icon: Clock, show: !!isLead },
                 ]
                   .filter((t) => t.show)
                   .map((tab) => {
@@ -371,38 +376,36 @@ export default function TeamDetailPage() {
           {/* BODY */}
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
             <div className="mb-6 text-sm text-muted-foreground">
-              <span className="mr-4">
-                Bạn thuộc team:{" "}
-                <span className={memberFlag ? "text-green-600" : ""}>
-                  {memberFlag ? "Có" : "Không"}
-                </span>
-              </span>
-              <span className="mr-4">
-                Vai trò của bạn: {myRoles.length ? myRoles.join(", ") : "—"}
-              </span>
-              <span>Tổng thành viên: {totalCount}</span>
               {guardErr ? <span className="ml-4 text-red-600">{guardErr}</span> : null}
             </div>
 
-            {activeTab === "posts" && memberFlag && (
-              <div>
-                <div className="flex justify-between items-center mb-6">
-                  <h2 className="text-2xl font-bold">Bài đăng gần đây</h2>
+            {activeTab === "posts" && (
+              checkingOfficer ? (
+                <Card className="p-6 text-sm text-muted-foreground">Đang kiểm tra quyền…</Card>
+              ) : canViewPosts ? (
+                <div>
+                  <div className="flex justify-between items-center mb-6">
+                    <h2 className="text-2xl font-bold">Bài đăng gần đây</h2>
+                  </div>
+                  <div className="space-y-6">
+                    {mockPosts.map((p, i) => (
+                      <PostCard
+                        key={i}
+                        author={p.author}
+                        content={p.content}
+                        image={p.image}
+                        timestamp={p.timestamp}
+                        likes={p.likes}
+                        comments={p.comments}
+                      />
+                    ))}
+                  </div>
                 </div>
-                <div className="space-y-6">
-                  {mockPosts.map((p, i) => (
-                    <PostCard
-                      key={i}
-                      author={p.author}
-                      content={p.content}
-                      image={p.image}
-                      timestamp={p.timestamp}
-                      likes={p.likes}
-                      comments={p.comments}
-                    />
-                  ))}
-                </div>
-              </div>
+              ) : (
+                <Card className="p-6 text-sm text-muted-foreground">
+                  Bạn không có quyền xem bài đăng của team này.
+                </Card>
+              )
             )}
 
             {activeTab === "members" && (

@@ -15,13 +15,7 @@ import {
   Plus,
   Newspaper,
 } from "lucide-react";
-import {
-  NavLink,
-  Outlet,
-  useParams,
-  useNavigate,
-  useLocation,
-} from "react-router-dom";
+import { NavLink, Outlet, useParams, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
@@ -42,10 +36,8 @@ import {
 import { toast } from "sonner";
 import { authService } from "@/services/authService";
 import { useTeams } from "@/hooks/useTeams";
-// hook officer tối giản (team-level API, có fallback)
-import { useClubOfficer } from "@/hooks/useClubOfficer";
-// context permissions để Guard đọc
 import { PermissionContext } from "@/contexts/PermissionContext";
+import { useClubOfficerFlag } from "@/hooks/useClubOfficerFlag";
 
 const navItems = [
   { key: "dashboard", url: "", icon: Home },
@@ -56,50 +48,14 @@ const navItems = [
 ];
 
 const managementItems = [
-  { key: "club_news", url: "/news", icon: Newspaper, label: "Yêu cầu tin tức" },
-  { key: "permissions", url: "/roles", icon: Shield, label: "Phân quyền" },
-  {
-    key: "pending_posts",
-    url: "/pending-posts",
-    icon: FileText,
-    label: "Bài viết chờ duyệt",
-  },
-  {
-    key: "manage_members",
-    url: "/members",
-    icon: Users,
-    label: "Quản lý thành viên",
-  },
-  {
-    key: "manage_events",
-    url: "/events",
-    icon: Calendar,
-    label: "Quản lý sự kiện",
-  },
-  {
-    key: "manage_recruitments",
-    url: "/recruitments",
-    icon: Briefcase,
-    label: "Quản lý tuyển thành viên",
-  },
-  {
-    key: "manage_reports",
-    url: "/reports",
-    icon: FileText,
-    label: "Quản lý báo cáo",
-  },
-  {
-    key: "manage_finance",
-    url: "/finance",
-    icon: DollarSign,
-    label: "Quản lý tài chính",
-  },
-  {
-    key: "pending_requests",
-    url: "/pending-requests",
-    icon: Clock,
-    label: "Yêu cầu chờ duyệt",
-  },
+  { key: "club_news", url: "/news", icon: Newspaper, label: "Quản lí tin tức" },
+  { key: "permissions", url: "/permissions", icon: Shield, label: "Phân quyền" },
+  { key: "pending_posts", url: "/pending-posts", icon: FileText, label: "Bài viết chờ duyệt" },
+  { key: "manage_members", url: "/members", icon: Users, label: "Quản lý thành viên" },
+  { key: "manage_events", url: "/events", icon: Calendar, label: "Quản lý sự kiện" },
+  { key: "manage_recruitments", url: "/recruitments", icon: Briefcase, label: "Quản lý tuyển thành viên" },
+  { key: "manage_finance", url: "/finance", icon: DollarSign, label: "Quản lý tài chính" },
+  { key: "pending_requests", url: "/pending-requests", icon: Clock, label: "Yêu cầu chờ duyệt" },
 ];
 
 const managementColors: Record<string, string> = {
@@ -110,7 +66,6 @@ const managementColors: Record<string, string> = {
   manage_recruitments: "bg-gradient-to-br from-red-500 to-red-600",
   manage_finance: "bg-gradient-to-br from-emerald-500 to-emerald-600",
   pending_requests: "bg-gradient-to-br from-orange-500 to-orange-600",
-  manage_reports: "bg-gradient-to-br from-pink-500 to-pink-600",
   club_news: "bg-gradient-to-br from-indigo-500 to-indigo-600",
 };
 
@@ -118,7 +73,6 @@ export const ClubLayout = () => {
   const { t } = useTranslation("common");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const navigate = useNavigate();
-  const location = useLocation();
 
   const { clubId = "0" } = useParams();
   const numericClubId = Number(clubId);
@@ -131,13 +85,12 @@ export const ClubLayout = () => {
     error: teamsError,
   } = useTeams(validClubId ? numericClubId : undefined);
 
-  // teamId từ URL (nếu đang ở route team)
-  const teamIdFromUrl = useMemo(() => {
-    const m = location.pathname.match(/\/teams\/(\d+)/);
-    return m ? Number(m[1]) : undefined;
-  }, [location.pathname]);
+  // ===== Club-level officer flag (QUYẾT ĐỊNH HIỂN THỊ NÚT) =====
+  const { amOfficer, checking } = useClubOfficerFlag(
+    validClubId ? numericClubId : undefined
+  );
 
-  // khi teams về, cập nhật cache firstTeamId (hook officer sẽ dùng fallback này)
+  // Ghi nhớ firstTeamId (chỉ để UX list, không ảnh hưởng permission)
   if (teams?.[0]?.teamId && validClubId) {
     const key = `firstTeamId:${numericClubId}`;
     try {
@@ -154,27 +107,21 @@ export const ClubLayout = () => {
     }
   }
 
-  // kiểm tra officer CN/PCN (dựa trên team-level API, có fallback)
-  const { isOfficer, loading: officerLoading } = useClubOfficer(
-    validClubId ? numericClubId : undefined,
-    teamIdFromUrl
-  );
-
-  // filter menu: chỉ CN/PCN mới thấy "Yêu cầu tin tức"
+  // CHỈ hiện "Quản lí tin tức" khi amOfficer === true
   const filteredManagementItems = useMemo(
     () =>
       managementItems.filter((item) => {
-        if (item.key === "club_news") return !officerLoading && isOfficer;
+        if (item.key === "club_news") return amOfficer === true;
         return true;
       }),
-    [isOfficer, officerLoading]
+    [amOfficer]
   );
 
   const handleLogout = async () => {
     try {
       await authService.logoutWithApi();
     } catch {
-      /* ignore */
+      // noop
     } finally {
       authService.logout();
       toast.success("Đăng xuất thành công!", { duration: 2000 });
@@ -191,8 +138,9 @@ export const ClubLayout = () => {
   }
 
   return (
-    // Cung cấp quyền cho toàn bộ subtree (Guard chỉ đọc, không tự gọi API)
-    <PermissionContext.Provider value={{ isOfficer, loading: officerLoading }}>
+    <PermissionContext.Provider
+      value={{ isOfficer: amOfficer === true, loading: checking }}
+    >
       <TooltipProvider delayDuration={200}>
         <div className="h-screen w-full bg-background flex flex-col overflow-hidden">
           {/* ===== HEADER ===== */}
@@ -294,9 +242,7 @@ export const ClubLayout = () => {
                             onClick={() => setIsMobileMenuOpen(false)}
                           >
                             <div
-                              className={`h-6 w-6 rounded-lg ${
-                                managementColors[item.key]
-                              } flex items-center justify-center text-white shadow-sm`}
+                              className={`h-6 w-6 rounded-lg ${managementColors[item.key]} flex items-center justify-center text-white shadow-sm`}
                             >
                               <item.icon className="h-3 w-3" />
                             </div>
@@ -336,9 +282,7 @@ export const ClubLayout = () => {
                         }
                       >
                         <div
-                          className={`h-8 w-8 rounded-lg ${
-                            managementColors[item.key]
-                          } flex items-center justify-center text-white shadow-sm`}
+                          className={`h-8 w-8 rounded-lg ${managementColors[item.key]} flex items-center justify-center text-white shadow-sm`}
                         >
                           <item.icon className="h-4 w-4" />
                         </div>
@@ -356,8 +300,8 @@ export const ClubLayout = () => {
                     </h2>
                   </div>
 
-                  {/* Nút tạo phòng ban: chỉ CN/PCN; ẩn khi officerLoading để tránh nháy */}
-                  {!officerLoading && isOfficer && (
+                  {/* Nút tạo phòng ban: CHỈ hiển thị khi amOfficer === true */}
+                  {amOfficer === true && (
                     <div className="px-3 mb-2">
                       <Button
                         variant="outline"
