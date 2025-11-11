@@ -82,6 +82,13 @@ public class RoleService {
         String systemRole = getUserSystemRoleStaff(userId);
         return "STAFF".equals(systemRole);
     }
+
+    /**
+     * Kiểm tra user có phải ADMIN (system role) không
+     */
+    public boolean isAdmin(Long userId) {
+        return userRepository.existsByIdAndSystemRole_RoleNameIgnoreCase(userId, "ADMIN");
+    }
     
     /**
      * Kiểm tra user có quyền tạo event không

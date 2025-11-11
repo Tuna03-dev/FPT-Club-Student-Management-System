@@ -4,6 +4,8 @@ import MainLayout from "@/layouts/MainLayout";
 import HomePage from "@/pages/HomePage";
 import { ClubLayout } from "@/layouts/ClubLayout";
 import { StaffLayout } from "@/layouts/StaffLayout";
+import { AdminLayout } from "@/layouts/AdminLayout";
+import StaffList from "@/pages/admin/StaffList";
 
 import { Dashboard } from "@/pages/myclub/Dashboard";
 import MemberList from "@/pages/myclub/members/MemberList";
@@ -128,6 +130,20 @@ export const router = createBrowserRouter([
         <StaffNewsEditor />
       </ProtectedRoute>
     ),
+  },
+
+  {
+    path: "/admin",
+    element: (
+      <ProtectedRoute>
+        <AdminLayout />
+      </ProtectedRoute>
+    ),
+    children: [
+      { index: true, element: <Navigate to="staff" replace /> },
+      { path: "staff", element: <StaffList /> },
+      { path: "settings", element: <div className="p-6">Cấu hình hệ thống</div> },
+    ],
   },
 
   {
