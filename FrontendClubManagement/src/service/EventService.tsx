@@ -48,7 +48,8 @@ export async function getAllEventsByFilter(
 ): Promise<EventResponse> {
   const res = await axiosClient.post<EventResponse>(
     "/events/get-all-by-filter",
-    payload
+    payload,
+    { timeout: 30000 }
   );
   if (!res.data) throw new Error("Empty response");
   return res.data;
@@ -69,13 +70,13 @@ export async function getAllClubs(): Promise<ClubDto[]> {
 }
 
 export async function getEventById(id: number): Promise<EventData> {
-  const res = await axiosClient.get<EventData>(`/events/${id}`);
+  const res = await axiosClient.get<EventData>(`/events/${id}`, { timeout: 30000 });
   if (!res.data) throw new Error("Event not found");
   return res.data;
 }
 
 export async function getEventsByClubId(clubId: number): Promise<EventData[]> {
-  const res = await axiosClient.get<EventData[]>(`/events/club/${clubId}`);
+  const res = await axiosClient.get<EventData[]>(`/events/club/${clubId}`, { timeout: 30000 });
   return res.data ?? [];
 }
 
@@ -83,7 +84,7 @@ export async function getEventsByClubId(clubId: number): Promise<EventData[]> {
  * Staff: Lấy tất cả events (không cần check membership)
  */
 export async function getStaffAllEvents(): Promise<EventData[]> {
-  const res = await axiosClient.get<EventData[]>("/events/staff/all");
+  const res = await axiosClient.get<EventData[]>("/events/staff/all", { timeout: 30000 });
   return res.data ?? [];
 }
 
@@ -91,13 +92,13 @@ export async function getStaffAllEvents(): Promise<EventData[]> {
  * Staff: Lấy events theo clubId (không cần check membership)
  */
 export async function getStaffEventsByClubId(clubId: number): Promise<EventData[]> {
-  const res = await axiosClient.get<EventData[]>(`/events/staff/club/${clubId}`);
+  const res = await axiosClient.get<EventData[]>(`/events/staff/club/${clubId}`, { timeout: 30000 });
   return res.data ?? [];
 }
 
 // ===== Staff Cancelled Events =====
 export async function getStaffCancelledEvents(clubId?: number): Promise<EventData[]> {
-  const res = await axiosClient.get<EventData[]>(`/events/staff/cancelled`, { params: clubId ? { clubId } : undefined });
+  const res = await axiosClient.get<EventData[]>(`/events/staff/cancelled`, { params: clubId ? { clubId } : undefined, timeout: 30000 });
   return res.data ?? [];
 }
 
@@ -193,7 +194,7 @@ export async function deleteEvent(eventId: number): Promise<void> {
 
 // ===== Staff Publish Event =====
 export async function publishEventByStaff(eventId: number): Promise<EventData> {
-  const res = await axiosClient.post<EventData>(`/events/${eventId}/publish`);
+  const res = await axiosClient.post<EventData>(`/events/${eventId}/publish`, undefined, { timeout: 30000 });
   if (!res.data) throw new Error("Publish event failed");
   return res.data;
 }
@@ -220,7 +221,7 @@ export interface PendingRequestDto {
 }
 
 export async function getPendingRequests(): Promise<PendingRequestDto[]> {
-  const res = await axiosClient.get<PendingRequestDto[]>("/events/pending-requests");
+  const res = await axiosClient.get<PendingRequestDto[]>("/events/pending-requests", { timeout: 30000 });
   return res.data ?? [];
 }
 
@@ -256,7 +257,7 @@ export interface MyDraftEventDto {
 
 export async function getMyDraftEvents(clubId?: number): Promise<MyDraftEventDto[]> {
   const params = clubId ? { clubId } : undefined;
-  const res = await axiosClient.get<MyDraftEventDto[]>("/events/my-draft-events", { params });
+  const res = await axiosClient.get<MyDraftEventDto[]>("/events/my-draft-events", { params, timeout: 30000 });
   return res.data ?? [];
 }
 
