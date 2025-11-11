@@ -237,6 +237,8 @@ export async function createReport(
 
 /**
  * Update a draft report
+ * Multipart/form-data endpoint
+ * File upload is optional. If file is provided, it will be uploaded to Cloudinary.
  */
 export interface UpdateReportRequest {
   reportTitle: string;
@@ -246,11 +248,32 @@ export interface UpdateReportRequest {
 
 export async function updateReport(
   reportId: number,
-  request: UpdateReportRequest
+  request: UpdateReportRequest,
+  file?: File
 ): Promise<ReportDetailResponse> {
+  // Always use FormData since backend endpoint requires multipart/form-data
+  const formData = new FormData();
+  
+  // Create a Blob for the JSON request with correct content-type
+  const requestBlob = new Blob([JSON.stringify(request)], {
+    type: "application/json",
+  });
+  formData.append("request", requestBlob, "request.json");
+  
+  // Only append file if provided (file is optional)
+  if (file) {
+    formData.append("file", file);
+  }
+
   const response = await axiosClient.put<ReportDetailResponse>(
     `/reports/club/${reportId}`,
-    request
+    formData,
+    {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+      timeout: 60000, // Increase timeout for file uploads
+    }
   );
   if (!response.data) {
     throw new Error("Failed to update report");

@@ -5,5 +5,6 @@ import lombok.*;
 public class CreateCommentRequest {
     private Long userId;
     private String content;
-    private Long parentId; // null nếu top-level
+    private Long parentId;
+    private Long rootParentId;// null nếu top-level
 }

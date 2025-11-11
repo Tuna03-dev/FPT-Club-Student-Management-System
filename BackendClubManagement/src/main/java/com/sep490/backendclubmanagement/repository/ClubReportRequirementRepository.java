@@ -41,11 +41,12 @@ public interface ClubReportRequirementRepository extends JpaRepository<ClubRepor
     /**
      * Find all ClubReportRequirements by clubId
      * Fetch submissionReportRequirement eagerly to avoid LazyInitializationException
+     * Ordered by creation time (newest first)
      */
     @Query("SELECT crr FROM ClubReportRequirement crr " +
            "JOIN FETCH crr.submissionReportRequirement " +
            "WHERE crr.club.id = :clubId " +
-           "ORDER BY crr.submissionReportRequirement.dueDate DESC")
+           "ORDER BY crr.submissionReportRequirement.createdAt DESC")
     List<ClubReportRequirement> findByClubId(
             @Param("clubId") Long clubId
     );

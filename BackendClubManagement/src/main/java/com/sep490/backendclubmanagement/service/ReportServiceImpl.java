@@ -504,6 +504,33 @@ public class ReportServiceImpl implements ReportServiceInterface {
     }
 
     /**
+     * Update a draft report with file upload
+     */
+    @Override
+    @Transactional
+    public ReportDetailResponse updateReportWithFile(Long reportId, UpdateReportRequest request, MultipartFile file, Long userId) {
+        // Upload file if provided
+        String fileUrl = request.getFileUrl(); // Use provided fileUrl if any
+        if (file != null && !file.isEmpty()) {
+            try {
+                // Upload file to Cloudinary in club/reports folder
+                CloudinaryService.UploadResult uploadResult = cloudinaryService.uploadFile(file, "club/reports");
+                fileUrl = uploadResult.url();
+                log.info("Uploaded file for report update: {}", fileUrl);
+            } catch (Exception e) {
+                log.error("Failed to upload file for report update: {}", e.getMessage(), e);
+                throw new RuntimeException("Failed to upload file: " + e.getMessage(), e);
+            }
+        }
+
+        // Set the uploaded file URL to request
+        request.setFileUrl(fileUrl);
+
+        // Delegate to updateReport method
+        return updateReport(reportId, request, userId);
+    }
+
+    /**
      * Submit a draft report or resubmit a rejected report
      * Allowed for: club president OR team officer who is the creator
      */
