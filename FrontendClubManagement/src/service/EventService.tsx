@@ -75,24 +75,24 @@ export async function getEventById(id: number): Promise<EventData> {
   return res.data;
 }
 
-export async function getEventsByClubId(clubId: number): Promise<EventData[]> {
-  const res = await axiosClient.get<EventData[]>(`/events/club/${clubId}`, { timeout: 30000 });
+export async function getEventsByClubId(clubId: number, params?: { startTime?: string; endTime?: string }): Promise<EventData[]> {
+  const res = await axiosClient.get<EventData[]>(`/events/club/${clubId}`, { params, timeout: 30000 });
   return res.data ?? [];
 }
 
 /**
  * Staff: Lấy tất cả events (không cần check membership)
  */
-export async function getStaffAllEvents(): Promise<EventData[]> {
-  const res = await axiosClient.get<EventData[]>("/events/staff/all", { timeout: 30000 });
+export async function getStaffAllEvents(params?: { startTime?: string; endTime?: string }): Promise<EventData[]> {
+  const res = await axiosClient.get<EventData[]>("/events/staff/all", { params, timeout: 30000 });
   return res.data ?? [];
 }
 
 /**
  * Staff: Lấy events theo clubId (không cần check membership)
  */
-export async function getStaffEventsByClubId(clubId: number): Promise<EventData[]> {
-  const res = await axiosClient.get<EventData[]>(`/events/staff/club/${clubId}`, { timeout: 30000 });
+export async function getStaffEventsByClubId(clubId: number, params?: { startTime?: string; endTime?: string }): Promise<EventData[]> {
+  const res = await axiosClient.get<EventData[]>(`/events/staff/club/${clubId}`, { params, timeout: 30000 });
   return res.data ?? [];
 }
 

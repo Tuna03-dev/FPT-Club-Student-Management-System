@@ -59,11 +59,28 @@ public interface EventRepository extends JpaRepository<Event, Long> {
     List<Event> findByIsDraftFalse();
 
     /**
+     * Lấy events theo clubId, không draft, giao với khoảng thời gian chỉ định
+     */
+    @Query("SELECT e FROM Event e " +
+           "WHERE (e.club.id = :clubId OR e.club.id IS NULL) " +
+           "AND e.isDraft = false " +
+           "AND (:startTime IS NULL OR :endTime IS NULL OR (e.endTime >= :startTime AND e.startTime <= :endTime))")
+    List<Event> findByClubIdAndIsDraftFalseInRange(Long clubId, LocalDateTime startTime, LocalDateTime endTime);
+
+    /**
      * Lấy tất cả events cho Staff (không bao gồm MEETING)
      */
     @Query("SELECT e FROM Event e WHERE e.isDraft = false " +
            "AND (e.eventType IS NULL OR UPPER(TRIM(e.eventType.typeName)) <> 'MEETING')")
     List<Event> findStaffAllEventsExcludingMeeting();
+
+    /**
+     * Lấy tất cả events cho Staff (không bao gồm MEETING) theo khoảng thời gian
+     */
+    @Query("SELECT e FROM Event e WHERE e.isDraft = false " +
+           "AND (e.eventType IS NULL OR UPPER(TRIM(e.eventType.typeName)) <> 'MEETING') " +
+           "AND (:startTime IS NULL OR :endTime IS NULL OR (e.endTime >= :startTime AND e.startTime <= :endTime))")
+    List<Event> findStaffAllEventsExcludingMeetingInRange(LocalDateTime startTime, LocalDateTime endTime);
 
     /**
      * Lấy events theo clubId cho Staff (không bao gồm MEETING)
@@ -72,6 +89,15 @@ public interface EventRepository extends JpaRepository<Event, Long> {
            "AND e.isDraft = false " +
            "AND (e.eventType IS NULL OR UPPER(TRIM(e.eventType.typeName)) <> 'MEETING')")
     List<Event> findStaffEventsByClubIdExcludingMeeting(Long clubId);
+
+    /**
+     * Lấy events theo clubId cho Staff (không bao gồm MEETING) theo khoảng thời gian
+     */
+    @Query("SELECT e FROM Event e WHERE (e.club.id = :clubId OR e.club.id IS NULL) " +
+           "AND e.isDraft = false " +
+           "AND (e.eventType IS NULL OR UPPER(TRIM(e.eventType.typeName)) <> 'MEETING') " +
+           "AND (:startTime IS NULL OR :endTime IS NULL OR (e.endTime >= :startTime AND e.startTime <= :endTime))")
+    List<Event> findStaffEventsByClubIdExcludingMeetingInRange(Long clubId, LocalDateTime startTime, LocalDateTime endTime);
 
     // STAFF: các sự kiện CLB đã hủy (isDraft = true, không còn chờ duyệt)
     @Query("SELECT e FROM Event e LEFT JOIN RequestEvent re ON re.event = e AND re.status IN :pendingStatuses " +

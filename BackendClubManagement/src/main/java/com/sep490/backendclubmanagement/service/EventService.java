@@ -33,7 +33,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.data.domain.Page;
 
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -139,11 +138,15 @@ public class EventService {
         return ModelMapperUtils.mapList(clubs, ClubDto.class);
     }
 
-    public List<EventData> getEventsByClubId(Long clubId, Long userId) {
+    public List<EventData> getEventsByClubId(Long clubId, Long userId, String startTime, String endTime) {
         if (!clubMemberShipRepository.existsByClubIdAndUserIdAndStatusActive(clubId, userId)) {
             throw new NotFoundException("You are not a member of this club or your membership is not active");
         }
-        List<Event> events = eventRepository.findByClubIdAndIsDraftFalse(clubId);
+        LocalDateTime start = parseIsoDateTimeNullable(startTime);
+        LocalDateTime end = parseIsoDateTimeNullable(endTime);
+        List<Event> events = (start == null || end == null)
+                ? eventRepository.findByClubIdAndIsDraftFalse(clubId)
+                : eventRepository.findByClubIdAndIsDraftFalseInRange(clubId, start, end);
         List<EventData> list = events.stream()
                 .map(event -> {
                     EventData dto = eventMapper.toDto(event);
@@ -156,8 +159,12 @@ public class EventService {
     }
 
 
-    public List<EventData> getStaffAllEvents() {
-        List<Event> events = eventRepository.findStaffAllEventsExcludingMeeting();
+    public List<EventData> getStaffAllEvents(String startTime, String endTime) {
+        LocalDateTime start = parseIsoDateTimeNullable(startTime);
+        LocalDateTime end = parseIsoDateTimeNullable(endTime);
+        List<Event> events = (start == null || end == null)
+                ? eventRepository.findStaffAllEventsExcludingMeeting()
+                : eventRepository.findStaffAllEventsExcludingMeetingInRange(start, end);
         List<EventData> list = events.stream()
                 .map(event -> {
                     EventData dto = eventMapper.toDto(event);
@@ -170,8 +177,12 @@ public class EventService {
     }
 
 
-    public List<EventData> getStaffEventsByClubId(Long clubId) {
-        List<Event> events = eventRepository.findStaffEventsByClubIdExcludingMeeting(clubId);
+    public List<EventData> getStaffEventsByClubId(Long clubId, String startTime, String endTime) {
+        LocalDateTime start = parseIsoDateTimeNullable(startTime);
+        LocalDateTime end = parseIsoDateTimeNullable(endTime);
+        List<Event> events = (start == null || end == null)
+                ? eventRepository.findStaffEventsByClubIdExcludingMeeting(clubId)
+                : eventRepository.findStaffEventsByClubIdExcludingMeetingInRange(clubId, start, end);
         List<EventData> list = events.stream()
                 .map(event -> {
                     EventData dto = eventMapper.toDto(event);
@@ -181,6 +192,18 @@ public class EventService {
                 .toList();
         setMediaUrlsAndTypesBatch(list, events.stream().map(Event::getId).toList());
         return list;
+    }
+
+    private LocalDateTime parseIsoDateTimeNullable(String value) {
+        if (value == null || value.isBlank()) return null;
+        try {
+            // Support ISO strings with 'Z' or timezone offset
+            java.time.OffsetDateTime odt = java.time.OffsetDateTime.parse(value);
+            return odt.toLocalDateTime();
+        } catch (java.time.format.DateTimeParseException ex) {
+            // Fallback to LocalDateTime without zone if provided
+            return LocalDateTime.parse(value);
+        }
     }
 
 

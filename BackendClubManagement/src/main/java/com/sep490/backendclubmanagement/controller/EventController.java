@@ -51,29 +51,34 @@ public class EventController {
     }
 
     @GetMapping("/club/{clubId}")
-    public ApiResponse<List<EventData>> getEventsByClubId(@PathVariable Long clubId) {
+    public ApiResponse<List<EventData>> getEventsByClubId(@PathVariable Long clubId,
+                                                          @RequestParam(value = "startTime", required = false) String startTime,
+                                                          @RequestParam(value = "endTime", required = false) String endTime) {
         Long userId = SecurityUtils.getCurrentUserId();
-        return ApiResponse.success(eventService.getEventsByClubId(clubId, userId));
+        return ApiResponse.success(eventService.getEventsByClubId(clubId, userId, startTime, endTime));
     }
 
 
     @GetMapping("/staff/all")
-    public ApiResponse<List<EventData>> getStaffAllEvents() {
+    public ApiResponse<List<EventData>> getStaffAllEvents(@RequestParam(value = "startTime", required = false) String startTime,
+                                                          @RequestParam(value = "endTime", required = false) String endTime) {
         Long userId = SecurityUtils.getCurrentUserId();
         if (!roleService.isStaff(userId)) {
             throw new ForbiddenException("Chỉ STAFF mới có quyền truy cập");
         }
-        return ApiResponse.success(eventService.getStaffAllEvents());
+        return ApiResponse.success(eventService.getStaffAllEvents(startTime, endTime));
     }
 
 
     @GetMapping("/staff/club/{clubId}")
-    public ApiResponse<List<EventData>> getStaffEventsByClubId(@PathVariable Long clubId) {
+    public ApiResponse<List<EventData>> getStaffEventsByClubId(@PathVariable Long clubId,
+                                                               @RequestParam(value = "startTime", required = false) String startTime,
+                                                               @RequestParam(value = "endTime", required = false) String endTime) {
         Long userId = SecurityUtils.getCurrentUserId();
         if (!roleService.isStaff(userId)) {
             throw new ForbiddenException("Chỉ STAFF mới có quyền truy cập");
         }
-        return ApiResponse.success(eventService.getStaffEventsByClubId(clubId));
+        return ApiResponse.success(eventService.getStaffEventsByClubId(clubId, startTime, endTime));
     }
     
 

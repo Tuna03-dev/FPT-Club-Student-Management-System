@@ -70,21 +70,24 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
       try {
         setLoading(true)
         setError(null)
+        const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1, 0, 0, 0)
+        const endOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0, 23, 59, 59)
+        const range = { startTime: startOfMonth.toISOString(), endTime: endOfMonth.toISOString() }
         const user = authService.getCurrentUser()
         const roleUpper = user?.systemRole ? String(user.systemRole).trim().toUpperCase() : undefined
         const isStaff = roleUpper === "STAFF"
         let eventData: EventData[]
         if (isStaff) {
           if (clubId && clubId > 0) {
-            eventData = await getStaffEventsByClubId(clubId)
+            eventData = await getStaffEventsByClubId(clubId, range)
           } else {
-            eventData = await getStaffAllEvents()
+            eventData = await getStaffAllEvents(range)
           }
         } else {
           if (!clubId || clubId <= 0) {
             throw new Error("Club ID is required")
           }
-          eventData = await getEventsByClubId(clubId)
+          eventData = await getEventsByClubId(clubId, range)
         }
         const mappedEvents: Event[] = eventData.map((event: EventData) => ({
           id: event.id.toString(),
@@ -139,13 +142,16 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
       }
     }
     fetchEvents()
-  }, [clubId])
+  }, [clubId, currentDate])
 
   // Refetch events function
   const refetchEvents = async () => {
     try {
       setLoading(true)
       setError(null)
+      const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1, 0, 0, 0)
+      const endOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0, 23, 59, 59)
+      const range = { startTime: startOfMonth.toISOString(), endTime: endOfMonth.toISOString() }
       
       const user = authService.getCurrentUser()
       const roleUpper = user?.systemRole ? String(user.systemRole).trim().toUpperCase() : undefined
@@ -154,15 +160,15 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
       let eventData: EventData[]
       if (isStaff) {
         if (clubId && clubId > 0) {
-          eventData = await getStaffEventsByClubId(clubId)
+          eventData = await getStaffEventsByClubId(clubId, range)
         } else {
-          eventData = await getStaffAllEvents()
+          eventData = await getStaffAllEvents(range)
         }
       } else {
         if (!clubId || clubId <= 0) {
           throw new Error("Club ID is required")
         }
-        eventData = await getEventsByClubId(clubId)
+        eventData = await getEventsByClubId(clubId, range)
       }
       
       const mappedEvents: Event[] = eventData.map((event: EventData) => ({
