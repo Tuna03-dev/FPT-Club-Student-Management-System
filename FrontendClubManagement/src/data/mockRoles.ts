@@ -1,12 +1,38 @@
 // Mock System Roles
 export const mockSystemRoles = [
-  { id: 1, roleName: "Admin", description: "Quản trị viên hệ thống" },
-  { id: 2, roleName: "Staff", description: "Nhân viên quản lý" },
-  { id: 3, roleName: "Club Officer", description: "Cán bộ câu lạc bộ" },
-  { id: 4, roleName: "Team Officer", description: "Trưởng ban" },
-  { id: 5, roleName: "Club Treasure", description: "Thủ quỹ CLB" },
-  { id: 6, roleName: "Member", description: "Thành viên" },
-  { id: 7, roleName: "Student", description: "Sinh viên" },
+  {
+    id: 1,
+    roleName: "ADMIN",
+    description: "Quản trị viên hệ thống, có toàn quyền.",
+  },
+  {
+    id: 2,
+    roleName: "STAFF",
+    description: "Cán bộ trường phụ trách các câu lạc bộ.",
+  },
+  {
+    id: 3,
+    roleName: "CLUB_OFFICER",
+    description: "Chủ nhiệm câu lạc bộ, quản lý hoạt động của CLB.",
+  },
+  {
+    id: 4,
+    roleName: "TEAM_OFFICER",
+    description:
+      "Trưởng ban các phòng ban trong CLB (Tổ chức, Truyền thông, Nội dung...).",
+  },
+  {
+    id: 5,
+    roleName: "STUDENT",
+    description: "Sinh viên thông thường, có thể tham gia CLB.",
+  },
+  {
+    id: 6,
+    roleName: "CLUB_TREASURE",
+    description:
+      "Thủ quỹ CLB - có quyền như Trưởng ban (mỗi người chỉ 1 role).",
+  },
+  { id: 7, roleName: "MEMBER", description: "Thành viên trong CLB" },
 ];
 
 // Mock Club Roles
