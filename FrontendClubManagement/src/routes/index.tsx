@@ -37,10 +37,14 @@ import TeamNewsRequests from "@/pages/news/TeamNewsRequests";
 import TeamNewsEditor from "@/pages/news/TeamNewsEditor";
 import Payment from "@/pages/myclub/payments/MemberPaymentPage";
 import TeamCreatePage from "@/pages/myclub/teams/TeamCreatePage";
+import RoleManagement from "@/pages/myclub/RoleManagement";
 
 import ClubOfficerGuard from "@/components/guards/ClubOfficerGuard";
 import ForbiddenPage from "@/pages/ForbiddenPage";
 
+import { StaffReportManagement } from "@/pages/myclub/staff/reportManagement/StaffReport";
+import { PeriodicReportClubs } from "@/pages/myclub/staff/reportManagement/PeriodicReportClubs";
+import { ClubReportManagement } from "@/pages/myclub/report/ReportManagement";
 export const router = createBrowserRouter([
   {
     path: "/",
@@ -73,11 +77,15 @@ export const router = createBrowserRouter([
       },
       {
         path: "achievements",
-        element: <div className="container mx-auto px-4 py-8">Trang Thành tích</div>,
+        element: (
+          <div className="container mx-auto px-4 py-8">Trang Thành tích</div>
+        ),
       },
       {
         path: "contact",
-        element: <div className="container mx-auto px-4 py-8">Trang Liên hệ</div>,
+        element: (
+          <div className="container mx-auto px-4 py-8">Trang Liên hệ</div>
+        ),
       },
 
       { path: "myRecruitmentApplication", element: <StudentRecruitment /> },
@@ -150,6 +158,14 @@ export const router = createBrowserRouter([
       },
 
       { path: "members", element: <MemberList /> },
+      {
+        path: "roles",
+        element: (
+          <ClubOfficerGuard>
+            <RoleManagement />
+          </ClubOfficerGuard>
+        ),
+      },
       { path: "events", element: <EventList /> },
       { path: "events/attendance/:eventId", element: <EventAttendancePage /> },
       { path: "recruitments", element: <RecruitmentManagement /> },
@@ -158,9 +174,12 @@ export const router = createBrowserRouter([
       { path: "notifications", element: <Notifications /> },
       { path: "settings", element: <Settings /> },
       { path: "teams/:teamId", element: <TeamDetailPage /> },
+      { path: "reports", element: <ClubReportManagement /> },
 
       { path: "myclub", element: <Navigate to="." replace /> },
       { path: "teams/:teamId/news-drafts", element: <TeamNewsDrafts /> },
+      { path: "teams/:teamId/news-requests", element: <TeamNewsRequests /> },
+      { path: "teams/:teamId/news-editor", element: <TeamNewsEditor /> },
       { path: "teams/:teamId/news-requests", element: <TeamNewsRequests /> },
       { path: "teams/:teamId/news-editor", element: <TeamNewsEditor /> },
 
@@ -179,7 +198,7 @@ export const router = createBrowserRouter([
 
   // 404
   {
-    path: "/myclub/staff",
+    path: "/staff",
     element: (
       <ProtectedRoute>
         <StaffLayout />
@@ -188,6 +207,14 @@ export const router = createBrowserRouter([
     children: [
       { path: "events", element: <StaffEventList /> },
       { path: "settings", element: <Settings /> },
+      {
+        path: "reports",
+        element: <StaffReportManagement />,
+      },
+      {
+        path: "report/:reportId/clubs",
+        element: <PeriodicReportClubs />,
+      },
     ],
   },
 

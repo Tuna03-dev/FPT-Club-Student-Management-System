@@ -33,6 +33,9 @@ public class Comment extends BaseEntity {
     @JoinColumn(name = "parent_comment_id")
     private Comment parentComment;
 
+    @Column(name = "root_parent_comment_id")
+    private Long rootParentCommentId;
+
     @OneToMany(mappedBy = "parentComment", cascade = CascadeType.ALL)
     private Set<Comment> replies;
 

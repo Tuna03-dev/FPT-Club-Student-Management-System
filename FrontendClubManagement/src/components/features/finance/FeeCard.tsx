@@ -1,4 +1,10 @@
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { DollarSign, Calendar, AlertCircle, Loader2 } from "lucide-react";
@@ -12,10 +18,46 @@ interface FeeCardProps {
   isGeneratingQR?: boolean;
 }
 
-export default function FeeCard({ fee, onPayClick, isGeneratingQR = false }: FeeCardProps) {
+export default function FeeCard({
+  fee,
+  onPayClick,
+  isGeneratingQR = false,
+}: FeeCardProps) {
   const paymentStatus = fee.paymentStatus || "pending";
   const isMandatory = fee.required ?? fee.isMandatory ?? false;
   const feeTitle = fee.title;
+
+  const getDueStatusBadge = (dueDate?: string) => {
+    if (!dueDate) return null;
+    const d = new Date(dueDate);
+    if (Number.isNaN(d.getTime())) return null;
+    const today = new Date();
+    const startOfToday = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate()
+    );
+    const diffDays = Math.floor(
+      (d.getTime() - startOfToday.getTime()) / (1000 * 60 * 60 * 24)
+    );
+
+    if (diffDays < 0) {
+      return <Badge className="bg-red-500/10 text-red-500">Đã hết hạn</Badge>;
+    }
+    if (diffDays === 0) {
+      return (
+        <Badge className="bg-yellow-500/10 text-yellow-600">Hạn hôm nay</Badge>
+      );
+    }
+    if (diffDays <= 3) {
+      return (
+        <Badge className="bg-amber-500/10 text-amber-500">
+          Sắp hết hạn ({diffDays} ngày)
+        </Badge>
+      );
+    }
+    return <Badge className="bg-green-500/10 text-green-500">Còn hạn</Badge>;
+  };
 
   return (
     <Card className="hover:shadow-lg transition-shadow">
@@ -25,7 +67,10 @@ export default function FeeCard({ fee, onPayClick, isGeneratingQR = false }: Fee
             <div className="flex items-center gap-2 mb-2 flex-wrap">
               <CardTitle className="text-lg">{feeTitle}</CardTitle>
               {isMandatory ? (
-                <Badge variant="default" className="bg-red-500 hover:bg-red-600">
+                <Badge
+                  variant="default"
+                  className="bg-red-500 hover:bg-red-600"
+                >
                   <AlertCircle className="h-3 w-3 mr-1" />
                   Bắt buộc
                 </Badge>
@@ -56,7 +101,10 @@ export default function FeeCard({ fee, onPayClick, isGeneratingQR = false }: Fee
               <Calendar className="h-4 w-4" />
               Hạn đóng:
             </span>
-            <span className="font-medium">{formatDate(fee.dueDate)}</span>
+            <div className="font-medium flex items-center gap-2">
+              <span>{formatDate(fee.dueDate)}</span>
+              {getDueStatusBadge(fee.dueDate)}
+            </div>
           </div>
           <Button
             onClick={() => onPayClick(fee)}

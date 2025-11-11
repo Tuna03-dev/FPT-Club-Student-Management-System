@@ -29,7 +29,7 @@ public class EventController {
     private final EventService eventService;
     private final EventManagementService eventManagementService;
     private final RoleService roleService;
-    
+
     @PostMapping("/get-all-by-filter")
     public ApiResponse<EventResponse> getAllEventsByFilter(@RequestBody EventRequest request){
          return ApiResponse.success(eventService.getAllEventsByFilter(request));
@@ -210,13 +210,13 @@ public class EventController {
     public ApiResponse<List<EventRegistrationDto>> getEventRegistrations(@PathVariable Long eventId,
                                                                          @RequestParam(value = "keyword", required = false) String keyword) {
         Long userId = SecurityUtils.getCurrentUserId();
-        
+
         EventData event = eventService.getEventById(eventId);
         Long clubId = event != null ? event.getClubId() : null;
         if (clubId == null) {
             throw new ForbiddenException("Event không thuộc về club nào");
         }
-        
+
         if (!roleService.isClubPresident(userId, clubId) && !roleService.isClubOfficer(userId, clubId)) {
             throw new ForbiddenException("Chỉ ban cán sự của CLB này mới có quyền xem danh sách đăng ký");
         }
@@ -228,13 +228,13 @@ public class EventController {
     @PostMapping("/batch-mark-attendance")
     public ApiResponse<Void> batchMarkAttendance(@Valid @RequestBody BatchMarkAttendanceRequest request) {
         Long userId = SecurityUtils.getCurrentUserId();
-        
+
         EventData event = eventService.getEventById(request.getEventId());
         Long clubId = event != null ? event.getClubId() : null;
         if (clubId == null) {
             throw new ForbiddenException("Event không thuộc về club nào");
         }
-        
+
         if (!roleService.isClubPresident(userId, clubId) && !roleService.isClubOfficer(userId, clubId)) {
             throw new ForbiddenException("Chỉ ban cán sự của CLB này mới có quyền điểm danh");
         }
@@ -242,5 +242,14 @@ public class EventController {
         eventService.batchMarkAttendance(request.getEventId(), request.getAttendances());
         
         return ApiResponse.success();
+    }
+
+    /**
+     * Lấy danh sách events chưa được yêu cầu nộp báo cáo
+     * Trả về: id event, tên event, id club, tên club
+     */
+    @GetMapping("/without-report-requirement")
+    public ApiResponse<List<EventWithoutReportRequirementDto>> getEventsWithoutReportRequirement() {
+        return ApiResponse.success(eventService.getEventsWithoutReportRequirement());
     }
 }
