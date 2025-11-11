@@ -245,7 +245,7 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
     const user = authService.getCurrentUser()
     if (!user) return
     const roleUpper = user.systemRole ? String(user.systemRole).trim().toUpperCase() : ""
-    const isReviewer = roleUpper === "STAFF" || roleUpper === "CLUB_OFFICER" || isPresidentOfCurrentClub
+    const isReviewer = roleUpper === "STAFF" || isPresidentOfCurrentClub
     if (isReviewer) {
       setLoadingPending(true)
       getPendingRequests()

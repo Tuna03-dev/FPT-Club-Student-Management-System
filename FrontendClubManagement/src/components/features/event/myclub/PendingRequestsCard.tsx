@@ -47,7 +47,7 @@ export function PendingRequestsCard({
   const { isClubPresident: isPresidentOfCurrentClub } = useClubPermissions(clubId)
   const user = authService.getCurrentUser()
   const roleUpper = user?.systemRole ? String(user.systemRole).trim().toUpperCase() : ""
-  const canReview = !!user && (roleUpper === "STAFF" || roleUpper === "CLUB_OFFICER" || isPresidentOfCurrentClub)
+  const canReview = !!user && (roleUpper === "STAFF" || isPresidentOfCurrentClub)
 
   if (!canReview) return null
 

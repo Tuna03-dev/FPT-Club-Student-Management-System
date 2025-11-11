@@ -42,12 +42,7 @@ export function useClubPermissions(
   // Check if user is a member of this club
   const isClubMember = useMemo(() => !!clubRole, [clubRole]);
 
-  // Check if user has CLUB_OFFICER role in this club
-  const isClubPresident = !!(
-    userClub &&
-    userClub.clubRoles &&
-    userClub.clubRoles.includes("CLUB_OFFICER")
-  );
+
   // Check if user has CLUB_PRESIDENT role in this club
   const isClubPresident = useMemo(() => {
     if (!clubRole) return false;
@@ -69,7 +64,7 @@ export function useClubPermissions(
   }, [clubRole]);
 
   // User has permission if they have CLUB_OFFICER role in this club
-  const hasPermission = isClubPresident;
+
   // User has permission if they have CLUB_PRESIDENT role in this club
   const hasPermission = useMemo(() => isClubPresident, [isClubPresident]);
 
