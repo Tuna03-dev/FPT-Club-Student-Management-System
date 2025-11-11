@@ -49,13 +49,43 @@ const navItems = [
 
 const managementItems = [
   { key: "club_news", url: "/news", icon: Newspaper, label: "Quản lí tin tức" },
-  { key: "permissions", url: "/permissions", icon: Shield, label: "Phân quyền" },
-  { key: "pending_posts", url: "/pending-posts", icon: FileText, label: "Bài viết chờ duyệt" },
-  { key: "manage_members", url: "/members", icon: Users, label: "Quản lý thành viên" },
-  { key: "manage_events", url: "/events", icon: Calendar, label: "Quản lý sự kiện" },
-  { key: "manage_recruitments", url: "/recruitments", icon: Briefcase, label: "Quản lý tuyển thành viên" },
-  { key: "manage_finance", url: "/finance", icon: DollarSign, label: "Quản lý tài chính" },
-  { key: "pending_requests", url: "/pending-requests", icon: Clock, label: "Yêu cầu chờ duyệt" },
+  { key: "permissions", url: "/roles", icon: Shield, label: "Phân quyền" },
+  {
+    key: "pending_posts",
+    url: "/pending-posts",
+    icon: FileText,
+    label: "Bài viết chờ duyệt",
+  },
+  {
+    key: "manage_members",
+    url: "/members",
+    icon: Users,
+    label: "Quản lý thành viên",
+  },
+  {
+    key: "manage_events",
+    url: "/events",
+    icon: Calendar,
+    label: "Quản lý sự kiện",
+  },
+  {
+    key: "manage_recruitments",
+    url: "/recruitments",
+    icon: Briefcase,
+    label: "Quản lý tuyển thành viên",
+  },
+  {
+    key: "manage_finance",
+    url: "/finance",
+    icon: DollarSign,
+    label: "Quản lý tài chính",
+  },
+  {
+    key: "pending_requests",
+    url: "/pending-requests",
+    icon: Clock,
+    label: "Yêu cầu chờ duyệt",
+  },
 ];
 
 const managementColors: Record<string, string> = {
@@ -242,7 +272,9 @@ export const ClubLayout = () => {
                             onClick={() => setIsMobileMenuOpen(false)}
                           >
                             <div
-                              className={`h-6 w-6 rounded-lg ${managementColors[item.key]} flex items-center justify-center text-white shadow-sm`}
+                              className={`h-6 w-6 rounded-lg ${
+                                managementColors[item.key]
+                              } flex items-center justify-center text-white shadow-sm`}
                             >
                               <item.icon className="h-3 w-3" />
                             </div>
@@ -282,7 +314,9 @@ export const ClubLayout = () => {
                         }
                       >
                         <div
-                          className={`h-8 w-8 rounded-lg ${managementColors[item.key]} flex items-center justify-center text-white shadow-sm`}
+                          className={`h-8 w-8 rounded-lg ${
+                            managementColors[item.key]
+                          } flex items-center justify-center text-white shadow-sm`}
                         >
                           <item.icon className="h-4 w-4" />
                         </div>
