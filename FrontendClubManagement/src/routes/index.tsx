@@ -26,7 +26,6 @@ import Finance from "@/pages/myclub/finance/Finance";
 import { StudentRecruitment } from "@/pages/studentRecruitment/StudentRecruitment";
 import { ClubDetail } from "@/pages/clubDetail/ClubDetail";
 import LoginPage from "@/pages/login/Login";
-import ClubDetailPage from "@/pages/myclub/ClubDetailPage";
 import ClubsPage from "@/pages/myclub/ClubsPage";
 import PresidentNewsList from "@/pages/news/PresidentNewsList";
 import PresidentNewsEditor from "@/pages/news/PresidentNewsEditor";
@@ -70,11 +69,9 @@ export const router = createBrowserRouter([
 
       {
         path: "clubs",
-        children: [
-          { index: true, element: <ClubsPage /> },
-          { path: ":id", element: <ClubDetailPage /> },
-        ],
+        children: [{ index: true, element: <ClubsPage /> }],
       },
+      { path: "club/:clubId", element: <ClubDetail /> },
       {
         path: "achievements",
         element: (
@@ -89,7 +86,6 @@ export const router = createBrowserRouter([
       },
 
       { path: "myRecruitmentApplication", element: <StudentRecruitment /> },
-      { path: "clubDetail/:clubId", element: <ClubDetail /> },
     ],
   },
 
