@@ -25,6 +25,7 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       REDIS_DATABASE: ${REDIS_DATABASE}
       HOST_FRONT_END: ${HOST_FRONT_END:-http://localhost:5173}
+      PAYOS_WEBHOOK_URL: ${PAYOS_WEBHOOK_URL}
       FAP_API_URL: http://fap-api:8081/api/allowed-users
     depends_on:
       - fap-api
