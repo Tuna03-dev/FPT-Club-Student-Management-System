@@ -111,14 +111,18 @@ public class ReportController {
 
     /**
      * Update a draft report
+     * Multipart/form-data endpoint
+     * File upload is optional. If file is provided, it will be uploaded to Cloudinary.
      */
-    @PutMapping("/club/{reportId}")
+    @PutMapping(value = "/club/{reportId}", consumes = "multipart/form-data")
     public ApiResponse<ReportDetailResponse> updateReport(
             @PathVariable Long reportId,
-            @RequestBody @Valid UpdateReportRequest request
-    ) {
+            @RequestPart("request") String requestJson,
+            @RequestPart(value = "file", required = false) MultipartFile file
+    ) throws Exception {
         Long userId = SecurityUtils.getCurrentUserId();
-        ReportDetailResponse data = reportService.updateReport(reportId, request, userId);
+        UpdateReportRequest request = objectMapper.readValue(requestJson, UpdateReportRequest.class);
+        ReportDetailResponse data = reportService.updateReportWithFile(reportId, request, file, userId);
         return ApiResponse.success(data);
     }
 

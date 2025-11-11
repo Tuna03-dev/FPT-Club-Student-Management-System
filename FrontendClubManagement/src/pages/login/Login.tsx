@@ -161,7 +161,7 @@ const LoginPage: React.FC = () => {
       {/* Back Button */}
       <button
         className="back-button"
-        onClick={() => navigate("")}
+        onClick={() => navigate("/")}
         aria-label="Quay lại"
       >
         <ArrowLeft size={20} />
