@@ -84,6 +84,16 @@ public interface ReportServiceInterface {
     ReportDetailResponse updateReport(Long reportId, UpdateReportRequest request, Long userId);
 
     /**
+     * Update a draft report with file upload
+     * @param reportId Report ID
+     * @param request Update request containing report details
+     * @param file Optional file to upload (will be uploaded to Cloudinary and fileUrl will be set automatically)
+     * @param userId Current user ID
+     * @return Updated report detail response
+     */
+    ReportDetailResponse updateReportWithFile(Long reportId, UpdateReportRequest request, MultipartFile file, Long userId);
+
+    /**
      * Submit a draft report (club president or team officer who is the creator)
      * @param request Submit request containing report ID
      * @param userId Current user ID
