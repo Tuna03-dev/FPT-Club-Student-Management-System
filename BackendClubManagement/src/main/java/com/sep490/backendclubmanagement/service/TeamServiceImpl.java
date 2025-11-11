@@ -11,7 +11,6 @@ import com.sep490.backendclubmanagement.mapper.TeamMapper;
 import com.sep490.backendclubmanagement.repository.*;
 import com.sep490.backendclubmanagement.security.RoleGuard;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,50 +31,50 @@ public class TeamServiceImpl implements TeamService {
     private final RoleGuard guard;
     private final UserRepository userRepository;
 
-    // Tên role khớp DB
-    private static final String LEADER_ROLE_NAME = "Trưởng ban";
-    private static final String VICE_LEADER_ROLE_NAME = "Phó ban";
-    private static final String MEMBER_ROLE_NAME = "Thành viên ban";
+    // Role codes (nếu bạn vẫn muốn gán vai trò khi được chọn)
+    private static final String ROLE_CODE_TEAM_HEAD = "CLUB_TEAM_HEAD";
+    private static final String ROLE_CODE_TEAM_DEPUTY = "CLUB_TEAM_DEPUTY";
+    private static final String ROLE_CODE_TEAM_MEMBER = "CLUB_MEMBER";
 
     @Override
     public List<TeamResponse> getTeamsByClubId(Long clubId) {
-        List<Team> teams = teamRepository.findByClubId(clubId);
-        return teams.stream().map(teamMapper::toDto).toList();
+        return teamRepository.findByClubId(clubId).stream()
+                .map(teamMapper::toDto)
+                .toList();
     }
 
     @Override
     @Transactional
-    public TeamResponse  createTeam(CreateTeamRequest request) {
+    public TeamResponse createTeam(CreateTeamRequest request) {
         validateDistinctLeaderAndVice(request);
 
-        // Chuẩn hóa tên ban
-        final String normalizedTeamName = request.getTeamName().trim();
+        // ✅ chuẩn hóa tên: trim + rút gọn khoảng trắng
+        final String normalizedTeamName = request.getTeamName()
+                .trim()
+                .replaceAll("\\s+", " ");
 
-        // Lấy học kỳ hiện tại
+        // Học kỳ hiện tại
         Semester currentSemester = semesterRepository.findCurrentSemester()
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy học kỳ hiện tại."));
 
-        // Lấy CLB
+        // CLB
         Club club = clubRepository.findById(request.getClubId())
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Không tìm thấy CLB với ID: " + request.getClubId()
-                ));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy CLB với ID: " + request.getClubId()));
 
-        // ✅ Kiểm tra quyền của người đang đăng nhập
+        // Quyền
         Long currentUserId = guard.getCurrentUserId();
         boolean canCreate = guard.isClubPresident(currentUserId, club.getId())
                 || guard.isClubVice(currentUserId, club.getId());
-
         if (!canCreate) {
             throw new AccessDeniedException("Chỉ Chủ nhiệm hoặc Phó chủ nhiệm CLB mới được phép tạo phòng ban.");
         }
 
-        // Kiểm tra trùng tên ban trong cùng CLB
-        if (teamRepository.existsByTeamNameAndClubId(normalizedTeamName, club.getId())) {
+        // ✅ check trùng tên (ignore-case)
+        if (teamRepository.existsByClubIdAndTeamNameIgnoreCase(club.getId(), normalizedTeamName)) {
             throw new DuplicateResourceException("Tên ban '" + normalizedTeamName + "' đã tồn tại trong CLB này.");
         }
 
-        // Gom danh sách user cần gán vào team
+        // Gom danh sách user (optional)
         List<Long> userIdsToAssign = new ArrayList<>();
         if (request.getLeaderUserId() != null) userIdsToAssign.add(request.getLeaderUserId());
         if (request.getViceLeaderUserId() != null) userIdsToAssign.add(request.getViceLeaderUserId());
@@ -87,16 +86,13 @@ public class TeamServiceImpl implements TeamService {
                 .distinct()
                 .toList();
 
-        // Lấy membership map để kiểm tra và gán
         final Map<Long, ClubMemberShip> membershipMap = distinctUserIds.isEmpty()
                 ? Collections.emptyMap()
                 : clubMembershipRepository.findByUserIdInAndClubId(distinctUserIds, club.getId())
                 .stream()
                 .collect(Collectors.toMap(cm -> cm.getUser().getId(), cm -> cm));
 
-        // Kiểm tra user hợp lệ
         if (!distinctUserIds.isEmpty()) {
-            // Kiểm tra user không thuộc CLB
             List<Long> notInClub = distinctUserIds.stream()
                     .filter(uid -> !membershipMap.containsKey(uid))
                     .toList();
@@ -104,67 +100,43 @@ public class TeamServiceImpl implements TeamService {
                 throw new ResourceNotFoundException("Các User ID không thuộc CLB: " + notInClub);
             }
 
-            // Kiểm tra user đã ở team khác trong kỳ hiện tại
+            // không cho 1 người ở 2 team trong cùng kỳ
             List<Long> alreadyInTeam = roleMembershipRepository
                     .findExistingTeamMembersInSemester(club.getId(), currentSemester.getId(), distinctUserIds);
             if (!alreadyInTeam.isEmpty()) {
-                throw new DuplicateResourceException(
-                        "Các User ID đã thuộc một ban khác trong học kỳ hiện tại: " + alreadyInTeam);
+                throw new DuplicateResourceException("Các User ID đã thuộc một ban khác trong kỳ hiện tại: " + alreadyInTeam);
             }
         }
 
-        // ✅ Tạo team mới
+        // ✅ tạo team
         Team newTeam = new Team();
         newTeam.setTeamName(normalizedTeamName);
         newTeam.setDescription(request.getDescription());
-        newTeam.setLinkGroupChat(request.getLinkGroupChat());
+        newTeam.setLinkGroupChat(request.getLinkGroupChat()); // optional
         newTeam.setClub(club);
         Team savedTeam = teamRepository.save(newTeam);
 
-        // ✅ Gán vai trò cho các user (nếu có)
+        // ✅ assign roles (optional): nếu bạn KHÔNG muốn gán thì không gửi các field => sẽ skip
         if (!distinctUserIds.isEmpty()) {
-            ClubRole leaderRole = clubRoleRepository.findByRoleName(LEADER_ROLE_NAME)
-                    .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy vai trò '" + LEADER_ROLE_NAME + "'"));
-            ClubRole viceLeaderRole = clubRoleRepository.findByRoleName(VICE_LEADER_ROLE_NAME)
-                    .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy vai trò '" + VICE_LEADER_ROLE_NAME + "'"));
-            ClubRole memberRole = clubRoleRepository.findByRoleName(MEMBER_ROLE_NAME)
-                    .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy vai trò '" + MEMBER_ROLE_NAME + "'"));
+            ClubRole leaderRole = getRole(club.getId(), ROLE_CODE_TEAM_HEAD);
+            ClubRole viceLeaderRole = getRole(club.getId(), ROLE_CODE_TEAM_DEPUTY);
+            ClubRole memberRole = getRole(club.getId(), ROLE_CODE_TEAM_MEMBER);
 
-            // Trưởng ban
             if (request.getLeaderUserId() != null) {
-                assignRoleToTeam(
-                        membershipMap.get(request.getLeaderUserId()),
-                        request.getLeaderUserId(),
-                        leaderRole,
-                        savedTeam,
-                        currentSemester
-                );
+                assignRoleToTeam(membershipMap.get(request.getLeaderUserId()), request.getLeaderUserId(),
+                        leaderRole, savedTeam, currentSemester);
             }
-
-            // Phó ban
             if (request.getViceLeaderUserId() != null) {
-                assignRoleToTeam(
-                        membershipMap.get(request.getViceLeaderUserId()),
-                        request.getViceLeaderUserId(),
-                        viceLeaderRole,
-                        savedTeam,
-                        currentSemester
-                );
+                assignRoleToTeam(membershipMap.get(request.getViceLeaderUserId()), request.getViceLeaderUserId(),
+                        viceLeaderRole, savedTeam, currentSemester);
             }
-
-            // Thành viên
             if (request.getMemberUserIds() != null) {
                 for (Long memberId : request.getMemberUserIds()) {
                     if (memberId == null) continue;
                     if (!Objects.equals(memberId, request.getLeaderUserId())
                             && !Objects.equals(memberId, request.getViceLeaderUserId())) {
-                        assignRoleToTeam(
-                                membershipMap.get(memberId),
-                                memberId,
-                                memberRole,
-                                savedTeam,
-                                currentSemester
-                        );
+                        assignRoleToTeam(membershipMap.get(memberId), memberId,
+                                memberRole, savedTeam, currentSemester);
                     }
                 }
             }
@@ -181,6 +153,13 @@ public class TeamServiceImpl implements TeamService {
         }
     }
 
+    private ClubRole getRole(Long clubId, String roleCode) {
+        return clubRoleRepository.findByClubIdAndRoleCode(clubId, roleCode)
+                .or(() -> clubRoleRepository.findByRoleCodeAndClubIsNull(roleCode))
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Không tìm thấy role_code = " + roleCode + " cho CLB " + clubId));
+    }
+
     private void assignRoleToTeam(
             ClubMemberShip membership,
             Long userId,
@@ -191,20 +170,18 @@ public class TeamServiceImpl implements TeamService {
         if (membership == null) {
             throw new ResourceNotFoundException("User ID " + userId + " không phải là thành viên của CLB.");
         }
-
         RoleMemberShip newRoleAssignment = new RoleMemberShip();
         newRoleAssignment.setClubMemberShip(membership);
         newRoleAssignment.setClubRole(role);
         newRoleAssignment.setTeam(team);
         newRoleAssignment.setSemester(semester);
         newRoleAssignment.setIsActive(true);
-
         roleMembershipRepository.save(newRoleAssignment);
     }
+
     @Override
     @Transactional(readOnly = true)
     public List<AvailableMemberDTO> getAvailableMembers(Long clubId) {
-
         Semester currentSemester = semesterRepository.findCurrentSemester()
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy học kỳ hiện tại."));
 
@@ -217,9 +194,7 @@ public class TeamServiceImpl implements TeamService {
                         .fullName(u.getFullName())
                         .avatarUrl(u.getAvatarUrl())
                         .email(u.getEmail())
-                        .build()
-                )
+                        .build())
                 .toList();
     }
-
 }

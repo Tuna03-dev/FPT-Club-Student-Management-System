@@ -27,5 +27,8 @@ public interface TeamRepository extends JpaRepository<Team, Long> {
 
     boolean existsByTeamNameAndClubId(String teamName, Long clubId);
 
+    // ✅ tránh trùng tên khác hoa/thường
+    boolean existsByClubIdAndTeamNameIgnoreCase(Long clubId, String teamName);
+
 
 }

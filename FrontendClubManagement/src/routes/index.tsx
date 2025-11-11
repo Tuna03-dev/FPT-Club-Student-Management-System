@@ -1,5 +1,4 @@
-// src/router.tsx
-import { createBrowserRouter, Navigate } from "react-router-dom";
+import { createBrowserRouter } from "react-router-dom";
 import MainLayout from "@/layouts/MainLayout";
 import HomePage from "@/pages/HomePage";
 import { ClubLayout } from "@/layouts/ClubLayout";
@@ -40,6 +39,11 @@ import TeamCreatePage from "@/pages/myclub/teams/TeamCreatePage";
 
 import ClubOfficerGuard from "@/components/guards/ClubOfficerGuard";
 import ForbiddenPage from "@/pages/ForbiddenPage";
+
+import DraftDetail from "@/pages/news/DraftDetail";
+import RequestDetail from "@/pages/news/RequestDetail";
+import StaffNewsDetail from "@/pages/news/StaffNewsDetail";
+import StaffNewsEdit from "@/pages/news/StaffNewsEdit";
 
 export const router = createBrowserRouter([
   {
@@ -105,23 +109,30 @@ export const router = createBrowserRouter([
     ),
   },
 
+  /* ========= STAFF LAYOUT CHO TẤT CẢ TRANG STAFF ========= */
   {
-    path: "/staff/news",
+    path: "/staff",
     element: (
       <ProtectedRoute>
-        <StaffNewsList />
+        <StaffLayout />
       </ProtectedRoute>
     ),
-  },
-  {
-    path: "/staff/news-editor",
-    element: (
-      <ProtectedRoute>
-        <StaffNewsEditor />
-      </ProtectedRoute>
-    ),
+    children: [
+      // News (staff)
+      { path: "news", element: <StaffNewsList /> },
+      { path: "news-editor", element: <StaffNewsEditor /> },
+      { path: "news/requests/:id", element: <RequestDetail /> },
+      { path: "news/drafts/:draftId", element: <DraftDetail /> },
+      { path: "news/:id", element: <StaffNewsDetail /> },
+      { path: "news/:id/edit", element: <StaffNewsEdit /> },
+
+      // Bạn có thể thêm các trang staff khác vào đây nếu muốn dùng chung layout
+      { path: "events", element: <StaffEventList /> },
+      { path: "settings", element: <Settings /> },
+    ],
   },
 
+  /* ========= (Giữ nguyên) MYCLUB STAFF CHO NHÁNH CŨ ========= */
   {
     path: "/myclub/:clubId",
     element: (
@@ -149,6 +160,24 @@ export const router = createBrowserRouter([
         ),
       },
 
+      // Club news detail (draft + request)
+      {
+        path: "news/drafts/:draftId",
+        element: (
+          <ClubOfficerGuard>
+            <DraftDetail />
+          </ClubOfficerGuard>
+        ),
+      },
+      {
+        path: "news/requests/:id",
+        element: (
+          <ClubOfficerGuard>
+            <RequestDetail />
+          </ClubOfficerGuard>
+        ),
+      },
+
       { path: "members", element: <MemberList /> },
       { path: "events", element: <EventList /> },
       { path: "events/attendance/:eventId", element: <EventAttendancePage /> },
@@ -159,19 +188,16 @@ export const router = createBrowserRouter([
       { path: "settings", element: <Settings /> },
       { path: "teams/:teamId", element: <TeamDetailPage /> },
 
-      { path: "myclub", element: <Navigate to="." replace /> },
+      // Team news (list)
       { path: "teams/:teamId/news-drafts", element: <TeamNewsDrafts /> },
       { path: "teams/:teamId/news-requests", element: <TeamNewsRequests /> },
       { path: "teams/:teamId/news-editor", element: <TeamNewsEditor /> },
 
-      {
-        path: "teams/create",
-        element: (
-          <ClubOfficerGuard>
-            <TeamCreatePage />
-          </ClubOfficerGuard>
-        ),
-      },
+      // Team-level detail
+      { path: "teams/:teamId/news/drafts/:draftId", element: <DraftDetail /> },
+      { path: "teams/:teamId/news/requests/:id", element: <RequestDetail /> },
+
+      { path: "teams/create", element: <TeamCreatePage /> },
     ],
   },
 
@@ -179,22 +205,9 @@ export const router = createBrowserRouter([
 
   // 404
   {
-    path: "/myclub/staff",
-    element: (
-      <ProtectedRoute>
-        <StaffLayout />
-      </ProtectedRoute>
-    ),
-    children: [
-      { path: "events", element: <StaffEventList /> },
-      { path: "settings", element: <Settings /> },
-    ],
-  },
-
-  {
     path: "*",
     element: (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex items-center justify-center minih-screen">
         <div className="text-center">
           <h1 className="text-4xl font-bold text-gray-800 mb-4">404</h1>
           <p className="text-gray-600">Không tìm thấy trang</p>

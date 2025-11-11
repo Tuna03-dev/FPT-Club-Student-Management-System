@@ -8,6 +8,7 @@ import {
   Clock,
   FileText,
   Users,
+  Newspaper,
 } from "lucide-react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useState } from "react";
@@ -29,16 +30,23 @@ import {
 import { authService } from "@/services/authService";
 import { useTranslation } from "react-i18next";
 
+/** ===== Top nav items (thanh giữa) =====
+ *  Nếu bạn muốn có nút "Tin tức" trên thanh giữa,
+ *  để key = "news" và url = "/news".
+ *  buildHref() sẽ tự chuyển sang /staff/news.
+ */
 const navItems = [
   { key: "events", url: "/events", icon: Calendar, label: "Sự kiện" },
+  { key: "news", url: "/news", icon: Newspaper, label: "Tin tức" }, // ← tùy chọn: có thể xóa nếu không muốn hiện ở top
 ];
 
-// Management items for Staff
+// Management items (sidebar + mobile)
 const managementItems = [
   { key: "manage_events", url: "/events", icon: Calendar, label: "Quản lý sự kiện" },
   { key: "pending_requests", url: "/pending-requests", icon: Clock, label: "Yêu cầu chờ duyệt" },
   { key: "pending_posts", url: "/pending-posts", icon: FileText, label: "Bài viết chờ duyệt" },
   { key: "manage_members", url: "/members", icon: Users, label: "Quản lý thành viên" },
+  { key: "manage_news", url: "/news", icon: Newspaper, label: "Quản lý tin tức" }, // ← cái bạn cần
 ];
 
 const managementColors: Record<string, string> = {
@@ -46,7 +54,20 @@ const managementColors: Record<string, string> = {
   pending_requests: "bg-gradient-to-br from-orange-500 to-orange-600",
   pending_posts: "bg-gradient-to-br from-yellow-500 to-yellow-600",
   manage_members: "bg-gradient-to-br from-blue-500 to-blue-600",
+  manage_news: "bg-gradient-to-br from-purple-500 to-purple-600",
 };
+
+/** Chỉ SỬA đường dẫn của riêng bạn:
+ * - Các mục staff “chung” khác vẫn giữ prefix /myclub/staff
+ * - Riêng “news” (key = manage_news ở sidebar/mobile, hoặc news ở top-nav)
+ *   sẽ chuyển hướng sang /staff/news theo router của bạn.
+ */
+function buildHref(item: { key: string; url: string }) {
+  if (item.key === "manage_news" || item.key === "news") {
+    return `/staff${item.url}`; // → /staff/news
+  }
+  return `/myclub/staff${item.url}`; // mặc định: không ảnh hưởng người khác
+}
 
 export const StaffLayout = () => {
   const { t } = useTranslation("common");
@@ -90,7 +111,7 @@ export const StaffLayout = () => {
                 <Tooltip key={item.key}>
                   <TooltipTrigger asChild>
                     <NavLink
-                      to={`/myclub/staff${item.url}`}
+                      to={buildHref(item)}
                       end={item.url === ""}
                       className={({ isActive }) =>
                         `flex items-center justify-center px-8 py-2 rounded-lg transition-all relative ${
@@ -153,7 +174,7 @@ export const StaffLayout = () => {
                     {managementItems.map((item) => (
                       <DropdownMenuItem key={item.key} asChild>
                         <NavLink
-                          to={`/myclub/staff${item.url}`}
+                          to={buildHref(item)}
                           className="flex items-center gap-3 w-full"
                           onClick={() => setIsMobileMenuOpen(false)}
                         >
@@ -188,7 +209,7 @@ export const StaffLayout = () => {
                   {managementItems.map((item) => (
                     <NavLink
                       key={item.key}
-                      to={`/myclub/staff${item.url}`}
+                      to={buildHref(item)}
                       className={({ isActive }) =>
                         `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
                           isActive
@@ -218,4 +239,3 @@ export const StaffLayout = () => {
     </TooltipProvider>
   );
 };
-
