@@ -19,7 +19,6 @@ import {
   type SubmitReportRequest,
   type ReviewReportByClubRequest,
 } from "@/services/reportService";
-import { axiosClient } from "@/api/axiosClient";
 import {
   mapBackendToFrontendReportType,
   type ReportDetailResponse,
@@ -441,60 +440,6 @@ export function ClubReportManagement() {
     }
   };
 
-  // Mock data for submissions (to be replaced later - currently using API data)
-  // Commented out as we're using API data now
-  /*
-  const [mockReportRequests] = useState<ReportRequest[]>([
-    {
-      request_id: "1",
-      request_type: "periodic",
-      title: "Báo cáo hoạt động tháng 11/2024",
-      description:
-        "Nhà trường yêu cầu báo cáo tổng hợp hoạt động của câu lạc bộ trong tháng 11",
-      deadline: "2024-11-30",
-      created_by: "Phòng Quản lý Sinh viên",
-      created_at: "2024-11-01T08:00:00Z",
-      required_details: [
-        "Số lượng hoạt động tổ chức",
-        "Tổng số thành viên tham gia",
-        "Các sự kiện chính",
-        "Kết quả đạt được",
-      ],
-    },
-    {
-      request_id: "2",
-      request_type: "post_event",
-      title: "Báo cáo hậu sự kiện: Workshop React Advanced",
-      description:
-        "Báo cáo chi tiết về sự kiện workshop React Advanced vừa diễn ra",
-      deadline: "2024-11-10",
-      created_by: "Phòng Quản lý Sinh viên",
-      created_at: "2024-10-28T14:00:00Z",
-      required_details: [
-        "Số lượng tham dự",
-        "Đánh giá của sinh viên",
-        "Nội dung được cải tiến",
-        "Kiến nghị cho các sự kiện tiếp theo",
-      ],
-    },
-    {
-      request_id: "3",
-      request_type: "periodic",
-      title: "Báo cáo hoạt động tháng 10/2024",
-      description: "Báo cáo hoạt động tháng 10 đã đến hạn nộp",
-      deadline: "2024-10-31",
-      created_by: "Phòng Quản lý Sinh viên",
-      created_at: "2024-10-01T08:00:00Z",
-      required_details: [
-        "Tổng hợp hoạt động",
-        "Danh sách sự kiện",
-        "Số lượng thành viên",
-        "Phản hồi từ thành viên",
-      ],
-    },
-  ]);
-  */
-
   // State for reports
   const [myReports, setMyReports] = useState<ReportListItemResponse[]>([]);
   const [allClubReports, setAllClubReports] = useState<
@@ -726,62 +671,15 @@ export function ClubReportManagement() {
 
       if (editingReportId) {
         // Update existing draft
-        let finalFileUrl = draftFileUrl;
-
-        // Nếu có file mới được chọn, upload file lên Cloudinary trước
-        if (draftFile) {
-          try {
-            // Upload file mới lên Cloudinary qua API /uploads/file
-            const formData = new FormData();
-            formData.append("file", draftFile);
-
-            interface UploadResult {
-              url: string;
-              publicId: string;
-              format: string;
-              bytes: number;
-            }
-
-            const uploadResponse = await axiosClient.post<UploadResult>(
-              "/uploads/file",
-              formData,
-              {
-                headers: {
-                  "Content-Type": "multipart/form-data",
-                },
-                timeout: 60000, // Increase timeout for file uploads
-              }
-            );
-
-            // Handle ApiResponse wrapper - axiosClient returns ApiResponse<T>
-            if (
-              uploadResponse.code === 200 &&
-              uploadResponse.data &&
-              uploadResponse.data.url
-            ) {
-              finalFileUrl = uploadResponse.data.url;
-              toast.success("File đã được tải lên thành công");
-            } else {
-              throw new Error(
-                uploadResponse.message || "Upload file failed: No URL returned"
-              );
-            }
-          } catch (err) {
-            console.error("Error uploading file:", err);
-            const errorMessage =
-              err instanceof Error ? err.message : "Không thể tải lên file";
-            toast.error(`Lỗi khi tải file: ${errorMessage}`);
-            // Tiếp tục update với fileUrl cũ nếu upload file thất bại
-          }
-        }
-
+        // Nếu có file mới, gửi file trực tiếp với API (backend sẽ xử lý upload)
+        // Nếu không có file mới, giữ fileUrl cũ
         const updateRequest: UpdateReportRequest = {
           reportTitle: draftTitle,
           content: draftContent,
-          fileUrl: finalFileUrl || undefined,
+          fileUrl: draftFile ? undefined : draftFileUrl || undefined, // Chỉ dùng fileUrl cũ nếu không có file mới
         };
 
-        await updateReport(editingReportId, updateRequest);
+        await updateReport(editingReportId, updateRequest, draftFile || undefined);
         toast.success("Báo cáo đã được cập nhật thành công");
       } else {
         // Create new draft - cần có requestId
@@ -2958,67 +2856,17 @@ export function ClubReportManagement() {
                         try {
                           setSavingDraft(true);
 
-                          let finalFileUrl = draftFileUrl;
-
-                          // Nếu có file mới được chọn, upload file lên Cloudinary trước
-                          if (draftFile) {
-                            try {
-                              const formData = new FormData();
-                              formData.append("file", draftFile);
-
-                              interface UploadResult {
-                                url: string;
-                                publicId: string;
-                                format: string;
-                                bytes: number;
-                              }
-
-                              const uploadResponse =
-                                await axiosClient.post<UploadResult>(
-                                  "/uploads/file",
-                                  formData,
-                                  {
-                                    headers: {
-                                      "Content-Type": "multipart/form-data",
-                                    },
-                                    timeout: 60000,
-                                  }
-                                );
-
-                              if (
-                                uploadResponse.code === 200 &&
-                                uploadResponse.data &&
-                                uploadResponse.data.url
-                              ) {
-                                finalFileUrl = uploadResponse.data.url;
-                                toast.success(
-                                  "File đã được tải lên thành công"
-                                );
-                              } else {
-                                throw new Error(
-                                  uploadResponse.message ||
-                                    "Upload file failed: No URL returned"
-                                );
-                              }
-                            } catch (err) {
-                              console.error("Error uploading file:", err);
-                              const errorMessage =
-                                err instanceof Error
-                                  ? err.message
-                                  : "Không thể tải lên file";
-                              toast.error(`Lỗi khi tải file: ${errorMessage}`);
-                            }
-                          }
-
                           if (editingReportId) {
                             // Update existing report
+                            // Nếu có file mới, gửi file trực tiếp với API (backend sẽ xử lý upload)
+                            // Nếu không có file mới, giữ fileUrl cũ
                             const updateRequest: UpdateReportRequest = {
                               reportTitle: draftTitle,
                               content: draftContent,
-                              fileUrl: finalFileUrl || undefined,
+                              fileUrl: draftFile ? undefined : draftFileUrl || undefined, // Chỉ dùng fileUrl cũ nếu không có file mới
                             };
 
-                            await updateReport(editingReportId, updateRequest);
+                            await updateReport(editingReportId, updateRequest, draftFile || undefined);
                             toast.success(
                               "Báo cáo đã được cập nhật thành công"
                             );
@@ -3027,7 +2875,7 @@ export function ClubReportManagement() {
                             const createRequest: CreateReportRequest = {
                               reportTitle: draftTitle,
                               content: draftContent,
-                              fileUrl: finalFileUrl || undefined,
+                              fileUrl: draftFileUrl || undefined,
                               clubId: clubId,
                               reportRequirementId: Number(
                                 selectedRequest.request_id
@@ -3095,58 +2943,6 @@ export function ClubReportManagement() {
                         try {
                           setSubmittingReport(true);
 
-                          let finalFileUrl = draftFileUrl;
-
-                          // Nếu có file mới được chọn, upload file lên Cloudinary trước
-                          if (draftFile) {
-                            try {
-                              const formData = new FormData();
-                              formData.append("file", draftFile);
-
-                              interface UploadResult {
-                                url: string;
-                                publicId: string;
-                                format: string;
-                                bytes: number;
-                              }
-
-                              const uploadResponse =
-                                await axiosClient.post<UploadResult>(
-                                  "/uploads/file",
-                                  formData,
-                                  {
-                                    headers: {
-                                      "Content-Type": "multipart/form-data",
-                                    },
-                                    timeout: 60000,
-                                  }
-                                );
-
-                              if (
-                                uploadResponse.code === 200 &&
-                                uploadResponse.data &&
-                                uploadResponse.data.url
-                              ) {
-                                finalFileUrl = uploadResponse.data.url;
-                                toast.success(
-                                  "File đã được tải lên thành công"
-                                );
-                              } else {
-                                throw new Error(
-                                  uploadResponse.message ||
-                                    "Upload file failed: No URL returned"
-                                );
-                              }
-                            } catch (err) {
-                              console.error("Error uploading file:", err);
-                              const errorMessage =
-                                err instanceof Error
-                                  ? err.message
-                                  : "Không thể tải lên file";
-                              toast.error(`Lỗi khi tải file: ${errorMessage}`);
-                            }
-                          }
-
                           let reportIdToSubmit = editingReportId;
                           let currentReportStatus: string | null = null;
 
@@ -3155,7 +2951,7 @@ export function ClubReportManagement() {
                             const createRequest: CreateReportRequest = {
                               reportTitle: draftTitle,
                               content: draftContent,
-                              fileUrl: finalFileUrl || undefined,
+                              fileUrl: draftFileUrl || undefined,
                               clubId: clubId,
                               reportRequirementId: Number(
                                 selectedRequest.request_id
@@ -3173,12 +2969,14 @@ export function ClubReportManagement() {
                             setDraftFile(null);
                           } else {
                             // Update existing report trước khi submit
+                            // Nếu có file mới, gửi file trực tiếp với API (backend sẽ xử lý upload)
+                            // Nếu không có file mới, giữ fileUrl cũ
                             const updateRequest: UpdateReportRequest = {
                               reportTitle: draftTitle,
                               content: draftContent,
-                              fileUrl: finalFileUrl || undefined,
+                              fileUrl: draftFile ? undefined : draftFileUrl || undefined, // Chỉ dùng fileUrl cũ nếu không có file mới
                             };
-                            await updateReport(reportIdToSubmit, updateRequest);
+                            await updateReport(reportIdToSubmit, updateRequest, draftFile || undefined);
 
                             // Lấy trạng thái hiện tại của report sau khi update
                             const currentReport =
@@ -3539,69 +3337,16 @@ export function ClubReportManagement() {
                           try {
                             setResubmittingReport(true);
 
-                            let finalFileUrl = draftFileUrl;
-
-                            // If a new file is selected, upload it to Cloudinary first
-                            if (draftFile) {
-                              try {
-                                const formData = new FormData();
-                                formData.append("file", draftFile);
-
-                                interface UploadResult {
-                                  url: string;
-                                  publicId: string;
-                                  format: string;
-                                  bytes: number;
-                                }
-
-                                const uploadResponse =
-                                  await axiosClient.post<UploadResult>(
-                                    "/uploads/file",
-                                    formData,
-                                    {
-                                      headers: {
-                                        "Content-Type": "multipart/form-data",
-                                      },
-                                      timeout: 60000,
-                                    }
-                                  );
-
-                                if (
-                                  uploadResponse.code === 200 &&
-                                  uploadResponse.data &&
-                                  uploadResponse.data.url
-                                ) {
-                                  finalFileUrl = uploadResponse.data.url;
-                                  toast.success(
-                                    "File đã được tải lên thành công"
-                                  );
-                                } else {
-                                  throw new Error(
-                                    uploadResponse.message ||
-                                      "Upload file failed: No URL returned"
-                                  );
-                                }
-                              } catch (err) {
-                                console.error("Error uploading file:", err);
-                                const errorMessage =
-                                  err instanceof Error
-                                    ? err.message
-                                    : "Không thể tải lên file";
-                                toast.error(
-                                  `Lỗi khi tải file: ${errorMessage}`
-                                );
-                                return;
-                              }
-                            }
-
                             // Update the report (this will also reset reviewerFeedback if backend handles it)
+                            // Nếu có file mới, gửi file trực tiếp với API (backend sẽ xử lý upload)
+                            // Nếu không có file mới, giữ fileUrl cũ
                             const updateRequest: UpdateReportRequest = {
                               reportTitle: draftTitle,
                               content: draftContent,
-                              fileUrl: finalFileUrl || undefined,
+                              fileUrl: draftFile ? undefined : draftFileUrl || undefined, // Chỉ dùng fileUrl cũ nếu không có file mới
                             };
 
-                            await updateReport(editingReportId, updateRequest);
+                            await updateReport(editingReportId, updateRequest, draftFile || undefined);
 
                             // Submit the report (resubmit)
                             // If resubmitting from REJECTED_UNIVERSITY, it will go to RESUBMITTED_UNIVERSITY
@@ -3702,73 +3447,18 @@ export function ClubReportManagement() {
 
                                 if (shouldSubmitToSchool) {
                                   // Nếu là club officer và status là PENDING_CLUB, cần lưu thay đổi trước (nếu có) rồi mới nộp lên trường
-                                  // Kiểm tra xem có thay đổi không (file mới hoặc nội dung thay đổi)
-                                  let finalFileUrl = draftFileUrl;
-
-                                  // Nếu có file mới, upload lên Cloudinary trước
-                                  if (draftFile) {
-                                    try {
-                                      const formData = new FormData();
-                                      formData.append("file", draftFile);
-
-                                      interface UploadResult {
-                                        url: string;
-                                        publicId: string;
-                                        format: string;
-                                        bytes: number;
-                                      }
-
-                                      const uploadResponse =
-                                        await axiosClient.post<UploadResult>(
-                                          "/uploads/file",
-                                          formData,
-                                          {
-                                            headers: {
-                                              "Content-Type":
-                                                "multipart/form-data",
-                                            },
-                                            timeout: 60000,
-                                          }
-                                        );
-
-                                      if (
-                                        uploadResponse.code === 200 &&
-                                        uploadResponse.data &&
-                                        uploadResponse.data.url
-                                      ) {
-                                        finalFileUrl = uploadResponse.data.url;
-                                      } else {
-                                        throw new Error(
-                                          uploadResponse.message ||
-                                            "Upload file failed: No URL returned"
-                                        );
-                                      }
-                                    } catch (err) {
-                                      console.error(
-                                        "Error uploading file:",
-                                        err
-                                      );
-                                      const errorMessage =
-                                        err instanceof Error
-                                          ? err.message
-                                          : "Không thể tải lên file";
-                                      toast.error(
-                                        `Lỗi khi tải file: ${errorMessage}`
-                                      );
-                                      setSubmittingReport(false);
-                                      return;
-                                    }
-                                  }
-
                                   // Cập nhật báo cáo nếu có thay đổi
+                                  // Nếu có file mới, gửi file trực tiếp với API (backend sẽ xử lý upload)
+                                  // Nếu không có file mới, giữ fileUrl cũ
                                   const updateRequest: UpdateReportRequest = {
                                     reportTitle: draftTitle,
                                     content: draftContent,
-                                    fileUrl: finalFileUrl || undefined,
+                                    fileUrl: draftFile ? undefined : draftFileUrl || undefined, // Chỉ dùng fileUrl cũ nếu không có file mới
                                   };
                                   await updateReport(
                                     editingReportId,
-                                    updateRequest
+                                    updateRequest,
+                                    draftFile || undefined
                                   );
 
                                   // Sau đó gọi API reviewReportByClub với status APPROVED_CLUB để nộp lên trường

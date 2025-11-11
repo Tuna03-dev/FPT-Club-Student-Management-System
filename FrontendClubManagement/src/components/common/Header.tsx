@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { User, Users, LogOut, Shield } from "lucide-react";
 import useMyClubs from "@/hooks/useMyClubs";
+import { toast } from "sonner";
 
 const Header: React.FC = () => {
   const [user, setUser] = useState<UserInfo | null>(null);
@@ -20,7 +21,11 @@ const Header: React.FC = () => {
   const [showClubsList, setShowClubsList] = useState(false);
   const navigate = useNavigate();
 
-  const { data: clubs, loading: clubsLoading, error: clubsError } = useMyClubs();
+  const {
+    data: clubs,
+    loading: clubsLoading,
+    error: clubsError,
+  } = useMyClubs();
 
   useEffect(() => {
     const checkAuth = () => {
@@ -46,6 +51,7 @@ const Header: React.FC = () => {
     setUser(null);
     setIsAuthenticated(false);
     navigate("/");
+    toast.success("Đăng xuất thành công!", { duration: 2000 });
   };
 
   const isAdmin =

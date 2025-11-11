@@ -14,54 +14,45 @@ declare global {
 
 const LoginPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
+  const [isGoogleReady, setIsGoogleReady] = useState(false);
   const navigate = useNavigate();
-  const googleButtonRef = useRef<HTMLDivElement>(null);
   const googleInitialized = useRef(false);
 
   useEffect(() => {
-    // Load Google Identity Services script
-    const script = document.createElement("script");
-    script.src = "https://accounts.google.com/gsi/client";
-    script.async = true;
-    script.defer = true;
-    document.head.appendChild(script);
-
-    script.onload = () => {
-      if (window.google && !googleInitialized.current) {
-        window.google.accounts.id.initialize({
-          client_id:
-            import.meta.env.VITE_GOOGLE_CLIENT_ID ||
-            "982768167645-ol552hiben0blq9es83e1b2ici5l56nj.apps.googleusercontent.com",
-          callback: handleCredentialResponse,
-          auto_select: false,
-          cancel_on_tap_outside: false,
-          use_fedcm_for_prompt: false,
-        });
-        googleInitialized.current = true;
-
-        // Pre-render Google button in hidden container for programmatic triggering
-        if (googleButtonRef.current) {
-          window.google.accounts.id.renderButton(googleButtonRef.current, {
-            theme: "outline",
-            size: "large",
-            width: "100%",
-            text: "signin_with",
-            shape: "rectangular",
-            logo_alignment: "left",
-            locale: "vi",
-          });
+    // Check if we're returning from OAuth callback
+    const hash = window.location.hash;
+    if (hash.includes("id_token=")) {
+      const params = new URLSearchParams(hash.substring(1));
+      const idToken = params.get("id_token");
+      const returnedNonce = params.get("nonce");
+      
+      // Verify nonce
+      const storedNonce = sessionStorage.getItem("google_oauth_nonce");
+      if (idToken && returnedNonce === storedNonce) {
+        // Clear URL hash
+        window.history.replaceState(null, "", window.location.pathname);
+        
+        // Send message to opener window if this is a popup callback
+        if (window.opener) {
+          window.opener.postMessage(
+            { type: "GOOGLE_OAUTH_CALLBACK", idToken },
+            window.location.origin
+          );
+          window.close();
+        } else {
+          // Process directly if opened in same window
+          handleCredentialResponse({ credential: idToken });
         }
       }
-    };
-
-    return () => {
-      const existingScript = document.head.querySelector(
-        'script[src="https://accounts.google.com/gsi/client"]'
-      );
-      if (existingScript) {
-        document.head.removeChild(existingScript);
-      }
-    };
+      
+      // Clean up
+      sessionStorage.removeItem("google_oauth_nonce");
+      sessionStorage.removeItem("google_oauth_state");
+    }
+    
+    // Mark Google as ready (we don't need the script for OAuth flow)
+    setIsGoogleReady(true);
+    googleInitialized.current = true;
   }, []);
 
   const handleCredentialResponse = async (response: any) => {
@@ -103,57 +94,127 @@ const LoginPage: React.FC = () => {
     }
   };
 
+
   const triggerGoogleSignIn = () => {
-    if (!window.google || !googleInitialized.current) {
-      toast.error("Google Sign-In chưa sẵn sàng. Vui lòng thử lại sau.");
+    // Use Google OAuth 2.0 Implicit Flow with popup
+    // This is the most reliable method that works in all environments
+    // It opens Google's account picker in a popup window
+    const clientId =
+      import.meta.env.VITE_GOOGLE_CLIENT_ID ||
+      "982768167645-ol552hiben0blq9es83e1b2ici5l56nj.apps.googleusercontent.com";
+    
+    // Use a dedicated callback page to handle OAuth redirect
+    const redirectUri = `${window.location.origin}/google-oauth-callback.html`;
+    const scope = "openid email profile";
+    const responseType = "id_token";
+    const nonce = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+    
+    // Store nonce in sessionStorage for verification
+    sessionStorage.setItem("google_oauth_nonce", nonce);
+    sessionStorage.setItem("google_oauth_state", "login");
+    
+    // Build OAuth URL
+    const authUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
+    authUrl.searchParams.set("client_id", clientId);
+    authUrl.searchParams.set("redirect_uri", redirectUri);
+    authUrl.searchParams.set("response_type", responseType);
+    authUrl.searchParams.set("scope", scope);
+    authUrl.searchParams.set("nonce", nonce);
+    authUrl.searchParams.set("prompt", "select_account"); // Show account picker
+    
+    // Calculate popup position (center of screen)
+    const width = 500;
+    const height = 600;
+    const left = window.screenX + (window.outerWidth - width) / 2;
+    const top = window.screenY + (window.outerHeight - height) / 2;
+    
+    // Open popup window
+    const popup = window.open(
+      authUrl.toString(),
+      "Google Sign-In",
+      `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
+    );
+    
+    if (!popup) {
+      toast.error("Trình duyệt đã chặn popup. Vui lòng cho phép popup và thử lại.");
       return;
     }
-
-    if (!googleButtonRef.current) return;
-
-    // Find the pre-rendered Google button and trigger it
-    const googleButton = googleButtonRef.current.querySelector(
-      "div[role='button'], button, iframe, .gsi-material-button"
-    ) as HTMLElement;
-
-    if (googleButton) {
-      // Try to click the button directly
-      googleButton.click();
-    } else {
-      // Fallback: try to show One Tap prompt
-      window.google.accounts.id.prompt((notification: any) => {
-        if (
-          notification.isNotDisplayed() ||
-          notification.isSkippedMoment() ||
-          notification.isDismissedMoment()
-        ) {
-          // If prompt doesn't work, re-render button and try again
-          googleButtonRef.current!.innerHTML = "";
-          window.google.accounts.id.renderButton(googleButtonRef.current!, {
-            theme: "outline",
-            size: "large",
-            width: "100%",
-            text: "signin_with",
-            shape: "rectangular",
-            logo_alignment: "left",
-            locale: "vi",
-          });
-
-          setTimeout(() => {
-            const renderedButton = googleButtonRef.current?.querySelector(
-              "div[role='button'], button, iframe, .gsi-material-button"
-            ) as HTMLElement;
-            if (renderedButton) {
-              renderedButton.click();
-            } else {
-              toast.error(
-                "Không thể hiển thị cửa sổ đăng nhập Google. Vui lòng tải lại trang và thử lại."
-              );
-            }
-          }, 200);
+    
+    // Focus popup
+    popup.focus();
+    
+    // Poll to check if popup was closed manually or check for redirect
+    let pollTimer: NodeJS.Timeout | null = null;
+    
+    // Listen for OAuth callback via postMessage
+    const handleMessage = async (event: MessageEvent) => {
+      // Verify origin for security
+      if (event.origin !== window.location.origin) {
+        return;
+      }
+      
+      if (event.data?.type === "GOOGLE_OAUTH_CALLBACK") {
+        window.removeEventListener("message", handleMessage);
+        if (pollTimer) {
+          clearInterval(pollTimer);
+          pollTimer = null;
         }
-      });
-    }
+        popup?.close();
+        
+        const idToken = event.data.idToken;
+        if (idToken) {
+          // Process the ID token
+          await handleCredentialResponse({ credential: idToken });
+        } else {
+          toast.error("Đăng nhập bị hủy hoặc có lỗi xảy ra.");
+        }
+      }
+    };
+    
+    window.addEventListener("message", handleMessage);
+    
+    // Start polling
+    pollTimer = setInterval(() => {
+      if (popup.closed) {
+        if (pollTimer) {
+          clearInterval(pollTimer);
+          pollTimer = null;
+        }
+        window.removeEventListener("message", handleMessage);
+        // User closed popup manually - don't show error
+        return;
+      }
+      
+      // Try to access popup location (may fail due to CORS, that's ok)
+      try {
+        if (popup.location.href.includes(window.location.origin)) {
+          // Popup has redirected to our site
+          const hash = popup.location.hash;
+          if (hash.includes("id_token=")) {
+            const params = new URLSearchParams(hash.substring(1));
+            const idToken = params.get("id_token");
+            const returnedNonce = params.get("nonce");
+            
+            // Verify nonce
+            const storedNonce = sessionStorage.getItem("google_oauth_nonce");
+            if (idToken && returnedNonce === storedNonce) {
+              if (pollTimer) {
+                clearInterval(pollTimer);
+                pollTimer = null;
+              }
+              window.removeEventListener("message", handleMessage);
+              popup.close();
+              
+              // Process the ID token
+              handleCredentialResponse({ credential: idToken });
+            }
+          }
+        }
+      } catch (e) {
+        // CORS error - popup is still on Google's domain, that's expected
+        // The callback page will send postMessage when it loads
+      }
+    }, 500);
   };
 
   return (
@@ -161,7 +222,7 @@ const LoginPage: React.FC = () => {
       {/* Back Button */}
       <button
         className="back-button"
-        onClick={() => navigate("")}
+        onClick={() => navigate("/")}
         aria-label="Quay lại"
       >
         <ArrowLeft size={20} />
@@ -191,7 +252,7 @@ const LoginPage: React.FC = () => {
           <button
             className="custom-google-button"
             onClick={triggerGoogleSignIn}
-            disabled={isLoading}
+            disabled={isLoading || !isGoogleReady}
             type="button"
           >
             <svg
@@ -221,20 +282,6 @@ const LoginPage: React.FC = () => {
             </svg>
             <span>Đăng nhập bằng Google</span>
           </button>
-          {/* Off-screen container for Google button rendering (not hidden completely to allow programmatic clicks) */}
-          <div
-            ref={googleButtonRef}
-            style={{
-              position: "absolute",
-              left: "-9999px",
-              top: "-9999px",
-              width: "100%",
-              opacity: 0,
-              pointerEvents: "none",
-            }}
-            id="google-signin-button"
-            aria-hidden="true"
-          ></div>
         </div>
 
         <p className="instruction">
@@ -248,6 +295,7 @@ const LoginPage: React.FC = () => {
           </div>
         )}
       </div>
+
     </div>
   );
 };
