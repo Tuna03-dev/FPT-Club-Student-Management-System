@@ -10,7 +10,6 @@ import java.util.Optional;
 @Repository
 public interface ClubRoleRepository extends JpaRepository<ClubRole, Long> {
     List<ClubRole> findByClubId(Long clubId);
-    Optional<ClubRole> findByRoleCodeAndClubIsNull(String roleCode);
 
    // check xem code role và role nam có trùng nhau k ( trong 1 clb)
     boolean existsByClubIdAndRoleCodeIgnoreCase(Long clubId, String roleCode);

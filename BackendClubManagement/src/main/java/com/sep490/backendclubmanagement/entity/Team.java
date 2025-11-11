@@ -24,9 +24,8 @@ public class Team extends BaseEntity {
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
 
-    @Column(name = "link_group_chat", nullable = true, length = 512)
+    @Column(name = "link_group_chat", nullable = false, length = 200)
     private String linkGroupChat;
-
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "club_id", nullable = false)

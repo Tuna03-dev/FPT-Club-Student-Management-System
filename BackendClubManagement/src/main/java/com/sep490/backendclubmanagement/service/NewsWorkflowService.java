@@ -1,10 +1,8 @@
-// src/main/java/com/sep490/backendclubmanagement/service/NewsWorkflowService.java
 package com.sep490.backendclubmanagement.service;
 
 import com.sep490.backendclubmanagement.dto.request.ApproveNewsRequest;
 import com.sep490.backendclubmanagement.dto.request.CreateNewsRequest;
 import com.sep490.backendclubmanagement.dto.request.RejectNewsRequest;
-import com.sep490.backendclubmanagement.dto.request.UpdateNewsRequest;
 import com.sep490.backendclubmanagement.dto.response.NewsRequestResponse;
 import com.sep490.backendclubmanagement.dto.response.PublishResult;
 import com.sep490.backendclubmanagement.entity.*;
@@ -28,7 +26,6 @@ public class NewsWorkflowService {
     private final RequestNewsMapper mapper;
     private final NewsMapper newsMapper;
     private final TeamRepository teamRepo;
-
     // ========== CREATE REQUEST ==========
     @Transactional
     public NewsRequestResponse createRequest(Long me, CreateNewsRequest dto) {
@@ -43,7 +40,7 @@ public class NewsWorkflowService {
 
         boolean isStaff      = guard.isStaff(me);
         boolean isManager    = guard.canApproveAtClub(me, club.getId()); // chủ nhiệm/phó
-        boolean isLeadInClub = guard.isLead(me, club.getId());           // trưởng ban
+        boolean isLeadInClub = guard.isLead(me, club.getId());           // trưởng ban (bất kỳ ban) trong CLB
 
         RequestStatus startStatus;
         News attachedNews = null;
@@ -55,6 +52,8 @@ public class NewsWorkflowService {
         } else if (isManager) {
             startStatus = RequestStatus.PENDING_UNIVERSITY;
 
+            // (Tuỳ chính sách: có thể KHÔNG cần tạo News ở đây.
+            //  Nếu muốn giữ nguyên hành vi cũ của bạn:)
             attachedNews = News.builder()
                     .title(title)
                     .content(desc)
@@ -89,7 +88,7 @@ public class NewsWorkflowService {
                 .club(club)
                 .team(team)
                 .news(attachedNews)                 // có thể null
-                .thumbnailUrl(dto.getThumbnailUrl())
+                .thumbnailUrl(dto.getThumbnailUrl())// ảnh đi theo request
                 .newsType(dto.getNewsType())
                 .build();
 
@@ -99,92 +98,35 @@ public class NewsWorkflowService {
         return mapper.toDto(detail);
     }
 
-    // ========== (NEW) UPDATE REQUEST WHEN PENDING ==========
-    @Transactional
-    public NewsRequestResponse updatePendingRequest(Long me, Long requestId, UpdateNewsRequest body) {
-        RequestNews r = requestRepo.findDetailById(requestId).orElseThrow();
-        RequestStatus st = r.getStatus();
-        Long clubId = r.getClub() != null ? r.getClub().getId() : null;
 
-        boolean isCreator = r.getCreatedBy() != null && r.getCreatedBy().getId().equals(me);
-        boolean isStaff   = guard.isStaff(me);
-        boolean isClubMgr = clubId != null && guard.canApproveAtClub(me, clubId);
-
-        boolean canEdit;
-        if (st == RequestStatus.PENDING_CLUB) {
-            // Người tạo (thường lead), Club manager, hoặc Staff
-            canEdit = isCreator || isClubMgr || isStaff;
-        } else if (st == RequestStatus.PENDING_UNIVERSITY) {
-            // Qua CLB rồi: chỉ Club manager hoặc Staff
-            canEdit = isClubMgr || isStaff;
-        } else {
-            throw new IllegalStateException("Chỉ được sửa khi request đang ở trạng thái PENDING.");
-        }
-
-        if (!canEdit) {
-            throw new SecurityException("Bạn không có quyền sửa request này ở trạng thái hiện tại.");
-        }
-
-        // Partial update fields
-        if (body.getTitle() != null && !body.getTitle().isBlank()) {
-            r.setRequestTitle(body.getTitle().trim());
-        }
-        if (body.getContent() != null && !body.getContent().isBlank()) {
-            r.setDescription(body.getContent().trim());
-        }
-        if (body.getThumbnailUrl() != null) {
-            r.setThumbnailUrl(body.getThumbnailUrl());
-        }
-        if (body.getNewsType() != null) {
-            r.setNewsType(body.getNewsType());
-        }
-
-        // Nếu có News nháp gắn kèm, đồng bộ để đảm bảo publish sau này đúng nội dung mới
-        News attached = r.getNews();
-        if (attached != null && Boolean.TRUE.equals(attached.getIsDraft())) {
-            if (body.getTitle() != null && !body.getTitle().isBlank()) {
-                attached.setTitle(body.getTitle().trim());
-            }
-            if (body.getContent() != null && !body.getContent().isBlank()) {
-                attached.setContent(body.getContent().trim());
-            }
-            if (body.getThumbnailUrl() != null) {
-                attached.setThumbnailUrl(body.getThumbnailUrl());
-            }
-            if (body.getNewsType() != null) {
-                attached.setNewsType(body.getNewsType());
-            }
-            newsRepo.save(attached);
-        }
-
-        requestRepo.save(r);
-        RequestNews detail = requestRepo.findDetailById(r.getId()).orElseThrow();
-        return mapper.toDto(detail);
-    }
 
     // ========== CLUB LEVEL: APPROVE & SUBMIT TO STAFF ==========
     @Transactional
     public NewsRequestResponse clubApproveAndSubmit(Long clubLeaderId, Long requestId, ApproveNewsRequest body) {
         RequestNews r = requestRepo.findById(requestId).orElseThrow();
 
-        if (!guard.canApproveAtClub(clubLeaderId, r.getClub().getId())) {
-            throw new SecurityException("Chỉ Chủ nhiệm/Phó được duyệt.");
+        if (!guard.isClubLeader(clubLeaderId, r.getClub().getId())) {
+            throw new SecurityException("Chỉ chủ nhiệm CLB được duyệt.");
         }
+
         if (r.getStatus() != RequestStatus.PENDING_CLUB) {
             throw new IllegalStateException("Yêu cầu không ở trạng thái PENDING_CLUB.");
         }
 
-        if (body != null && body.getContent() != null) {
-            r.setDescription(body.getContent());
+        if (body != null) {
+//            if (body.getTitle() != null) r.getRequestTitle();
+            if (body.getContent() != null) r.setDescription(body.getContent());
         }
 
         r.setStatus(RequestStatus.PENDING_UNIVERSITY);
+
         r.setResponseMessage("Chủ nhiệm CLB đã duyệt và gửi lên cấp trường.");
         requestRepo.save(r);
 
         RequestNews detail = requestRepo.findDetailById(r.getId()).orElseThrow();
         return mapper.toDto(detail);
     }
+
 
     // ========== CLUB LEVEL: REJECT (President only) ==========
     @Transactional
@@ -220,7 +162,7 @@ public class NewsWorkflowService {
 
         News usedNews;
         if (r.getNews() != null && Boolean.TRUE.equals(r.getNews().getIsDraft())) {
-            // publish nháp
+            // có nháp -> publish nháp
             usedNews = r.getNews();
             usedNews.setIsDraft(false);
 
@@ -234,10 +176,11 @@ public class NewsWorkflowService {
             newsRepo.save(usedNews);
 
         } else if (r.getNews() != null) {
+            // đã gắn news publish sẵn
             usedNews = r.getNews();
 
         } else {
-            // tạo mới từ request/body
+            // TẠO NEWS MỚI từ request (hoặc body override)
             String title   = (body != null && body.getTitle() != null)        ? body.getTitle()        : r.getRequestTitle();
             String content = (body != null && body.getContent() != null)      ? body.getContent()      : r.getDescription();
             String thumb   = (body != null && body.getThumbnailUrl() != null) ? body.getThumbnailUrl() : r.getThumbnailUrl();
@@ -257,7 +200,7 @@ public class NewsWorkflowService {
             r.setNews(usedNews);
         }
 
-        // Đồng bộ bóng
+        // Đồng bộ lại dữ liệu “bóng” trên RequestNews nếu còn thiếu
         if (r.getThumbnailUrl() == null && usedNews.getThumbnailUrl() != null) {
             r.setThumbnailUrl(usedNews.getThumbnailUrl());
         }
@@ -267,11 +210,14 @@ public class NewsWorkflowService {
 
         r.setStatus(RequestStatus.APPROVED_UNIVERSITY);
         r.setResponseMessage("Staff approved and published.");
-        requestRepo.saveAndFlush(r);
+        requestRepo.saveAndFlush(r); // đảm bảo flush trước khi load detail
 
         RequestNews detail = requestRepo.findDetailById(r.getId()).orElseThrow();
         return mapper.toDto(detail);
     }
+
+
+
 
     // ========== STAFF LEVEL: REJECT ==========
     @Transactional
@@ -293,6 +239,7 @@ public class NewsWorkflowService {
     }
 
     // ========== STAFF DIRECT PUBLISH ==========
+    // NewsWorkflowService.staffDirectPublish(...)
     @Transactional
     public PublishResult staffDirectPublish(Long me, ApproveNewsRequest body) {
         if (!guard.isStaff(me)) {
@@ -314,7 +261,7 @@ public class NewsWorkflowService {
                 .isSpotlight(Boolean.TRUE.equals(body.getIsSpotlight()))
                 .isDraft(false)
                 .createdBy(staff)
-                .club(null) // staff không đại diện CLB
+                .club(null) // ❗ luôn null vì Staff không đại diện CLB
                 .build();
 
         newsRepo.save(news);
@@ -322,37 +269,33 @@ public class NewsWorkflowService {
         return new PublishResult(news.getId(), newsMapper.toDto(news), "Đăng trực tiếp thành công");
     }
 
-    // ========== CANCEL REQUEST (siết quyền theo trạng thái) ==========
+
     @Transactional
     public void cancelRequest(Long me, Long requestId) {
         RequestNews r = requestRepo.findDetailById(requestId).orElseThrow();
 
-        RequestStatus st = r.getStatus();
-        Long clubId = r.getClub() != null ? r.getClub().getId() : null;
-
-        boolean isCreator = r.getCreatedBy() != null && r.getCreatedBy().getId().equals(me);
-        boolean isStaff   = guard.isStaff(me);
-        boolean isClubMgr = clubId != null && guard.canApproveAtClub(me, clubId);
-
-        boolean canCancel;
-        if (st == RequestStatus.PENDING_CLUB) {
-            canCancel = isCreator || isClubMgr || isStaff;
-        } else if (st == RequestStatus.PENDING_UNIVERSITY) {
-            canCancel = isClubMgr || isStaff; // lead không còn quyền
-        } else {
-            throw new IllegalStateException("Chỉ hủy được khi request đang ở trạng thái PENDING.");
-        }
+        boolean canCancel =
+                (r.getCreatedBy() != null && r.getCreatedBy().getId().equals(me))
+                        || guard.isStaff(me)
+                        || (r.getClub() != null && guard.canApproveAtClub(me, r.getClub().getId()));
 
         if (!canCancel) throw new SecurityException("Không có quyền hủy request này.");
 
-        // Nếu có news nháp gắn kèm → đưa về nháp (đề phòng đang là draft=false)
+        if (!(r.getStatus() == RequestStatus.PENDING_CLUB || r.getStatus() == RequestStatus.PENDING_UNIVERSITY)) {
+            throw new IllegalStateException("Chỉ hủy được khi request đang ở trạng thái PENDING.");
+        }
+
+        // đưa News về nháp
         News news = r.getNews();
         if (news != null) {
             news.setIsDraft(true);
             newsRepo.save(news);
         }
 
+        // đổi trạng thái request => CANCELED
         r.setStatus(RequestStatus.CANCELED);
         requestRepo.save(r);
     }
+
+
 }

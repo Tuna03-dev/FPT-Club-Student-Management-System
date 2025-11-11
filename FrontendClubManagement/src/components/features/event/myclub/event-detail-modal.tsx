@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { UpdateEventForm, type UpdateEventFormData } from "./update-event-form"
-import { updateEvent, deleteEvent, getEventById, registerForEvent, cancelEventRegistration, getRegistrationStatus, cancelClubEventByStaff } from "@/service/EventService"
+import { updateEvent, deleteEvent, getEventById, registerForEvent, cancelEventRegistration, getRegistrationStatus, cancelClubEventByStaff, publishEventByStaff, type UpdateEventPayload } from "@/service/EventService"
 import { authService } from "@/services/authService"
 import { toast } from "sonner"
 import React from "react"
@@ -44,8 +44,11 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
   const params = useParams()
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
   const [openUpdate, setOpenUpdate] = useState(false)
+  const [updateFormMedia, setUpdateFormMedia] = useState<Array<{ id: number; url: string; type: "IMAGE" | "VIDEO" }>>([])
   const [isDeleting, setIsDeleting] = useState(false)
+  const [isPublishing, setIsPublishing] = useState(false)
   const [images, setImages] = useState<string[]>(event.images ?? [])
+  const [mediaTypes, setMediaTypes] = useState<string[]>([])
   const [isRegistered, setIsRegistered] = useState(false)
   const [isRegistering, setIsRegistering] = useState(false)
   const [clubName, setClubName] = useState<string | null>(null)
@@ -55,14 +58,16 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
   // Get clubId from props or URL params
   const currentClubId = clubId || (params.clubId ? parseInt(params.clubId as string, 10) : undefined)
   const user = authService.getCurrentUser()
-  const isClubPresident = user?.systemRole === "CLUB_PRESIDENT"
-  const isClubOfficer = user?.systemRole === "CLUB_OFFICER"
+  const isClubPresident = user?.systemRole === "CLUB_OFFICER"
+  const isClubOfficer = user?.systemRole === "TEAM_OFFICER"
   const isStaff = user?.systemRole === "STAFF"
   const canMarkAttendance = isClubPresident || isClubOfficer
   const canManageMeeting = canMarkAttendance // FE: lãnh đạo CLB có quyền quản lý MEETING
 
   // Kiểm tra sự kiện đã kết thúc chưa
   const isEventEnded = new Date() >= event.endDate
+  // Cho phép điểm danh trong vòng 1 ngày sau khi kết thúc
+  const isWithinOneDayAfterEnd = new Date() < new Date(event.endDate.getTime() + 24 * 60 * 60 * 1000)
   const isEventUpcoming = new Date() < event.startDate
   const isMeeting = (eventTypeName ?? "").toUpperCase() === "MEETING"
   const canEditStaffEvent = isStaff && isEventUpcoming && (eventClubId == null)
@@ -79,6 +84,7 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
           if (!images || images.length === 0) {
             setImages(full.mediaUrls ?? [])
           }
+          setMediaTypes(full.mediaTypes ?? [])
           setClubName(full.clubName || null)
           setEventTypeName(full.eventTypeName || null)
           setEventClubId(full.clubId ?? null)
@@ -172,15 +178,24 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
         </div>
 
         <div className="p-6 space-y-6 overflow-y-auto">
-          {/* Image Carousel */}
+          {/* Media Carousel (Images & Videos) */}
           {images.length > 0 && (
             <div className="space-y-4">
               <div className="relative bg-muted rounded-lg overflow-hidden aspect-video">
-                <img
-                  src={images[currentImageIndex] || "/placeholder.svg"}
-                  alt={`${event.title} - ảnh ${currentImageIndex + 1}`}
-                  className="w-full h-full object-cover"
-                />
+                {mediaTypes[currentImageIndex] === "VIDEO" ? (
+                  <video
+                    src={images[currentImageIndex]}
+                    className="w-full h-full object-cover"
+                    controls
+                    playsInline
+                  />
+                ) : (
+                  <img
+                    src={images[currentImageIndex] || "/placeholder.svg"}
+                    alt={`${event.title} - ${mediaTypes[currentImageIndex] === "VIDEO" ? "video" : "ảnh"} ${currentImageIndex + 1}`}
+                    className="w-full h-full object-cover"
+                  />
+                )}
 
                 {/* Navigation buttons */}
                 {images.length > 1 && (
@@ -188,14 +203,14 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
                     <button
                       onClick={handlePrevImage}
                       className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white p-2 rounded-full transition-colors"
-                      aria-label="Ảnh trước"
+                      aria-label="Media trước"
                     >
                       <ChevronLeft className="w-5 h-5" />
                     </button>
                     <button
                       onClick={handleNextImage}
                       className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white p-2 rounded-full transition-colors"
-                      aria-label="Ảnh tiếp theo"
+                      aria-label="Media tiếp theo"
                     >
                       <ChevronRight className="w-5 h-5" />
                     </button>
@@ -203,9 +218,9 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
                 )}
               </div>
 
-              {/* Image counter only - no thumbnails */}
+              {/* Media counter */}
               <div className="text-sm text-muted-foreground text-center">
-                Ảnh {currentImageIndex + 1} / {images.length}
+                {mediaTypes[currentImageIndex] === "VIDEO" ? "Video" : "Ảnh"} {currentImageIndex + 1} / {images.length}
               </div>
             </div>
           )}
@@ -268,9 +283,81 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
           {/* Actions */}
         {!readOnly && (event.isMyDraft ? (
             <div className="flex gap-2 pt-2">
+              {/* Nút Public cho STAFF draft events (toàn trường, không có club) */}
+              {isStaff && eventClubId == null && (
+                <Button
+                  className="flex-1 bg-green-600 hover:bg-green-700 text-white h-10 text-sm gap-2"
+                  disabled={isPublishing}
+                  onClick={async () => {
+                    try {
+                      setIsPublishing(true)
+                      const published = await publishEventByStaff(Number(event.id))
+                      toast.success("Đã public sự kiện thành công!")
+                      // Cập nhật event state
+                      onUpdated?.({
+                        id: String(published.id),
+                        title: published.title,
+                        description: published.description,
+                        startDate: new Date(published.startTime),
+                        endDate: new Date(published.endTime),
+                        location: published.location,
+                        attendees: event.attendees,
+                        status: (() => {
+                          const now = new Date()
+                          const s = new Date(published.startTime)
+                          const e = new Date(published.endTime)
+                          if (now < s) return "upcoming"
+                          if (now >= s && now <= e) return "ongoing"
+                          return "completed"
+                        })(),
+                        images: published.mediaUrls || [],
+                        isMyDraft: false,
+                        requestStatus: undefined,
+                      })
+                      // Thông báo cho calendar refetch lại dữ liệu
+                      try {
+                        window.dispatchEvent(new CustomEvent('events:refetch'))
+                      } catch { /* empty */ }
+                    } catch (error: unknown) {
+                      console.error("Error publishing event:", error)
+                      toast.error(getErrorMessage(error, "Không thể public sự kiện. Vui lòng thử lại."))
+                    } finally {
+                      setIsPublishing(false)
+                    }
+                  }}
+                >
+                  {isPublishing ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Đang public...
+                    </>
+                  ) : (
+                    <>
+                      <Users className="w-4 h-4" />
+                      Công Khai
+                    </>
+                  )}
+                </Button>
+              )}
               <Button
                 className="flex-1 bg-blue-600 hover:bg-blue-700 text-white h-10 text-sm gap-2"
-                onClick={() => setOpenUpdate(true)}
+                onClick={async () => {
+                  // Fetch lại media để đảm bảo có mediaIds
+                  try {
+                    const full = await getEventById(Number(event.id))
+                    const mediaUrls = full.mediaUrls ?? []
+                    const mediaTypes = full.mediaTypes ?? []
+                    const mediaIds = full.mediaIds ?? []
+                    setUpdateFormMedia(mediaUrls.map((url, idx) => ({
+                      id: mediaIds[idx] ?? 0,
+                      url,
+                      type: (mediaTypes[idx] ?? "IMAGE") as "IMAGE" | "VIDEO"
+                    })))
+                    setOpenUpdate(true)
+                  } catch {
+                    setOpenUpdate(true)
+                  }
+                }}
               >
                 <Edit className="w-4 h-4" />
                 Cập nhật
@@ -313,7 +400,23 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
                 <>
                   <Button
                     className="flex-1 bg-blue-600 hover:bg-blue-700 text-white h-10 text-sm gap-2"
-                    onClick={() => setOpenUpdate(true)}
+                    onClick={async () => {
+                      // Fetch lại media để đảm bảo có mediaIds
+                      try {
+                        const full = await getEventById(Number(event.id))
+                        const mediaUrls = full.mediaUrls ?? []
+                        const mediaTypes = full.mediaTypes ?? []
+                        const mediaIds = full.mediaIds ?? []
+                        setUpdateFormMedia(mediaUrls.map((url, idx) => ({
+                          id: mediaIds[idx] ?? 0,
+                          url,
+                          type: (mediaTypes[idx] ?? "IMAGE") as "IMAGE" | "VIDEO"
+                        })))
+                        setOpenUpdate(true)
+                      } catch {
+                        setOpenUpdate(true)
+                      }
+                    }}
                   >
                     <Edit className="w-4 h-4" />
                     Sửa
@@ -361,7 +464,7 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
                           // Thông báo cho calendar refetch lại dữ liệu
                           try {
                             window.dispatchEvent(new CustomEvent('events:refetch'))
-                          } catch {}
+                          } catch { /* empty */ }
                           onClose()
                         } catch (error: unknown) {
                           console.error("Cancel event failed:", error)
@@ -372,23 +475,23 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
                       Hủy sự kiện
                     </Button>
                   )}
-              {/* Nút Điểm danh/Xem điểm danh - chỉ hiện cho CLUB_PRESIDENT và CLUB_OFFICER */}
+              {/* Nút Điểm danh/Xem điểm danh - chỉ hiện cho CLUB_OFFICER và TEAM_OFFICER */}
               {canMarkAttendance && currentClubId && (
                 <Button
-                  className={`${!isEventEnded ? "flex-1" : "flex-1"} h-10 text-sm gap-2 ${
-                    isEventEnded 
+                  className={`${(!isEventEnded || isWithinOneDayAfterEnd) ? "flex-1" : "flex-1"} h-10 text-sm gap-2 ${
+                    (isEventEnded && !isWithinOneDayAfterEnd)
                       ? "bg-white text-foreground border border-border hover:bg-orange-500 hover:text-white hover:border-orange-600"
                       : "bg-orange-500 hover:bg-orange-600 text-white"
                   }`}
                   onClick={() => {
                     onClose()
-                    const url = isEventEnded 
+                    const url = (isEventEnded && !isWithinOneDayAfterEnd)
                       ? `/myclub/${currentClubId}/events/attendance/${event.id}?mode=view`
                       : `/myclub/${currentClubId}/events/attendance/${event.id}`
                     navigate(url)
                   }}
                 >
-                  {isEventEnded ? (
+                  {(isEventEnded && !isWithinOneDayAfterEnd) ? (
                     <>
                       <Eye className="w-4 h-4" />
                       Xem điểm danh
@@ -449,9 +552,10 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
               startTime: new Date(event.startDate).toISOString().slice(0,16),
               endTime: new Date(event.endDate).toISOString().slice(0,16),
               // eventTypeId không có sẵn trong event, để trống nghĩa là không đổi
+              ...(updateFormMedia.length > 0 ? { existingMedia: updateFormMedia } : {})
             }}
             onSubmit={async (data: UpdateEventFormData) => {
-              const payload = {
+              const payload: UpdateEventPayload = {
                 title: data.title && data.title.trim() !== "" ? data.title : undefined,
                 description: data.description && data.description.trim() !== "" ? data.description : undefined,
                 location: data.location && data.location.trim() !== "" ? data.location : undefined,
@@ -459,6 +563,7 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
                 endTime: data.endTime && data.endTime !== "" ? data.endTime : undefined,
                 eventTypeId: data.eventTypeId ? Number(data.eventTypeId) : undefined,
                 images: data.eventImages ?? [],
+                deleteMediaIds: data.deleteMediaIds && data.deleteMediaIds.length > 0 ? data.deleteMediaIds : undefined,
               }
               try {
                 const updated = await updateEvent(Number(event.id), payload)

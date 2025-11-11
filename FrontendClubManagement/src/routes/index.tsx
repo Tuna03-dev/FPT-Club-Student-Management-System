@@ -1,8 +1,11 @@
-import { createBrowserRouter } from "react-router-dom";
+// src/router.tsx
+import { createBrowserRouter, Navigate } from "react-router-dom";
 import MainLayout from "@/layouts/MainLayout";
 import HomePage from "@/pages/HomePage";
 import { ClubLayout } from "@/layouts/ClubLayout";
 import { StaffLayout } from "@/layouts/StaffLayout";
+import { AdminLayout } from "@/layouts/AdminLayout";
+import StaffList from "@/pages/admin/StaffList";
 
 import { Dashboard } from "@/pages/myclub/Dashboard";
 import MemberList from "@/pages/myclub/members/MemberList";
@@ -41,15 +44,9 @@ import RoleManagement from "@/pages/myclub/RoleManagement";
 import ClubOfficerGuard from "@/components/guards/ClubOfficerGuard";
 import ForbiddenPage from "@/pages/ForbiddenPage";
 
-import DraftDetail from "@/pages/news/DraftDetail";
-import RequestDetail from "@/pages/news/RequestDetail";
-import StaffNewsDetail from "@/pages/news/StaffNewsDetail";
-import StaffNewsEdit from "@/pages/news/StaffNewsEdit";
-
 import { StaffReportManagement } from "@/pages/myclub/staff/reportManagement/StaffReport";
 import { PeriodicReportClubs } from "@/pages/myclub/staff/reportManagement/PeriodicReportClubs";
 import { ClubReportManagement } from "@/pages/myclub/report/ReportManagement";
-
 export const router = createBrowserRouter([
   {
     path: "/",
@@ -82,11 +79,15 @@ export const router = createBrowserRouter([
       },
       {
         path: "achievements",
-        element: <div className="container mx-auto px-4 py-8">Trang Thành tích</div>,
+        element: (
+          <div className="container mx-auto px-4 py-8">Trang Thành tích</div>
+        ),
       },
       {
         path: "contact",
-        element: <div className="container mx-auto px-4 py-8">Trang Liên hệ</div>,
+        element: (
+          <div className="container mx-auto px-4 py-8">Trang Liên hệ</div>
+        ),
       },
 
       { path: "myRecruitmentApplication", element: <StudentRecruitment /> },
@@ -115,23 +116,33 @@ export const router = createBrowserRouter([
   },
 
   {
-    path: "/staff",
+    path: "/staff/news",
     element: (
       <ProtectedRoute>
-        <StaffLayout />
+        <StaffNewsList />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/staff/news-editor",
+    element: (
+      <ProtectedRoute>
+        <StaffNewsEditor />
+      </ProtectedRoute>
+    ),
+  },
+
+  {
+    path: "/admin",
+    element: (
+      <ProtectedRoute>
+        <AdminLayout />
       </ProtectedRoute>
     ),
     children: [
-      { path: "news", element: <StaffNewsList /> },
-      { path: "news-editor", element: <StaffNewsEditor /> },
-      { path: "news/requests/:id", element: <RequestDetail /> },
-      { path: "news/drafts/:draftId", element: <DraftDetail /> },
-      { path: "news/:id", element: <StaffNewsDetail /> },
-      { path: "news/:id/edit", element: <StaffNewsEdit /> },
-      { path: "events", element: <StaffEventList /> },
-      { path: "settings", element: <Settings /> },
-      { path: "reports", element: <StaffReportManagement /> },
-      { path: "report/:reportId/clubs", element: <PeriodicReportClubs /> },
+      { index: true, element: <Navigate to="staff" replace /> },
+      { path: "staff", element: <StaffList /> },
+      { path: "settings", element: <div className="p-6">Cấu hình hệ thống</div> },
     ],
   },
 
@@ -162,23 +173,6 @@ export const router = createBrowserRouter([
         ),
       },
 
-      {
-        path: "news/drafts/:draftId",
-        element: (
-          <ClubOfficerGuard>
-            <DraftDetail />
-          </ClubOfficerGuard>
-        ),
-      },
-      {
-        path: "news/requests/:id",
-        element: (
-          <ClubOfficerGuard>
-            <RequestDetail />
-          </ClubOfficerGuard>
-        ),
-      },
-
       { path: "members", element: <MemberList /> },
       {
         path: "roles",
@@ -198,23 +192,52 @@ export const router = createBrowserRouter([
       { path: "teams/:teamId", element: <TeamDetailPage /> },
       { path: "reports", element: <ClubReportManagement /> },
 
+      { path: "myclub", element: <Navigate to="." replace /> },
       { path: "teams/:teamId/news-drafts", element: <TeamNewsDrafts /> },
       { path: "teams/:teamId/news-requests", element: <TeamNewsRequests /> },
       { path: "teams/:teamId/news-editor", element: <TeamNewsEditor /> },
+      { path: "teams/:teamId/news-requests", element: <TeamNewsRequests /> },
+      { path: "teams/:teamId/news-editor", element: <TeamNewsEditor /> },
 
-      { path: "teams/:teamId/news/drafts/:draftId", element: <DraftDetail /> },
-      { path: "teams/:teamId/news/requests/:id", element: <RequestDetail /> },
-
-      { path: "teams/create", element: <TeamCreatePage /> },
+      {
+        path: "teams/create",
+        element: (
+          <ClubOfficerGuard>
+            <TeamCreatePage />
+          </ClubOfficerGuard>
+        ),
+      },
     ],
   },
 
   { path: "/403", element: <ForbiddenPage /> },
 
+  // 404
+  {
+    path: "/staff",
+    element: (
+      <ProtectedRoute>
+        <StaffLayout />
+      </ProtectedRoute>
+    ),
+    children: [
+      { path: "events", element: <StaffEventList /> },
+      { path: "settings", element: <Settings /> },
+      {
+        path: "reports",
+        element: <StaffReportManagement />,
+      },
+      {
+        path: "report/:reportId/clubs",
+        element: <PeriodicReportClubs />,
+      },
+    ],
+  },
+
   {
     path: "*",
     element: (
-      <div className="flex items-center justify-center minih-screen">
+      <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
           <h1 className="text-4xl font-bold text-gray-800 mb-4">404</h1>
           <p className="text-gray-600">Không tìm thấy trang</p>

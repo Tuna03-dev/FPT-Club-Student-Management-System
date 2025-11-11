@@ -147,5 +147,41 @@ public class CloudinaryService {
         }
     }
 
+    /**
+     * Upload video file to Cloudinary
+     * @param file MultipartFile video to upload
+     * @param folder Folder path in Cloudinary
+     * @return UploadResult with video URL and metadata
+     */
+    public UploadResult uploadVideo(MultipartFile file, String folder) {
+        try {
+            var result = cloudinary.uploader().upload(
+                    file.getBytes(),
+                    ObjectUtils.asMap(
+                            "folder", folder,
+                            "resource_type", "video",
+                            "overwrite", false
+                    )
+            );
+            return new UploadResult(
+                    (String) result.get("secure_url"),
+                    (String) result.get("public_id"),
+                    (String) result.get("format"),
+                    ((Number) result.get("bytes")).longValue());
+
+        } catch (Exception e) {
+            throw new RuntimeException("Cloudinary video upload fail: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Upload video file to Cloudinary (default folder)
+     * @param file MultipartFile video to upload
+     * @return UploadResult with video URL and metadata
+     */
+    public UploadResult uploadVideo(MultipartFile file) {
+        return uploadVideo(file, "club/events");
+    }
+
     public record UploadResult(String url, String publicId, String format, long bytes) {}
 }
