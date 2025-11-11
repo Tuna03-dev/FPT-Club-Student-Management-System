@@ -82,11 +82,11 @@ public class EventService {
         List<EventData> list = events.stream()
                 .map(event -> {
                     EventData dto = eventMapper.toDto(event);
-                    setMediaUrlsAndTypes(dto, event.getId());
                     dto.setClubId(event.getClub() != null ? event.getClub().getId() : null);
                     return dto;
                 })
                 .toList();
+        setMediaUrlsAndTypesBatch(list, events.stream().map(Event::getId).toList());
 
 
         return EventResponse.builder()
@@ -108,6 +108,22 @@ public class EventService {
         dto.setMediaIds(mediaList.stream().map(EventMedia::getId).toList());
     }
 
+    private void setMediaUrlsAndTypesBatch(List<EventData> dtos, List<Long> eventIds) {
+        if (dtos == null || dtos.isEmpty() || eventIds == null || eventIds.isEmpty()) return;
+        List<EventMedia> allMedia = eventMediaRepository.findByEventIdInOrderByDisplayOrder(eventIds);
+        Map<Long, List<EventMedia>> byEventId = allMedia.stream()
+                .collect(Collectors.groupingBy(em -> em.getEvent().getId(), LinkedHashMap::new, Collectors.toList()));
+        Map<Long, EventData> dtoById = dtos.stream().collect(Collectors.toMap(EventData::getId, d -> d));
+        for (Map.Entry<Long, List<EventMedia>> entry : byEventId.entrySet()) {
+            EventData dto = dtoById.get(entry.getKey());
+            if (dto == null) continue;
+            List<EventMedia> mediaList = entry.getValue();
+            dto.setMediaUrls(mediaList.stream().map(EventMedia::getMediaUrl).toList());
+            dto.setMediaTypes(mediaList.stream().map(m -> m.getMediaType() != null ? m.getMediaType().name() : "IMAGE").toList());
+            dto.setMediaIds(mediaList.stream().map(EventMedia::getId).toList());
+        }
+    }
+
     public EventData getEventById(Long id) {
         Optional<Event> event = eventRepository.findById(id);
         if(event.isEmpty()){
@@ -127,41 +143,44 @@ public class EventService {
         if (!clubMemberShipRepository.existsByClubIdAndUserIdAndStatusActive(clubId, userId)) {
             throw new NotFoundException("You are not a member of this club or your membership is not active");
         }
-        return eventRepository.findByClubIdAndIsDraftFalse(clubId)
-                .stream()
+        List<Event> events = eventRepository.findByClubIdAndIsDraftFalse(clubId);
+        List<EventData> list = events.stream()
                 .map(event -> {
                     EventData dto = eventMapper.toDto(event);
-                    setMediaUrlsAndTypes(dto, event.getId());
                     dto.setClubId(event.getClub() != null ? event.getClub().getId() : null);
                     return dto;
                 })
                 .toList();
+        setMediaUrlsAndTypesBatch(list, events.stream().map(Event::getId).toList());
+        return list;
     }
 
 
     public List<EventData> getStaffAllEvents() {
-        return eventRepository.findStaffAllEventsExcludingMeeting()
-                .stream()
+        List<Event> events = eventRepository.findStaffAllEventsExcludingMeeting();
+        List<EventData> list = events.stream()
                 .map(event -> {
                     EventData dto = eventMapper.toDto(event);
-                    setMediaUrlsAndTypes(dto, event.getId());
                     dto.setClubId(event.getClub() != null ? event.getClub().getId() : null);
                     return dto;
                 })
                 .toList();
+        setMediaUrlsAndTypesBatch(list, events.stream().map(Event::getId).toList());
+        return list;
     }
 
 
     public List<EventData> getStaffEventsByClubId(Long clubId) {
-        return eventRepository.findStaffEventsByClubIdExcludingMeeting(clubId)
-                .stream()
+        List<Event> events = eventRepository.findStaffEventsByClubIdExcludingMeeting(clubId);
+        List<EventData> list = events.stream()
                 .map(event -> {
                     EventData dto = eventMapper.toDto(event);
-                    setMediaUrlsAndTypes(dto, event.getId());
                     dto.setClubId(event.getClub() != null ? event.getClub().getId() : null);
                     return dto;
                 })
                 .toList();
+        setMediaUrlsAndTypesBatch(list, events.stream().map(Event::getId).toList());
+        return list;
     }
 
 
