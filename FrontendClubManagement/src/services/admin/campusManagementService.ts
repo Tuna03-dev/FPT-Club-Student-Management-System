@@ -22,6 +22,14 @@ export type CampusFilterRequest = {
   keyword?: string;
 };
 
+export type CreateCampusPayload = {
+  campusName: string;
+  campusCode?: string;
+  address?: string;
+  phone?: string;
+  email?: string;
+};
+
 export type UpdateCampusPayload = {
   campusName?: string;
   campusCode?: string;
@@ -37,6 +45,14 @@ export const campusManagementService = {
     const res = await axiosClient.post<CampusListResponse>(`${baseUrl}/all-by-filter`, request);
     if (res.code !== 200 || !res.data) {
       throw new Error(res.message || "Không thể lấy danh sách campus");
+    }
+    return res.data;
+  },
+
+  async create(payload: CreateCampusPayload): Promise<CampusSummary> {
+    const res = await axiosClient.post<CampusSummary>(`${baseUrl}/create`, payload);
+    if (res.code !== 200 || !res.data) {
+      throw new Error(res.message || "Không thể tạo campus");
     }
     return res.data;
   },

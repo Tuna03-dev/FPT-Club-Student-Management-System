@@ -1,6 +1,7 @@
 package com.sep490.backendclubmanagement.service;
 
 import com.sep490.backendclubmanagement.dto.request.CampusFilterRequest;
+import com.sep490.backendclubmanagement.dto.request.CreateCampusRequest;
 import com.sep490.backendclubmanagement.dto.response.CampusListResponse;
 import com.sep490.backendclubmanagement.dto.response.CampusSummaryResponse;
 import com.sep490.backendclubmanagement.dto.request.UpdateCampusRequest;
@@ -37,6 +38,43 @@ public class CampusManagementService {
                 .total(page.getTotalElements())
                 .count(data.size())
                 .data(data)
+                .build();
+    }
+
+    @Transactional
+    public CampusSummaryResponse createCampus(CreateCampusRequest request) {
+        if (request == null) {
+            throw new IllegalArgumentException("Request không hợp lệ");
+        }
+        if (request.getCampusName() == null || request.getCampusName().trim().isEmpty()) {
+            throw new IllegalArgumentException("Tên campus không được để trống");
+        }
+
+        // Kiểm tra campusCode unique nếu có
+        if (request.getCampusCode() != null && !request.getCampusCode().trim().isEmpty()) {
+            boolean exists = campusRepository.existsByCampusCode(request.getCampusCode().trim());
+            if (exists) {
+                throw new IllegalArgumentException("Mã campus đã tồn tại");
+            }
+        }
+
+        Campus campus = Campus.builder()
+                .campusName(request.getCampusName().trim())
+                .campusCode(request.getCampusCode() != null && !request.getCampusCode().trim().isEmpty()
+                        ? request.getCampusCode().trim() : null)
+                .address(request.getAddress())
+                .phone(request.getPhone())
+                .email(request.getEmail())
+                .build();
+
+        Campus saved = campusRepository.save(campus);
+        return CampusSummaryResponse.builder()
+                .id(saved.getId())
+                .campusName(saved.getCampusName())
+                .campusCode(saved.getCampusCode())
+                .address(saved.getAddress())
+                .phone(saved.getPhone())
+                .email(saved.getEmail())
                 .build();
     }
 

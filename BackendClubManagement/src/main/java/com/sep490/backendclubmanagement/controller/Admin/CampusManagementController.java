@@ -2,6 +2,7 @@ package com.sep490.backendclubmanagement.controller.Admin;
 
 import com.sep490.backendclubmanagement.dto.ApiResponse;
 import com.sep490.backendclubmanagement.dto.request.CampusFilterRequest;
+import com.sep490.backendclubmanagement.dto.request.CreateCampusRequest;
 import com.sep490.backendclubmanagement.dto.response.CampusListResponse;
 import com.sep490.backendclubmanagement.dto.response.CampusSummaryResponse;
 import com.sep490.backendclubmanagement.dto.request.UpdateCampusRequest;
@@ -31,6 +32,15 @@ public class CampusManagementController {
             throw new ForbiddenException("Chỉ ADMIN mới có quyền truy cập");
         }
         return ApiResponse.success(campusManagementService.getAllCampusesByFilter(request));
+    }
+
+    @PostMapping("/create")
+    public ApiResponse<CampusSummaryResponse> createCampus(@RequestBody CreateCampusRequest request) {
+        Long currentUserId = SecurityUtils.getCurrentUserId();
+        if (!roleService.isAdmin(currentUserId)) {
+            throw new ForbiddenException("Chỉ ADMIN mới có quyền truy cập");
+        }
+        return ApiResponse.success(campusManagementService.createCampus(request));
     }
 
     @PostMapping("/{campusId}/update")

@@ -8,7 +8,8 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { campusManagementService, type CampusSummary } from "@/services/admin/campusManagementService";
 import { toast } from "sonner";
 import { useDebounce } from "@/hooks/useDebounce";
-import { Pencil, ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
+import { Pencil, Plus, ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Pagination, PaginationContent, PaginationItem, PaginationLink } from "@/components/ui/pagination";
 
 const defaultSort = ["id,desc"];
@@ -21,6 +22,22 @@ export default function CampusManagement() {
   const debouncedSearch = useDebounce(search, 400);
   const [page, setPage] = useState(1);
   const [size, setSize] = useState(10);
+
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createLoading, setCreateLoading] = useState(false);
+  const [createForm, setCreateForm] = useState<{
+    campusName: string;
+    campusCode: string;
+    address: string;
+    phone: string;
+    email: string;
+  }>({
+    campusName: "",
+    campusCode: "",
+    address: "",
+    phone: "",
+    email: "",
+  });
 
   const [editOpen, setEditOpen] = useState(false);
   const [editLoading, setEditLoading] = useState(false);
@@ -62,6 +79,17 @@ export default function CampusManagement() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedSearch, page, size]);
 
+  const openCreateModal = () => {
+    setCreateForm({
+      campusName: "",
+      campusCode: "",
+      address: "",
+      phone: "",
+      email: "",
+    });
+    setCreateOpen(true);
+  };
+
   const openEditModal = (campus: CampusSummary) => {
     setSelected(campus);
     setForm({
@@ -72,6 +100,30 @@ export default function CampusManagement() {
       email: campus.email ?? "",
     });
     setEditOpen(true);
+  };
+
+  const handleCreate = async () => {
+    if (!createForm.campusName.trim()) {
+      toast.error("Vui lòng nhập tên campus");
+      return;
+    }
+    try {
+      setCreateLoading(true);
+      await campusManagementService.create({
+        campusName: createForm.campusName.trim(),
+        campusCode: createForm.campusCode.trim() || undefined,
+        address: createForm.address || undefined,
+        phone: createForm.phone || undefined,
+        email: createForm.email || undefined,
+      });
+      toast.success("Tạo campus thành công");
+      setCreateOpen(false);
+      fetchCampuses();
+    } catch (e: any) {
+      toast.error(e?.message || "Tạo campus thất bại");
+    } finally {
+      setCreateLoading(false);
+    }
   };
 
   const handleUpdate = async () => {
@@ -103,12 +155,21 @@ export default function CampusManagement() {
           <h1 className="text-xl font-semibold">Quản lý Campus</h1>
           <p className="text-sm text-muted-foreground">Theo dõi và chỉnh sửa thông tin các cơ sở</p>
         </div>
-        <Input
-          placeholder="Tìm kiếm theo tên, mã hoặc địa chỉ..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full md:w-72"
-        />
+        <div className="flex flex-col gap-2 md:flex-row md:items-center md:gap-3">
+          <Input
+            placeholder="Tìm kiếm theo tên, mã hoặc địa chỉ..."
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
+            className="w-full md:w-72"
+          />
+          <Button onClick={openCreateModal} className="gap-2">
+            <Plus className="h-4 w-4" />
+            Tạo campus mới
+          </Button>
+        </div>
       </div>
 
       <Card className="p-0 overflow-hidden">
@@ -125,11 +186,28 @@ export default function CampusManagement() {
           </TableHeader>
           <TableBody>
             {loading ? (
-              <TableRow>
-                <TableCell colSpan={6} className="text-center text-muted-foreground">
-                  Đang tải...
-                </TableCell>
-              </TableRow>
+              Array.from({ length: size }).map((_, index) => (
+                <TableRow key={`skeleton-${index}`}>
+                  <TableCell>
+                    <Skeleton className="h-5 w-48" />
+                  </TableCell>
+                  <TableCell>
+                    <Skeleton className="h-5 w-24" />
+                  </TableCell>
+                  <TableCell>
+                    <Skeleton className="h-5 w-64" />
+                  </TableCell>
+                  <TableCell>
+                    <Skeleton className="h-5 w-28" />
+                  </TableCell>
+                  <TableCell>
+                    <Skeleton className="h-5 w-40" />
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Skeleton className="h-8 w-8 rounded-md ml-auto" />
+                  </TableCell>
+                </TableRow>
+              ))
             ) : campuses.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={6} className="text-center text-muted-foreground">
@@ -214,6 +292,69 @@ export default function CampusManagement() {
         </div>
       </div>
 
+      {/* Create Modal */}
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent className="sm:max-w-xl rounded-xl border bg-card shadow-lg">
+          <DialogHeader>
+            <DialogTitle className="text-xl">Tạo campus mới</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid gap-2">
+              <label className="text-sm font-medium text-muted-foreground">Tên campus *</label>
+              <Input
+                value={createForm.campusName}
+                onChange={(e) => setCreateForm((prev) => ({ ...prev, campusName: e.target.value }))}
+                placeholder="Ví dụ: Cơ sở Hà Nội"
+              />
+            </div>
+            <div className="grid gap-2">
+              <label className="text-sm font-medium text-muted-foreground">Mã campus</label>
+              <Input
+                value={createForm.campusCode}
+                onChange={(e) => setCreateForm((prev) => ({ ...prev, campusCode: e.target.value }))}
+                placeholder="Ví dụ: HN"
+              />
+            </div>
+            <div className="grid gap-2">
+              <label className="text-sm font-medium text-muted-foreground">Địa chỉ</label>
+              <Textarea
+                value={createForm.address}
+                onChange={(e) => setCreateForm((prev) => ({ ...prev, address: e.target.value }))}
+                rows={3}
+                placeholder="Nhập địa chỉ campus"
+              />
+            </div>
+            <div className="grid gap-2 md:grid-cols-2 md:gap-4">
+              <div className="grid gap-2">
+                <label className="text-sm font-medium text-muted-foreground">Số điện thoại</label>
+                <Input
+                  value={createForm.phone}
+                  onChange={(e) => setCreateForm((prev) => ({ ...prev, phone: e.target.value }))}
+                  placeholder="Ví dụ: 0123456789"
+                />
+              </div>
+              <div className="grid gap-2">
+                <label className="text-sm font-medium text-muted-foreground">Email</label>
+                <Input
+                  value={createForm.email}
+                  onChange={(e) => setCreateForm((prev) => ({ ...prev, email: e.target.value }))}
+                  placeholder="Ví dụ: campus@fpt.edu.vn"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setCreateOpen(false)} disabled={createLoading}>
+                Hủy
+              </Button>
+              <Button onClick={handleCreate} disabled={createLoading}>
+                {createLoading ? "Đang tạo..." : "Tạo campus"}
+              </Button>
+            </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Modal */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent className="sm:max-w-xl rounded-xl border bg-card shadow-lg">
           <DialogHeader>
