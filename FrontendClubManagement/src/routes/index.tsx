@@ -50,6 +50,7 @@ import StaffNewsEdit from "@/pages/news/StaffNewsEdit";
 import { StaffReportManagement } from "@/pages/myclub/staff/reportManagement/StaffReport";
 import { PeriodicReportClubs } from "@/pages/myclub/staff/reportManagement/PeriodicReportClubs";
 import { ClubReportManagement } from "@/pages/myclub/report/ReportManagement";
+import ProfileSettings from "@/pages/ProfileSettings";
 
 export const router = createBrowserRouter([
   {
@@ -96,6 +97,14 @@ export const router = createBrowserRouter([
 
       { path: "myRecruitmentApplication", element: <StudentRecruitment /> },
       { path: "clubDetail/:clubId", element: <ClubDetail /> },
+      {
+        path: "profile",
+        element: (
+          <ProtectedRoute>
+            <ProfileSettings />
+          </ProtectedRoute>
+        ),
+      },
     ],
   },
 
