@@ -2,22 +2,13 @@ import { useEffect, useState } from "react";
 import { getMyClubs } from "@/api/clubs";
 import type { MyClubDTO } from "@/types/dto/MyClubDTO";
 
-
-export function useMyClubs(enabled: boolean = true) {
+export function useMyClubs() {
   const [data, setData] = useState<MyClubDTO[] | null>(null);
-  const [loading, setLoading] = useState(enabled);
+  const [loading, setLoading] = useState(true);
   const [error, setErr] = useState<string | null>(null);
 
   useEffect(() => {
-    let alive = true;
-
-    if (!enabled) {
-      setLoading(false);
-      setData(null);
-      setErr(null);
-      return () => { alive = false; };
-    }
-
+    let alive = true; 
     (async () => {
       try {
         const clubs = await getMyClubs();
@@ -31,9 +22,8 @@ export function useMyClubs(enabled: boolean = true) {
         setLoading(false);
       }
     })();
-
     return () => { alive = false; };
-  }, [enabled]);
+  }, []);
 
   return { data, loading, error };
 }

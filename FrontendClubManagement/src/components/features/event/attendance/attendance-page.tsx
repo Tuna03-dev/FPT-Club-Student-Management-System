@@ -44,8 +44,8 @@ interface AttendancePageProps {
 export function AttendancePage({ eventId, event: propEvent }: AttendancePageProps) {
   const [searchParams] = useSearchParams()
   const user = authService.getCurrentUser()
-  const isPresident = user?.systemRole === "CLUB_PRESIDENT"
-  const isOfficer = user?.systemRole === "CLUB_OFFICER"
+  const isPresident = user?.systemRole === "CLUB_OFFICER"
+  const isOfficer = user?.systemRole === "TEAM_OFFICER"
   const canMarkAttendance = isPresident || isOfficer
   const readOnly = (searchParams.get("mode") ?? "") === "view" || !canMarkAttendance
   const [searchTerm, setSearchTerm] = useState("")

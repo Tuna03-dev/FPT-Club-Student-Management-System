@@ -1,5 +1,7 @@
+// src/types/news.ts
 export type AuthorRole = "STAFF" | "CLUB";
 
+// Đồng bộ với BE:
 export type RequestStatus =
   | "DRAFT"
   | "PENDING_CLUB"
@@ -10,6 +12,7 @@ export type RequestStatus =
   | "REJECTED_UNIVERSITY"
   | "CANCELED";
 
+// ⬇️ Dùng đúng wrapper của axiosClient (data?: T)
 export type { ApiResponse as ApiResp } from "@/api/axiosClient";
 
 export interface NewsRequest {
@@ -38,15 +41,14 @@ export interface NewsRequest {
   // Bài news (nếu đã attach)
   newsId: number | null;
 
-  // BỔ SUNG thông tin phòng ban (team)
+  // ⬇️ BỔ SUNG: thông tin phòng ban (team) để hiển thị/lọc
   teamId?: number | null;
   teamName?: string | null;
-
   thumbnailUrl?: string | null;
   newsType?: string | null;
-
-  departmentName?: string | null;
+   departmentName?: string | null;
   departmentCode?: string | null;
+  // (nếu sau này cần) semesterId?: number | null;
 }
 
 export interface NewsData {
@@ -55,10 +57,10 @@ export interface NewsData {
   content: string;
   thumbnailUrl: string | null;
   newsType: string | null;
-  draft: boolean;           
+  draft: boolean;           // mapper BE đang trả về đúng 'draft'
   clubId: number | null;
   clubName: string | null;
-  updatedAt: string | null; 
+  updatedAt: string | null; // "yyyy-MM-dd HH:mm:ss"
   authorId: number | null;
   authorName: string | null;
   authorEmail: string | null;
@@ -121,12 +123,4 @@ export interface ApproveNewsRequest {
 
 export interface RejectNewsRequest {
   reason: string;
-}
-
-// ⬇️ BỔ SUNG: payload sửa Request khi đang Pending
-export interface UpdateNewsRequestPayload {
-  title?: string;
-  content?: string;
-  thumbnailUrl?: string | null;
-  newsType?: string | null;
 }
