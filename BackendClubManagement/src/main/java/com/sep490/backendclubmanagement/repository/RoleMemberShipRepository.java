@@ -539,6 +539,25 @@ WHERE cm.club.id = :clubId
     boolean isClubOfficerOrTeamOfficerInCurrentSemester(@Param("userId") Long userId,
                                            @Param("clubId") Long clubId,
                                            @Param("semesterId") Long semesterId);
+    @Query("""
+        SELECT CASE WHEN COUNT(rm) > 0 THEN true ELSE false END
+        FROM RoleMemberShip rm
+        JOIN rm.clubMemberShip cm
+        JOIN cm.user u
+        JOIN cm.club c
+        JOIN rm.clubRole cr
+        LEFT JOIN rm.semester s
+        WHERE u.id = :userId
+          AND c.id = :clubId
+          AND rm.isActive = true
+          AND rm.team IS NULL
+          AND (
+                rm.semester IS NULL
+             OR (s.startDate <= CURRENT_DATE AND s.endDate >= CURRENT_DATE)
+          )
+          AND cr.roleCode IN ('CLUB_PRESIDENT','CLUB_VICE_PRESIDENT')
+    """)
+    boolean isUserClubOfficer(@Param("userId") Long userId, @Param("clubId") Long clubId);
 }
 
 

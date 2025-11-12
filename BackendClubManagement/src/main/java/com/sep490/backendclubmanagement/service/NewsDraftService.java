@@ -31,9 +31,9 @@ public class NewsDraftService {
     private final ClubRepository clubRepo;
     private final RoleGuard guard;
     private final NewsMapper newsMapper;
+    private final WebSocketService webSocketService; // ✅ thêm realtime service
 
     // ========== CREATE DRAFT ==========
-    // NewsDraftService.createDraft
     @Transactional
     public NewsData createDraft(Long me, CreateDraftRequest body) {
         User creator = userRepo.findById(me).orElseThrow();
@@ -49,14 +49,12 @@ public class NewsDraftService {
             }
             final Long clubId = body.getClubId();
 
-            // nếu có teamId -> buộc phải là trưởng ban team đó
             if (body.getTeamId() != null) {
                 boolean leadOfTeam = guard.isTeamLead(me, clubId, body.getTeamId());
                 if (!leadOfTeam) {
                     throw new SecurityException("Bạn không có quyền tạo nháp cho team này.");
                 }
             } else {
-                // không có teamId -> chỉ Chủ nhiệm/Phó mới được
                 boolean manager = guard.isClubManager(me, clubId);
                 if (!manager) {
                     throw new SecurityException("Bạn không có quyền tạo nháp cho CLB này.");
@@ -78,11 +76,6 @@ public class NewsDraftService {
         newsRepo.save(draft);
         return newsMapper.toDto(draft);
     }
-
-
-
-
-
 
     // ========== UPDATE DRAFT ==========
     @Transactional
@@ -134,7 +127,6 @@ public class NewsDraftService {
             throw new SecurityException("Bạn không có quyền xóa nháp này.");
         }
 
-        // Nếu nháp đang nằm trong 1 request pending thì chặn
         if (requestRepo.existsPendingByNewsId(newsId)) {
             throw new IllegalStateException("Nháp đang gắn vào một yêu cầu chưa xử lý. Hãy hủy hoặc hoàn tất yêu cầu trước khi xóa.");
         }
@@ -143,12 +135,11 @@ public class NewsDraftService {
     }
 
     // ========== LIST DRAFTS ==========
-    // NewsDraftService.listDrafts
     @Transactional(readOnly = true)
     public Page<NewsData> listDrafts(Long me, Long clubId, int page, int size) {
         List<News> myDrafts = newsRepo.findAll().stream()
                 .filter(n -> Boolean.TRUE.equals(n.getIsDraft()))
-                .filter(n -> n.getCreatedBy() != null && n.getCreatedBy().getId().equals(me)) // << CHỐT QUYỀN
+                .filter(n -> n.getCreatedBy() != null && n.getCreatedBy().getId().equals(me))
                 .filter(n -> clubId == null || (n.getClub() != null && clubId.equals(n.getClub().getId())))
                 .sorted(Comparator.comparing(News::getUpdatedAt, Comparator.nullsLast(Comparator.naturalOrder()))
                         .thenComparing(News::getId).reversed())
@@ -162,7 +153,6 @@ public class NewsDraftService {
 
         return new PageImpl<>(content, PageRequest.of(p, s), myDrafts.size());
     }
-
 
     // ========== SUBMIT DRAFT -> REQUEST ==========
     @Transactional
@@ -201,7 +191,6 @@ public class NewsDraftService {
             throw new SecurityException("Bạn không có quyền submit nháp này.");
         }
 
-        // ✅ Copy dữ liệu từ nháp vào RequestNews
         RequestNews req = RequestNews.builder()
                 .requestTitle(draft.getTitle())
                 .description(draft.getContent())
@@ -210,25 +199,29 @@ public class NewsDraftService {
                 .createdBy(actor)
                 .club(draft.getClub())
                 .team(team)
-                .thumbnailUrl(draft.getThumbnailUrl()) // Ảnh đi theo
+                .thumbnailUrl(draft.getThumbnailUrl())
                 .newsType(draft.getNewsType())
-                .news(null) // theo phương án B: xóa nháp, không gắn news
+                .news(null)
                 .build();
 
         requestRepo.save(req);
-
-        // ✅ XÓA nháp khỏi bảng news
         newsRepo.delete(draft);
 
-        return Map.of(
+        // ✅ Realtime broadcast
+        Map<String, Object> payload = Map.of(
                 "requestId", req.getId(),
+                "clubId", clubId,
                 "status", req.getStatus().name()
         );
+
+        if (startStatus == RequestStatus.PENDING_CLUB) {
+            webSocketService.broadcastToClub(clubId, "NEWS_REQUEST", "CREATED", payload);
+        } else {
+            webSocketService.broadcastToSystemRole("STAFF", "NEWS_REQUEST", "CREATED", payload);
+        }
+
+        return payload;
     }
-
-
-
-
 
     // ========== STAFF PUBLISH DRAFT ==========
     @Transactional
@@ -245,8 +238,13 @@ public class NewsDraftService {
         draft.setIsDraft(false);
         newsRepo.save(draft);
 
+        // ✅ Realtime broadcast
+        webSocketService.broadcastSystemWide("NEWS", "PUBLISHED", newsMapper.toDto(draft));
+
         return newsMapper.toDto(draft);
     }
+
+    // ========== GET DRAFT DETAIL ==========
     @Transactional(readOnly = true)
     public NewsData getDraftDetail(Long me, Long newsId) {
         News draft = newsRepo.findById(newsId).orElseThrow();
@@ -266,6 +264,4 @@ public class NewsDraftService {
 
         return newsMapper.toDto(draft);
     }
-
-
 }
