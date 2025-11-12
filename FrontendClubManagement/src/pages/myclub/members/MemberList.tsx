@@ -862,10 +862,12 @@ const Members = () => {
                                 <Mail className="h-3 w-3" />
                                 <span>{member.email}</span>
                               </div>
-                              <div className="flex items-center gap-1">
-                                <Phone className="h-3 w-3" />
-                                <span>{member.phoneNumber}</span>
-                              </div>
+                              {member.phoneNumber && (
+                                <div className="flex items-center gap-1">
+                                  <Phone className="h-3 w-3" />
+                                  <span>{member.phoneNumber}</span>
+                                </div>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -1200,10 +1202,12 @@ const Members = () => {
                                 <Mail className="h-3 w-3" />
                                 <span>{member.email}</span>
                               </div>
-                              <div className="flex items-center gap-1">
-                                <Phone className="h-3 w-3" />
-                                <span>{member.phoneNumber}</span>
-                              </div>
+                              {member.phoneNumber && (
+                                <div className="flex items-center gap-1">
+                                  <Phone className="h-3 w-3" />
+                                  <span>{member.phoneNumber}</span>
+                                </div>
+                              )}
                             </div>
                           </div>
                         </div>

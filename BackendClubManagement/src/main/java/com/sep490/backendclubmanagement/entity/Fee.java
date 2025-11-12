@@ -46,6 +46,10 @@ public class Fee extends BaseEntity {
     @JoinColumn(name = "club_id", nullable = false)
     private Club club;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "semester_id")
+    private Semester semester;
+
     @OneToMany(mappedBy = "fee", cascade = CascadeType.ALL)
     private Set<IncomeTransaction> incomeTransactions;
 }
