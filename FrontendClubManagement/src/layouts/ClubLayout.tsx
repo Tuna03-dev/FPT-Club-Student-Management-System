@@ -44,6 +44,8 @@ import { authService } from "@/services/authService";
 import { useTeams } from "@/hooks/useTeams";
 // hook officer tối giản (team-level API, có fallback)
 import { useClubOfficer } from "@/hooks/useClubOfficer";
+// hook permissions chi tiết cho phân quyền
+import { useClubPermissions } from "@/hooks/useClubPermissions";
 // context permissions để Guard đọc
 import { PermissionContext } from "@/contexts/PermissionContext";
 
@@ -55,50 +57,80 @@ const navItems = [
   { key: "notifications", url: "/notifications", icon: Bell },
 ];
 
-const managementItems = [
-  { key: "club_news", url: "/news", icon: Newspaper, label: "Yêu cầu tin tức" },
-  { key: "permissions", url: "/roles", icon: Shield, label: "Phân quyền" },
+// Define permission levels for each menu item
+type PermissionLevel = "CLUB_OFFICER" | "TEAM_OFFICER" | "MEMBER";
+
+interface ManagementItem {
+  key: string;
+  url: string;
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  requiredRole: PermissionLevel; // Minimum role required
+}
+
+const managementItems: ManagementItem[] = [
+  {
+    key: "club_news",
+    url: "/news",
+    icon: Newspaper,
+    label: "Yêu cầu tin tức",
+    requiredRole: "CLUB_OFFICER",
+  },
+  {
+    key: "permissions",
+    url: "/roles",
+    icon: Shield,
+    label: "Phân quyền",
+    requiredRole: "CLUB_OFFICER",
+  },
   {
     key: "pending_posts",
     url: "/pending-posts",
     icon: FileText,
     label: "Bài viết chờ duyệt",
+    requiredRole: "TEAM_OFFICER",
   },
   {
     key: "manage_members",
     url: "/members",
     icon: Users,
-    label: "Quản lý thành viên",
+    label: "Danh sách thành viên",
+    requiredRole: "MEMBER", // Everyone can view, but actions are restricted
   },
   {
     key: "manage_events",
     url: "/events",
     icon: Calendar,
     label: "Quản lý sự kiện",
+    requiredRole: "TEAM_OFFICER",
   },
   {
     key: "manage_recruitments",
     url: "/recruitments",
     icon: Briefcase,
     label: "Quản lý tuyển thành viên",
+    requiredRole: "CLUB_OFFICER",
   },
   {
     key: "manage_reports",
     url: "/reports",
     icon: FileText,
     label: "Quản lý báo cáo",
+    requiredRole: "TEAM_OFFICER",
   },
   {
     key: "manage_finance",
     url: "/finance",
     icon: DollarSign,
     label: "Quản lý tài chính",
+    requiredRole: "CLUB_OFFICER",
   },
   {
     key: "pending_requests",
     url: "/pending-requests",
     icon: Clock,
     label: "Yêu cầu chờ duyệt",
+    requiredRole: "CLUB_OFFICER",
   },
 ];
 
@@ -160,15 +192,49 @@ export const ClubLayout = () => {
     teamIdFromUrl
   );
 
-  // filter menu: chỉ CN/PCN mới thấy "Yêu cầu tin tức"
-  const filteredManagementItems = useMemo(
-    () =>
-      managementItems.filter((item) => {
-        if (item.key === "club_news") return !officerLoading && isOfficer;
-        return true;
-      }),
-    [isOfficer, officerLoading]
-  );
+  // Kiểm tra quyền chi tiết
+  const {
+    isClubPresident,
+    isTeamOfficer,
+    loading: permissionsLoading,
+  } = useClubPermissions(validClubId ? numericClubId : undefined);
+
+  // Determine user's role level
+  const userRoleLevel: PermissionLevel = useMemo(() => {
+    if (permissionsLoading) return "MEMBER"; // Default while loading
+    if (isClubPresident) return "CLUB_OFFICER";
+    if (isTeamOfficer) return "TEAM_OFFICER";
+    return "MEMBER";
+  }, [isClubPresident, isTeamOfficer, permissionsLoading]);
+
+  // Filter menu based on user permissions and update labels
+  const filteredManagementItems = useMemo(() => {
+    if (permissionsLoading) return [];
+
+    const roleHierarchy: Record<PermissionLevel, number> = {
+      CLUB_OFFICER: 3,
+      TEAM_OFFICER: 2,
+      MEMBER: 1,
+    };
+
+    return managementItems
+      .filter((item) => {
+        // Check if user has required role level
+        return roleHierarchy[userRoleLevel] >= roleHierarchy[item.requiredRole];
+      })
+      .map((item) => {
+        // Update labels for members (more view-oriented)
+        if (userRoleLevel === "MEMBER") {
+          if (item.key === "manage_members") {
+            return { ...item, label: "Thành viên" };
+          }
+          if (item.key === "manage_events") {
+            return { ...item, label: "Sự kiện" };
+          }
+        }
+        return item;
+      });
+  }, [userRoleLevel, permissionsLoading]);
 
   const handleLogout = async () => {
     try {
@@ -284,7 +350,11 @@ export const ClubLayout = () => {
                   <DropdownMenuContent align="end" className="w-64">
                     <div className="px-2 py-1.5">
                       <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-                        QUẢN LÝ
+                        {userRoleLevel === "CLUB_OFFICER"
+                          ? "QUẢN LÝ"
+                          : userRoleLevel === "TEAM_OFFICER"
+                          ? "QUẢN LÝ"
+                          : "DANH MỤC"}
                       </h3>
                       {filteredManagementItems.map((item) => (
                         <DropdownMenuItem key={item.key} asChild>
@@ -316,37 +386,48 @@ export const ClubLayout = () => {
             <aside className="hidden lg:block w-64 border-r border-border bg-card h-[calc(100vh-56px)] sticky top-14">
               <nav className="pt-2 pb-4 px-4 space-y-6 h-full overflow-y-auto">
                 {/* Management */}
-                <div>
-                  <div className="px-3 mb-4">
-                    <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                      QUẢN LÝ
-                    </h2>
-                  </div>
-                  <div className="space-y-2">
-                    {filteredManagementItems.map((item) => (
-                      <NavLink
-                        key={item.key}
-                        to={`/myclub/${clubId}${item.url}`}
-                        className={({ isActive }) =>
-                          `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                            isActive
-                              ? "bg-primary/10 text-primary shadow-sm"
-                              : "text-foreground hover:bg-secondary"
-                          }`
-                        }
-                      >
-                        <div
-                          className={`h-8 w-8 rounded-lg ${
-                            managementColors[item.key]
-                          } flex items-center justify-center text-white shadow-sm`}
+                {filteredManagementItems.length > 0 && (
+                  <div>
+                    <div className="px-3 mb-4">
+                      <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                        {userRoleLevel === "CLUB_OFFICER"
+                          ? "QUẢN LÝ"
+                          : userRoleLevel === "TEAM_OFFICER"
+                          ? "QUẢN LÝ"
+                          : "DANH MỤC"}
+                      </h2>
+                      {!permissionsLoading && userRoleLevel === "MEMBER" && (
+                        <p className="text-[10px] text-muted-foreground mt-1">
+                          Xem thông tin CLB
+                        </p>
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      {filteredManagementItems.map((item) => (
+                        <NavLink
+                          key={item.key}
+                          to={`/myclub/${clubId}${item.url}`}
+                          className={({ isActive }) =>
+                            `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                              isActive
+                                ? "bg-primary/10 text-primary shadow-sm"
+                                : "text-foreground hover:bg-secondary"
+                            }`
+                          }
                         >
-                          <item.icon className="h-4 w-4" />
-                        </div>
-                        <span>{item.label}</span>
-                      </NavLink>
-                    ))}
+                          <div
+                            className={`h-8 w-8 rounded-lg ${
+                              managementColors[item.key]
+                            } flex items-center justify-center text-white shadow-sm`}
+                          >
+                            <item.icon className="h-4 w-4" />
+                          </div>
+                          <span>{item.label}</span>
+                        </NavLink>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* Teams */}
                 <div>
@@ -356,8 +437,8 @@ export const ClubLayout = () => {
                     </h2>
                   </div>
 
-                  {/* Nút tạo phòng ban: chỉ CN/PCN; ẩn khi officerLoading để tránh nháy */}
-                  {!officerLoading && isOfficer && (
+                  {/* Nút tạo phòng ban: chỉ CLUB_OFFICER */}
+                  {!permissionsLoading && userRoleLevel === "CLUB_OFFICER" && (
                     <div className="px-3 mb-2">
                       <Button
                         variant="outline"

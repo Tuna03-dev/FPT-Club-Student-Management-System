@@ -43,6 +43,7 @@ interface MemberDetailDialogProps {
   roles: ClubRoleDTO[];
   teams: TeamDTO[];
   onUpdated?: () => void;
+  isOfficer?: boolean;
 }
 
 const MemberDetailDialog = ({
@@ -53,6 +54,7 @@ const MemberDetailDialog = ({
   roles,
   teams,
   onUpdated,
+  isOfficer = true, // Default to true for backward compatibility
 }: MemberDetailDialogProps) => {
   // Dialog states
   const [isEditMemberOpen, setIsEditMemberOpen] = useState(false);
@@ -407,51 +409,68 @@ const MemberDetailDialog = ({
                 </Card>
               </div>
 
-              {/* Action Buttons - Only for current members (not LEFT) */}
-              {(member as unknown as { membershipStatus?: string })
-                .membershipStatus !== "LEFT" && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <Button
-                    variant="outline"
-                    className="w-full border-primary/30 hover:bg-primary/10"
-                    onClick={openEditMemberDialog}
-                  >
-                    <UserCog className="h-4 w-4 mr-2" />
-                    Chỉnh sửa vai trò & phân ban
-                  </Button>
-                  {member.currentTerm?.isActive ? (
+              {/* Action Buttons - Only for officers and current members (not LEFT) */}
+              {isOfficer &&
+                (member as unknown as { membershipStatus?: string })
+                  .membershipStatus !== "LEFT" && (
+                  <>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <Button
+                        variant="outline"
+                        className="w-full border-primary/30 hover:bg-primary/10"
+                        onClick={openEditMemberDialog}
+                      >
+                        <UserCog className="h-4 w-4 mr-2" />
+                        Chỉnh sửa vai trò & phân ban
+                      </Button>
+                      {member.currentTerm?.isActive ? (
+                        <Button
+                          variant="outline"
+                          className="w-full border-yellow-500/30 hover:bg-yellow-500/10 text-yellow-600"
+                          onClick={openChangeStatusDialog}
+                        >
+                          <UserX className="h-4 w-4 mr-2" />
+                          Tạm ngưng
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          className="w-full border-green-500/30 hover:bg-green-500/10 text-green-600"
+                          onClick={openChangeStatusDialog}
+                        >
+                          <UserCheck className="h-4 w-4 mr-2" />
+                          Kích hoạt
+                        </Button>
+                      )}
+                    </div>
+
+                    {/* Remove Button - Only for active/deactive members */}
                     <Button
-                      variant="outline"
-                      className="w-full border-yellow-500/30 hover:bg-yellow-500/10 text-yellow-600"
-                      onClick={openChangeStatusDialog}
+                      variant="destructive"
+                      className="w-full"
+                      onClick={openRemoveDialog}
                     >
                       <UserX className="h-4 w-4 mr-2" />
-                      Tạm ngưng
+                      Đá khỏi CLB
                     </Button>
-                  ) : (
-                    <Button
-                      variant="outline"
-                      className="w-full border-green-500/30 hover:bg-green-500/10 text-green-600"
-                      onClick={openChangeStatusDialog}
-                    >
-                      <UserCheck className="h-4 w-4 mr-2" />
-                      Kích hoạt
-                    </Button>
-                  )}
-                </div>
-              )}
+                  </>
+                )}
 
-              {/* Remove Button - Only for active/deactive members */}
-              {(member as unknown as { membershipStatus?: string })
-                .membershipStatus !== "LEFT" && (
-                <Button
-                  variant="destructive"
-                  className="w-full"
-                  onClick={openRemoveDialog}
-                >
-                  <UserX className="h-4 w-4 mr-2" />
-                  Đá khỏi CLB
-                </Button>
+              {/* Read-only notice for regular members */}
+              {!isOfficer && (
+                <Card className="border-blue-500/30 bg-blue-500/5">
+                  <CardContent className="p-4">
+                    <div className="flex items-start gap-3">
+                      <Shield className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
+                      <div className="flex-1">
+                        <p className="text-sm text-blue-600 dark:text-blue-300">
+                          Bạn đang xem thông tin thành viên. Chỉ Chủ nhiệm và
+                          Phó Chủ nhiệm mới có quyền chỉnh sửa.
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
               )}
 
               {/* Current Term */}

@@ -37,35 +37,42 @@ export default function ProfileSettings() {
     phone: "", // TODO: Add phone field to UserInfo
     studentId: "", // TODO: Add studentCode field to UserInfo
     avatar: currentUser?.avatarUrl || "",
-    role: currentUser?.systemRole || "Sinh viên",
+    role: currentUser?.systemRole || "STUDENT",
     department: "",
     joinedDate: "01/09/2024",
   });
 
-  // Mock clubs membership data - TODO: Replace with actual API call
-  const userClubs = [
-    {
-      id: "1",
-      clubName: "CLB Lập trình FPT",
-      role: "Chủ tịch",
-      joinedDate: "01/09/2023",
-      status: "Đang hoạt động",
-    },
-    {
-      id: "2",
-      clubName: "CLB Tiếng Anh",
-      role: "Thành viên",
-      joinedDate: "15/10/2023",
-      status: "Đang hoạt động",
-    },
-    {
-      id: "3",
-      clubName: "CLB Thể thao",
-      role: "Phó chủ tịch",
-      joinedDate: "20/09/2023",
-      status: "Đang hoạt động",
-    },
-  ];
+  // Get clubs from currentUser
+  const userClubs = currentUser?.clubRoleList || [];
+
+  // Helper function to get system role display name
+  const getSystemRoleDisplay = (systemRole: string) => {
+    switch (systemRole) {
+      case "CLUB_OFFICER":
+        return "Cán bộ CLB";
+      case "STAFF":
+        return "Nhân viên";
+      case "ADMIN":
+        return "Quản trị viên";
+      case "STUDENT":
+      default:
+        return "Sinh viên";
+    }
+  };
+
+  // Helper function to get role badge color
+  const getRoleBadgeVariant = (
+    clubRole: string
+  ): "default" | "secondary" | "outline" => {
+    const role = clubRole.toLowerCase();
+    if (role.includes("chủ nhiệm") || role.includes("chủ tịch")) {
+      return "default"; // Primary color
+    }
+    if (role.includes("phó") || role.includes("trưởng")) {
+      return "secondary";
+    }
+    return "outline"; // For regular members
+  };
 
   const handleSaveProfile = async () => {
     try {
@@ -144,7 +151,7 @@ export default function ProfileSettings() {
                   <div className="flex gap-2 flex-wrap justify-center sm:justify-start">
                     <Badge className="bg-gradient-to-r from-primary to-primary/80 shadow-md">
                       <Shield className="h-3 w-3 mr-1" />
-                      {userData.role}
+                      {getSystemRoleDisplay(userData.role)}
                     </Badge>
                     {userData.department && (
                       <Badge variant="outline" className="border-primary/30">
@@ -242,51 +249,63 @@ export default function ProfileSettings() {
         </Card>
 
         {/* Clubs Membership Card */}
-        <Card className="border-primary/20 shadow-lg hover:shadow-xl transition-shadow duration-300">
-          <CardHeader className="bg-gradient-to-r from-primary/10 to-primary/5 border-b border-primary/10">
-            <CardTitle className="flex items-center gap-2 text-xl sm:text-2xl">
-              <Users className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
-              Các CLB đang tham gia
-            </CardTitle>
-            <CardDescription className="text-sm">
-              Danh sách các câu lạc bộ và vai trò của bạn
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="pt-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {userClubs.map((club) => (
-                <Card
-                  key={club.id}
-                  className="border-primary/20 hover:border-primary/40 transition-all hover:shadow-lg"
-                >
-                  <CardContent className="pt-6">
-                    <div className="space-y-3">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <h4 className="font-semibold text-base sm:text-lg mb-2 text-foreground">
-                            {club.clubName}
-                          </h4>
-                          <Badge className="bg-gradient-to-r from-primary to-primary/80 shadow-sm mb-2">
-                            <Shield className="h-3 w-3 mr-1" />
-                            {club.role}
-                          </Badge>
+        {userClubs.length > 0 && (
+          <Card className="border-primary/20 shadow-lg hover:shadow-xl transition-shadow duration-300">
+            <CardHeader className="bg-gradient-to-r from-primary/10 to-primary/5 border-b border-primary/10">
+              <CardTitle className="flex items-center gap-2 text-xl sm:text-2xl">
+                <Users className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
+                Các CLB đang tham gia
+              </CardTitle>
+              <CardDescription className="text-sm">
+                Danh sách các câu lạc bộ và vai trò của bạn
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="pt-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {userClubs.map((club) => (
+                  <Card
+                    key={club.clubId}
+                    className="border-primary/20 hover:border-primary/40 transition-all hover:shadow-lg"
+                  >
+                    <CardContent className="pt-6">
+                      <div className="space-y-3">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <h4 className="font-semibold text-base sm:text-lg mb-2 text-foreground">
+                              {club.clubName}
+                            </h4>
+                            <div className="flex flex-col gap-2">
+                              <Badge
+                                variant={getRoleBadgeVariant(club.clubRole)}
+                                className="w-fit shadow-sm"
+                              >
+                                <Shield className="h-3 w-3 mr-1" />
+                                {club.clubRole}
+                              </Badge>
+                              <Badge
+                                variant="outline"
+                                className="w-fit border-primary/30 text-xs"
+                              >
+                                {getSystemRoleDisplay(club.systemRole)}
+                              </Badge>
+                            </div>
+                          </div>
+                        </div>
+                        <Separator className="bg-primary/10" />
+                        <div className="space-y-1 text-sm text-muted-foreground">
+                          <p className="flex items-center gap-1">
+                            <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                            Đang hoạt động
+                          </p>
                         </div>
                       </div>
-                      <Separator className="bg-primary/10" />
-                      <div className="space-y-1 text-sm text-muted-foreground">
-                        <p>Tham gia: {club.joinedDate}</p>
-                        <p className="flex items-center gap-1">
-                          <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-                          {club.status}
-                        </p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );
