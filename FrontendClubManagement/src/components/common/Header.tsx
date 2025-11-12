@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { User, Users, LogOut, Shield } from "lucide-react";
+import { User, Users, LogOut, Shield, Building2 } from "lucide-react";
 import useMyClubs from "@/hooks/useMyClubs";
 import { toast } from "sonner";
 
@@ -54,8 +54,12 @@ const Header: React.FC = () => {
     toast.success("Đăng xuất thành công!", { duration: 2000 });
   };
 
+  const normalizedSystemRole = user?.systemRole
+    ? String(user.systemRole).trim().toUpperCase()
+    : "";
   const isAdmin =
-    user?.systemRole === "ADMIN" || user?.systemRole === "MANAGER";
+    normalizedSystemRole === "ADMIN" || normalizedSystemRole === "MANAGER";
+  const isStaff = normalizedSystemRole === "STAFF";
 
   const getInitials = (name: string) =>
     name
@@ -160,6 +164,16 @@ const Header: React.FC = () => {
                             Câu lạc bộ của tôi
                           </DropdownMenuItem>
                         )}
+
+                      {isStaff && (
+                        <DropdownMenuItem
+                          onClick={() => navigate("/staff/events")}
+                          className="cursor-pointer text-[14px] text-gray-700"
+                        >
+                          <Building2 className="mr-2 h-4 w-4 text-orange-500" />
+                          Trang quản lý của ICPDP
+                        </DropdownMenuItem>
+                      )}
 
                       {isAdmin && (
                         <DropdownMenuItem

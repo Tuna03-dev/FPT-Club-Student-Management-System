@@ -29,6 +29,7 @@ public interface PublicClubRepository extends JpaRepository<Club, Long> {
         String getCampus_name();
         Long getTotal_teams();
         String getTop2_names();
+        Long getActive_recruitment_id();
     }
 
     interface ClubDetailRow {
@@ -108,7 +109,8 @@ public interface PublicClubRepository extends JpaRepository<Club, Long> {
           cat.category_name,
           cam.campus_name,
           COALESCE(t_tot.total_teams, 0) AS total_teams,
-          COALESCE(t2.top2_names, '') AS top2_names
+          COALESCE(t2.top2_names, '') AS top2_names,
+          r.id AS active_recruitment_id
         FROM clubs c
         LEFT JOIN club_categories cat 
           ON cat.id = c.club_category_id AND cat.deleted_at IS NULL
@@ -131,6 +133,24 @@ public interface PublicClubRepository extends JpaRepository<Club, Long> {
           WHERE t.deleted_at IS NULL
           GROUP BY t.club_id
         ) t2 ON t2.club_id = c.id
+        LEFT JOIN (
+          SELECT r1.id, r1.club_id
+          FROM recruitments r1
+          INNER JOIN (
+            SELECT club_id, MAX(created_at) AS max_created_at
+            FROM recruitments
+            WHERE deleted_at IS NULL
+              AND status = 'OPEN'
+              AND start_date <= CURRENT_TIMESTAMP
+              AND end_date >= CURRENT_TIMESTAMP
+            GROUP BY club_id
+          ) r2 ON r1.club_id = r2.club_id 
+               AND r1.created_at = r2.max_created_at
+          WHERE r1.deleted_at IS NULL
+            AND r1.status = 'OPEN'
+            AND r1.start_date <= CURRENT_TIMESTAMP
+            AND r1.end_date >= CURRENT_TIMESTAMP
+        ) r ON r.club_id = c.id
         WHERE c.deleted_at IS NULL
           AND c.status = 'ACTIVE'
           AND (:q IS NULL OR

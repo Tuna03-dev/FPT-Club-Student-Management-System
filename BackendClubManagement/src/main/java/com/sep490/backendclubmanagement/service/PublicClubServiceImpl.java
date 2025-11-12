@@ -30,6 +30,7 @@ public class PublicClubServiceImpl implements PublicClubService {
         List<PublicClubCardDTO> content = rows.getContent().stream().map(r -> {
             List<String> topTags = splitCsv2(r.getTop2_names());
             int overflow = (int) Math.max(0, Optional.ofNullable(r.getTotal_teams()).orElse(0L) - topTags.size());
+            Long activeRecruitmentId = r.getActive_recruitment_id();
             return PublicClubCardDTO.builder()
                     .id(r.getId())
                     .clubCode(r.getClub_code())
@@ -44,6 +45,8 @@ public class PublicClubServiceImpl implements PublicClubService {
                     .totalTeams(r.getTotal_teams())
                     .topTags(topTags)
                     .tagsOverflow(overflow)
+                    .hasActiveRecruitment(activeRecruitmentId != null)
+                    .activeRecruitmentId(activeRecruitmentId)
                     .build();
         }).toList();
 
