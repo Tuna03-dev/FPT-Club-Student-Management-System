@@ -180,7 +180,10 @@ export default function ProfileSettings() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="studentId" className="flex items-center gap-2">
+                  <Label
+                    htmlFor="studentId"
+                    className="flex items-center gap-2"
+                  >
                     <IdCard className="h-4 w-4 text-primary" />
                     Mã số sinh viên
                   </Label>
