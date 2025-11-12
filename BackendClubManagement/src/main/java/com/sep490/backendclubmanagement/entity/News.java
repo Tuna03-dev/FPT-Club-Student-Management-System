@@ -47,5 +47,18 @@ public class News extends BaseEntity {
 
     @OneToOne(mappedBy = "news", cascade = CascadeType.ALL)
     private RequestNews requestNews;
+
+    //update delete xóa mềm news
+    @Column(nullable = false)
+    private boolean hidden = false;
+
+    @Column(nullable = false)
+    private boolean deleted = false;
+
+    @Column(name = "deleted_by_id")
+    private Long deletedById;
+
+    @Column(name = "updated_by_id")
+    private Long updatedById;
 }
 
