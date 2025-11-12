@@ -40,6 +40,7 @@ import TeamNewsEditor from "@/pages/news/TeamNewsEditor";
 import Payment from "@/pages/myclub/payments/MemberPaymentPage";
 import TeamCreatePage from "@/pages/myclub/teams/TeamCreatePage";
 import RoleManagement from "@/pages/myclub/RoleManagement";
+import PendingPosts from "@/pages/myclub/PendingPosts";
 
 import ClubOfficerGuard from "@/components/guards/ClubOfficerGuard";
 import ForbiddenPage from "@/pages/ForbiddenPage";
@@ -47,6 +48,8 @@ import ForbiddenPage from "@/pages/ForbiddenPage";
 import { StaffReportManagement } from "@/pages/myclub/staff/reportManagement/StaffReport";
 import { PeriodicReportClubs } from "@/pages/myclub/staff/reportManagement/PeriodicReportClubs";
 import { ClubReportManagement } from "@/pages/myclub/report/ReportManagement";
+import ProfileSettings from "@/pages/ProfileSettings";
+
 export const router = createBrowserRouter([
   {
     path: "/",
@@ -92,6 +95,14 @@ export const router = createBrowserRouter([
 
       { path: "myRecruitmentApplication", element: <StudentRecruitment /> },
       { path: "clubDetail/:clubId", element: <ClubDetail /> },
+      {
+        path: "profile",
+        element: (
+          <ProtectedRoute>
+            <ProfileSettings />
+          </ProtectedRoute>
+        ),
+      },
     ],
   },
 
@@ -179,6 +190,14 @@ export const router = createBrowserRouter([
         element: (
           <ClubOfficerGuard>
             <RoleManagement />
+          </ClubOfficerGuard>
+        ),
+      },
+      {
+        path: "pending-posts",
+        element: (
+          <ClubOfficerGuard>
+            <PendingPosts />
           </ClubOfficerGuard>
         ),
       },
