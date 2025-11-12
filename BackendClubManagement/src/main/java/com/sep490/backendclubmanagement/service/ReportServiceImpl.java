@@ -1,5 +1,6 @@
 package com.sep490.backendclubmanagement.service;
 
+import com.sep490.backendclubmanagement.dto.request.ClubReportRequirementFilterRequest;
 import com.sep490.backendclubmanagement.dto.request.CreateReportRequirementRequest;
 import com.sep490.backendclubmanagement.dto.request.CreateReportRequest;
 import com.sep490.backendclubmanagement.dto.request.ReportFilterRequest;
@@ -41,6 +42,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -972,6 +974,119 @@ public class ReportServiceImpl implements ReportServiceInterface {
                     return response;
                 })
                 .toList();
+    }
+
+    /**
+     * Get all report requirements for a club with filters and pagination (for CLUB_OFFICER or TEAM_OFFICER)
+     */
+    @Override
+    public PageResponse<ReportRequirementResponse> getClubReportRequirementsForOfficerWithFilters(
+            ClubReportRequirementFilterRequest request,
+            Long clubId,
+            Long userId
+    ) {
+        // Validate club exists
+        Club club = clubRepository.findById(clubId)
+                .orElseThrow(() -> new NotFoundException("Club not found with ID: " + clubId));
+
+        // Get current semester
+        Semester currentSemester = semesterRepository.findCurrentSemester()
+                .orElse(null);
+
+        // Check if user is CLUB_OFFICER or TEAM_OFFICER (from club_roles table) in current semester
+        boolean isClubOfficerOrTeamOfficer = false;
+
+        if (currentSemester != null) {
+            isClubOfficerOrTeamOfficer = roleMemberShipRepository.isClubOfficerOrTeamOfficerInCurrentSemester(
+                    userId, clubId, currentSemester.getId());
+        }
+
+        if (!isClubOfficerOrTeamOfficer) {
+            throw new ForbiddenException(
+                    "Chỉ cán bộ câu lạc bộ (CLUB_OFFICER) hoặc cán bộ ban (TEAM_OFFICER) " +
+                    "trong kỳ hiện tại và đang hoạt động mới có quyền xem danh sách yêu cầu báo cáo."
+            );
+        }
+
+        // Parse status filter
+        Boolean filterUnsubmitted = null;
+        Boolean filterOverdue = null;
+        ReportStatus reportStatus = null;
+
+        if (request.getStatus() != null && !request.getStatus().isEmpty()) {
+            String statusStr = request.getStatus().toUpperCase();
+            if ("UNSUBMITTED".equals(statusStr)) {
+                filterUnsubmitted = true;
+            } else if ("OVERDUE".equals(statusStr)) {
+                filterOverdue = true;
+            } else {
+                // Try to parse as ReportStatus enum
+                try {
+                    reportStatus = ReportStatus.valueOf(statusStr);
+                } catch (IllegalArgumentException e) {
+                    // Invalid status, ignore filter
+                }
+            }
+        }
+
+        // Get current date for overdue filter
+        LocalDate currentDate = LocalDate.now();
+
+        // Get pageable
+        Pageable pageable = request.getPageable("createdAt,desc");
+
+        // Query with filters
+        Page<ClubReportRequirement> requirementPage = clubReportRequirementRepository.findByClubIdWithFilters(
+                clubId,
+                request.getKeyword(),
+                filterUnsubmitted,
+                filterOverdue,
+                reportStatus,
+                request.getSemesterId(),
+                currentDate,
+                pageable
+        );
+
+        // Map to response
+        Page<ReportRequirementResponse> responsePage = requirementPage.map(crr -> {
+            ReportRequirementResponse response = submissionReportRequirementMapper.toDto(crr.getSubmissionReportRequirement());
+            
+            // Build report info if exists
+            ReportRequirementResponse.ReportInfo reportInfo = null;
+            if (crr.getReport() != null) {
+                Report report = crr.getReport();
+                reportInfo = ReportRequirementResponse.ReportInfo.builder()
+                        .id(report.getId())
+                        .reportTitle(report.getReportTitle())
+                        .status(report.getStatus() != null ? report.getStatus().name() : null)
+                        .submittedDate(report.getSubmittedDate())
+                        .createdAt(report.getCreatedAt())
+                        .updatedAt(report.getUpdatedAt())
+                        .mustResubmit(report.isMustResubmit())
+                        .build();
+            }
+            
+            // Get status from report if exists, otherwise null
+            String statusStr = null;
+            if (crr.getReport() != null && crr.getReport().getStatus() != null) {
+                statusStr = crr.getReport().getStatus().name();
+            }
+            
+            // Add the club requirement info for this specific club
+            ReportRequirementResponse.ClubRequirementInfo clubRequirementInfo = ReportRequirementResponse.ClubRequirementInfo.builder()
+                    .id(crr.getId())
+                    .clubId(crr.getClub().getId())
+                    .clubName(crr.getClub().getClubName())
+                    .clubCode(crr.getClub().getClubCode())
+                    .status(statusStr)
+                    .report(reportInfo)
+                    .build();
+            
+            response.setClubRequirements(List.of(clubRequirementInfo));
+            return response;
+        });
+
+        return PageResponse.of(responsePage);
     }
 
     /**

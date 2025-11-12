@@ -162,6 +162,19 @@ public interface ReportServiceInterface {
     List<ReportRequirementResponse> getClubReportRequirementsForOfficer(Long clubId, Long userId);
 
     /**
+     * Get all report requirements for a club with filters and pagination (for CLUB_OFFICER or TEAM_OFFICER)
+     * @param request Filter request containing status, semesterId, keyword, and pagination
+     * @param clubId Club ID
+     * @param userId Current user ID
+     * @return Page response containing list of report requirement responses assigned to the club
+     */
+    PageResponse<ReportRequirementResponse> getClubReportRequirementsForOfficerWithFilters(
+            com.sep490.backendclubmanagement.dto.request.ClubReportRequirementFilterRequest request,
+            Long clubId,
+            Long userId
+    );
+
+    /**
      * Get report of a specific club for a specific report requirement (for CLUB_OFFICER or TEAM_OFFICER)
      * @param requirementId Submission report requirement ID
      * @param clubId Club ID

@@ -155,6 +155,35 @@ export async function getClubReportRequirementsForOfficer(
 }
 
 /**
+ * Club Report Requirement Filter Request
+ */
+export interface ClubReportRequirementFilterRequest {
+  page?: number;
+  size?: number;
+  sort?: string[];
+  keyword?: string;
+  status?: string; // OVERDUE, UNSUBMITTED, DRAFT, PENDING_CLUB, etc.
+  semesterId?: number;
+}
+
+/**
+ * Get all report requirements for a club with filters and pagination (for CLUB_OFFICER or TEAM_OFFICER)
+ */
+export async function getClubReportRequirementsForOfficerWithFilters(
+  clubId: number,
+  request: ClubReportRequirementFilterRequest
+): Promise<PageResponse<ReportRequirementResponse>> {
+  const response = await axiosClient.post<PageResponse<ReportRequirementResponse>>(
+    `/reports/club/${clubId}/requirements/officer/filter`,
+    request
+  );
+  if (!response.data) {
+    throw new Error("Failed to get club report requirements for officer with filters");
+  }
+  return response.data;
+}
+
+/**
  * Get report of a specific club for a specific report requirement (for CLUB_OFFICER or TEAM_OFFICER)
  * Returns null if club hasn't submitted report yet
  */

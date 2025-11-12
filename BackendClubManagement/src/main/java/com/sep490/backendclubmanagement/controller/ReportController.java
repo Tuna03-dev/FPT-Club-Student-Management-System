@@ -2,6 +2,7 @@ package com.sep490.backendclubmanagement.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sep490.backendclubmanagement.dto.ApiResponse;
+import com.sep490.backendclubmanagement.dto.request.ClubReportRequirementFilterRequest;
 import com.sep490.backendclubmanagement.dto.request.CreateReportRequirementRequest;
 import com.sep490.backendclubmanagement.dto.request.CreateReportRequest;
 import com.sep490.backendclubmanagement.dto.request.ReportFilterRequest;
@@ -183,6 +184,20 @@ public class ReportController {
     ) {
         Long userId = SecurityUtils.getCurrentUserId();
         List<ReportRequirementResponse> data = reportService.getClubReportRequirementsForOfficer(clubId, userId);
+        return ApiResponse.success(data);
+    }
+
+    /**
+     * Get all report requirements for a club with filters and pagination (for CLUB_OFFICER or TEAM_OFFICER)
+     */
+    @PostMapping("/club/{clubId}/requirements/officer/filter")
+    public ApiResponse<PageResponse<ReportRequirementResponse>> getClubReportRequirementsForOfficerWithFilters(
+            @PathVariable Long clubId,
+            @RequestBody @Valid ClubReportRequirementFilterRequest request
+    ) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        PageResponse<ReportRequirementResponse> data = reportService.getClubReportRequirementsForOfficerWithFilters(
+                request, clubId, userId);
         return ApiResponse.success(data);
     }
 

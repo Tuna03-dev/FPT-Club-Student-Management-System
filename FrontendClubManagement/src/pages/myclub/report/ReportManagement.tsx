@@ -2,9 +2,11 @@
 
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useParams } from "react-router-dom";
+import { useDebounce } from "@/hooks/useDebounce";
 import { Button } from "@/components/ui/button";
 import {
   getClubReportRequirementsForOfficer,
+  getClubReportRequirementsForOfficerWithFilters,
   getClubReportByRequirementForOfficer,
   createReport,
   updateReport,
@@ -18,6 +20,7 @@ import {
   type UpdateReportRequest,
   type SubmitReportRequest,
   type ReviewReportByClubRequest,
+  type ClubReportRequirementFilterRequest,
 } from "@/services/reportService";
 import {
   mapBackendToFrontendReportType,
@@ -79,14 +82,21 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { ReportListItemResponse } from "@/types/dto/reportRequirement.dto";
+import { clubService, type SemesterDTO } from "@/services/clubService";
 
 type ReportType = "periodic" | "post_event";
-type SubmissionStatus =
-  | "draft"
-  | "pending_approval"
-  | "approved"
-  | "rejected"
-  | "submitted";
+type ReportStatusFilter =
+  | "OVERDUE"
+  | "UNSUBMITTED"
+  | "DRAFT"
+  | "PENDING_CLUB"
+  | "APPROVED_CLUB"
+  | "REJECTED_CLUB"
+  | "UPDATED_PENDING_CLUB"
+  | "PENDING_UNIVERSITY"
+  | "APPROVED_UNIVERSITY"
+  | "REJECTED_UNIVERSITY"
+  | "RESUBMITTED_UNIVERSITY";
 
 interface ReportRequest {
   request_id: string;
@@ -122,7 +132,6 @@ interface ReportSubmission {
   created_at: string;
   updated_at: string;
   submitted_at?: string;
-  status: SubmissionStatus;
   content: string;
   attachments?: Array<{
     name: string;
@@ -201,6 +210,36 @@ const reportStatusColors: Record<string, string> = {
   RESUBMITTED_UNIVERSITY: "bg-blue-100 text-blue-700",
 };
 
+// Ordered list of report statuses for dropdown filter
+const reportStatusFilterOptions: ReportStatusFilter[] = [
+  "OVERDUE",
+  "UNSUBMITTED",
+  "DRAFT",
+  "PENDING_CLUB",
+  "APPROVED_CLUB",
+  "REJECTED_CLUB",
+  "UPDATED_PENDING_CLUB",
+  "PENDING_UNIVERSITY",
+  "APPROVED_UNIVERSITY",
+  "REJECTED_UNIVERSITY",
+  "RESUBMITTED_UNIVERSITY",
+];
+
+// Status labels for filter dropdown (includes UNSUBMITTED and OVERDUE)
+const reportStatusFilterLabels: Record<ReportStatusFilter, string> = {
+  OVERDUE: "Quá hạn",
+  UNSUBMITTED: "Chưa nộp",
+  DRAFT: "Bản nháp",
+  PENDING_CLUB: "Chờ phê duyệt CLB",
+  APPROVED_CLUB: "Đã duyệt CLB",
+  REJECTED_CLUB: "Bị từ chối CLB",
+  UPDATED_PENDING_CLUB: "Đã cập nhật - Chờ phê duyệt CLB",
+  PENDING_UNIVERSITY: "Chờ phê duyệt nhà trường",
+  APPROVED_UNIVERSITY: "Đã duyệt nhà trường",
+  REJECTED_UNIVERSITY: "Bị từ chối nhà trường",
+  RESUBMITTED_UNIVERSITY: "Đã nộp lại nhà trường",
+};
+
 export function ClubReportManagement() {
   const params = useParams();
   const clubIdParam = params.clubId;
@@ -276,7 +315,7 @@ export function ClubReportManagement() {
   >(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [semesterFilter, setSemesterFilter] = useState<string>("all");
-  const [statusFilter, setStatusFilter] = useState<SubmissionStatus | "all">(
+  const [statusFilter, setStatusFilter] = useState<ReportStatusFilter | "all">(
     "all"
   );
   const [currentPage, setCurrentPage] = useState(1);
@@ -291,6 +330,15 @@ export function ClubReportManagement() {
   const [reportRequests, setReportRequests] = useState<ReportRequest[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [semesters, setSemesters] = useState<SemesterDTO[]>([]);
+  const [, setLoadingSemesters] = useState(false);
+  const [totalPages, setTotalPages] = useState(1);
+  const [, setTotalElements] = useState(0);
+  const [, setHasNext] = useState(false);
+  const [, setHasPrevious] = useState(false);
+
+  // Debounce search query to avoid too many API calls
+  const debouncedSearchQuery = useDebounce(searchQuery, 500);
   const [submitting, setSubmitting] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
   const [submittingReport, setSubmittingReport] = useState(false);
@@ -305,25 +353,67 @@ export function ClubReportManagement() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editFileInputRef = useRef<HTMLInputElement>(null);
 
-  // Fetch report requirements from API
+  // Fetch semesters from API
+  useEffect(() => {
+    const fetchSemesters = async () => {
+      if (!clubId) {
+        return;
+      }
+
+      try {
+        setLoadingSemesters(true);
+        const response = await clubService.getSemesters(clubId);
+        if (response.data) {
+          setSemesters(response.data);
+        }
+      } catch (err) {
+        console.error("Error fetching semesters:", err);
+        // Don't show error toast for semesters as it's not critical
+      } finally {
+        setLoadingSemesters(false);
+      }
+    };
+
+    fetchSemesters();
+  }, [clubId]);
+
+  // Fetch report requirements from API with filters and pagination
   useEffect(() => {
     const fetchReportRequirements = async () => {
-      if (!clubId) {
-        setError("Club ID not found");
+      if (!clubId || activeTab !== "requests") {
         return;
       }
 
       try {
         setLoading(true);
         setError(null);
-        const requirements = await getClubReportRequirementsForOfficer(clubId);
+
+        // Build filter request
+        const filterRequest: ClubReportRequirementFilterRequest = {
+          page: currentPage,
+          size: pageSize,
+          sort: ["createdAt,desc"],
+          keyword: debouncedSearchQuery || undefined,
+          status: statusFilter !== "all" ? statusFilter : undefined,
+          semesterId:
+            semesterFilter !== "all" ? Number(semesterFilter) : undefined,
+        };
+
+        const response = await getClubReportRequirementsForOfficerWithFilters(
+          clubId,
+          filterRequest
+        );
 
         // Map API response to ReportRequest format
-        const mappedRequests: ReportRequest[] = requirements.map((req) =>
+        const mappedRequests: ReportRequest[] = response.content.map((req) =>
           mapRequirementToReportRequest(req)
         );
 
         setReportRequests(mappedRequests);
+        setTotalPages(response.totalPages);
+        setTotalElements(response.totalElements);
+        setHasNext(response.hasNext);
+        setHasPrevious(response.hasPrevious);
       } catch (err) {
         console.error("Error fetching report requirements:", err);
         const errorMessage =
@@ -337,10 +427,16 @@ export function ClubReportManagement() {
       }
     };
 
-    if (activeTab === "requests") {
-      fetchReportRequirements();
-    }
-  }, [clubId, activeTab]);
+    fetchReportRequirements();
+  }, [
+    clubId,
+    activeTab,
+    currentPage,
+    pageSize,
+    debouncedSearchQuery,
+    statusFilter,
+    semesterFilter,
+  ]);
 
   // Fetch my reports when submissions tab is active
   useEffect(() => {
@@ -448,99 +544,21 @@ export function ClubReportManagement() {
   const [loadingMyReports, setLoadingMyReports] = useState(false);
   const [loadingAllClubReports, setLoadingAllClubReports] = useState(false);
 
-  const [reportSubmissions] = useState<ReportSubmission[]>([
-    {
-      submission_id: "1",
-      request_id: "2",
-      report_type: "post_event",
-      title: "Báo cáo hậu sự kiện: Workshop React Advanced",
-      event_name: "Workshop React Advanced",
-      created_by_name: "Trần Thị B",
-      created_by_id: "102",
-      created_at: "2024-10-28T09:15:00Z",
-      updated_at: "2024-10-28T15:45:00Z",
-      submitted_at: "2024-10-29T10:00:00Z",
-      status: "approved",
-      content:
-        "Workshop React Advanced diễn ra vào ngày 28/10/2024 tại phòng A101.\n\nSố lượng: 80 sinh viên tham dự\nSpeaker: Đỗ Minh Hải (Senior Developer)\n\nFeedback:\n- Nội dung hay: 9/10\n- Chất lượng trình bày: 8.5/10\n- Đội ngũ tổ chức: 9/10",
-      approval_notes: "Báo cáo đầy đủ và chất lượng",
-      approved_by: "Phòng Quản lý Sinh viên",
-    },
-    {
-      submission_id: "2",
-      request_id: "3",
-      report_type: "periodic",
-      title: "Báo cáo hoạt động tháng 10/2024",
-      period_month: "10/2024",
-      created_by_name: "Nguyễn Văn A",
-      created_by_id: "101",
-      created_at: "2024-10-25T10:30:00Z",
-      updated_at: "2024-10-25T10:30:00Z",
-      submitted_at: "2024-10-30T14:20:00Z",
-      status: "submitted",
-      content:
-        "Trong tháng 10/2024, câu lạc bộ đã tổ chức được 3 sự kiện chính:\n1. Workshop: Giới thiệu Machine Learning cơ bản\n2. Hội thảo: Careers in AI industry\n3. Networking event với các công ty công nghệ\n\nTổng cộng 150 thành viên tham gia các hoạt động.",
-    },
-  ]);
-
-  // Extract unique semesters/periods from requests and submissions
+  // Use semesters from API, sorted by startDate descending (most recent first)
   const availableSemesters = useMemo(() => {
-    const semesters = new Set<string>();
-
-    // From requests - extract from deadline
-    reportRequests.forEach((request) => {
-      const date = new Date(request.deadline);
-      const semester = `${date.getMonth() + 1}/${date.getFullYear()}`;
-      semesters.add(semester);
+    return [...semesters].sort((a, b) => {
+      const dateA = new Date(a.startDate);
+      const dateB = new Date(b.startDate);
+      return dateB.getTime() - dateA.getTime();
     });
-
-    // From submissions - extract from period_month or created_at
-    reportSubmissions.forEach((submission) => {
-      if (submission.period_month) {
-        semesters.add(submission.period_month);
-      } else {
-        const date = new Date(submission.created_at);
-        const semester = `${date.getMonth() + 1}/${date.getFullYear()}`;
-        semesters.add(semester);
-      }
-    });
-
-    return Array.from(semesters).sort().reverse(); // Most recent first
-  }, [reportRequests, reportSubmissions]);
-
-  const filteredRequests = useMemo(() => {
-    return reportRequests.filter((request) => {
-      const matchesSearch =
-        request.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        request.description.toLowerCase().includes(searchQuery.toLowerCase());
-
-      // Filter by semester
-      if (semesterFilter !== "all") {
-        const requestDate = new Date(request.deadline);
-        const requestSemester = `${
-          requestDate.getMonth() + 1
-        }/${requestDate.getFullYear()}`;
-        if (requestSemester !== semesterFilter) {
-          return false;
-        }
-      }
-
-      return matchesSearch;
-    });
-  }, [reportRequests, searchQuery, semesterFilter]);
-
-  // Calculate pagination
-  const totalPages = Math.ceil(filteredRequests.length / pageSize);
-  const paginatedRequests = useMemo(() => {
-    const startIndex = (currentPage - 1) * pageSize;
-    const endIndex = startIndex + pageSize;
-    return filteredRequests.slice(startIndex, endIndex);
-  }, [filteredRequests, currentPage, pageSize]);
+  }, [semesters]);
 
   // Reset to page 1 when search or filter changes
   useEffect(() => {
-    setCurrentPage(1);
-  }, [searchQuery, semesterFilter]);
+    if (activeTab === "requests") {
+      setCurrentPage(1);
+    }
+  }, [debouncedSearchQuery, semesterFilter, statusFilter, activeTab]);
 
   // Filter my reports
   const filteredMyReports = useMemo(() => {
@@ -550,40 +568,31 @@ export function ClubReportManagement() {
         (report.content?.toLowerCase().includes(searchQuery.toLowerCase()) ??
           false);
 
-      // Filter by status - map backend status to frontend status
+      // Filter by semester
+      if (semesterFilter !== "all") {
+        if (
+          !report.semester ||
+          report.semester.id.toString() !== semesterFilter
+        ) {
+          return false;
+        }
+      }
+
+      // Filter by status
       if (statusFilter !== "all") {
+        // OVERDUE and UNSUBMITTED don't apply to reports tab (reports are already submitted)
+        if (statusFilter === "OVERDUE" || statusFilter === "UNSUBMITTED") {
+          return false;
+        }
         const reportStatus = report.status?.toUpperCase();
-        if (statusFilter === "draft" && reportStatus !== "DRAFT") return false;
-        if (
-          statusFilter === "pending_approval" &&
-          reportStatus !== "PENDING_CLUB" &&
-          reportStatus !== "PENDING_UNIVERSITY"
-        )
+        if (reportStatus !== statusFilter) {
           return false;
-        if (
-          statusFilter === "approved" &&
-          reportStatus !== "APPROVED_CLUB" &&
-          reportStatus !== "APPROVED_UNIVERSITY"
-        )
-          return false;
-        if (
-          statusFilter === "rejected" &&
-          reportStatus !== "REJECTED_CLUB" &&
-          reportStatus !== "REJECTED_UNIVERSITY"
-        )
-          return false;
-        if (
-          statusFilter === "submitted" &&
-          reportStatus !== "PENDING_CLUB" &&
-          reportStatus !== "PENDING_UNIVERSITY" &&
-          reportStatus !== "RESUBMITTED_UNIVERSITY"
-        )
-          return false;
+        }
       }
 
       return matchesSearch;
     });
-  }, [myReports, searchQuery, statusFilter]);
+  }, [myReports, searchQuery, statusFilter, semesterFilter]);
 
   // Filter all club reports
   const filteredAllClubReports = useMemo(() => {
@@ -593,40 +602,31 @@ export function ClubReportManagement() {
         (report.content?.toLowerCase().includes(searchQuery.toLowerCase()) ??
           false);
 
+      // Filter by semester
+      if (semesterFilter !== "all") {
+        if (
+          !report.semester ||
+          report.semester.id.toString() !== semesterFilter
+        ) {
+          return false;
+        }
+      }
+
       // Filter by status
       if (statusFilter !== "all") {
+        // OVERDUE and UNSUBMITTED don't apply to reports tab (reports are already submitted)
+        if (statusFilter === "OVERDUE" || statusFilter === "UNSUBMITTED") {
+          return false;
+        }
         const reportStatus = report.status?.toUpperCase();
-        if (statusFilter === "draft" && reportStatus !== "DRAFT") return false;
-        if (
-          statusFilter === "pending_approval" &&
-          reportStatus !== "PENDING_CLUB" &&
-          reportStatus !== "PENDING_UNIVERSITY"
-        )
+        if (reportStatus !== statusFilter) {
           return false;
-        if (
-          statusFilter === "approved" &&
-          reportStatus !== "APPROVED_CLUB" &&
-          reportStatus !== "APPROVED_UNIVERSITY"
-        )
-          return false;
-        if (
-          statusFilter === "rejected" &&
-          reportStatus !== "REJECTED_CLUB" &&
-          reportStatus !== "REJECTED_UNIVERSITY"
-        )
-          return false;
-        if (
-          statusFilter === "submitted" &&
-          reportStatus !== "PENDING_CLUB" &&
-          reportStatus !== "PENDING_UNIVERSITY" &&
-          reportStatus !== "RESUBMITTED_UNIVERSITY"
-        )
-          return false;
+        }
       }
 
       return matchesSearch;
     });
-  }, [allClubReports, searchQuery, statusFilter]);
+  }, [allClubReports, searchQuery, statusFilter, semesterFilter]);
 
   const isDeadlinePassed = (deadline: string) =>
     new Date(deadline) < new Date();
@@ -679,7 +679,11 @@ export function ClubReportManagement() {
           fileUrl: draftFile ? undefined : draftFileUrl || undefined, // Chỉ dùng fileUrl cũ nếu không có file mới
         };
 
-        await updateReport(editingReportId, updateRequest, draftFile || undefined);
+        await updateReport(
+          editingReportId,
+          updateRequest,
+          draftFile || undefined
+        );
         toast.success("Báo cáo đã được cập nhật thành công");
       } else {
         // Create new draft - cần có requestId
@@ -821,8 +825,11 @@ export function ClubReportManagement() {
                 <SelectContent>
                   <SelectItem value="all">Tất cả kỳ</SelectItem>
                   {availableSemesters.map((semester) => (
-                    <SelectItem key={semester} value={semester}>
-                      {semester}
+                    <SelectItem
+                      key={semester.id}
+                      value={semester.id.toString()}
+                    >
+                      {semester.semesterName}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -830,7 +837,7 @@ export function ClubReportManagement() {
               <Select
                 value={statusFilter}
                 onValueChange={(value) =>
-                  setStatusFilter(value as SubmissionStatus | "all")
+                  setStatusFilter(value as ReportStatusFilter | "all")
                 }
               >
                 <SelectTrigger className="w-full sm:w-[180px]">
@@ -838,13 +845,11 @@ export function ClubReportManagement() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Tất cả trạng thái</SelectItem>
-                  <SelectItem value="draft">Bản nháp</SelectItem>
-                  <SelectItem value="pending_approval">
-                    Chờ phê duyệt
-                  </SelectItem>
-                  <SelectItem value="approved">Đã phê duyệt</SelectItem>
-                  <SelectItem value="rejected">Bị từ chối</SelectItem>
-                  <SelectItem value="submitted">Đã nộp</SelectItem>
+                  {reportStatusFilterOptions.map((status) => (
+                    <SelectItem key={status} value={status}>
+                      {reportStatusFilterLabels[status]}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -869,7 +874,7 @@ export function ClubReportManagement() {
             {/* Request Cards */}
             {!loading && !error && (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {paginatedRequests.map((request) => {
+                {reportRequests.map((request) => {
                   const isDeadlineExp = isDeadlinePassed(request.deadline);
 
                   return (
@@ -902,12 +907,16 @@ export function ClubReportManagement() {
                                   request.status ||
                                   "Chưa nộp"}
                               </Badge>
-                              {/* Badge "phải nộp lại" khi mustResubmit = true */}
-                              {request.report?.mustResubmit === true && (
-                                <Badge className="bg-orange-100 text-orange-700 border border-orange-300 font-semibold">
-                                  Phải nộp lại
-                                </Badge>
-                              )}
+                              {/* Badge "phải nộp lại" khi mustResubmit = true, nhưng ẩn khi status là PENDING_UNIVERSITY hoặc RESUBMITTED_UNIVERSITY */}
+                              {request.report?.mustResubmit === true &&
+                                request.status?.toUpperCase() !==
+                                  "PENDING_UNIVERSITY" &&
+                                request.status?.toUpperCase() !==
+                                  "RESUBMITTED_UNIVERSITY" && (
+                                  <Badge className="bg-orange-100 text-orange-700 border border-orange-300 font-semibold">
+                                    Phải nộp lại
+                                  </Badge>
+                                )}
                             </div>
                             <CardTitle className="text-lg mb-1">
                               {request.title}
@@ -1158,7 +1167,7 @@ export function ClubReportManagement() {
               </div>
             )}
 
-            {!loading && !error && filteredRequests.length === 0 && (
+            {!loading && !error && reportRequests.length === 0 && (
               <div className="text-center py-12">
                 <FileText className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
                 <p className="text-muted-foreground">
@@ -1170,7 +1179,7 @@ export function ClubReportManagement() {
             {/* Pagination */}
             {!loading &&
               !error &&
-              filteredRequests.length > 0 &&
+              reportRequests.length > 0 &&
               totalPages > 1 && (
                 <div className="mt-8 flex justify-center">
                   <Pagination>
@@ -1319,8 +1328,11 @@ export function ClubReportManagement() {
                 <SelectContent>
                   <SelectItem value="all">Tất cả kỳ</SelectItem>
                   {availableSemesters.map((semester) => (
-                    <SelectItem key={semester} value={semester}>
-                      {semester}
+                    <SelectItem
+                      key={semester.id}
+                      value={semester.id.toString()}
+                    >
+                      {semester.semesterName}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -1328,7 +1340,7 @@ export function ClubReportManagement() {
               <Select
                 value={statusFilter}
                 onValueChange={(value) =>
-                  setStatusFilter(value as SubmissionStatus | "all")
+                  setStatusFilter(value as ReportStatusFilter | "all")
                 }
               >
                 <SelectTrigger className="w-full sm:w-[180px]">
@@ -1336,13 +1348,11 @@ export function ClubReportManagement() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Tất cả trạng thái</SelectItem>
-                  <SelectItem value="draft">Bản nháp</SelectItem>
-                  <SelectItem value="pending_approval">
-                    Chờ phê duyệt
-                  </SelectItem>
-                  <SelectItem value="approved">Đã phê duyệt</SelectItem>
-                  <SelectItem value="rejected">Bị từ chối</SelectItem>
-                  <SelectItem value="submitted">Đã nộp</SelectItem>
+                  {reportStatusFilterOptions.map((status) => (
+                    <SelectItem key={status} value={status}>
+                      {reportStatusFilterLabels[status]}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -1548,8 +1558,11 @@ export function ClubReportManagement() {
                 <SelectContent>
                   <SelectItem value="all">Tất cả kỳ</SelectItem>
                   {availableSemesters.map((semester) => (
-                    <SelectItem key={semester} value={semester}>
-                      {semester}
+                    <SelectItem
+                      key={semester.id}
+                      value={semester.id.toString()}
+                    >
+                      {semester.semesterName}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -1557,7 +1570,7 @@ export function ClubReportManagement() {
               <Select
                 value={statusFilter}
                 onValueChange={(value) =>
-                  setStatusFilter(value as SubmissionStatus | "all")
+                  setStatusFilter(value as ReportStatusFilter | "all")
                 }
               >
                 <SelectTrigger className="w-full sm:w-[180px]">
@@ -1565,13 +1578,11 @@ export function ClubReportManagement() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Tất cả trạng thái</SelectItem>
-                  <SelectItem value="draft">Bản nháp</SelectItem>
-                  <SelectItem value="pending_approval">
-                    Chờ phê duyệt
-                  </SelectItem>
-                  <SelectItem value="approved">Đã phê duyệt</SelectItem>
-                  <SelectItem value="rejected">Bị từ chối</SelectItem>
-                  <SelectItem value="submitted">Đã nộp</SelectItem>
+                  {reportStatusFilterOptions.map((status) => (
+                    <SelectItem key={status} value={status}>
+                      {reportStatusFilterLabels[status]}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -1731,12 +1742,16 @@ export function ClubReportManagement() {
                         selectedReportDetail.status?.toUpperCase() || "DRAFT"
                       ] || "Bản nháp"}
                     </Badge>
-                    {/* Badge "phải nộp lại" khi mustResubmit = true */}
-                    {selectedReportDetail.mustResubmit && (
-                      <Badge className="bg-orange-100 text-orange-700 border border-orange-300">
-                        Phải nộp lại
-                      </Badge>
-                    )}
+                    {/* Badge "phải nộp lại" khi mustResubmit = true, nhưng ẩn khi status là PENDING_UNIVERSITY hoặc RESUBMITTED_UNIVERSITY */}
+                    {selectedReportDetail.mustResubmit &&
+                      selectedReportDetail.status?.toUpperCase() !==
+                        "PENDING_UNIVERSITY" &&
+                      selectedReportDetail.status?.toUpperCase() !==
+                        "RESUBMITTED_UNIVERSITY" && (
+                        <Badge className="bg-orange-100 text-orange-700 border border-orange-300">
+                          Phải nộp lại
+                        </Badge>
+                      )}
                   </div>
                 </div>
                 <Button
@@ -2863,10 +2878,16 @@ export function ClubReportManagement() {
                             const updateRequest: UpdateReportRequest = {
                               reportTitle: draftTitle,
                               content: draftContent,
-                              fileUrl: draftFile ? undefined : draftFileUrl || undefined, // Chỉ dùng fileUrl cũ nếu không có file mới
+                              fileUrl: draftFile
+                                ? undefined
+                                : draftFileUrl || undefined, // Chỉ dùng fileUrl cũ nếu không có file mới
                             };
 
-                            await updateReport(editingReportId, updateRequest, draftFile || undefined);
+                            await updateReport(
+                              editingReportId,
+                              updateRequest,
+                              draftFile || undefined
+                            );
                             toast.success(
                               "Báo cáo đã được cập nhật thành công"
                             );
@@ -2974,9 +2995,15 @@ export function ClubReportManagement() {
                             const updateRequest: UpdateReportRequest = {
                               reportTitle: draftTitle,
                               content: draftContent,
-                              fileUrl: draftFile ? undefined : draftFileUrl || undefined, // Chỉ dùng fileUrl cũ nếu không có file mới
+                              fileUrl: draftFile
+                                ? undefined
+                                : draftFileUrl || undefined, // Chỉ dùng fileUrl cũ nếu không có file mới
                             };
-                            await updateReport(reportIdToSubmit, updateRequest, draftFile || undefined);
+                            await updateReport(
+                              reportIdToSubmit,
+                              updateRequest,
+                              draftFile || undefined
+                            );
 
                             // Lấy trạng thái hiện tại của report sau khi update
                             const currentReport =
@@ -3343,10 +3370,16 @@ export function ClubReportManagement() {
                             const updateRequest: UpdateReportRequest = {
                               reportTitle: draftTitle,
                               content: draftContent,
-                              fileUrl: draftFile ? undefined : draftFileUrl || undefined, // Chỉ dùng fileUrl cũ nếu không có file mới
+                              fileUrl: draftFile
+                                ? undefined
+                                : draftFileUrl || undefined, // Chỉ dùng fileUrl cũ nếu không có file mới
                             };
 
-                            await updateReport(editingReportId, updateRequest, draftFile || undefined);
+                            await updateReport(
+                              editingReportId,
+                              updateRequest,
+                              draftFile || undefined
+                            );
 
                             // Submit the report (resubmit)
                             // If resubmitting from REJECTED_UNIVERSITY, it will go to RESUBMITTED_UNIVERSITY
@@ -3453,7 +3486,9 @@ export function ClubReportManagement() {
                                   const updateRequest: UpdateReportRequest = {
                                     reportTitle: draftTitle,
                                     content: draftContent,
-                                    fileUrl: draftFile ? undefined : draftFileUrl || undefined, // Chỉ dùng fileUrl cũ nếu không có file mới
+                                    fileUrl: draftFile
+                                      ? undefined
+                                      : draftFileUrl || undefined, // Chỉ dùng fileUrl cũ nếu không có file mới
                                   };
                                   await updateReport(
                                     editingReportId,
