@@ -113,7 +113,7 @@ export default function RequestDetail() {
   const [fileObj, setFileObj] = useState<File | null>(null);
 
   const fmt = (iso?: string | null) => (iso ? new Date(iso).toLocaleString("vi-VN") : "—");
-
+  void reason;
   const reload = async () => {
     const rs = await requestsApi.getDetail(id);
     const data = (rs as any).data ?? rs?.data ?? rs;

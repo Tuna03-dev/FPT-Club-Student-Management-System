@@ -41,7 +41,6 @@ export default function TeamNewsEditor() {
   const [newsType, setNewsType] = useState("")
   const [saving, setSaving] = useState(false)
   const [errors, setErrors] = useState<FormErrors>({})
-
   // lấy draftId từ query
   useEffect(() => {
     const p = new URLSearchParams(window.location.search)
@@ -157,6 +156,7 @@ export default function TeamNewsEditor() {
   }
 
   const goBack = () => nav(-1)
+  void fileObj
 
   return (
     <div className="min-h-screen bg-background">
