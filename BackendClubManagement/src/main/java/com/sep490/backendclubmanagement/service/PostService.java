@@ -41,6 +41,18 @@ public class PostService {
         Page<Post> page = postRepository.findTeamPosts(clubId, teamId, "PUBLISHED", pageable);
         return page.map(this::toDetailsDTO);
     }
+
+    // Bài chờ duyệt toàn CLB (club-wide pending)
+    public Page<PostWithRelationsData> getPendingClubWidePosts(Long clubId, Pageable pageable) {
+        Page<Post> page = postRepository.findPendingClubWidePosts(clubId, PostStatus.PENDING, pageable);
+        return page.map(this::toDetailsDTO);
+    }
+
+    // Bài chờ duyệt theo team
+    public Page<PostWithRelationsData> getPendingTeamPosts(Long clubId, Long teamId, Pageable pageable) {
+        Page<Post> page = postRepository.findPendingTeamPosts(clubId, teamId, PostStatus.PENDING, pageable);
+        return page.map(this::toDetailsDTO);
+    }
     // search
     public Page<PostWithRelationsData> searchPosts(
             Long clubId, Long teamId, Boolean clubWide, String keyword, Pageable pageable

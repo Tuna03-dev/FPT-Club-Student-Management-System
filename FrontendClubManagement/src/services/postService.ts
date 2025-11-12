@@ -33,17 +33,34 @@ export interface PostWithRelationsData {
   withinClub: boolean;
   clubWide: boolean;
   createdAt: string;
-  
+
   teamId?: number;
   teamName?: string;
   clubId: number;
   clubName: string;
   authorId: number;
   authorName: string;
-  
+
   comments: CommentData[];
   likes: LikeData[];
   media: PostMediaData[];
+}
+
+export interface PostDTO {
+  id: number;
+  content: string;
+  status: string; // PENDING, APPROVED, REJECTED
+  createdAt: string;
+  updatedAt: string;
+  author: {
+    id: number;
+    fullName: string;
+    avatarUrl?: string;
+    roleName?: string;
+  };
+  mediaUrls?: string[];
+  clubId: number;
+  teamId?: number;
 }
 
 export interface CreatePostRequest {
@@ -96,17 +113,17 @@ interface SpringPageResponse<T> {
     paged: boolean;
     unpaged: boolean;
   };
-  last: boolean;          // ✅ Quan trọng: true nếu là trang cuối
+  last: boolean; // ✅ Quan trọng: true nếu là trang cuối
   totalElements: number;
   totalPages: number;
   size: number;
-  number: number;         // ✅ Page number hiện tại
+  number: number; // ✅ Page number hiện tại
   sort: {
     empty: boolean;
     sorted: boolean;
     unsorted: boolean;
   };
-  first: boolean;         // ✅ true nếu là trang đầu
+  first: boolean; // ✅ true nếu là trang đầu
   numberOfElements: number;
   empty: boolean;
 }
@@ -137,22 +154,41 @@ export const postService = {
       size?: number;
       sort?: string;
     } = {}
-  ): Promise<ApiResponse<{ content: PostWithRelationsData[]; totalElements: number; totalPages: number; hasNext: boolean; hasPrevious: boolean }>> {
+  ): Promise<
+    ApiResponse<{
+      content: PostWithRelationsData[];
+      totalElements: number;
+      totalPages: number;
+      hasNext: boolean;
+      hasPrevious: boolean;
+    }>
+  > {
     const query = new URLSearchParams();
     query.set("page", String(params.page ?? 0));
     query.set("size", String(params.size ?? 10));
     query.set("sort", params.sort ?? "createdAt,desc");
 
-    return axiosClient.get(`/posts/${clubId}/teams/${teamId}?${query.toString()}`);
+    return axiosClient.get(
+      `/posts/${clubId}/teams/${teamId}?${query.toString()}`
+    );
   },
 
   // Search posts
-  async searchPosts(params: PostSearchParams): Promise<ApiResponse<{ content: PostWithRelationsData[]; totalElements: number; totalPages: number; hasNext: boolean; hasPrevious: boolean }>> {
+  async searchPosts(params: PostSearchParams): Promise<
+    ApiResponse<{
+      content: PostWithRelationsData[];
+      totalElements: number;
+      totalPages: number;
+      hasNext: boolean;
+      hasPrevious: boolean;
+    }>
+  > {
     const query = new URLSearchParams();
     query.set("q", params.q);
     if (params.clubId) query.set("clubId", String(params.clubId));
     if (params.teamId) query.set("teamId", String(params.teamId));
-    if (params.clubWide !== undefined) query.set("clubWide", String(params.clubWide));
+    if (params.clubWide !== undefined)
+      query.set("clubWide", String(params.clubWide));
     query.set("page", String(params.page ?? 0));
     query.set("size", String(params.size ?? 10));
     query.set("sort", params.sort ?? "createdAt,desc");
@@ -167,22 +203,22 @@ export const postService = {
     onProgress?: (progress: number) => void
   ): Promise<ApiResponse<PostWithRelationsData>> {
     const formData = new FormData();
-    
+
     // Create a Blob for the JSON request with correct content-type
     const requestBlob = new Blob([JSON.stringify(request)], {
       type: "application/json",
     });
     formData.append("request", requestBlob, "request.json");
-    
+
     // Append files
     if (files && files.length > 0) {
-      files.forEach(file => {
+      files.forEach((file) => {
         formData.append("files", file);
       });
     }
 
     // Config cho upload: timeout dài + progress (kiểu AxiosRequestConfig)
-    const config: import('axios').AxiosRequestConfig = {
+    const config: import("axios").AxiosRequestConfig = {
       timeout: 300000, // 5 phút - adjust nếu cần
       onUploadProgress: (progressEvent) => {
         if (progressEvent.total && onProgress) {
@@ -205,16 +241,16 @@ export const postService = {
     files?: File[]
   ): Promise<ApiResponse<PostWithRelationsData>> {
     const formData = new FormData();
-    
+
     // Create a Blob for the JSON request with correct content-type
     const requestBlob = new Blob([JSON.stringify(request)], {
       type: "application/json",
     });
     formData.append("request", requestBlob, "request.json");
-    
+
     // Append files
     if (files && files.length > 0) {
-      files.forEach(file => {
+      files.forEach((file) => {
         formData.append("files", file);
       });
     }
@@ -229,8 +265,65 @@ export const postService = {
   },
 
   // Delete media from post
-  async deleteMedia(postId: number, mediaId: number): Promise<ApiResponse<PostWithRelationsData>> {
+  async deleteMedia(
+    postId: number,
+    mediaId: number
+  ): Promise<ApiResponse<PostWithRelationsData>> {
     return axiosClient.delete(`/posts/delete/${postId}/media/${mediaId}`);
+  },
+
+  // Get pending club-wide posts (with pagination)
+  async getPendingClubWidePosts(
+    clubId: number,
+    params: {
+      page?: number;
+      size?: number;
+      sort?: string;
+    } = {}
+  ): Promise<ApiResponse<SpringPageResponse<PostWithRelationsData>>> {
+    const query = new URLSearchParams();
+    query.set("page", String(params.page ?? 0));
+    query.set("size", String(params.size ?? 5));
+    query.set("sort", params.sort ?? "createdAt,desc");
+
+    return axiosClient.get(
+      `/posts/${clubId}/club-wide/pending?${query.toString()}`
+    );
+  },
+
+  // Get pending team posts (with pagination)
+  async getPendingTeamPosts(
+    clubId: number,
+    teamId: number,
+    params: {
+      page?: number;
+      size?: number;
+      sort?: string;
+    } = {}
+  ): Promise<ApiResponse<SpringPageResponse<PostWithRelationsData>>> {
+    const query = new URLSearchParams();
+    query.set("page", String(params.page ?? 0));
+    query.set("size", String(params.size ?? 5));
+    query.set("sort", params.sort ?? "createdAt,desc");
+
+    return axiosClient.get(
+      `/posts/${clubId}/teams/${teamId}/pending?${query.toString()}`
+    );
+  },
+
+  // Approve post
+  async approvePost(postId: number): Promise<ApiResponse<null>> {
+    return axiosClient.post(`/posts/${postId}/approve`);
+  },
+
+  // Reject post
+  async rejectPost(
+    postId: number,
+    reason?: string
+  ): Promise<ApiResponse<null>> {
+    return axiosClient.post(`/posts/${postId}/reject`, {
+      reason: reason || "",
+    });
   },
 };
 

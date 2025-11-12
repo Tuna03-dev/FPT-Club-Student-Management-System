@@ -14,6 +14,7 @@ export interface ClubPermissions {
  * Hook to check if user has permissions to manage club
  * Requires:
  * - User must be an ACTIVE member of the club
+ * - User must have CLUB_OFFICER club role in the current semester
  * - User must have CLUB_PRESIDENT club role in the current semester
  *
  * Sử dụng role data từ localStorage (clubRoleList) để check quyền nhanh hơn
@@ -41,6 +42,7 @@ export function useClubPermissions(
   // Check if user is a member of this club
   const isClubMember = useMemo(() => !!clubRole, [clubRole]);
 
+
   // Check if user has CLUB_PRESIDENT role in this club
   const isClubPresident = useMemo(() => {
     if (!clubRole) return false;
@@ -60,6 +62,8 @@ export function useClubPermissions(
 
     return isOfficer;
   }, [clubRole]);
+
+  // User has permission if they have CLUB_OFFICER role in this club
 
   // User has permission if they have CLUB_PRESIDENT role in this club
   const hasPermission = useMemo(() => isClubPresident, [isClubPresident]);

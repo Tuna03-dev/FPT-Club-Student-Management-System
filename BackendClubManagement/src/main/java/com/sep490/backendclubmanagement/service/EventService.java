@@ -19,6 +19,7 @@ import com.sep490.backendclubmanagement.mapper.EventMapper;
 import com.sep490.backendclubmanagement.repository.ClubMemberShipRepository;
 import com.sep490.backendclubmanagement.repository.EventAttendanceRepository;
 import com.sep490.backendclubmanagement.repository.EventMediaRepository;
+import com.sep490.backendclubmanagement.entity.EventMedia;
 import com.sep490.backendclubmanagement.repository.EventRepository;
 import com.sep490.backendclubmanagement.repository.UserRepository;
 import com.sep490.backendclubmanagement.shared.ModelMapperUtils;
@@ -32,7 +33,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.data.domain.Page;
 
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -56,11 +56,10 @@ public class EventService {
                 .toList()
                 : List.of();
 
-        // 2️⃣ Lấy dữ liệu từ repository (lọc theo eventTypeId, clubId, thời gian, is_draft)
         Page<Event> page = this.eventRepository.getAllByFilter(request, request.getPageable());
         List<Event> events = page.getContent();
 
-        // 3️⃣ Nếu có keyword thì lọc tiếp ở tầng Java
+
         if (!keywords.isEmpty()) {
             events = events.stream()
                     .filter(event -> {
@@ -78,20 +77,20 @@ public class EventService {
                     .toList();
         }
 
-        // 4️⃣ Map sang DTO
+
         List<EventData> list = events.stream()
                 .map(event -> {
                     EventData dto = eventMapper.toDto(event);
-                    dto.setMediaUrls(eventMediaRepository.findMediaUrlsByEventId(event.getId()));
                     dto.setClubId(event.getClub() != null ? event.getClub().getId() : null);
                     return dto;
                 })
                 .toList();
+        setMediaUrlsAndTypesBatch(list, events.stream().map(Event::getId).toList());
 
-        // 5️⃣ Trả về kết quả
+
         return EventResponse.builder()
-                .total(page.getTotalElements())  // tổng số trong DB (chưa lọc keyword)
-                .count(list.size())              // số kết quả sau khi lọc keyword
+                .total(page.getTotalElements())
+                .count(list.size())
                 .data(list)
                 .build();
     }
@@ -101,13 +100,36 @@ public class EventService {
         return ModelMapperUtils.mapList(eventTypes, EventTypesDto.class);
     }
 
+    private void setMediaUrlsAndTypes(EventData dto, Long eventId) {
+        List<EventMedia> mediaList = eventMediaRepository.findByEventIdOrderByDisplayOrder(eventId);
+        dto.setMediaUrls(mediaList.stream().map(EventMedia::getMediaUrl).toList());
+        dto.setMediaTypes(mediaList.stream().map(m -> m.getMediaType() != null ? m.getMediaType().name() : "IMAGE").toList());
+        dto.setMediaIds(mediaList.stream().map(EventMedia::getId).toList());
+    }
+
+    private void setMediaUrlsAndTypesBatch(List<EventData> dtos, List<Long> eventIds) {
+        if (dtos == null || dtos.isEmpty() || eventIds == null || eventIds.isEmpty()) return;
+        List<EventMedia> allMedia = eventMediaRepository.findByEventIdInOrderByDisplayOrder(eventIds);
+        Map<Long, List<EventMedia>> byEventId = allMedia.stream()
+                .collect(Collectors.groupingBy(em -> em.getEvent().getId(), LinkedHashMap::new, Collectors.toList()));
+        Map<Long, EventData> dtoById = dtos.stream().collect(Collectors.toMap(EventData::getId, d -> d));
+        for (Map.Entry<Long, List<EventMedia>> entry : byEventId.entrySet()) {
+            EventData dto = dtoById.get(entry.getKey());
+            if (dto == null) continue;
+            List<EventMedia> mediaList = entry.getValue();
+            dto.setMediaUrls(mediaList.stream().map(EventMedia::getMediaUrl).toList());
+            dto.setMediaTypes(mediaList.stream().map(m -> m.getMediaType() != null ? m.getMediaType().name() : "IMAGE").toList());
+            dto.setMediaIds(mediaList.stream().map(EventMedia::getId).toList());
+        }
+    }
+
     public EventData getEventById(Long id) {
         Optional<Event> event = eventRepository.findById(id);
         if(event.isEmpty()){
             throw new NotFoundException("Event not found");
         }
         EventData dto = eventMapper.toDto(event.get());
-        dto.setMediaUrls(eventMediaRepository.findMediaUrlsByEventId(event.get().getId()));
+        setMediaUrlsAndTypes(dto, event.get().getId());
         return dto;
     }
 
@@ -116,45 +138,72 @@ public class EventService {
         return ModelMapperUtils.mapList(clubs, ClubDto.class);
     }
 
-    public List<EventData> getEventsByClubId(Long clubId, Long userId) {
+    public List<EventData> getEventsByClubId(Long clubId, Long userId, String startTime, String endTime) {
         if (!clubMemberShipRepository.existsByClubIdAndUserIdAndStatusActive(clubId, userId)) {
             throw new NotFoundException("You are not a member of this club or your membership is not active");
         }
-        return eventRepository.findByClubIdAndIsDraftFalse(clubId)
-                .stream()
+        LocalDateTime start = parseIsoDateTimeNullable(startTime);
+        LocalDateTime end = parseIsoDateTimeNullable(endTime);
+        List<Event> events = (start == null || end == null)
+                ? eventRepository.findByClubIdAndIsDraftFalse(clubId)
+                : eventRepository.findByClubIdAndIsDraftFalseInRange(clubId, start, end);
+        List<EventData> list = events.stream()
                 .map(event -> {
                     EventData dto = eventMapper.toDto(event);
-                    dto.setMediaUrls(eventMediaRepository.findMediaUrlsByEventId(event.getId()));
                     dto.setClubId(event.getClub() != null ? event.getClub().getId() : null);
                     return dto;
                 })
                 .toList();
+        setMediaUrlsAndTypesBatch(list, events.stream().map(Event::getId).toList());
+        return list;
     }
 
 
-    public List<EventData> getStaffAllEvents() {
-        return eventRepository.findStaffAllEventsExcludingMeeting()
-                .stream()
+    public List<EventData> getStaffAllEvents(String startTime, String endTime) {
+        LocalDateTime start = parseIsoDateTimeNullable(startTime);
+        LocalDateTime end = parseIsoDateTimeNullable(endTime);
+        List<Event> events = (start == null || end == null)
+                ? eventRepository.findStaffAllEventsExcludingMeeting()
+                : eventRepository.findStaffAllEventsExcludingMeetingInRange(start, end);
+        List<EventData> list = events.stream()
                 .map(event -> {
                     EventData dto = eventMapper.toDto(event);
-                    dto.setMediaUrls(eventMediaRepository.findMediaUrlsByEventId(event.getId()));
                     dto.setClubId(event.getClub() != null ? event.getClub().getId() : null);
                     return dto;
                 })
                 .toList();
+        setMediaUrlsAndTypesBatch(list, events.stream().map(Event::getId).toList());
+        return list;
     }
 
 
-    public List<EventData> getStaffEventsByClubId(Long clubId) {
-        return eventRepository.findStaffEventsByClubIdExcludingMeeting(clubId)
-                .stream()
+    public List<EventData> getStaffEventsByClubId(Long clubId, String startTime, String endTime) {
+        LocalDateTime start = parseIsoDateTimeNullable(startTime);
+        LocalDateTime end = parseIsoDateTimeNullable(endTime);
+        List<Event> events = (start == null || end == null)
+                ? eventRepository.findStaffEventsByClubIdExcludingMeeting(clubId)
+                : eventRepository.findStaffEventsByClubIdExcludingMeetingInRange(clubId, start, end);
+        List<EventData> list = events.stream()
                 .map(event -> {
                     EventData dto = eventMapper.toDto(event);
-                    dto.setMediaUrls(eventMediaRepository.findMediaUrlsByEventId(event.getId()));
                     dto.setClubId(event.getClub() != null ? event.getClub().getId() : null);
                     return dto;
                 })
                 .toList();
+        setMediaUrlsAndTypesBatch(list, events.stream().map(Event::getId).toList());
+        return list;
+    }
+
+    private LocalDateTime parseIsoDateTimeNullable(String value) {
+        if (value == null || value.isBlank()) return null;
+        try {
+            // Support ISO strings with 'Z' or timezone offset
+            java.time.OffsetDateTime odt = java.time.OffsetDateTime.parse(value);
+            return odt.toLocalDateTime();
+        } catch (java.time.format.DateTimeParseException ex) {
+            // Fallback to LocalDateTime without zone if provided
+            return LocalDateTime.parse(value);
+        }
     }
 
 
@@ -162,26 +211,36 @@ public class EventService {
         // Kiểm tra event tồn tại
         Event event = eventRepository.findById(eventId)
                 .orElseThrow(() -> new NotFoundException("Event not found"));
-
+        
         // Kiểm tra event đã được publish chưa
         if (event.getIsDraft() != null && event.getIsDraft()) {
             throw new RuntimeException("Cannot register for draft event");
         }
-
-        // Kiểm tra event đã kết thúc chưa
-        if (event.getStartTime() != null && event.getStartTime().isBefore(LocalDateTime.now())) {
-            throw new RuntimeException("Cannot register for event that has already started");
+        
+        // Cho phép MEETING đăng ký trong khi đang diễn ra; các loại khác chỉ trước khi bắt đầu
+        LocalDateTime now = LocalDateTime.now();
+        boolean isMeeting = event.getEventType() != null &&
+                event.getEventType().getTypeName() != null &&
+                "MEETING".equalsIgnoreCase(event.getEventType().getTypeName());
+        if (event.getStartTime() != null) {
+            boolean hasStarted = event.getStartTime().isBefore(now);
+            if (hasStarted && !isMeeting) {
+                throw new RuntimeException("Cannot register for event that has already started");
+            }
+        }
+        if (event.getEndTime() != null && event.getEndTime().isBefore(now)) {
+            throw new RuntimeException("Cannot register for event that has already ended");
         }
 
         // Kiểm tra user tồn tại
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new NotFoundException("User not found"));
-
+        
         // Kiểm tra đã đăng ký chưa
         if (eventAttendanceRepository.existsByEventIdAndUserId(eventId, userId)) {
             throw new RuntimeException("You have already registered for this event");
         }
-
+        
         // Tạo event attendance với status REGISTERED
         EventAttendance eventAttendance = EventAttendance.builder()
                 .event(event)
@@ -189,7 +248,7 @@ public class EventService {
                 .registrationTime(LocalDateTime.now())
                 .attendanceStatus(AttendanceStatus.REGISTERED)
                 .build();
-
+        
         eventAttendanceRepository.save(eventAttendance);
     }
 
@@ -198,13 +257,13 @@ public class EventService {
         // Kiểm tra đã đăng ký chưa
         EventAttendance eventAttendance = eventAttendanceRepository.findByEventIdAndUserId(eventId, userId)
                 .orElseThrow(() -> new NotFoundException("You have not registered for this event"));
-
+        
         // Kiểm tra event đã bắt đầu chưa
         Event event = eventAttendance.getEvent();
         if (event.getStartTime() != null && event.getStartTime().isBefore(LocalDateTime.now())) {
             throw new RuntimeException("Cannot cancel registration for event that has already started");
         }
-
+        
         // Xóa đăng ký
         eventAttendanceRepository.delete(eventAttendance);
     }
@@ -218,9 +277,9 @@ public class EventService {
     public List<EventRegistrationDto> getEventRegistrations(Long eventId) {
         Event event = eventRepository.findById(eventId)
                 .orElseThrow(() -> new NotFoundException("Event not found"));
-
+        
         List<EventAttendance> attendances = eventAttendanceRepository.findByEventId(eventId);
-
+        
         return attendances.stream()
                 .map(attendance -> {
                     User user = attendance.getUser();
@@ -232,8 +291,8 @@ public class EventService {
                             .email(user.getEmail())
                             .avatarUrl(user.getAvatarUrl())
                             .registrationTime(attendance.getRegistrationTime())
-                            .attendanceStatus(attendance.getAttendanceStatus() != null
-                                    ? attendance.getAttendanceStatus().name()
+                            .attendanceStatus(attendance.getAttendanceStatus() != null 
+                                    ? attendance.getAttendanceStatus().name() 
                                     : null)
                             .checkInTime(attendance.getCheckInTime())
                             .notes(attendance.getNotes())
@@ -266,42 +325,42 @@ public class EventService {
         // Kiểm tra event tồn tại và thuộc club
         Event event = eventRepository.findById(eventId)
                 .orElseThrow(() -> new NotFoundException("Event not found"));
-
+        
         // Kiểm tra event thuộc club nào
         if (event.getClub() == null) {
             throw new NotFoundException("Event không thuộc về club nào");
         }
-
-        // Không cho điểm danh nếu sự kiện đã kết thúc
-        if (event.getEndTime() != null && event.getEndTime().isBefore(LocalDateTime.now())) {
-            throw new RuntimeException("Event has ended. Attendance can no longer be modified");
+        
+        // Không cho điểm danh nếu sự kiện đã kết thúc quá 1 ngày
+        if (event.getEndTime() != null && event.getEndTime().isBefore(LocalDateTime.now().minusDays(1))) {
+            throw new RuntimeException("Event ended more than 1 day ago. Attendance can no longer be modified");
         }
-
+        
         if (attendances == null || attendances.isEmpty()) {
             throw new RuntimeException("Danh sách điểm danh không được rỗng");
         }
-
+        
         List<EventAttendance> updatedAttendances = new ArrayList<>();
-
+        
         for (BatchMarkAttendanceRequest.AttendanceItem item : attendances) {
             // Kiểm tra status hợp lệ
-            if (item.getAttendanceStatus() != AttendanceStatus.PRESENT &&
+            if (item.getAttendanceStatus() != AttendanceStatus.PRESENT && 
                 item.getAttendanceStatus() != AttendanceStatus.ABSENT) {
                 throw new RuntimeException("Chỉ có thể điểm danh PRESENT hoặc ABSENT cho userId: " + item.getUserId());
             }
-
+            
             // Kiểm tra user đã đăng ký event chưa
             EventAttendance attendance = eventAttendanceRepository.findByEventIdAndUserId(eventId, item.getUserId())
                     .orElseThrow(() -> new NotFoundException("User với ID " + item.getUserId() + " chưa đăng ký sự kiện này"));
-
+            
             // Cập nhật điểm danh
             attendance.setAttendanceStatus(item.getAttendanceStatus());
             attendance.setCheckInTime(item.getAttendanceStatus() == AttendanceStatus.PRESENT ? LocalDateTime.now() : null);
             attendance.setNotes(item.getNotes());
-
+            
             updatedAttendances.add(attendance);
         }
-
+        
         eventAttendanceRepository.saveAll(updatedAttendances);
     }
 
