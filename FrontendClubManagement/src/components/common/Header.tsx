@@ -93,7 +93,6 @@ const Header: React.FC = () => {
             {[
               { path: "/", label: "Trang chủ" },
               { path: "/clubs", label: "Câu lạc bộ" },
-              { path: "/myclub/select", label: "CLB của tôi" },
               { path: "/events", label: "Sự kiện" },
               { path: "/news", label: "Tin tức" },
               { path: "/about", label: "Giới thiệu" },
