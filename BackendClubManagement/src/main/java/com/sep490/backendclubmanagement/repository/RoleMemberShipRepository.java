@@ -470,14 +470,30 @@ SELECT CASE WHEN EXISTS (
     @Query("""
 SELECT cm.user.id
 FROM ClubMemberShip cm
-LEFT JOIN RoleMemberShip rm 
-  ON rm.clubMemberShip.id = cm.id 
-  AND rm.semester.id = :semesterId
 WHERE cm.club.id = :clubId
-  AND (rm.team.id IS NULL OR rm.isActive = FALSE)
+  AND cm.status = com.sep490.backendclubmanagement.entity.ClubMemberShipStatus.ACTIVE
+  AND NOT EXISTS (
+       SELECT 1
+       FROM RoleMemberShip rmTeam
+       WHERE rmTeam.clubMemberShip = cm
+         AND rmTeam.semester.id = :semesterId
+         AND COALESCE(rmTeam.isActive, TRUE) = TRUE
+         AND rmTeam.team IS NOT NULL
+  )
+  AND NOT EXISTS (
+       SELECT 1
+       FROM RoleMemberShip rmClub
+       JOIN rmClub.clubRole cr
+       WHERE rmClub.clubMemberShip = cm
+         AND rmClub.semester.id = :semesterId
+         AND COALESCE(rmClub.isActive, TRUE) = TRUE
+         AND rmClub.team IS NULL
+         AND UPPER(cr.roleCode) IN ('CLUB_PRESIDENT','CLUB_VICE_PRESIDENT')
+  )
 """)
     List<Long> findAvailableMemberUserIds(@Param("clubId") Long clubId,
                                           @Param("semesterId") Long semesterId);
+
 
     @Query("""
     SELECT DISTINCT COALESCE(cr.roleName, 'Thành viên')

@@ -39,7 +39,7 @@ export async function getAllTeamsForPresident(
   return res.data ?? [];
 }
 export async function createTeam(payload: CreateTeamPayload): Promise<TeamResponse> {
-  const res = await axiosClient.post<TeamResponse>("/api/teams", payload);
+  const res = await axiosClient.post<TeamResponse>("/teams", payload);
   // res hiện là ApiResponse<TeamResponse>
   if (res.code !== 200 || !res.data) throw new Error(res.message || "Create team failed");
   return res.data;                       // ✅ Trả về T duy nhất
