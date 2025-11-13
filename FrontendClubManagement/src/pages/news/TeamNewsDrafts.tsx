@@ -112,7 +112,7 @@ export default function TeamNewsDrafts() {
   }
 
   return (
-    <div className="px-4 sm:px-6 lg:px-8 py-4 space-y-6 max-w-none mx-auto">
+  <div className="px-0 sm:px-2 lg:px-4 py-4 space-y-6 w-full">
       {/* banners */}
       {infoBanner && (
         <div className="flex items-center gap-2 bg-blue-50 text-blue-700 px-3 py-2 rounded-lg border border-blue-200">
@@ -124,12 +124,6 @@ export default function TeamNewsDrafts() {
           <AlertTriangle className="h-4 w-4" /> <span>{errBanner}</span>
         </div>
       )}
-
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Drafts • Phòng ban</h1>
-        <div className="text-xs text-slate-500">Tổng: {total}</div>
-      </div>
-
       <div className="overflow-x-auto border rounded-lg bg-white shadow-sm">
         {loading ? (
           <table className="w-full">
@@ -137,7 +131,7 @@ export default function TeamNewsDrafts() {
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700">Ảnh</th>
                 <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700">Tiêu đề</th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700">CLB</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700">Loại tin tức</th>
                 <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700">Cập nhật</th>
                 <th className="px-6 py-3 text-center text-xs font-semibold text-slate-700">Thao tác</th>
               </tr>
@@ -156,7 +150,7 @@ export default function TeamNewsDrafts() {
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700">Ảnh</th>
                 <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700">Tiêu đề</th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700">CLB</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700">Loại tin tức</th>
                 <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700">Cập nhật</th>
                 <th className="px-6 py-3 text-center text-xs font-semibold text-slate-700">Thao tác</th>
               </tr>
@@ -173,7 +167,7 @@ export default function TeamNewsDrafts() {
                     <div className="line-clamp-2 font-medium text-slate-900">{d.title}</div>
                   </td>
                   <td className="px-6 py-4">
-                    <div className="text-sm text-slate-700">{d.clubName || "—"}</div>
+                    <div className="text-sm text-slate-700">{d.newsType || "—"}</div>
                   </td>
                   <td className="px-6 py-4">
                     <div className="text-sm text-slate-600 inline-flex items-center gap-1">

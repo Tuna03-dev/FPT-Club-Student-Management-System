@@ -205,16 +205,6 @@ export default function ClubDetailPage() {
             )}
 
             {/* Link group chat */}
-            {dept.linkGroupChat && (
-              <a
-                href={dept.linkGroupChat}
-                target="_blank"
-                rel="noreferrer"
-                className="text-sm text-primary hover:underline"
-              >
-                Link group chat
-              </a>
-            )}
           </CardContent>
         </Card>
       ))

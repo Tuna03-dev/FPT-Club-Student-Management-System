@@ -408,13 +408,13 @@ export default function TeamDetailPage() {
                   // Drafts/Requests: chỉ leader
                   {
                     id: "drafts",
-                    label: "Drafts",
+                    label: "Bản Nháp tin tức",
                     icon: FileText,
                     show: !!isLead,
                   },
                   {
                     id: "requests",
-                    label: "Requests",
+                    label: "Tin tức chờ duyệt",
                     icon: Clock,
                     show: !!isLead,
                   },

@@ -13,6 +13,7 @@ export interface ClubDetailDTO {
 }
 
 export async function getMyClubs(): Promise<MyClubDTO[]> {
+  console.log("[getMyClubs] CALL API /my-clubs");
   const res = await axiosClient.get<MyClubDTO[]>("/management/my-clubs");
   if (res.code !== 200) throw new Error(res.message || "Failed to fetch clubs");
   return res.data ?? [];

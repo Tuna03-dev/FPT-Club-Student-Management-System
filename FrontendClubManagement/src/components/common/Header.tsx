@@ -21,11 +21,13 @@ const Header: React.FC = () => {
   const [showClubsList, setShowClubsList] = useState(false);
   const navigate = useNavigate();
 
+  const shouldLoadMyClubs = isAuthenticated && !!user;
+
   const {
     data: clubs,
     loading: clubsLoading,
     error: clubsError,
-  } = useMyClubs();
+  } = useMyClubs(shouldLoadMyClubs);
 
   useEffect(() => {
     const checkAuth = () => {
@@ -34,10 +36,13 @@ const Header: React.FC = () => {
       setUser(currentUser);
       setIsAuthenticated(authenticated);
     };
+
     checkAuth();
+
     window.addEventListener("storage", checkAuth);
     const handleAuthChange = () => checkAuth();
     window.addEventListener("auth-state-changed", handleAuthChange);
+
     return () => {
       window.removeEventListener("storage", checkAuth);
       window.removeEventListener("auth-state-changed", handleAuthChange);
@@ -134,7 +139,9 @@ const Header: React.FC = () => {
                       <p className="text-[14px] font-semibold text-gray-800">
                         {user.fullName}
                       </p>
-                      <p className="text-[13px] text-gray-500">{user.email}</p>
+                      <p className="text-[13px] text-gray-500">
+                        {user.email}
+                      </p>
                     </div>
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
@@ -149,7 +156,7 @@ const Header: React.FC = () => {
                         Thông tin cá nhân
                       </DropdownMenuItem>
 
-                      {/* Hiển thị “Câu lạc bộ của tôi” chỉ khi có CLB */}
+                      {/* “Câu lạc bộ của tôi” chỉ khi có CLB */}
                       {!clubsLoading &&
                         !clubsError &&
                         clubs &&
@@ -207,7 +214,6 @@ const Header: React.FC = () => {
                         CLB của bạn
                       </DropdownMenuLabel>
 
-                      {/* Trạng thái tải */}
                       {clubsLoading && (
                         <div className="px-3 py-2 text-[14px] text-gray-500">
                           Đang tải danh sách CLB…
@@ -226,7 +232,6 @@ const Header: React.FC = () => {
                           </div>
                         )}
 
-                      {/* Danh sách CLB thực tế */}
                       {!clubsLoading &&
                         !clubsError &&
                         clubs?.map((club) => (
@@ -235,7 +240,7 @@ const Header: React.FC = () => {
                             onClick={() => {
                               localStorage.setItem(
                                 "lastClubId",
-                                String(club.clubId)
+                                String(club.clubId),
                               );
                               setShowClubsList(false);
                               navigate(`/myclub/${club.clubId}`);
