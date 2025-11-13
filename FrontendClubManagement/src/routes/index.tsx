@@ -70,6 +70,7 @@ export const router = createBrowserRouter([
         ],
       },
 
+  
       {
         path: "news",
         children: [
@@ -200,7 +201,10 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <Navigate to="staff" replace /> },
       { path: "staff", element: <StaffList /> },
-      { path: "settings", element: <div className="p-6">Cấu hình hệ thống</div> },
+      {
+        path: "settings",
+        element: <div className="p-6">Cấu hình hệ thống</div>,
+      },
     ],
   },
 

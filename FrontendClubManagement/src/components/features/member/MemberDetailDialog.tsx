@@ -43,6 +43,7 @@ interface MemberDetailDialogProps {
   roles: ClubRoleDTO[];
   teams: TeamDTO[];
   onUpdated?: () => void;
+  isOfficer?: boolean;
 }
 
 const MemberDetailDialog = ({
@@ -53,66 +54,66 @@ const MemberDetailDialog = ({
   roles,
   teams,
   onUpdated,
+  isOfficer = true, // Default to true for backward compatibility
 }: MemberDetailDialogProps) => {
   // Dialog states
-  const [isEditRoleOpen, setIsEditRoleOpen] = useState(false);
-  const [isAssignTeamOpen, setIsAssignTeamOpen] = useState(false);
+  const [isEditMemberOpen, setIsEditMemberOpen] = useState(false);
   const [isChangeStatusOpen, setIsChangeStatusOpen] = useState(false);
   const [isRemoveOpen, setIsRemoveOpen] = useState(false);
   const [selectedRole, setSelectedRole] = useState<string>("");
   const [selectedTeam, setSelectedTeam] = useState<string>("");
   const [isActionLoading, setIsActionLoading] = useState(false);
 
-  // action handlers
-  const handleChangeRole = async () => {
-    if (!member || !selectedRole || !clubId) {
+  // action handlers - Combined update for role and team
+  const handleUpdateMember = async () => {
+    if (!member || !clubId) {
+      toast.error("Thiếu thông tin thành viên");
+      return;
+    }
+
+    // Validation
+    if (!selectedRole) {
       toast.error("Vui lòng chọn vai trò");
       return;
     }
+
+    if (!selectedTeam) {
+      toast.error("Vui lòng chọn ban");
+      return;
+    }
+
     setIsActionLoading(true);
     try {
       const roleId = parseInt(selectedRole);
+      const teamId = parseInt(selectedTeam);
       const currentUser = authService.getCurrentUser();
+
       if (!currentUser || !currentUser.id) {
         toast.error("Không xác định người dùng hiện tại");
-        setIsActionLoading(false);
         return;
       }
-      const currentUserId = currentUser.id;
+
+      // Update role first
       await memberService.changeRole(
         clubId,
         member.userId,
         roleId,
-        currentUserId
+        currentUser.id
       );
-      toast.success("Cập nhật vai trò thành công");
-      setIsEditRoleOpen(false);
-      if (onUpdated) onUpdated();
-      onClose();
-    } catch (err) {
-      console.error(err);
-      toast.error("Cập nhật vai trò thất bại");
-    } finally {
-      setIsActionLoading(false);
-    }
-  };
 
-  const handleAssignTeam = async () => {
-    if (!member || !selectedTeam || !clubId) {
-      toast.error("Vui lòng chọn ban");
-      return;
-    }
-    setIsActionLoading(true);
-    try {
-      const teamId = parseInt(selectedTeam);
+      // Then assign team
       await memberService.assignTeam(clubId, member.userId, teamId);
-      toast.success("Phân ban thành công");
-      setIsAssignTeamOpen(false);
+
+      toast.success("Cập nhật thông tin thành viên thành công");
+      setIsEditMemberOpen(false);
       if (onUpdated) onUpdated();
       onClose();
     } catch (err) {
       console.error(err);
-      toast.error("Phân ban thất bại");
+      const error = err as { response?: { data?: { message?: string } } };
+      const errorMessage =
+        error.response?.data?.message || "Cập nhật thông tin thất bại";
+      toast.error(errorMessage);
     } finally {
       setIsActionLoading(false);
     }
@@ -166,27 +167,23 @@ const MemberDetailDialog = ({
     }
   };
 
-  const openEditRoleDialog = () => {
+  const openEditMemberDialog = () => {
     if (member) {
+      // Set current role
       const currentRole = getDisplayRoleInfo(member)?.roleName || "";
-      // Find the role ID that matches the current role name
       const currentRoleObj = roles.find(
         (role) => role.roleName === currentRole
       );
       setSelectedRole(currentRoleObj ? currentRoleObj.id.toString() : "");
-      setIsEditRoleOpen(true);
-    }
-  };
 
-  const openAssignTeamDialog = () => {
-    if (member) {
+      // Set current team
       const currentTeamName = member.currentTerm?.teamName || "";
-      // Find the team ID that matches the current team name
       const currentTeamObj = teams.find(
         (team) => team.teamName === currentTeamName
       );
       setSelectedTeam(currentTeamObj ? currentTeamObj.id.toString() : "");
-      setIsAssignTeamOpen(true);
+
+      setIsEditMemberOpen(true);
     }
   };
 
@@ -209,8 +206,10 @@ const MemberDetailDialog = ({
   };
 
   const getDisplayRoleInfo = (
-    member: MemberResponseDTO
+    member: MemberResponseDTO | null
   ): { roleName: string; roleLevel: number } | null => {
+    if (!member) return null;
+
     const current = member.currentTerm as unknown as
       | {
           roleName?: string;
@@ -410,59 +409,68 @@ const MemberDetailDialog = ({
                 </Card>
               </div>
 
-              {/* Action Buttons - Only for current members (not LEFT) */}
-              {(member as unknown as { membershipStatus?: string })
-                .membershipStatus !== "LEFT" && (
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <Button
-                    variant="outline"
-                    className="w-full border-primary/30 hover:bg-primary/10"
-                    onClick={openEditRoleDialog}
-                  >
-                    <Shield className="h-4 w-4 mr-2" />
-                    Thay đổi vai trò
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="w-full border-blue-500/30 hover:bg-blue-500/10 text-blue-600"
-                    onClick={openAssignTeamDialog}
-                  >
-                    <UserCog className="h-4 w-4 mr-2" />
-                    Phân ban
-                  </Button>
-                  {member.currentTerm?.isActive ? (
+              {/* Action Buttons - Only for officers and current members (not LEFT) */}
+              {isOfficer &&
+                (member as unknown as { membershipStatus?: string })
+                  .membershipStatus !== "LEFT" && (
+                  <>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <Button
+                        variant="outline"
+                        className="w-full border-primary/30 hover:bg-primary/10"
+                        onClick={openEditMemberDialog}
+                      >
+                        <UserCog className="h-4 w-4 mr-2" />
+                        Chỉnh sửa vai trò & phân ban
+                      </Button>
+                      {member.currentTerm?.isActive ? (
+                        <Button
+                          variant="outline"
+                          className="w-full border-yellow-500/30 hover:bg-yellow-500/10 text-yellow-600"
+                          onClick={openChangeStatusDialog}
+                        >
+                          <UserX className="h-4 w-4 mr-2" />
+                          Tạm ngưng
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          className="w-full border-green-500/30 hover:bg-green-500/10 text-green-600"
+                          onClick={openChangeStatusDialog}
+                        >
+                          <UserCheck className="h-4 w-4 mr-2" />
+                          Kích hoạt
+                        </Button>
+                      )}
+                    </div>
+
+                    {/* Remove Button - Only for active/deactive members */}
                     <Button
-                      variant="outline"
-                      className="w-full border-yellow-500/30 hover:bg-yellow-500/10 text-yellow-600"
-                      onClick={openChangeStatusDialog}
+                      variant="destructive"
+                      className="w-full"
+                      onClick={openRemoveDialog}
                     >
                       <UserX className="h-4 w-4 mr-2" />
-                      Tạm ngưng
+                      Đá khỏi CLB
                     </Button>
-                  ) : (
-                    <Button
-                      variant="outline"
-                      className="w-full border-green-500/30 hover:bg-green-500/10 text-green-600"
-                      onClick={openChangeStatusDialog}
-                    >
-                      <UserCheck className="h-4 w-4 mr-2" />
-                      Kích hoạt
-                    </Button>
-                  )}
-                </div>
-              )}
+                  </>
+                )}
 
-              {/* Remove Button - Only for active/deactive members */}
-              {(member as unknown as { membershipStatus?: string })
-                .membershipStatus !== "LEFT" && (
-                <Button
-                  variant="destructive"
-                  className="w-full"
-                  onClick={openRemoveDialog}
-                >
-                  <UserX className="h-4 w-4 mr-2" />
-                  Đá khỏi CLB
-                </Button>
+              {/* Read-only notice for regular members */}
+              {!isOfficer && (
+                <Card className="border-blue-500/30 bg-blue-500/5">
+                  <CardContent className="p-4">
+                    <div className="flex items-start gap-3">
+                      <Shield className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
+                      <div className="flex-1">
+                        <p className="text-sm text-blue-600 dark:text-blue-300">
+                          Bạn đang xem thông tin thành viên. Chỉ Chủ nhiệm và
+                          Phó Chủ nhiệm mới có quyền chỉnh sửa.
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
               )}
 
               {/* Current Term */}
@@ -596,23 +604,52 @@ const MemberDetailDialog = ({
         </DialogContent>
       </Dialog>
 
-      {/* Edit Role Dialog */}
-      <Dialog open={isEditRoleOpen} onOpenChange={setIsEditRoleOpen}>
-        <DialogContent className="max-w-md">
+      {/* Edit Member Dialog - Combined Role & Team */}
+      <Dialog open={isEditMemberOpen} onOpenChange={setIsEditMemberOpen}>
+        <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Shield className="h-5 w-5 text-primary" />
-              Chỉnh sửa vai trò
+              <UserCog className="h-5 w-5 text-primary" />
+              Chỉnh sửa thông tin thành viên
             </DialogTitle>
             <DialogDescription>
-              Cập nhật vai trò cho {member?.fullName}
+              Cập nhật vai trò và phân ban cho {member?.fullName}
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
+          <div className="space-y-6 py-4">
+            {/* Current Information */}
+            <div className="p-4 rounded-lg bg-muted/50 border border-border space-y-2">
+              <p className="text-sm font-medium text-muted-foreground">
+                Thông tin hiện tại:
+              </p>
+              <div className="flex items-center gap-2 flex-wrap">
+                <Badge
+                  className={getRoleColorByLevel(
+                    getDisplayRoleInfo(member)?.roleLevel
+                  )}
+                >
+                  {getDisplayRoleInfo(member)?.roleName || "N/A"}
+                </Badge>
+                <span className="text-muted-foreground">•</span>
+                <Badge
+                  variant="outline"
+                  className="border-orange-500/30 text-orange-600"
+                >
+                  {member?.currentTerm?.teamName || "Chưa có ban"}
+                </Badge>
+              </div>
+            </div>
+
+            {/* Role Selection */}
             <div className="space-y-2">
-              <Label htmlFor="role">Chọn vai trò mới</Label>
+              <Label htmlFor="role" className="flex items-center gap-2">
+                <Shield className="h-4 w-4 text-primary" />
+                Vai trò <span className="text-destructive">*</span>
+              </Label>
               <Select value={selectedRole} onValueChange={setSelectedRole}>
-                <SelectTrigger>
+                <SelectTrigger
+                  className={!selectedRole ? "border-destructive" : ""}
+                >
                   <SelectValue placeholder="Chọn vai trò" />
                 </SelectTrigger>
                 <SelectContent>
@@ -625,75 +662,75 @@ const MemberDetailDialog = ({
                   ))}
                 </SelectContent>
               </Select>
+              {selectedRole && (
+                <div className="p-3 rounded-lg bg-secondary/30 border border-border">
+                  <p className="text-sm text-muted-foreground">
+                    {roles.find((role) => role.id.toString() === selectedRole)
+                      ?.description ||
+                      `Vai trò ${
+                        roles.find(
+                          (role) => role.id.toString() === selectedRole
+                        )?.roleName
+                      } có quyền hạn và trách nhiệm tương ứng trong CLB.`}
+                  </p>
+                </div>
+              )}
             </div>
-            {selectedRole && (
-              <div className="p-3 rounded-lg bg-secondary/30 border border-border">
-                <p className="text-sm text-muted-foreground">
-                  {roles.find((role) => role.id.toString() === selectedRole)
-                    ?.description ||
-                    `Vai trò ${
-                      roles.find((role) => role.id.toString() === selectedRole)
-                        ?.roleName
-                    } có quyền hạn và trách nhiệm tương ứng trong CLB.`}
-                </p>
-              </div>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsEditRoleOpen(false)}>
-              Hủy
-            </Button>
-            <Button onClick={handleChangeRole} disabled={isActionLoading}>
-              Lưu thay đổi
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
-      {/* Assign Team Dialog */}
-      <Dialog open={isAssignTeamOpen} onOpenChange={setIsAssignTeamOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <UserCog className="h-5 w-5 text-primary" />
-              Phân ban
-            </DialogTitle>
-            <DialogDescription>
-              Phân {member?.fullName} vào ban chuyên môn
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
+            {/* Team Selection */}
             <div className="space-y-2">
-              <Label htmlFor="team">Chọn ban</Label>
+              <Label htmlFor="team" className="flex items-center gap-2">
+                <UserCog className="h-4 w-4 text-primary" />
+                Phòng ban <span className="text-destructive">*</span>
+              </Label>
               <Select value={selectedTeam} onValueChange={setSelectedTeam}>
-                <SelectTrigger>
+                <SelectTrigger
+                  className={!selectedTeam ? "border-destructive" : ""}
+                >
                   <SelectValue placeholder="Chọn ban" />
                 </SelectTrigger>
                 <SelectContent>
                   {teams.map((team) => (
                     <SelectItem key={team.id} value={team.id.toString()}>
-                      {team.teamName}
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">{team.teamName}</span>
+                      </div>
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Info Note */}
             <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/30">
               <p className="text-sm text-blue-600">
-                💡 Mỗi thành viên chỉ thuộc 1 ban chính. Nếu thành viên tham gia
-                nhiều ban, hãy chọn ban có trách nhiệm chính.
+                💡 <strong>Lưu ý:</strong> Vai trò và ban sẽ được cập nhật đồng
+                thời. Đảm bảo vai trò phù hợp với vị trí trong ban đã chọn.
               </p>
             </div>
+
+            {/* Validation Warning */}
+            {(!selectedRole || !selectedTeam) && (
+              <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/30">
+                <p className="text-sm text-destructive">
+                  ⚠️ Vui lòng chọn đầy đủ vai trò và phòng ban
+                </p>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button
               variant="outline"
-              onClick={() => setIsAssignTeamOpen(false)}
+              onClick={() => setIsEditMemberOpen(false)}
+              disabled={isActionLoading}
             >
               Hủy
             </Button>
-            <Button onClick={handleAssignTeam} disabled={isActionLoading}>
-              Lưu thay đổi
+            <Button
+              onClick={handleUpdateMember}
+              disabled={isActionLoading || !selectedRole || !selectedTeam}
+            >
+              {isActionLoading ? "Đang xử lý..." : "Lưu thay đổi"}
             </Button>
           </DialogFooter>
         </DialogContent>

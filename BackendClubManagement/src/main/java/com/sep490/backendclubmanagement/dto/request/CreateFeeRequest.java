@@ -27,5 +27,7 @@ public class CreateFeeRequest {
     private Boolean isMandatory;
 
     private Boolean isDraft;
+
+    private Long semesterId; // For MEMBERSHIP fee type
 }
 

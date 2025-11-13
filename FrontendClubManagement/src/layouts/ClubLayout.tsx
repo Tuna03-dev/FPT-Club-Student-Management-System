@@ -37,7 +37,7 @@ import { toast } from "sonner";
 import { authService } from "@/services/authService";
 import { useTeams } from "@/hooks/useTeams";
 import { PermissionContext } from "@/contexts/PermissionContext";
-import { useClubOfficerFlag } from "@/hooks/useClubOfficerFlag";
+import { useClubPermissions } from "@/hooks/useClubPermissions";
 
 const navItems = [
   { key: "dashboard", url: "", icon: Home },
@@ -47,15 +47,81 @@ const navItems = [
   { key: "notifications", url: "/notifications", icon: Bell },
 ];
 
-const managementItems = [
-  { key: "club_news", url: "/news", icon: Newspaper, label: "Quản lí tin tức" },
-  { key: "permissions", url: "/permissions", icon: Shield, label: "Phân quyền" },
-  { key: "pending_posts", url: "/pending-posts", icon: FileText, label: "Bài viết chờ duyệt" },
-  { key: "manage_members", url: "/members", icon: Users, label: "Quản lý thành viên" },
-  { key: "manage_events", url: "/events", icon: Calendar, label: "Quản lý sự kiện" },
-  { key: "manage_recruitments", url: "/recruitments", icon: Briefcase, label: "Quản lý tuyển thành viên" },
-  { key: "manage_finance", url: "/finance", icon: DollarSign, label: "Quản lý tài chính" },
-  { key: "pending_requests", url: "/pending-requests", icon: Clock, label: "Yêu cầu chờ duyệt" },
+// Define permission levels for each menu item
+type PermissionLevel = "CLUB_OFFICER" | "TEAM_OFFICER" | "MEMBER";
+
+interface ManagementItem {
+  key: string;
+  url: string;
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  requiredRole: PermissionLevel; // Minimum role required
+}
+
+const managementItems: ManagementItem[] = [
+  {
+    key: "club_news",
+    url: "/news",
+    icon: Newspaper,
+    label: "Yêu cầu tin tức",
+    requiredRole: "CLUB_OFFICER",
+  },
+  {
+    key: "permissions",
+    url: "/roles",
+    icon: Shield,
+    label: "Phân quyền",
+    requiredRole: "CLUB_OFFICER",
+  },
+  {
+    key: "pending_posts",
+    url: "/pending-posts",
+    icon: FileText,
+    label: "Bài viết chờ duyệt",
+    requiredRole: "TEAM_OFFICER",
+  },
+  {
+    key: "manage_members",
+    url: "/members",
+    icon: Users,
+    label: "Danh sách thành viên",
+    requiredRole: "MEMBER", // Everyone can view, but actions are restricted
+  },
+  {
+    key: "manage_events",
+    url: "/events",
+    icon: Calendar,
+    label: "Quản lý sự kiện",
+    requiredRole: "TEAM_OFFICER",
+  },
+  {
+    key: "manage_recruitments",
+    url: "/recruitments",
+    icon: Briefcase,
+    label: "Quản lý tuyển thành viên",
+    requiredRole: "CLUB_OFFICER",
+  },
+  {
+    key: "manage_reports",
+    url: "/reports",
+    icon: FileText,
+    label: "Quản lý báo cáo",
+    requiredRole: "TEAM_OFFICER",
+  },
+  {
+    key: "manage_finance",
+    url: "/finance",
+    icon: DollarSign,
+    label: "Quản lý tài chính",
+    requiredRole: "CLUB_OFFICER",
+  },
+  {
+    key: "pending_requests",
+    url: "/pending-requests",
+    icon: Clock,
+    label: "Yêu cầu chờ duyệt",
+    requiredRole: "CLUB_OFFICER",
+  },
 ];
 
 const managementColors: Record<string, string> = {
@@ -66,6 +132,7 @@ const managementColors: Record<string, string> = {
   manage_recruitments: "bg-gradient-to-br from-red-500 to-red-600",
   manage_finance: "bg-gradient-to-br from-emerald-500 to-emerald-600",
   pending_requests: "bg-gradient-to-br from-orange-500 to-orange-600",
+  manage_reports: "bg-gradient-to-br from-pink-500 to-pink-600",
   club_news: "bg-gradient-to-br from-indigo-500 to-indigo-600",
 };
 
@@ -85,10 +152,12 @@ export const ClubLayout = () => {
     error: teamsError,
   } = useTeams(validClubId ? numericClubId : undefined);
 
-  // ===== Club-level officer flag (QUYẾT ĐỊNH HIỂN THỊ NÚT) =====
-  const { amOfficer, checking } = useClubOfficerFlag(
-    validClubId ? numericClubId : undefined
-  );
+  // ===== Check permissions from localStorage (unified approach) =====
+  const {
+    isClubPresident,
+    isTeamOfficer,
+    loading: permissionsLoading,
+  } = useClubPermissions(validClubId ? numericClubId : undefined);
 
   // Ghi nhớ firstTeamId (chỉ để UX list, không ảnh hưởng permission)
   if (teams?.[0]?.teamId && validClubId) {
@@ -107,21 +176,49 @@ export const ClubLayout = () => {
     }
   }
 
+  // Determine user's role level
+  const userRoleLevel: PermissionLevel = useMemo(() => {
+    if (permissionsLoading) return "MEMBER"; // Default while loading
+    if (isClubPresident) return "CLUB_OFFICER";
+    if (isTeamOfficer) return "TEAM_OFFICER";
+    return "MEMBER";
+  }, [isClubPresident, isTeamOfficer, permissionsLoading]);
+
+  // Filter menu based on user permissions and update labels
+  const filteredManagementItems = useMemo(() => {
+    if (permissionsLoading) return [];
+
+    const roleHierarchy: Record<PermissionLevel, number> = {
+      CLUB_OFFICER: 3,
+      TEAM_OFFICER: 2,
+      MEMBER: 1,
+    };
+
+    return managementItems
+      .filter((item) => {
+        // Check if user has required role level
+        return roleHierarchy[userRoleLevel] >= roleHierarchy[item.requiredRole];
+      })
+      .map((item) => {
+        // Update labels for members (more view-oriented)
+        if (userRoleLevel === "MEMBER") {
+          if (item.key === "manage_members") {
+            return { ...item, label: "Thành viên" };
+          }
+          if (item.key === "manage_events") {
+            return { ...item, label: "Sự kiện" };
+          }
+        }
+        return item;
+      });
+  }, [userRoleLevel, permissionsLoading]);
   // CHỈ hiện "Quản lí tin tức" khi amOfficer === true
-  const filteredManagementItems = useMemo(
-    () =>
-      managementItems.filter((item) => {
-        if (item.key === "club_news") return amOfficer === true;
-        return true;
-      }),
-    [amOfficer]
-  );
 
   const handleLogout = async () => {
     try {
       await authService.logoutWithApi();
     } catch {
-      // noop
+      /* ignore */
     } finally {
       authService.logout();
       toast.success("Đăng xuất thành công!", { duration: 2000 });
@@ -139,7 +236,7 @@ export const ClubLayout = () => {
 
   return (
     <PermissionContext.Provider
-      value={{ isOfficer: amOfficer === true, loading: checking }}
+      value={{ isOfficer: isClubPresident, loading: permissionsLoading }}
     >
       <TooltipProvider delayDuration={200}>
         <div className="h-screen w-full bg-background flex flex-col overflow-hidden">
@@ -232,7 +329,11 @@ export const ClubLayout = () => {
                   <DropdownMenuContent align="end" className="w-64">
                     <div className="px-2 py-1.5">
                       <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-                        QUẢN LÝ
+                        {userRoleLevel === "CLUB_OFFICER"
+                          ? "QUẢN LÝ"
+                          : userRoleLevel === "TEAM_OFFICER"
+                          ? "QUẢN LÝ"
+                          : "DANH MỤC"}
                       </h3>
                       {filteredManagementItems.map((item) => (
                         <DropdownMenuItem key={item.key} asChild>
@@ -242,7 +343,9 @@ export const ClubLayout = () => {
                             onClick={() => setIsMobileMenuOpen(false)}
                           >
                             <div
-                              className={`h-6 w-6 rounded-lg ${managementColors[item.key]} flex items-center justify-center text-white shadow-sm`}
+                              className={`h-6 w-6 rounded-lg ${
+                                managementColors[item.key]
+                              } flex items-center justify-center text-white shadow-sm`}
                             >
                               <item.icon className="h-3 w-3" />
                             </div>
@@ -262,35 +365,48 @@ export const ClubLayout = () => {
             <aside className="hidden lg:block w-64 border-r border-border bg-card h-[calc(100vh-56px)] sticky top-14">
               <nav className="pt-2 pb-4 px-4 space-y-6 h-full overflow-y-auto">
                 {/* Management */}
-                <div>
-                  <div className="px-3 mb-4">
-                    <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                      QUẢN LÝ
-                    </h2>
-                  </div>
-                  <div className="space-y-2">
-                    {filteredManagementItems.map((item) => (
-                      <NavLink
-                        key={item.key}
-                        to={`/myclub/${clubId}${item.url}`}
-                        className={({ isActive }) =>
-                          `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                            isActive
-                              ? "bg-primary/10 text-primary shadow-sm"
-                              : "text-foreground hover:bg-secondary"
-                          }`
-                        }
-                      >
-                        <div
-                          className={`h-8 w-8 rounded-lg ${managementColors[item.key]} flex items-center justify-center text-white shadow-sm`}
+                {filteredManagementItems.length > 0 && (
+                  <div>
+                    <div className="px-3 mb-4">
+                      <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                        {userRoleLevel === "CLUB_OFFICER"
+                          ? "QUẢN LÝ"
+                          : userRoleLevel === "TEAM_OFFICER"
+                          ? "QUẢN LÝ"
+                          : "DANH MỤC"}
+                      </h2>
+                      {!permissionsLoading && userRoleLevel === "MEMBER" && (
+                        <p className="text-[10px] text-muted-foreground mt-1">
+                          Xem thông tin CLB
+                        </p>
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      {filteredManagementItems.map((item) => (
+                        <NavLink
+                          key={item.key}
+                          to={`/myclub/${clubId}${item.url}`}
+                          className={({ isActive }) =>
+                            `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                              isActive
+                                ? "bg-primary/10 text-primary shadow-sm"
+                                : "text-foreground hover:bg-secondary"
+                            }`
+                          }
                         >
-                          <item.icon className="h-4 w-4" />
-                        </div>
-                        <span>{item.label}</span>
-                      </NavLink>
-                    ))}
+                          <div
+                            className={`h-8 w-8 rounded-lg ${
+                              managementColors[item.key]
+                            } flex items-center justify-center text-white shadow-sm`}
+                          >
+                            <item.icon className="h-4 w-4" />
+                          </div>
+                          <span>{item.label}</span>
+                        </NavLink>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* Teams */}
                 <div>
@@ -300,8 +416,8 @@ export const ClubLayout = () => {
                     </h2>
                   </div>
 
-                  {/* Nút tạo phòng ban: CHỈ hiển thị khi amOfficer === true */}
-                  {amOfficer === true && (
+                  {/* Nút tạo phòng ban: CHỈ hiển thị khi là CLUB_OFFICER */}
+                  {isClubPresident && (
                     <div className="px-3 mb-2">
                       <Button
                         variant="outline"

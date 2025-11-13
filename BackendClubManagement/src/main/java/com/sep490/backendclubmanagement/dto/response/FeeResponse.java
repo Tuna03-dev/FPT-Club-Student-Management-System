@@ -14,4 +14,6 @@ public class FeeResponse {
     private FeeType feeType;
     private LocalDate dueDate;
     private Boolean isMandatory;
+    private Long semesterId; // For MEMBERSHIP fee type
+    private String semesterName; // For display
 }
