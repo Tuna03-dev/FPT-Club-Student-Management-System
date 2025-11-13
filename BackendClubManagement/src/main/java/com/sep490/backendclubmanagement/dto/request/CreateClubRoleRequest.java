@@ -10,7 +10,7 @@ public class CreateClubRoleRequest {
     @NotBlank
     private String roleName;
 
-    @NotBlank
+    // Optional - will be auto-generated from roleName if not provided
     private String roleCode;
 
     private String description;
