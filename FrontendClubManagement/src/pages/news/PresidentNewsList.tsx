@@ -305,7 +305,7 @@ function PresidentNewsListImpl() {
       <div className="max-w-none mx-auto flex items-center justify-between py-4 px-4 sm:px-6 lg:px-8">
         <div className="flex items-center gap-3">
           <FileText className="h-6 w-6 text-orange-600" />
-          <h1 className="text-xl font-semibold text-slate-900">News • Quản lý tin tức</h1>
+          <h1 className="text-3xl font-semibold text-slate-900">Quản lý tin tức</h1>
         </div>
         {clubId && (
           <Link
@@ -323,10 +323,10 @@ function PresidentNewsListImpl() {
     <div className="flex items-center justify-between gap-4 flex-wrap">
       <div className="inline-flex p-1 rounded-xl border bg-white shadow-sm">
         <TabButton active={tab === "drafts"} onClick={() => setTab("drafts")}>
-          Bản nháp
+          Bản nháp tin tức
         </TabButton>
         <TabButton active={tab === "requests"} onClick={() => setTab("requests")}>
-          Requests
+          Danh sách yêu cầu tin tức
         </TabButton>
       </div>
       {tab === "requests" && (
@@ -492,7 +492,7 @@ function PresidentNewsListImpl() {
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700">Ảnh</th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700">Tiêu đề</th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700">CLB</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700">CLB/Ban</th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700">Trạng thái</th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700">Ngày gửi</th>
                   <th className="px-6 py-3 text-center text-xs font-semibold text-slate-700">Thao tác</th>
@@ -515,7 +515,7 @@ function PresidentNewsListImpl() {
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700">Ảnh</th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700">Tiêu đề</th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700">CLB</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700">CLB/Ban</th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700">Trạng thái</th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700">Ngày gửi</th>
                   <th className="px-6 py-3 text-center text-xs font-semibold text-slate-700">Thao tác</th>
@@ -541,8 +541,16 @@ function PresidentNewsListImpl() {
                       <div className="line-clamp-2 font-medium text-slate-900">{r.requestTitle}</div>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="text-sm text-slate-700">{r.clubName || "—"}</div>
-                    </td>
+                        <div className="space-y-0.5">
+                          <p className="text-sm font-semibold text-slate-900">
+                            {r.clubName || "—"}
+                          </p>
+                          <p className="text-xs text-slate-500">
+                            {r.teamName || "—"}
+                          </p>
+                        </div>
+                      </td>
+
                     <td className="px-6 py-4">
                       <span className={badgeClass(r.status)}>{VN_STATUS[r.status] || r.status}</span>
                     </td>
