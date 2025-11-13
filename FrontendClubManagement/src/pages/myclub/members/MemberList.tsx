@@ -892,7 +892,7 @@ const Members = () => {
                             </div>
                           </div>
 
-                          {isOfficer ? (
+                          {isOfficer && (
                             <div className="flex items-center gap-2">
                               <Button
                                 variant="outline"
@@ -905,21 +905,6 @@ const Members = () => {
                                   Xem chi tiết
                                 </span>
                                 <span className="sm:hidden">Chi tiết</span>
-                              </Button>
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-2">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="border-primary/30 hover:bg-primary/10 shadow-sm transition-all"
-                                onClick={() => setSelectedMember(member)}
-                              >
-                                <Eye className="h-4 w-4 mr-2" />
-                                <span className="hidden sm:inline">
-                                  Xem thông tin
-                                </span>
-                                <span className="sm:hidden">Xem</span>
                               </Button>
                             </div>
                           )}
@@ -1234,20 +1219,22 @@ const Members = () => {
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="border-red-500/30 hover:bg-red-500 hover:text-white hover:border-red-500 shadow-sm hover:shadow-glow transition-all"
-                              onClick={() => setSelectedMember(member)}
-                            >
-                              <Eye className="h-4 w-4 mr-2" />
-                              <span className="hidden sm:inline">
-                                Xem chi tiết
-                              </span>
-                              <span className="sm:hidden">Chi tiết</span>
-                            </Button>
-                          </div>
+                          {isOfficer && (
+                            <div className="flex items-center gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="border-red-500/30 hover:bg-red-500 hover:text-white hover:border-red-500 shadow-sm hover:shadow-glow transition-all"
+                                onClick={() => setSelectedMember(member)}
+                              >
+                                <Eye className="h-4 w-4 mr-2" />
+                                <span className="hidden sm:inline">
+                                  Xem chi tiết
+                                </span>
+                                <span className="sm:hidden">Chi tiết</span>
+                              </Button>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </CardContent>

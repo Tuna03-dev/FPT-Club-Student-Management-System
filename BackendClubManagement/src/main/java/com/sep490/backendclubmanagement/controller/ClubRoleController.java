@@ -29,6 +29,7 @@ public class ClubRoleController {
         Object principal = auth.getPrincipal();
         return !(principal instanceof String s && "anonymousUser".equalsIgnoreCase(s));
     }
+    
     @GetMapping
     public ResponseEntity<ApiResponse<List<ClubRoleResponse>>> getClubRoles(
             @PathVariable Long clubId

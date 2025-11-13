@@ -68,14 +68,12 @@ export default function RoleManagement() {
   const [submitting, setSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     roleName: "",
-    roleCode: "",
     description: "",
     roleLevel: 1,
     systemRoleId: 0,
   });
   const [validationErrors, setValidationErrors] = useState<{
     roleName?: string;
-    roleCode?: string;
     roleLevel?: string;
   }>({});
 
@@ -114,7 +112,6 @@ export default function RoleManagement() {
       setEditingRole(role);
       setFormData({
         roleName: role.roleName,
-        roleCode: role.roleCode || "",
         description: role.description || "",
         roleLevel: role.roleLevel,
         systemRoleId: role.systemRoleId,
@@ -123,7 +120,6 @@ export default function RoleManagement() {
       setEditingRole(null);
       setFormData({
         roleName: "",
-        roleCode: "",
         description: "",
         roleLevel: 3, // Default level 3 cho Trưởng ban
         systemRoleId: 4, // Default TEAM_OFFICER
@@ -152,25 +148,6 @@ export default function RoleManagement() {
     return undefined;
   };
 
-  const validateRoleCode = (value: string): string | undefined => {
-    if (!value.trim()) {
-      return "Mã role không được để trống";
-    }
-    if (!/^[A-Z_]+$/.test(value)) {
-      return "Mã role chỉ chứa chữ IN HOA và dấu gạch dưới";
-    }
-    // Check duplicate role code
-    const isDuplicate = clubRoles.some(
-      (role) =>
-        role.roleCode.toUpperCase() === value.toUpperCase() &&
-        (!editingRole || role.id !== editingRole.id)
-    );
-    if (isDuplicate) {
-      return "Mã role đã tồn tại";
-    }
-    return undefined;
-  };
-
   const validateRoleLevel = (
     level: number,
     systemRoleId: number
@@ -193,12 +170,11 @@ export default function RoleManagement() {
   const validateForm = (): boolean => {
     const errors: typeof validationErrors = {
       roleName: validateRoleName(formData.roleName),
-      roleCode: validateRoleCode(formData.roleCode),
       roleLevel: validateRoleLevel(formData.roleLevel, formData.systemRoleId),
     };
 
     setValidationErrors(errors);
-    return !errors.roleName && !errors.roleCode && !errors.roleLevel;
+    return !errors.roleName && !errors.roleLevel;
   };
 
   const handleSaveRole = async () => {
@@ -220,9 +196,20 @@ export default function RoleManagement() {
 
     setSubmitting(true);
     try {
+      // Auto-generate roleCode from roleName
+      const roleCode = formData.roleName
+        .toUpperCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "") // Remove accents
+        .replace(/Đ/g, "D")
+        .replace(/đ/g, "d")
+        .replace(/[^A-Z0-9]/g, "_") // Replace non-alphanumeric with underscore
+        .replace(/_+/g, "_") // Replace multiple underscores with single
+        .replace(/^_|_$/g, ""); // Remove leading/trailing underscores
+
       const request = {
         roleName: formData.roleName,
-        roleCode: formData.roleCode,
+        roleCode: roleCode,
         description: formData.description || undefined,
         roleLevel: formData.roleLevel,
         systemRoleId: formData.systemRoleId || null,
@@ -498,35 +485,6 @@ export default function RoleManagement() {
                         )}
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="roleCode">Mã role *</Label>
-                        <Input
-                          id="roleCode"
-                          value={formData.roleCode}
-                          onChange={(e) => {
-                            const newValue = e.target.value;
-                            setFormData({
-                              ...formData,
-                              roleCode: newValue,
-                            });
-                            // Validate on change
-                            const error = validateRoleCode(newValue);
-                            setValidationErrors((prev) => ({
-                              ...prev,
-                              roleCode: error,
-                            }));
-                          }}
-                          placeholder="VD: CLUB_PRESIDENT"
-                          className={
-                            validationErrors.roleCode ? "border-red-500" : ""
-                          }
-                        />
-                        {validationErrors.roleCode && (
-                          <p className="text-sm text-red-500">
-                            {validationErrors.roleCode}
-                          </p>
-                        )}
-                      </div>
-                      <div className="space-y-2">
                         <Label htmlFor="systemRole">System Role *</Label>
                         <Select
                           value={formData.systemRoleId.toString()}
@@ -558,14 +516,29 @@ export default function RoleManagement() {
                                     role.roleName
                                   )
                               )
-                              .map((role) => (
-                                <SelectItem
-                                  key={role.id}
-                                  value={role.id.toString()}
-                                >
-                                  {role.roleName}
-                                </SelectItem>
-                              ))}
+                              .map((role) => {
+                                const rules =
+                                  ROLE_LEVEL_RULES[
+                                    role.roleName as keyof typeof ROLE_LEVEL_RULES
+                                  ];
+                                return (
+                                  <SelectItem
+                                    key={role.id}
+                                    value={role.id.toString()}
+                                  >
+                                    <div className="flex flex-col">
+                                      <span className="font-medium">
+                                        {role.roleName}
+                                      </span>
+                                      {rules && (
+                                        <span className="text-xs text-muted-foreground">
+                                          {rules.description}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </SelectItem>
+                                );
+                              })}
                           </SelectContent>
                         </Select>
                       </div>
@@ -701,14 +674,9 @@ export default function RoleManagement() {
                           <p className="text-sm text-muted-foreground mb-2">
                             {role.description}
                           </p>
-                          <div className="flex items-center gap-2">
-                            <Badge variant="secondary" className="text-xs">
-                              {role.systemRoleName}
-                            </Badge>
-                            <span className="text-xs text-muted-foreground">
-                              {role.roleCode}
-                            </span>
-                          </div>
+                          <Badge variant="secondary" className="text-xs">
+                            {role.systemRoleName}
+                          </Badge>
                         </div>
                         <div className="flex items-center gap-1 ml-2">
                           <Button
