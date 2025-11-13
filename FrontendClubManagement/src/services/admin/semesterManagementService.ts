@@ -65,6 +65,13 @@ export const semesterManagementService = {
     }
     return res.data;
   },
+
+  async remove(semesterId: number): Promise<void> {
+    const res = await axiosClient.delete<void>(`${baseUrl}/${semesterId}`);
+    if (res.code !== 200) {
+      throw new Error(res.message || "Không thể xóa kỳ học");
+    }
+  },
 };
 
 export default semesterManagementService;

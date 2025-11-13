@@ -113,6 +113,13 @@ public class CampusManagementService {
                 .email(campus.getEmail())
                 .build();
     }
+
+    @Transactional
+    public void deleteCampus(Long campusId) {
+        Campus campus = campusRepository.findById(campusId)
+                .orElseThrow(() -> new IllegalArgumentException("Campus not found"));
+        campusRepository.delete(campus);
+    }
 }
 
 

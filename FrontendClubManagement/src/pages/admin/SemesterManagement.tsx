@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { semesterManagementService, type SemesterSummary } from "@/services/admin/semesterManagementService";
 import { toast } from "sonner";
 import { useDebounce } from "@/hooks/useDebounce";
-import { Pencil, Plus, ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
+import { Pencil, Plus, ChevronLeftIcon, ChevronRightIcon, Trash2 } from "lucide-react";
 import { Pagination, PaginationContent, PaginationItem, PaginationLink } from "@/components/ui/pagination";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -170,6 +170,31 @@ export default function SemesterManagement() {
     }
   };
 
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [semesterToDelete, setSemesterToDelete] = useState<SemesterSummary | null>(null);
+
+  const confirmDelete = (semester: SemesterSummary) => {
+    setSemesterToDelete(semester);
+    setDeleteOpen(true);
+  };
+
+  const handleDelete = async () => {
+    if (!semesterToDelete) return;
+    try {
+      setDeleteLoading(true);
+      await semesterManagementService.remove(semesterToDelete.id);
+      toast.success("Xóa kỳ học thành công");
+      setDeleteOpen(false);
+      setSemesterToDelete(null);
+      fetchSemesters();
+    } catch (e: any) {
+      toast.error(e?.message || "Xóa kỳ học thất bại");
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
   const formatDate = (dateString: string) => {
     if (!dateString) return "-";
     const date = new Date(dateString);
@@ -276,13 +301,22 @@ export default function SemesterManagement() {
                     )}
                   </TableCell>
                   <TableCell className="text-right">
-                    <button
-                      className="inline-flex p-2 rounded-md hover:bg-secondary transition group"
-                      title="Chỉnh sửa"
-                      onClick={() => openEditModal(semester)}
-                    >
-                      <Pencil className="h-4 w-4 group-hover:text-orange-500 transition-colors" />
-                    </button>
+                    <div className="inline-flex items-center gap-2 justify-end">
+                      <button
+                        className="inline-flex p-2 rounded-md hover:bg-secondary transition group"
+                        title="Chỉnh sửa"
+                        onClick={() => openEditModal(semester)}
+                      >
+                        <Pencil className="h-4 w-4 group-hover:text-orange-500 transition-colors" />
+                      </button>
+                      <button
+                        className="inline-flex p-2 rounded-md hover:bg-destructive/10 transition group"
+                        title="Xóa kỳ học"
+                        onClick={() => confirmDelete(semester)}
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive group-hover:text-destructive" />
+                      </button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))
@@ -472,6 +506,37 @@ export default function SemesterManagement() {
               </DialogFooter>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirm Modal */}
+      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <DialogContent className="sm:max-w-md rounded-xl border bg-card shadow-lg">
+          <DialogHeader>
+            <DialogTitle className="text-xl">Xóa kỳ học</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Bạn có chắc chắn muốn xóa kỳ học{" "}
+              <span className="font-semibold text-foreground">
+                {semesterToDelete?.semesterName ?? ""}
+              </span>
+              ? Hành động này không thể hoàn tác.
+            </p>
+            {semesterToDelete?.isCurrent && (
+              <p className="text-xs text-destructive">
+                Lưu ý: kỳ học này đang là kỳ học hiện tại.
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteOpen(false)} disabled={deleteLoading}>
+              Hủy
+            </Button>
+            <Button variant="destructive" onClick={handleDelete} disabled={deleteLoading}>
+              {deleteLoading ? "Đang xóa..." : "Xóa ngay"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

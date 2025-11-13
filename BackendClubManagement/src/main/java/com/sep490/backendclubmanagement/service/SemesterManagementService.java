@@ -166,6 +166,13 @@ public class SemesterManagementService {
         return toSemesterSummary(saved);
     }
 
+    @Transactional
+    public void deleteSemester(Long semesterId) {
+        Semester semester = semesterRepository.findById(semesterId)
+                .orElseThrow(() -> new IllegalArgumentException("Kỳ học không tồn tại"));
+        semesterRepository.delete(semester);
+    }
+
     private SemesterSummaryResponse toSemesterSummary(Semester semester) {
         return SemesterSummaryResponse.builder()
                 .id(semester.getId())

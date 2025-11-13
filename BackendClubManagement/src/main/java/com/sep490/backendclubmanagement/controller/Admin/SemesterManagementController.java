@@ -11,6 +11,7 @@ import com.sep490.backendclubmanagement.service.RoleService;
 import com.sep490.backendclubmanagement.service.SemesterManagementService;
 import com.sep490.backendclubmanagement.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -51,6 +52,16 @@ public class SemesterManagementController {
             throw new ForbiddenException("Chỉ ADMIN mới có quyền truy cập");
         }
         return ApiResponse.success(semesterManagementService.updateSemester(semesterId, request));
+    }
+
+    @DeleteMapping("/{semesterId}")
+    public ApiResponse<Void> deleteSemester(@PathVariable Long semesterId) {
+        Long currentUserId = SecurityUtils.getCurrentUserId();
+        if (!roleService.isAdmin(currentUserId)) {
+            throw new ForbiddenException("Chỉ ADMIN mới có quyền truy cập");
+        }
+        semesterManagementService.deleteSemester(semesterId);
+        return ApiResponse.success();
     }
 }
 

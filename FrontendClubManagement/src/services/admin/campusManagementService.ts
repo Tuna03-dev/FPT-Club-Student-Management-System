@@ -64,6 +64,13 @@ export const campusManagementService = {
     }
     return res.data;
   },
+
+  async remove(campusId: number): Promise<void> {
+    const res = await axiosClient.delete<void>(`${baseUrl}/${campusId}`);
+    if (res.code !== 200) {
+      throw new Error(res.message || "Không thể xóa campus");
+    }
+  },
 };
 
 export default campusManagementService;

@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { campusManagementService, type CampusSummary } from "@/services/admin/campusManagementService";
 import { toast } from "sonner";
 import { useDebounce } from "@/hooks/useDebounce";
-import { Pencil, Plus, ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
+import { Pencil, Plus, ChevronLeftIcon, ChevronRightIcon, Trash2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Pagination, PaginationContent, PaginationItem, PaginationLink } from "@/components/ui/pagination";
 
@@ -148,6 +148,31 @@ export default function CampusManagement() {
     }
   };
 
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [campusToDelete, setCampusToDelete] = useState<CampusSummary | null>(null);
+
+  const confirmDelete = (campus: CampusSummary) => {
+    setCampusToDelete(campus);
+    setDeleteOpen(true);
+  };
+
+  const handleDelete = async () => {
+    if (!campusToDelete) return;
+    try {
+      setDeleteLoading(true);
+      await campusManagementService.remove(campusToDelete.id);
+      toast.success("Xóa campus thành công");
+      setDeleteOpen(false);
+      setCampusToDelete(null);
+      fetchCampuses();
+    } catch (e: any) {
+      toast.error(e?.message || "Xóa campus thất bại");
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
   return (
     <div className="p-4 md:p-6 space-y-4">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -223,13 +248,22 @@ export default function CampusManagement() {
                   <TableCell>{campus.phone ?? "-"}</TableCell>
                   <TableCell>{campus.email ?? "-"}</TableCell>
                   <TableCell className="text-right">
-                    <button
-                      className="inline-flex p-2 rounded-md hover:bg-secondary transition group"
-                      title="Chỉnh sửa"
-                      onClick={() => openEditModal(campus)}
-                    >
-                      <Pencil className="h-4 w-4 group-hover:text-orange-500 transition-colors" />
-                    </button>
+                    <div className="inline-flex items-center gap-2 justify-end">
+                      <button
+                        className="inline-flex p-2 rounded-md hover:bg-secondary transition group"
+                        title="Chỉnh sửa"
+                        onClick={() => openEditModal(campus)}
+                      >
+                        <Pencil className="h-4 w-4 group-hover:text-orange-500 transition-colors" />
+                      </button>
+                      <button
+                        className="inline-flex p-2 rounded-md hover:bg-destructive/10 transition group"
+                        title="Xóa campus"
+                        onClick={() => confirmDelete(campus)}
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive group-hover:text-destructive" />
+                      </button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))
@@ -410,6 +444,40 @@ export default function CampusManagement() {
               </DialogFooter>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirm Modal */}
+      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <DialogContent className="sm:max-w-md rounded-xl border bg-card shadow-lg">
+          <DialogHeader>
+            <DialogTitle className="text-xl">Xóa campus</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Bạn có chắc chắn muốn xóa campus{" "}
+              <span className="font-semibold text-foreground">
+                {campusToDelete?.campusName ?? ""}
+              </span>
+              ? Hành động này không thể hoàn tác.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setDeleteOpen(false)}
+              disabled={deleteLoading}
+            >
+              Hủy
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDelete}
+              disabled={deleteLoading}
+            >
+              {deleteLoading ? "Đang xóa..." : "Xóa ngay"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
