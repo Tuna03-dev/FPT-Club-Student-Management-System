@@ -4,6 +4,8 @@ import com.sep490.backendclubmanagement.entity.Semester;
 import com.sep490.backendclubmanagement.repository.SemesterRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,6 +22,16 @@ import java.util.Optional;
 @Slf4j
 public class SemesterScheduledJob {
 
+    /**
+     * Run once when application starts to initialize current semester
+     */
+    @EventListener(ApplicationReadyEvent.class)
+    @Transactional
+    public void onApplicationReady() {
+        log.info("Application ready - running initial semester update");
+        performSemesterUpdate();
+    }
+
     private final SemesterRepository semesterRepository;
 
     /**
@@ -35,6 +47,13 @@ public class SemesterScheduledJob {
     @Scheduled(cron = "0 1 0 * * *")
     @Transactional
     public void updateCurrentSemester() {
+        performSemesterUpdate();
+    }
+
+    /**
+     * Core logic to update current semester
+     */
+    private void performSemesterUpdate() {
         log.info("Starting scheduled job: Update Current Semester");
 
         try {

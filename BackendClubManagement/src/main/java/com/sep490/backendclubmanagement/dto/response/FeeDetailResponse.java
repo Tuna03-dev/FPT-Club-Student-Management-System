@@ -16,6 +16,7 @@ public class FeeDetailResponse {
     private LocalDate dueDate;
     private Boolean isMandatory;
     private Boolean isDraft;
+    private Boolean hasEverExpired; // Once true, amount cannot be edited
     private Integer paidMembers;
     private Integer totalMembers;
     private LocalDateTime paidDate;
