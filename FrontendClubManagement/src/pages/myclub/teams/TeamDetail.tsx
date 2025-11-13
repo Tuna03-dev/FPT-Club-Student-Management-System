@@ -471,7 +471,11 @@ export default function TeamDetailPage() {
               <div className="max-w-3xl mx-auto">
                 {/* Create Post */}
                 <div className="mb-4">
-                  <CreatePost onPostCreated={refreshPosts} clubId={cId} />
+                  <CreatePost
+                    onPostCreated={refreshPosts}
+                    clubId={cId}
+                    teamId={tId}
+                  />
                 </div>
 
                 {/* Loading State - First Load */}
