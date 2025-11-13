@@ -37,6 +37,7 @@ import java.util.stream.Collectors;
 public class FeeService {
     private final FeeRepository feeRepository;
     private final ClubRepository clubRepository;
+    private final SemesterRepository semesterRepository;
     private final FeeMapper feeMapper;
     private final PayOSIntegrationService payOSIntegrationService;
     private final UserRepository userRepository;
@@ -144,6 +145,14 @@ public class FeeService {
         Club club = clubRepository.findById(clubId)
             .orElseThrow(() -> new AppException(ErrorCode.CLUB_NOT_FOUND));
         boolean isDraft = request.getIsDraft() == null || Boolean.TRUE.equals(request.getIsDraft());
+
+        // Handle semester for MEMBERSHIP fee type
+        Semester semester = null;
+        if (request.getFeeType() == FeeType.MEMBERSHIP && request.getSemesterId() != null) {
+            semester = semesterRepository.findById(request.getSemesterId())
+                .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND, "Semester not found"));
+        }
+
         Fee fee = Fee.builder()
                 .title(request.getTitle())
                 .description(request.getDescription())
@@ -153,6 +162,7 @@ public class FeeService {
                 .isMandatory(request.getIsMandatory())
                 .isDraft(isDraft)
                 .club(club)
+                .semester(semester)
                 .build();
         Fee saved = feeRepository.save(fee);
         return feeMapper.toFeeDetailResponse(saved);
@@ -174,6 +184,15 @@ public class FeeService {
         // Check if title already exists (excluding current fee)
         if (isFeeTitleExistsExcluding(fee.getClub().getId(), request.getTitle(), feeId)) {
             throw new AppException(ErrorCode.VALIDATION_ERROR, "Tên khoản phí đã tồn tại");
+        }
+
+        // Handle semester for MEMBERSHIP fee type
+        if (request.getFeeType() == FeeType.MEMBERSHIP && request.getSemesterId() != null) {
+            Semester semester = semesterRepository.findById(request.getSemesterId())
+                .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND, "Semester not found"));
+            fee.setSemester(semester);
+        } else {
+            fee.setSemester(null);
         }
 
         // Update fee fields
