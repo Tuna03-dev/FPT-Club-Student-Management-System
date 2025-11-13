@@ -37,7 +37,7 @@ import { toast } from "sonner";
 import { authService } from "@/services/authService";
 import { useTeams } from "@/hooks/useTeams";
 import { PermissionContext } from "@/contexts/PermissionContext";
-import { useClubOfficerFlag } from "@/hooks/useClubOfficerFlag";
+import { useClubPermissions } from "@/hooks/useClubPermissions";
 
 const navItems = [
   { key: "dashboard", url: "", icon: Home },
@@ -140,7 +140,6 @@ export const ClubLayout = () => {
   const { t } = useTranslation("common");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const navigate = useNavigate();
-  const location = useLocation();
 
   const { clubId = "0" } = useParams();
   const numericClubId = Number(clubId);
@@ -153,10 +152,12 @@ export const ClubLayout = () => {
     error: teamsError,
   } = useTeams(validClubId ? numericClubId : undefined);
 
-  // ===== Club-level officer flag (QUYẾT ĐỊNH HIỂN THỊ NÚT) =====
-  const { amOfficer, checking } = useClubOfficerFlag(
-    validClubId ? numericClubId : undefined
-  );
+  // ===== Check permissions from localStorage (unified approach) =====
+  const {
+    isClubPresident,
+    isTeamOfficer,
+    loading: permissionsLoading,
+  } = useClubPermissions(validClubId ? numericClubId : undefined);
 
   // Ghi nhớ firstTeamId (chỉ để UX list, không ảnh hưởng permission)
   if (teams?.[0]?.teamId && validClubId) {
@@ -174,19 +175,6 @@ export const ClubLayout = () => {
       /* empty */
     }
   }
-
-  // kiểm tra officer CN/PCN (dựa trên team-level API, có fallback)
-  const { isOfficer, loading: officerLoading } = useClubOfficer(
-    validClubId ? numericClubId : undefined,
-    teamIdFromUrl
-  );
-
-  // Kiểm tra quyền chi tiết
-  const {
-    isClubPresident,
-    isTeamOfficer,
-    loading: permissionsLoading,
-  } = useClubPermissions(validClubId ? numericClubId : undefined);
 
   // Determine user's role level
   const userRoleLevel: PermissionLevel = useMemo(() => {
@@ -225,14 +213,6 @@ export const ClubLayout = () => {
       });
   }, [userRoleLevel, permissionsLoading]);
   // CHỈ hiện "Quản lí tin tức" khi amOfficer === true
-  const filteredManagementItems = useMemo(
-    () =>
-      managementItems.filter((item) => {
-        if (item.key === "club_news") return amOfficer === true;
-        return true;
-      }),
-    [amOfficer]
-  );
 
   const handleLogout = async () => {
     try {
@@ -256,7 +236,7 @@ export const ClubLayout = () => {
 
   return (
     <PermissionContext.Provider
-      value={{ isOfficer: amOfficer === true, loading: checking }}
+      value={{ isOfficer: isClubPresident, loading: permissionsLoading }}
     >
       <TooltipProvider delayDuration={200}>
         <div className="h-screen w-full bg-background flex flex-col overflow-hidden">
@@ -363,7 +343,9 @@ export const ClubLayout = () => {
                             onClick={() => setIsMobileMenuOpen(false)}
                           >
                             <div
-                              className={`h-6 w-6 rounded-lg ${managementColors[item.key]} flex items-center justify-center text-white shadow-sm`}
+                              className={`h-6 w-6 rounded-lg ${
+                                managementColors[item.key]
+                              } flex items-center justify-center text-white shadow-sm`}
                             >
                               <item.icon className="h-3 w-3" />
                             </div>
@@ -434,8 +416,8 @@ export const ClubLayout = () => {
                     </h2>
                   </div>
 
-                  {/* Nút tạo phòng ban: CHỈ hiển thị khi amOfficer === true */}
-                  {amOfficer === true && (
+                  {/* Nút tạo phòng ban: CHỈ hiển thị khi là CLUB_OFFICER */}
+                  {isClubPresident && (
                     <div className="px-3 mb-2">
                       <Button
                         variant="outline"
