@@ -15,13 +15,7 @@ import {
   Plus,
   Newspaper,
 } from "lucide-react";
-import {
-  NavLink,
-  Outlet,
-  useParams,
-  useNavigate,
-  useLocation,
-} from "react-router-dom";
+import { NavLink, Outlet, useParams, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
@@ -42,12 +36,8 @@ import {
 import { toast } from "sonner";
 import { authService } from "@/services/authService";
 import { useTeams } from "@/hooks/useTeams";
-// hook officer tối giản (team-level API, có fallback)
-import { useClubOfficer } from "@/hooks/useClubOfficer";
-// hook permissions chi tiết cho phân quyền
-import { useClubPermissions } from "@/hooks/useClubPermissions";
-// context permissions để Guard đọc
 import { PermissionContext } from "@/contexts/PermissionContext";
+import { useClubOfficerFlag } from "@/hooks/useClubOfficerFlag";
 
 const navItems = [
   { key: "dashboard", url: "", icon: Home },
@@ -163,13 +153,12 @@ export const ClubLayout = () => {
     error: teamsError,
   } = useTeams(validClubId ? numericClubId : undefined);
 
-  // teamId từ URL (nếu đang ở route team)
-  const teamIdFromUrl = useMemo(() => {
-    const m = location.pathname.match(/\/teams\/(\d+)/);
-    return m ? Number(m[1]) : undefined;
-  }, [location.pathname]);
+  // ===== Club-level officer flag (QUYẾT ĐỊNH HIỂN THỊ NÚT) =====
+  const { amOfficer, checking } = useClubOfficerFlag(
+    validClubId ? numericClubId : undefined
+  );
 
-  // khi teams về, cập nhật cache firstTeamId (hook officer sẽ dùng fallback này)
+  // Ghi nhớ firstTeamId (chỉ để UX list, không ảnh hưởng permission)
   if (teams?.[0]?.teamId && validClubId) {
     const key = `firstTeamId:${numericClubId}`;
     try {
@@ -235,6 +224,15 @@ export const ClubLayout = () => {
         return item;
       });
   }, [userRoleLevel, permissionsLoading]);
+  // CHỈ hiện "Quản lí tin tức" khi amOfficer === true
+  const filteredManagementItems = useMemo(
+    () =>
+      managementItems.filter((item) => {
+        if (item.key === "club_news") return amOfficer === true;
+        return true;
+      }),
+    [amOfficer]
+  );
 
   const handleLogout = async () => {
     try {
@@ -257,8 +255,9 @@ export const ClubLayout = () => {
   }
 
   return (
-    // Cung cấp quyền cho toàn bộ subtree (Guard chỉ đọc, không tự gọi API)
-    <PermissionContext.Provider value={{ isOfficer, loading: officerLoading }}>
+    <PermissionContext.Provider
+      value={{ isOfficer: amOfficer === true, loading: checking }}
+    >
       <TooltipProvider delayDuration={200}>
         <div className="h-screen w-full bg-background flex flex-col overflow-hidden">
           {/* ===== HEADER ===== */}
@@ -364,9 +363,7 @@ export const ClubLayout = () => {
                             onClick={() => setIsMobileMenuOpen(false)}
                           >
                             <div
-                              className={`h-6 w-6 rounded-lg ${
-                                managementColors[item.key]
-                              } flex items-center justify-center text-white shadow-sm`}
+                              className={`h-6 w-6 rounded-lg ${managementColors[item.key]} flex items-center justify-center text-white shadow-sm`}
                             >
                               <item.icon className="h-3 w-3" />
                             </div>
@@ -437,8 +434,8 @@ export const ClubLayout = () => {
                     </h2>
                   </div>
 
-                  {/* Nút tạo phòng ban: chỉ CLUB_OFFICER */}
-                  {!permissionsLoading && userRoleLevel === "CLUB_OFFICER" && (
+                  {/* Nút tạo phòng ban: CHỈ hiển thị khi amOfficer === true */}
+                  {amOfficer === true && (
                     <div className="px-3 mb-2">
                       <Button
                         variant="outline"
