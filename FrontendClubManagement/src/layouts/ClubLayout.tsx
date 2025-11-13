@@ -63,7 +63,7 @@ const managementItems: ManagementItem[] = [
     key: "club_news",
     url: "/news",
     icon: Newspaper,
-    label: "Yêu cầu tin tức",
+    label: "Quản lý tin tức",
     requiredRole: "CLUB_OFFICER",
   },
   {

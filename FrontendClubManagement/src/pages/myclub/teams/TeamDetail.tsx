@@ -2,6 +2,7 @@ import { useMemo, useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useTeamDetail } from "@/hooks/useTeamDetail";
 import { useTeamLeadGuard } from "@/hooks/useTeamLeadGuard";
+import { useClubPermissions } from "@/hooks/useClubPermissions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -109,10 +110,16 @@ export default function TeamDetailPage() {
   const [search, setSearch] = useState("");
 
   const { data, loading, error } = useTeamDetail(cId, tId);
-  const { allowed: isLead, error: guardErr } = useTeamLeadGuard(cId, tId);
+  const { allowed: isLead } = useTeamLeadGuard(cId, tId);
 
-  // Determine memberFlag early
+  // Check club-level permissions from localStorage
+  const { isClubPresident } = useClubPermissions(cId);
+
+  // Determine if user can view posts:
+  // 1. CLUB_OFFICER can view all teams
+  // 2. Team member can view their own team
   const memberFlag = !!data?.member;
+  const canViewPosts = isClubPresident || memberFlag;
 
   // Posts state
   const [posts, setPosts] = useState<PostWithRelationsData[]>([]);
@@ -161,12 +168,12 @@ export default function TeamDetailPage() {
     [cId, tId]
   );
 
-  // Load initial posts when tab is active and user is member
+  // Load initial posts when tab is active and user can view posts
   useEffect(() => {
-    if (activeTab === "posts" && memberFlag && !loading) {
+    if (activeTab === "posts" && canViewPosts && !loading) {
       loadPosts(0, false);
     }
-  }, [activeTab, memberFlag, loading, loadPosts]);
+  }, [activeTab, canViewPosts, loading, loadPosts]);
 
   // Infinite scroll
   const sentinelRef = useRef<HTMLDivElement | null>(null);
@@ -272,24 +279,21 @@ export default function TeamDetailPage() {
     }
   }, [isLead, activeTab]);
 
-  // Nếu không phải member thì chặn tab posts → chuyển sang members
+  // Nếu không có quyền xem posts thì chặn tab posts → chuyển sang members
   useEffect(() => {
-    const memberFlag = !!data?.member;
-    if (!memberFlag && activeTab === "posts") {
+    if (!canViewPosts && activeTab === "posts") {
       setActiveTab("members");
     }
-  }, [data?.member, activeTab]);
+  }, [canViewPosts, activeTab]);
 
   // ❌ ĐỪNG return sớm trước các hooks khác
   // Thay vì return, hiển thị loading/error trong JSX bên dưới
 
   const teamName = data?.teamName ?? "";
   const teamDesc = data?.description ?? "";
-  const myRoles = data?.myRoles ?? [];
 
   // Wrap rawMembers in useMemo to prevent dependency issues
   const rawMembers = useMemo(() => data?.members ?? [], [data?.members]);
-  const totalCount = (data?.memberCount ?? rawMembers.length) || 0;
 
   // Các useMemo luôn được gọi (kể cả loading/error) để giữ thứ tự hooks ổn định
   const members = useMemo(
@@ -387,12 +391,12 @@ export default function TeamDetailPage() {
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
               <div className="flex gap-8">
                 {[
-                  // Posts chỉ hiển thị nếu user thuộc team
+                  // Posts: CLUB_OFFICER hoặc thành viên team
                   {
                     id: "posts",
                     label: "Bài đăng",
                     icon: FileText,
-                    show: !!memberFlag,
+                    show: canViewPosts,
                   },
                   // Members luôn hiển thị để mọi thành viên CLB xem
                   {
@@ -440,23 +444,30 @@ export default function TeamDetailPage() {
 
           {/* BODY */}
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            <div className="mb-6 text-sm text-muted-foreground">
-              <span className="mr-4">
-                Bạn thuộc team:{" "}
-                <span className={memberFlag ? "text-green-600" : ""}>
-                  {memberFlag ? "Có" : "Không"}
-                </span>
-              </span>
-              <span className="mr-4">
-                Vai trò của bạn: {myRoles.length ? myRoles.join(", ") : "—"}
-              </span>
-              <span>Tổng thành viên: {totalCount}</span>
-              {guardErr ? (
-                <span className="ml-4 text-red-600">{guardErr}</span>
-              ) : null}
-            </div>
+            {/* Access Denied Message for Posts */}
+            {activeTab === "posts" && !canViewPosts && (
+              <Card className="p-6 border-yellow-500/20 bg-yellow-500/5">
+                <CardContent>
+                  <div className="text-center space-y-4">
+                    <div className="text-yellow-700 dark:text-yellow-400 font-semibold">
+                      Bạn không có quyền xem bài đăng của phòng ban này
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      Chỉ thành viên của phòng ban hoặc Chủ nhiệm/Phó Chủ nhiệm
+                      CLB mới có thể xem bài đăng.
+                    </p>
+                    <Button
+                      variant="outline"
+                      onClick={() => setActiveTab("members")}
+                    >
+                      Xem danh sách thành viên
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
-            {activeTab === "posts" && memberFlag && (
+            {activeTab === "posts" && canViewPosts && (
               <div className="max-w-3xl mx-auto">
                 {/* Create Post */}
                 <div className="mb-4">
