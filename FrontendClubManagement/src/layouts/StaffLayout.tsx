@@ -50,7 +50,7 @@ const managementItems = [
   },
   {
     key: "pending_posts",
-    url: "/pending-posts",
+    url: "/news",
     icon: FileText,
     label: "Bài viết chờ duyệt",
   },
