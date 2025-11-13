@@ -26,6 +26,6 @@ public interface TeamRepository extends JpaRepository<Team, Long> {
     Optional<Team> findByIdAndClubId(Long teamId, Long clubId);
 
     boolean existsByTeamNameAndClubId(String teamName, Long clubId);
-
+    boolean existsByClubIdAndTeamNameIgnoreCase(Long clubId, String teamName);
 
 }

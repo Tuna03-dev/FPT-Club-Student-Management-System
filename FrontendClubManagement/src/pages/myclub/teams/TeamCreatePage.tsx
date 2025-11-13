@@ -18,6 +18,13 @@ interface Member {
   role?: MemberRole;
 }
 
+interface FormErrors {
+  teamName?: string;
+  description?: string;
+  linkGroupChat?: string;
+  general?: string;
+}
+
 /* ================= MemberSelector ================= */
 function MemberSelector({
   clubId,
@@ -65,8 +72,8 @@ function MemberSelector({
     const kw = searchTerm.toLowerCase().trim();
     const selectedSet = new Set(selectedIds);
     return availableMembers
-      .filter((m) => !selectedSet.has(m.id)) // ẩn người đã chọn
-      .filter((m) => (kw ? m.name.toLowerCase().includes(kw) : true)); // trống → hiện tất cả
+      .filter((m) => !selectedSet.has(m.id))
+      .filter((m) => (kw ? m.name.toLowerCase().includes(kw) : true));
   }, [availableMembers, searchTerm, selectedIds]);
 
   const handleFocus = () => setIsDropdownOpen(true);
@@ -89,7 +96,12 @@ function MemberSelector({
 
   return (
     <div className="space-y-3" ref={boxRef}>
-      <Label className="text-gray-700 font-semibold">Tìm thành viên</Label>
+      <Label className="text-gray-800 font-semibold flex items-center gap-2">
+        Tìm thành viên
+        <span className="text-xs px-2 py-0.5 rounded-full bg-orange-100 text-orange-700">
+          Tùy chọn
+        </span>
+      </Label>
       <div className="relative">
         <div className="flex gap-2">
           <div className="flex-1 relative">
@@ -100,18 +112,18 @@ function MemberSelector({
               onChange={(e) => setSearchTerm(e.target.value)}
               onFocus={handleFocus}
               disabled={loading}
-              className="pl-10 border-gray-300 focus:border-blue-500"
+              className="pl-10 border-gray-300 focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
             />
           </div>
         </div>
 
         {isDropdownOpen && (
-          <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-300 rounded-lg shadow-lg z-30 max-h-64 overflow-y-auto">
+          <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-lg z-30 max-h-64 overflow-y-auto">
             {filtered.length > 0 ? (
               filtered.map((member) => (
                 <div
                   key={member.id}
-                  className="p-3 hover:bg-blue-50 cursor-pointer flex items-center justify-between group border-b last:border-b-0"
+                  className="p-3 hover:bg-orange-50 cursor-pointer flex items-center justify-between group border-b last:border-b-0"
                 >
                   <span className="text-gray-900 font-medium">{member.name}</span>
                   <Button
@@ -121,7 +133,7 @@ function MemberSelector({
                       onAddMember(member);
                       setSearchTerm("");
                     }}
-                    className="opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="opacity-0 group-hover:opacity-100 transition-opacity bg-orange-500 hover:bg-orange-600 text-white"
                   >
                     <Plus size={16} />
                   </Button>
@@ -152,6 +164,7 @@ export default function TeamCreatePage() {
   const [leader, setLeader] = useState<Member | null>(null);
   const [deputy, setDeputy] = useState<Member | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [errors, setErrors] = useState<FormErrors>({});
 
   const handleAddMember = (member: Member) => {
     if (!selectedMembers.find((m) => m.id === member.id)) {
@@ -183,14 +196,52 @@ export default function TeamCreatePage() {
       .map((id) => parseInt(id, 10));
   }, [selectedMembers, leader, deputy]);
 
+  function validateForm() {
+    const newErrors: FormErrors = {};
+
+    const trimmedName = teamName.trim();
+    const trimmedDesc = description.trim();
+    const trimmedLink = linkGroupChat.trim();
+
+    if (!trimmedName) {
+      newErrors.teamName = "Vui lòng nhập tên phòng ban.";
+    } else if (trimmedName.length < 3) {
+      newErrors.teamName = "Tên phòng ban phải có ít nhất 3 ký tự.";
+    }
+
+    if (!trimmedDesc) {
+      newErrors.description = "Vui lòng nhập mô tả phòng ban.";
+    } else if (trimmedDesc.length < 10) {
+      newErrors.description = "Mô tả cần ít nhất 10 ký tự để mô tả rõ hơn.";
+    }
+
+    if (trimmedLink) {
+      try {
+        // Nếu có nhập thì phải là URL hợp lệ
+        new URL(trimmedLink);
+      } catch {
+        newErrors.linkGroupChat = "Link nhóm chat không hợp lệ. Vui lòng nhập dạng https://...";
+      }
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setErrors((prev) => ({ ...prev, general: undefined }));
+
+    if (!validateForm()) {
+      // có lỗi → không gọi API
+      return;
+    }
 
     const payload: CreateTeamPayload = {
       clubId: numericClubId,
       teamName: teamName.trim(),
       description: description.trim() || undefined,
-      linkGroupChat: linkGroupChat.trim() || undefined,
+      linkGroupChat: linkGroupChat.trim() || undefined, // vẫn cho null
       leaderUserId: leader ? parseInt(leader.id, 10) : undefined,
       viceLeaderUserId: deputy ? parseInt(deputy.id, 10) : undefined,
       memberUserIds: memberUserIds.length ? memberUserIds : undefined,
@@ -201,25 +252,42 @@ export default function TeamCreatePage() {
       const result = await createTeam(payload);
       navigate(`/myclub/${clubId}/teams/${result.id}`);
     } catch (err: any) {
-      alert(err?.message || "Không thể tạo phòng ban.");
+      setErrors((prev) => ({
+        ...prev,
+        general: err?.message || "Không thể tạo phòng ban. Vui lòng thử lại.",
+      }));
     } finally {
       setSubmitting(false);
     }
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6 p-4 md:p-6 max-w-3xl">
+    <form
+      onSubmit={handleSubmit}
+      className="space-y-6 p-4 md:p-6 w-full mx-auto bg-white rounded-2xl shadow-xl border border-orange-100"
+    >
+      {/* Header tổng thể */}
+      <div className="mb-2">
+        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+          <span className="inline-block w-2 h-6 rounded-full bg-orange-500" />
+          Tạo phòng ban mới
+        </h1>
+        <p className="text-sm text-gray-500 mt-1">
+          Thiết lập thông tin cơ bản và phân công nhân sự cho phòng ban trong CLB.
+        </p>
+      </div>
+
       {/* Thông tin cơ bản */}
-      <Card className="border-0 shadow-lg">
-        <CardHeader className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-t-lg">
-          <CardTitle>Tạo phòng ban</CardTitle>
-          <CardDescription className="text-blue-100">
-            Nhập thông tin chi tiết về phòng ban mới
+      <Card className="border border-orange-100 shadow-md">
+        <CardHeader className="bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-t-lg">
+          <CardTitle>Tên & thông tin phòng ban</CardTitle>
+          <CardDescription className="text-orange-100">
+            Đây là thông tin sẽ hiển thị cho toàn bộ thành viên.
           </CardDescription>
         </CardHeader>
         <CardContent className="pt-6 space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="team-name" className="text-gray-700 font-semibold">
+            <Label htmlFor="team-name" className="text-gray-800 font-semibold">
               Tên phòng ban <span className="text-red-500">*</span>
             </Label>
             <Input
@@ -227,47 +295,62 @@ export default function TeamCreatePage() {
               placeholder="Ví dụ: Ban Truyền thông"
               value={teamName}
               onChange={(e) => setTeamName(e.target.value)}
-              required
-              className="border-gray-300 focus:border-blue-500"
+              className={`border-gray-300 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 ${
+                errors.teamName ? "border-red-500" : ""
+              }`}
             />
+            {errors.teamName && (
+              <p className="mt-1 text-sm text-red-500">{errors.teamName}</p>
+            )}
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="description" className="text-gray-700 font-semibold">
-              Mô tả
+            <Label htmlFor="description" className="text-gray-800 font-semibold">
+              Mô tả <span className="text-red-500">*</span>
             </Label>
             <Textarea
               id="description"
               placeholder="Mô tả chức năng và trách nhiệm của phòng ban..."
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              rows={3}
-              className="border-gray-300 focus:border-blue-500"
+              rows={4}
+              className={`border-gray-300 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 resize-none ${
+                errors.description ? "border-red-500" : ""
+              }`}
             />
+            {errors.description && (
+              <p className="mt-1 text-sm text-red-500">{errors.description}</p>
+            )}
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="group-link" className="text-gray-700 font-semibold">
-              Link nhóm chat
+            <Label htmlFor="group-link" className="text-gray-800 font-semibold">
+              Link nhóm chat{" "}
+              <span className="text-xs text-gray-500 font-normal">(có thể để trống)</span>
             </Label>
             <Input
               id="group-link"
-              placeholder="https://..."
+              placeholder="https://zalo.me/..., https://chat.whatsapp.com/..."
               value={linkGroupChat}
               onChange={(e) => setLinkGroupChat(e.target.value)}
               type="url"
-              className="border-gray-300 focus:border-blue-500"
+              className={`border-gray-300 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 ${
+                errors.linkGroupChat ? "border-red-500" : ""
+              }`}
             />
+            {errors.linkGroupChat && (
+              <p className="mt-1 text-sm text-red-500">{errors.linkGroupChat}</p>
+            )}
           </div>
         </CardContent>
       </Card>
 
       {/* Chọn thành viên */}
-      <Card className="border-0 shadow-lg">
-        <CardHeader className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-t-lg">
+      <Card className="border border-orange-100 shadow-md">
+        <CardHeader className="bg-gradient-to-r from-orange-400 to-orange-500 text-white rounded-t-lg">
           <CardTitle>Chọn thành viên</CardTitle>
-          <CardDescription className="text-indigo-100">
-            Thêm thành viên vào phòng ban (tùy chọn)
+          <CardDescription className="text-orange-50">
+            Thêm thành viên vào phòng ban để phân công vai trò (không bắt buộc).
           </CardDescription>
         </CardHeader>
         <CardContent className="pt-6">
@@ -281,10 +364,13 @@ export default function TeamCreatePage() {
 
       {/* Danh sách đã chọn + gán vai trò */}
       {selectedMembers.length > 0 && (
-        <Card className="border-0 shadow-lg">
-          <CardHeader className="bg-gray-50 rounded-t-lg border-b">
-            <CardTitle className="text-lg">
-              Danh sách thành viên ({selectedMembers.length})
+        <Card className="border border-orange-100 shadow-md">
+          <CardHeader className="bg-orange-50 rounded-t-lg border-b border-orange-100">
+            <CardTitle className="text-lg flex items-center justify-between">
+              <span>Danh sách thành viên ({selectedMembers.length})</span>
+              <span className="text-xs font-normal text-orange-700 bg-orange-100 px-2 py-1 rounded-full">
+                Chọn Trưởng ban / Phó ban
+              </span>
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-6">
@@ -295,7 +381,7 @@ export default function TeamCreatePage() {
                 return (
                   <div
                     key={m.id}
-                    className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                    className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-orange-50/40 transition-colors"
                   >
                     <div className="flex-1">
                       <p className="font-medium text-gray-900">{m.name}</p>
@@ -305,7 +391,7 @@ export default function TeamCreatePage() {
                           onClick={() => handleSetLeader(m)}
                           className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
                             isLeader
-                              ? "bg-blue-600 text-white"
+                              ? "bg-orange-500 text-white shadow-sm"
                               : "bg-gray-200 text-gray-700 hover:bg-gray-300"
                           }`}
                           title={isLeader ? "Bỏ Trưởng ban" : "Gán Trưởng ban"}
@@ -317,7 +403,7 @@ export default function TeamCreatePage() {
                           onClick={() => handleSetDeputy(m)}
                           className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
                             isDeputy
-                              ? "bg-indigo-600 text-white"
+                              ? "bg-amber-500 text-white shadow-sm"
                               : "bg-gray-200 text-gray-700 hover:bg-gray-300"
                           }`}
                           title={isDeputy ? "Bỏ Phó ban" : "Gán Phó ban"}
@@ -344,31 +430,38 @@ export default function TeamCreatePage() {
 
       {/* Tóm tắt phân công */}
       {(leader || deputy) && (
-        <Card className="border-0 shadow-lg bg-blue-50">
+        <Card className="border border-orange-100 shadow-sm bg-orange-50">
           <CardHeader>
-            <CardTitle className="text-base">Tóm tắt phân công</CardTitle>
+            <CardTitle className="text-base text-orange-800">Tóm tắt phân công</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
             {leader && (
               <p className="text-sm text-gray-700">
-                <span className="font-semibold text-blue-700">Trưởng ban:</span> {leader.name}
+                <span className="font-semibold text-orange-700">Trưởng ban:</span> {leader.name}
               </p>
             )}
             {deputy && (
               <p className="text-sm text-gray-700">
-                <span className="font-semibold text-indigo-700">Phó ban:</span> {deputy.name}
+                <span className="font-semibold text-amber-700">Phó ban:</span> {deputy.name}
               </p>
             )}
           </CardContent>
         </Card>
       )}
 
+      {/* Lỗi chung từ server */}
+      {errors.general && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {errors.general}
+        </div>
+      )}
+
       {/* Actions */}
-      <div className="flex gap-3 pt-2">
+      <div className="flex flex-col md:flex-row gap-3 pt-2">
         <Button
           type="submit"
           disabled={submitting}
-          className="flex-1 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white font-semibold"
+          className="flex-1 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-semibold shadow-md disabled:opacity-70 disabled:cursor-not-allowed"
         >
           <Plus size={18} className="mr-2" />
           {submitting ? "Đang tạo..." : "Tạo phòng ban"}
@@ -376,8 +469,8 @@ export default function TeamCreatePage() {
         <Button
           type="button"
           variant="outline"
-          className="flex-1 bg-transparent"
-          onClick={() => navigate(-1)}
+          className="flex-1 bg-white border-gray-300 hover:bg-gray-50"
+          onClick={() => navigate(`/myclub/${clubId}`)}
           disabled={submitting}
         >
           Hủy

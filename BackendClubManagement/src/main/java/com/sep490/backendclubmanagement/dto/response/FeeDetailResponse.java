@@ -20,4 +20,6 @@ public class FeeDetailResponse {
     private Integer totalMembers;
     private LocalDateTime paidDate;
     private String transactionReference;
+    private Long semesterId; // For MEMBERSHIP fee type
+    private String semesterName; // For display
 }

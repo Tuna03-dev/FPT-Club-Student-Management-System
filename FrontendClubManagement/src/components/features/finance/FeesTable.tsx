@@ -28,8 +28,9 @@ import type {
   UpdateFeeRequest,
   FeeType,
 } from "@/types/fee";
-import { useMemo, useState, useCallback } from "react";
+import { useMemo, useState, useCallback, useEffect } from "react";
 import feeService from "@/services/feeService";
+import { clubService, type SemesterDTO } from "@/services/clubService";
 import { Switch } from "@/components/ui/switch";
 import { format, addDays } from "date-fns";
 import { z } from "zod";
@@ -139,6 +140,26 @@ export function FeesTable({
   const [isDeleteOpen, setIsDeleteOpen] = useState<boolean>(false);
   const [deleteLoading, setDeleteLoading] = useState<boolean>(false);
   const [publishingFeeId, setPublishingFeeId] = useState<number | null>(null);
+  const [semesters, setSemesters] = useState<SemesterDTO[]>([]);
+  const [loadingSemesters, setLoadingSemesters] = useState<boolean>(false);
+
+  // Load semesters when component mounts
+  useEffect(() => {
+    const loadSemesters = async () => {
+      setLoadingSemesters(true);
+      try {
+        const response = await clubService.getSemesters(clubId);
+        if (response.code === 200 && response.data) {
+          setSemesters(response.data);
+        }
+      } catch (error) {
+        console.error("Error loading semesters:", error);
+      } finally {
+        setLoadingSemesters(false);
+      }
+    };
+    loadSemesters();
+  }, [clubId]);
 
   const schema = useMemo(
     () =>
@@ -184,7 +205,21 @@ export function FeesTable({
           ]),
           description: z.string().optional(),
           isMandatory: z.boolean(),
+          semesterId: z.coerce.number().optional(),
         })
+        .refine(
+          (data) => {
+            // If feeType is MEMBERSHIP, semesterId is required
+            if (data.feeType === "MEMBERSHIP") {
+              return !!data.semesterId && data.semesterId > 0;
+            }
+            return true;
+          },
+          {
+            message: "Vui lòng chọn kỳ học cho phí hội viên",
+            path: ["semesterId"],
+          }
+        )
         .superRefine(async (data, ctx) => {
           const name = data.title;
           if (!name) return;
@@ -216,6 +251,7 @@ export function FeesTable({
       dueDate: format(addDays(new Date(), 7), "yyyy-MM-dd"),
       feeType: "MEMBERSHIP",
       isMandatory: true,
+      semesterId: undefined,
     },
   });
 
@@ -227,6 +263,7 @@ export function FeesTable({
       dueDate: format(addDays(new Date(), 7), "yyyy-MM-dd"),
       feeType: "MEMBERSHIP",
       isMandatory: true,
+      semesterId: undefined,
     });
   }, [form]);
 
@@ -251,6 +288,7 @@ export function FeesTable({
           feeType: values.feeType,
           isMandatory: values.isMandatory,
           isDraft: !publishImmediately,
+          semesterId: values.semesterId,
         };
         const apiRes = await feeService.createFee(clubId, dto);
         const createdFee = apiRes?.data;
@@ -328,7 +366,21 @@ export function FeesTable({
           ]),
           description: z.string().optional(),
           isMandatory: z.boolean(),
+          semesterId: z.coerce.number().optional(),
         })
+        .refine(
+          (data) => {
+            // If feeType is MEMBERSHIP, semesterId is required
+            if (data.feeType === "MEMBERSHIP") {
+              return !!data.semesterId && data.semesterId > 0;
+            }
+            return true;
+          },
+          {
+            message: "Vui lòng chọn kỳ học cho phí hội viên",
+            path: ["semesterId"],
+          }
+        )
         .superRefine(async (data, ctx) => {
           const name = data.title;
           if (!name || !editingFee) return;
@@ -370,6 +422,7 @@ export function FeesTable({
         dueDate: fee.dueDate,
         feeType: fee.feeType,
         isMandatory: fee.isMandatory,
+        semesterId: fee.semesterId,
       });
       setIsEditOpen(true);
     },
@@ -388,6 +441,7 @@ export function FeesTable({
           dueDate: values.dueDate,
           feeType: values.feeType,
           isMandatory: values.isMandatory,
+          semesterId: values.semesterId,
         };
         const apiRes = await feeService.updateFee(
           clubId,
@@ -721,6 +775,46 @@ export function FeesTable({
                     )}
                   />
                 </div>
+                {form.watch("feeType") === "MEMBERSHIP" && (
+                  <div>
+                    <FormField
+                      control={form.control}
+                      name="semesterId"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Kỳ học *</FormLabel>
+                          <FormControl>
+                            <select
+                              id="fee-semester"
+                              className="w-full border rounded p-2 mt-1"
+                              value={field.value || ""}
+                              onChange={(e) =>
+                                field.onChange(
+                                  e.target.value
+                                    ? Number(e.target.value)
+                                    : undefined
+                                )
+                              }
+                              disabled={loadingSemesters}
+                            >
+                              <option value="">-- Chọn kỳ học --</option>
+                              {semesters.map((semester) => (
+                                <option key={semester.id} value={semester.id}>
+                                  {semester.semesterName}
+                                  {semester.isCurrent ? " (Hiện tại)" : ""}
+                                </option>
+                              ))}
+                            </select>
+                          </FormControl>
+                          <FormMessage />
+                          <div className="text-xs text-muted-foreground">
+                            Chọn kỳ học để active thành viên khi đóng phí
+                          </div>
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                )}
                 <div className="md:col-span-2">
                   <FormField
                     control={form.control}
@@ -843,15 +937,22 @@ export function FeesTable({
                 {fees.map((fee) => (
                   <TableRow key={fee.id}>
                     <TableCell className="font-medium">
-                      <div className="flex items-center gap-2">
-                        {fee.title}
-                        {fee.isDraft && (
-                          <Badge
-                            className="bg-yellow-500/10 text-yellow-600 border-yellow-500"
-                            variant="outline"
-                          >
-                            Bản nháp
-                          </Badge>
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-2">
+                          {fee.title}
+                          {fee.isDraft && (
+                            <Badge
+                              className="bg-yellow-500/10 text-yellow-600 border-yellow-500"
+                              variant="outline"
+                            >
+                              Bản nháp
+                            </Badge>
+                          )}
+                        </div>
+                        {fee.semesterName && fee.feeType === "MEMBERSHIP" && (
+                          <div className="text-xs text-muted-foreground">
+                            Kỳ: {fee.semesterName}
+                          </div>
                         )}
                       </div>
                     </TableCell>
@@ -1051,6 +1152,46 @@ export function FeesTable({
                   )}
                 />
               </div>
+              {editForm.watch("feeType") === "MEMBERSHIP" && (
+                <div>
+                  <FormField
+                    control={editForm.control}
+                    name="semesterId"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Kỳ học *</FormLabel>
+                        <FormControl>
+                          <select
+                            id="edit-fee-semester"
+                            className="w-full border rounded p-2 mt-1"
+                            value={field.value || ""}
+                            onChange={(e) =>
+                              field.onChange(
+                                e.target.value
+                                  ? Number(e.target.value)
+                                  : undefined
+                              )
+                            }
+                            disabled={loadingSemesters}
+                          >
+                            <option value="">-- Chọn kỳ học --</option>
+                            {semesters.map((semester) => (
+                              <option key={semester.id} value={semester.id}>
+                                {semester.semesterName}
+                                {semester.isCurrent ? " (Hiện tại)" : ""}
+                              </option>
+                            ))}
+                          </select>
+                        </FormControl>
+                        <FormMessage />
+                        <div className="text-xs text-muted-foreground">
+                          Chọn kỳ học để active thành viên khi đóng phí
+                        </div>
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              )}
               <div className="md:col-span-2">
                 <FormField
                   control={editForm.control}

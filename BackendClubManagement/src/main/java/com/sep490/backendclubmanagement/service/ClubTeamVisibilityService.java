@@ -114,7 +114,8 @@ public class ClubTeamVisibilityService {
                 /* member */ isMember,
                 myRoles,
                 memberCount,
-                members
+                members,
+                team.getLinkGroupChat()
         );
     }
 

@@ -3,15 +3,15 @@ package com.sep490.backendclubmanagement.repository;
 import com.sep490.backendclubmanagement.dto.request.NewsRequest;
 import com.sep490.backendclubmanagement.dto.response.ActivityDTO;
 import com.sep490.backendclubmanagement.dto.response.LatestNewsDTO;
+import com.sep490.backendclubmanagement.entity.Club;
 import com.sep490.backendclubmanagement.entity.News;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.*;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
-import com.sep490.backendclubmanagement.entity.Club;
-import org.springframework.data.jpa.repository.Modifying;
+
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -26,10 +26,7 @@ public interface NewsRepository extends JpaRepository<News, Long> {
             "ORDER BY n.createdAt DESC")
     List<LatestNewsDTO> findLatestNews(Pageable pageable);
 
-    // Lấy tin non-draft mới nhất
     Optional<News> findTopByIsDraftFalseOrderByCreatedAtDesc();
-
-    // Lấy tin spotlight mới nhất
     Optional<News> findTopByIsSpotlightTrueOrderByCreatedAtDesc();
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
@@ -40,18 +37,17 @@ public interface NewsRepository extends JpaRepository<News, Long> {
     @Query("UPDATE News n SET n.isSpotlight = true WHERE n.id = :id")
     int markSpotlight(@Param("id") Long id);
 
-    // Dành cho phần quản trị: lọc/tìm kiếm tin tức (native) - GIỮ NGUYÊN
+    // Lọc news (giữ nguyên bản native bạn đang dùng)
     @Query(value = """
-                                     SELECT DISTINCT e.*
-                                         FROM news e
-                                         LEFT JOIN clubs c ON e.club_id = c.id
-                                         WHERE
-                                             (:#{#request.clubId} IS NULL OR e.club_id = :#{#request.clubId})
-                                            AND e.is_draft = false
-          """, nativeQuery = true, countProjection = "e.id")
+            SELECT DISTINCT e.*
+            FROM news e
+            LEFT JOIN clubs c ON e.club_id = c.id
+            WHERE (:#{#request.clubId} IS NULL OR e.club_id = :#{#request.clubId})
+              AND e.is_draft = false
+            """,
+            nativeQuery = true, countProjection = "e.id")
     Page<News> getAllNewsByFilter(NewsRequest request, Pageable pageable);
 
-    // Activity theo tác giả (JPQL) — phục vụ ClubManagementService
     @Query("SELECT new com.sep490.backendclubmanagement.dto.response.ActivityDTO(" +
             "n.id, 'NEWS', n.title, u.fullName, n.createdAt) " +
             "FROM News n JOIN n.createdBy u " +
@@ -70,4 +66,34 @@ public interface NewsRepository extends JpaRepository<News, Long> {
       ORDER BY n.updatedAt DESC
     """)
     Page<News> findDraftsByAuthor(@Param("authorId") Long authorId, Pageable pageable);
+
+    // ===== STAFF: ẩn/xóa mềm/khôi phục =====
+    @Query("select n from News n where n.id = :id")
+    Optional<News> findByIdForUpdate(@Param("id") Long id);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("update News n set n.hidden = :hidden where n.id = :id and n.deleted = false")
+    int updateHidden(@Param("id") Long id, @Param("hidden") boolean hidden);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+           update News n
+              set n.deleted = true,
+                  n.deletedById = :staffId,
+                  n.deletedAt = :now
+            where n.id = :id and n.deleted = false
+           """)
+    int softDelete(@Param("id") Long id,
+                   @Param("staffId") Long staffId,
+                   @Param("now") LocalDateTime now);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+           update News n
+              set n.deleted = false,
+                  n.deletedById = null,
+                  n.deletedAt = null
+            where n.id = :id and n.deleted = true
+           """)
+    int restore(@Param("id") Long id);
 }

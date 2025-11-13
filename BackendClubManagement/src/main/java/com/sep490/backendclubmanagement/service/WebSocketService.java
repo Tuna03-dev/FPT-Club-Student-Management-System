@@ -191,6 +191,24 @@ public class WebSocketService {
         });
         log.info("Sent message to {} users, type: {}", emails.size(), type);
     }
+    public <T> void broadcastToUser(Long userId, String type, String action, T payload) {
+        try {
+            if (userId == null) {
+                log.warn("broadcastToUser skipped: null userId");
+                return;
+            }
+            WebSocketMessage<T> message = WebSocketMessage.of(type, action, payload);
+            messagingTemplate.convertAndSendToUser(
+                    String.valueOf(userId),
+                    "/queue/" + type,
+                    message
+            );
+            log.info("Broadcast to userId: {}, type: {}, action: {}", userId, type, action);
+        } catch (Exception e) {
+            log.error("Failed to broadcast to userId: {}", userId, e);
+        }
+    }
+
 }
 
 

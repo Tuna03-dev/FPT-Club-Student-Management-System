@@ -275,7 +275,7 @@ export default function PendingPosts() {
                   className="text-xs sm:text-sm whitespace-nowrap px-3 sm:px-4 flex-shrink-0"
                 >
                   <Clock className="h-3 w-3 sm:h-4 sm:w-4 mr-1.5" />
-                  Toàn bộ club
+                  Toàn bộ câu lạc bộ
                 </TabsTrigger>
                 {teamsLoading
                   ? // Loading skeletons for teams

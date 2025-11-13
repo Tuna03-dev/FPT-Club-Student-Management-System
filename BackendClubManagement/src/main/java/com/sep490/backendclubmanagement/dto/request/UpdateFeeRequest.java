@@ -26,5 +26,7 @@ public class UpdateFeeRequest {
     @NotNull
     private Boolean isMandatory;
 
+    private Long semesterId; // For MEMBERSHIP fee type
+
 }
 

@@ -1,41 +1,33 @@
-import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
-import { requestsApi } from "@/api/newsRequests";
-import type { NewsRequest, RequestStatus } from "@/types/news";
-import { useTeamLeadGuard } from "@/hooks/useTeamLeadGuard";
-import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Clock, Search } from "lucide-react";
+"use client"
 
-// ========== Types ==========
-type FilterStatus = RequestStatus | "ALL";
+import { useEffect, useState } from "react"
+import { useNavigate, useParams } from "react-router-dom"
+import { requestsApi } from "@/api/newsRequests"
+import type { NewsRequest, RequestStatus } from "@/types/news"
+import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Clock, Search, RefreshCw, ImageOff, Eye, Pencil, XCircle, Info, AlertTriangle } from "lucide-react"
+import { SkeletonRow } from "@/components/common/Skeleton"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
+import { useWebSocket } from "@/hooks/useWebSocket"
 
-// ========== Badge màu ==========
+type FilterStatus = RequestStatus | "ALL"
+
 const badgeClass = (s?: string) => {
   const map: Record<string, string> = {
-    DRAFT: "bg-slate-500",
-    PENDING_CLUB: "bg-amber-500",
-    APPROVED_CLUB: "bg-emerald-600",
-    REJECTED_CLUB: "bg-rose-600",
-    PENDING_UNIVERSITY: "bg-amber-500",
-    APPROVED_UNIVERSITY: "bg-emerald-600",
-    REJECTED_UNIVERSITY: "bg-rose-600",
-    CANCELED: "bg-slate-500",
-  };
-  return `inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold text-white ${
-    map[s || "CANCELED"] || "bg-slate-500"
-  }`;
-};
+    DRAFT: "bg-slate-100 text-slate-700 ring-1 ring-slate-200",
+    PENDING_CLUB: "bg-amber-50 text-amber-700 ring-1 ring-amber-200",
+    APPROVED_CLUB: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200",
+    REJECTED_CLUB: "bg-rose-50 text-rose-700 ring-1 ring-rose-200",
+    PENDING_UNIVERSITY: "bg-amber-50 text-amber-700 ring-1 ring-amber-200",
+    APPROVED_UNIVERSITY: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200",
+    REJECTED_UNIVERSITY: "bg-rose-50 text-rose-700 ring-1 ring-rose-200",
+    CANCELED: "bg-slate-100 text-slate-600 ring-1 ring-slate-200",
+  }
+  return `inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${map[s || "CANCELED"] || "bg-slate-100"}`
+}
 
-// ========== Nhãn tiếng Việt ==========
 const statusLabel: Record<RequestStatus | "CANCELED" | "DRAFT", string> = {
   DRAFT: "Bản nháp",
   PENDING_CLUB: "Chờ duyệt (CLB)",
@@ -45,60 +37,107 @@ const statusLabel: Record<RequestStatus | "CANCELED" | "DRAFT", string> = {
   APPROVED_UNIVERSITY: "Đã duyệt (Trường)",
   REJECTED_UNIVERSITY: "Từ chối (Trường)",
   CANCELED: "Đã hủy",
-};
+}
 
 export default function TeamNewsRequests() {
-  const { clubId: clubIdParam, teamId: teamIdParam } = useParams();
-  const clubId = Number(clubIdParam);
-  const teamId = Number(teamIdParam);
-  const { allowed, error } = useTeamLeadGuard(clubId, teamId);
+  const nav = useNavigate()
+  const { clubId: clubIdParam, teamId: teamIdParam } = useParams()
+  const clubId = Number(clubIdParam)
+  const teamId = Number(teamIdParam)
 
-  const [list, setList] = useState<NewsRequest[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [kw, setKw] = useState("");
-  const [status, setStatus] = useState<FilterStatus>("PENDING_CLUB");
+  const token = localStorage.getItem("accessToken") || null
+  const { isConnected, subscribeToClub, subscribeToUserQueue } = useWebSocket(token)
 
-  const extractItems = (apiEnvelope: any): NewsRequest[] => {
-    const payload = apiEnvelope?.data;
-    if (payload && Array.isArray(payload.data)) return payload.data as NewsRequest[];
-    if (payload && Array.isArray(payload.content)) return payload.content as NewsRequest[];
-    if (Array.isArray(payload)) return payload as NewsRequest[];
-    return [];
-  };
+  const [list, setList] = useState<NewsRequest[]>([])
+  const [loading, setLoading] = useState(false)
+  const [kw, setKw] = useState("")
+  const [status, setStatus] = useState<FilterStatus>("ALL")
+  const [doing, setDoing] = useState<number | null>(null)
+
+  // banners
+  const [infoBanner, setInfoBanner] = useState<string | null>(null)
+  const [errBanner, setErrBanner] = useState<string | null>(null)
+
+  // cancel dialog
+  const [cancelId, setCancelId] = useState<number | null>(null)
+  const [cancelBusy, setCancelBusy] = useState(false)
 
   const load = async () => {
-    setLoading(true);
+    setLoading(true)
     try {
-      const params: Record<string, any> = { page: 1, size: 100 };
-      if (kw.trim()) params.keyword = kw.trim();
-      if (status !== "ALL") params.status = status as RequestStatus; // "ALL" => không gửi status
-      if (Number.isFinite(clubId)) params.clubId = clubId;
-      if (Number.isFinite(teamId)) params.teamId = teamId;
-      const res = await requestsApi.search(params);
-      const items = extractItems(res.data);
-      setList(items);
+      const params: Record<string, any> = { page: 1, size: 100 }
+      if (kw.trim()) params.keyword = kw.trim()
+      if (status !== "ALL") params.status = status as RequestStatus
+      if (Number.isFinite(clubId)) params.clubId = clubId
+      if (Number.isFinite(teamId)) params.teamId = teamId
+      const res = await requestsApi.search(params)
+      const payload = (res as any)?.data ?? res
+      setList(Array.isArray(payload?.data) ? payload.data : [])
+    } catch (e: any) {
+      setErrBanner(e?.message || "Không tải được danh sách yêu cầu.")
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }
 
   useEffect(() => {
-    load();
+    load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clubIdParam, teamIdParam, kw, status]);
+  }, [clubIdParam, teamIdParam, kw, status])
 
-  if (allowed === false)
-    return (
-      <div className="p-4 text-sm text-red-600">
-        Bạn không có quyền truy cập. {error}
-      </div>
-    );
-  if (allowed === null)
-    return <div className="p-4 text-sm text-slate-500">Đang kiểm tra quyền…</div>;
+  // Realtime: khi có NEWS_REQUEST trong CLB thì reload
+  useEffect(() => {
+    if (!isConnected || !Number.isFinite(clubId)) return
+    const offClub = subscribeToClub(clubId, (msg) => {
+      if (msg.type === "NEWS_REQUEST") load()
+    })
+    const offMe = subscribeToUserQueue((_msg) => {})
+    return () => {
+      offClub?.()
+      offMe?.()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isConnected, clubId])
+
+  const canEdit = (r: NewsRequest) => r.status === "PENDING_CLUB"
+  const canCancel = (r: NewsRequest) => r.status === "PENDING_CLUB"
+
+  // điều hướng sửa (mở form ở trang chi tiết)
+  const onEdit = (r: NewsRequest) => {
+    nav(`/myclub/${clubId}/teams/${teamId}/news/requests/${r.id}?edit=1`)
+  }
+
+  const confirmCancel = async () => {
+    if (!cancelId) return
+    setCancelBusy(true)
+    setDoing(cancelId)
+    try {
+      await requestsApi.cancel(cancelId)
+      setInfoBanner(`Đã hủy request #${cancelId}.`)
+      await load()
+    } catch (e: any) {
+      setErrBanner(e?.message || "Hủy thất bại.")
+    } finally {
+      setDoing(null)
+      setCancelBusy(false)
+      setCancelId(null)
+    }
+  }
 
   return (
-    <div className="p-6 max-w-6xl mx-auto space-y-6">
-      {/* Tiêu đề */}
+    <div className="px-4 sm:px-6 lg:px-4 py-4 max-w-none mx-auto space-y-6">
+      {/* banners */}
+      {infoBanner && (
+        <div className="flex items-center gap-2 bg-blue-50 text-blue-700 px-3 py-2 rounded-lg border border-blue-200">
+          <Info className="h-4 w-4" /> <span>{infoBanner}</span>
+        </div>
+      )}
+      {errBanner && (
+        <div className="flex items-center gap-2 bg-rose-50 text-rose-700 px-3 py-2 rounded-lg border border-rose-200">
+          <AlertTriangle className="h-4 w-4" /> <span>{errBanner}</span>
+        </div>
+      )}
+
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <h1 className="text-2xl font-bold flex items-center gap-2">
           <Clock className="h-5 w-5 text-primary" />
@@ -106,24 +145,15 @@ export default function TeamNewsRequests() {
         </h1>
       </div>
 
-      {/* Bộ lọc */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Tìm theo tiêu đề, mô tả…"
-            value={kw}
-            onChange={(e) => setKw(e.target.value)}
-            className="pl-9"
-          />
+          <Input placeholder="Tìm theo tiêu đề, mô tả…" value={kw} onChange={(e) => setKw(e.target.value)} className="pl-9" />
         </div>
         <Select value={status} onValueChange={(v) => setStatus(v as FilterStatus)}>
-          <SelectTrigger className="w-[220px]">
-            <SelectValue placeholder="Trạng thái" />
-          </SelectTrigger>
+          <SelectTrigger className="w-[220px]"><SelectValue placeholder="Trạng thái" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="ALL">Tất cả trạng thái</SelectItem>
-            <SelectItem value="DRAFT">Bản nháp</SelectItem>
             <SelectItem value="PENDING_CLUB">Chờ duyệt (CLB)</SelectItem>
             <SelectItem value="APPROVED_CLUB">Đã duyệt (CLB)</SelectItem>
             <SelectItem value="REJECTED_CLUB">Từ chối (CLB)</SelectItem>
@@ -135,56 +165,119 @@ export default function TeamNewsRequests() {
         </Select>
       </div>
 
-      {/* Danh sách */}
-      {loading ? (
-        <div className="text-sm text-muted-foreground py-8 text-center">Đang tải…</div>
-      ) : list.length > 0 ? (
-        <div className="grid gap-3">
-          {list.map((r) => (
-            <Card key={r.id} className="p-4 hover:shadow-md transition-shadow">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex-1">
-                  {/* Người gửi */}
-                  <div className="flex items-center gap-3">
-                    <Avatar className="h-8 w-8">
-                      <AvatarImage src={r.createdByAvatarUrl || ""} />
-                      <AvatarFallback>{r.createdByFullName?.[0] || "U"}</AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <div className="font-medium leading-tight">
-                        {r.requestTitle || "—"}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        {r.createdByFullName || "—"} •{" "}
-                        {r.requestDate
-                          ? new Date(r.requestDate).toLocaleString("vi-VN")
-                          : "—"}
-                      </div>
+      <div className="overflow-x-auto border rounded-lg bg-white shadow-sm">
+        {loading ? (
+          <table className="w-full">
+            <thead className="border-b bg-slate-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700">Ảnh</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700">Tiêu đề</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700">Trạng thái</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700">Ngày gửi</th>
+                <th className="px-6 py-3 text-center text-xs font-semibold text-slate-700">Thao tác</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {[...Array(6)].map((_, i) => (
+                <SkeletonRow key={i} columns={[{ width: 64 }, { width: "100%" }, { width: 120 }, { width: 140 }, { width: 80 }]} />
+              ))}
+            </tbody>
+          </table>
+        ) : list.length === 0 ? (
+          <div className="py-12 text-center text-sm text-slate-500">Chưa có yêu cầu nào.</div>
+        ) : (
+          <table className="w-full">
+            <thead className="border-b bg-slate-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700">Ảnh</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700">Tiêu đề</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700">Trạng thái</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700">Ngày gửi</th>
+                <th className="px-6 py-3 text-center text-xs font-semibold text-slate-700">Thao tác</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {list.map((r) => (
+                <tr key={r.id} className="hover:bg-slate-50 transition-colors">
+                  <td className="px-6 py-4">
+                    <div className="w-16 h-16 rounded-lg bg-slate-100 overflow-hidden flex items-center justify-center">
+                      {r.thumbnailUrl ? <img src={r.thumbnailUrl || "/placeholder.svg"} className="w-full h-full object-cover" /> : <ImageOff className="h-5 w-5 text-slate-400" />}
                     </div>
-                  </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="line-clamp-2 font-medium text-slate-900">{r.requestTitle || "—"}</div>
+                    <div className="text-xs text-slate-500 line-clamp-1">{r.description ?? "—"}</div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className={badgeClass(r.status)}>
+                      {statusLabel[(r.status as RequestStatus) || "CANCELED"] || r.status}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="text-sm text-slate-600">{r.requestDate ? new Date(r.requestDate).toLocaleString("vi-VN") : "—"}</div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex items-center justify-center gap-2">
+                      <button
+                        className="p-2 rounded-lg text-slate-600 hover:bg-slate-100"
+                        title="Xem chi tiết"
+                        onClick={() => nav(`/myclub/${clubId}/teams/${teamId}/news/requests/${r.id}`)}
+                      >
+                        <Eye className="h-4 w-4" />
+                      </button>
 
-                  {/* Mô tả */}
-                  <div className="mt-2 text-sm text-slate-600 whitespace-pre-wrap">
-                    {r.description ?? "—"}
-                  </div>
+                      {canEdit(r) && (
+                        <button
+                          className="p-2 rounded-lg text-slate-600 hover:bg-slate-100 disabled:opacity-50"
+                          disabled={doing === r.id}
+                          title="Sửa"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            onEdit(r)
+                          }}
+                        >
+                          {doing === r.id ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Pencil className="h-4 w-4" />}
+                        </button>
+                      )}
 
-                  {/* Club & Team */}
-                  
-                </div>
+                      {canCancel(r) && (
+                        <button
+                          className="p-2 rounded-lg text-rose-600 hover:bg-rose-50 disabled:opacity-50"
+                          disabled={doing === r.id}
+                          title="Hủy"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setCancelId(r.id)
+                          }}
+                        >
+                          {doing === r.id ? <RefreshCw className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
 
-                {/* Badge trạng thái */}
-                <span className={badgeClass(r.status)}>
-                  {statusLabel[(r.status as RequestStatus) || "CANCELED"] || r.status}
-                </span>
-              </div>
-            </Card>
-          ))}
-        </div>
-      ) : (
-        <Card className="p-8 text-center text-sm text-muted-foreground">
-          Chưa có yêu cầu nào.
-        </Card>
-      )}
+      {/* Cancel dialog */}
+      <Dialog open={cancelId !== null} onOpenChange={(open) => { if (!open) setCancelId(null) }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Hủy request #{cancelId}</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-slate-600">Bạn chắc chắn muốn hủy yêu cầu này?</p>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setCancelId(null)} disabled={cancelBusy}>Không</Button>
+            <Button variant="destructive" onClick={confirmCancel} disabled={cancelBusy}>
+              {cancelBusy ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : null}
+              Hủy
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
-  );
+  )
 }
