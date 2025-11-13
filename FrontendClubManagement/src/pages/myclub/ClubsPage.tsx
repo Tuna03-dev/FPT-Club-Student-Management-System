@@ -47,8 +47,12 @@ export default function ClubsPage() {
     string | null
   >(null);
   const [selectedClubName, setSelectedClubName] = useState<string>("");
+
   const navigate = useNavigate();
-  const { data: myClubs } = useMyClubs();
+
+  // ✅ Chỉ load danh sách CLB của tôi nếu đã đăng nhập
+  const isAuthenticated = authService.isAuthenticated();
+  const { data: myClubs } = useMyClubs(isAuthenticated);
 
   useEffect(() => {
     setLoading(true);
@@ -65,7 +69,7 @@ export default function ClubsPage() {
     return () => clearTimeout(debounce);
   }, [page, searchQuery]);
 
-  // Reset to page 0 when search or filter changes
+  // Reset về page 0 khi search hoặc filter đổi
   useEffect(() => {
     setPage(0);
   }, [searchQuery, recruitmentFilter]);
@@ -131,7 +135,6 @@ export default function ClubsPage() {
         return;
       }
     } catch (e) {
-      // Có thể show lỗi hoặc cho phép tiếp tục
       console.error("Error checking application status:", e);
     }
 
@@ -189,7 +192,9 @@ export default function ClubsPage() {
                   <SelectContent>
                     <SelectItem value="all">Tất cả câu lạc bộ</SelectItem>
                     <SelectItem value="has">Có đợt ứng tuyển</SelectItem>
-                    <SelectItem value="none">Không có đợt ứng tuyển</SelectItem>
+                    <SelectItem value="none">
+                      Không có đợt ứng tuyển
+                    </SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -222,7 +227,7 @@ export default function ClubsPage() {
                     return (
                       <div key={club.id} className="relative flex flex-col">
                         <Link
-                          to={`/club/${club.id}`}
+                          to={`/clubs/${club.id}`}
                           className="block flex-1 flex flex-col h-full"
                         >
                           <Card
@@ -282,7 +287,7 @@ export default function ClubsPage() {
                                     </Badge>
                                   )}
                                 </div>
-                                 <div className="flex flex-col gap-2 mt-auto">
+                                <div className="flex flex-col gap-2 mt-auto">
                                   {hasRecruitment && (
                                     <Button
                                       className="w-full bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-primary-foreground font-semibold shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all duration-300 relative overflow-hidden group"
@@ -302,13 +307,10 @@ export default function ClubsPage() {
                                       <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700"></span>
                                     </Button>
                                   )}
-                                   <Button
-                                     variant="default"
-                                     className="w-full"
-                                   >
-                                     Xem Chi Tiết
-                                   </Button>
-                                 </div>
+                                  <Button variant="default" className="w-full">
+                                    Xem Chi Tiết
+                                  </Button>
+                                </div>
                               </div>
                             </CardContent>
                           </Card>
@@ -320,64 +322,69 @@ export default function ClubsPage() {
               </div>
 
               {/* Pagination */}
-              {!loading && filteredClubs.length > 0 && data.totalPages > 1 && (
-                <div className="flex items-center justify-center mt-12">
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setPage((p) => Math.max(0, p - 1))}
-                      disabled={data.first}
-                    >
-                      Trước
-                    </Button>
+              {!loading &&
+                filteredClubs.length > 0 &&
+                data.totalPages > 1 && (
+                  <div className="flex items-center justify-center mt-12">
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setPage((p) => Math.max(0, p - 1))}
+                        disabled={data.first}
+                      >
+                        Trước
+                      </Button>
 
-                    <div className="flex items-center gap-1">
-                      {Array.from(
-                        { length: Math.min(5, data.totalPages) },
-                        (_, i) => {
-                          const currentPageNum = data.number + 1;
-                          let pageNum;
-                          if (data.totalPages <= 5) {
-                            pageNum = i + 1;
-                          } else if (currentPageNum <= 3) {
-                            pageNum = i + 1;
-                          } else if (currentPageNum >= data.totalPages - 2) {
-                            pageNum = data.totalPages - 4 + i;
-                          } else {
-                            pageNum = currentPageNum - 2 + i;
+                      <div className="flex items-center gap-1">
+                        {Array.from(
+                          { length: Math.min(5, data.totalPages) },
+                          (_, i) => {
+                            const currentPageNum = data.number + 1;
+                            let pageNum;
+                            if (data.totalPages <= 5) {
+                              pageNum = i + 1;
+                            } else if (currentPageNum <= 3) {
+                              pageNum = i + 1;
+                            } else if (
+                              currentPageNum >=
+                              data.totalPages - 2
+                            ) {
+                              pageNum = data.totalPages - 4 + i;
+                            } else {
+                              pageNum = currentPageNum - 2 + i;
+                            }
+
+                            return (
+                              <Button
+                                key={pageNum}
+                                variant={
+                                  currentPageNum === pageNum
+                                    ? "default"
+                                    : "outline"
+                                }
+                                size="sm"
+                                onClick={() => setPage(pageNum - 1)}
+                                className="w-10 h-10"
+                              >
+                                {pageNum}
+                              </Button>
+                            );
                           }
+                        )}
+                      </div>
 
-                          return (
-                            <Button
-                              key={pageNum}
-                              variant={
-                                currentPageNum === pageNum
-                                  ? "default"
-                                  : "outline"
-                              }
-                              size="sm"
-                              onClick={() => setPage(pageNum - 1)}
-                              className="w-10 h-10"
-                            >
-                              {pageNum}
-                            </Button>
-                          );
-                        }
-                      )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setPage((p) => p + 1)}
+                        disabled={data.last}
+                      >
+                        Sau
+                      </Button>
                     </div>
-
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setPage((p) => p + 1)}
-                      disabled={data.last}
-                    >
-                      Sau
-                    </Button>
                   </div>
-                </div>
-              )}
+                )}
             </>
           )
         )}

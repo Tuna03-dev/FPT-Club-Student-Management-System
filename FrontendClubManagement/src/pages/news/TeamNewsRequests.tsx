@@ -6,7 +6,7 @@ import { requestsApi } from "@/api/newsRequests"
 import type { NewsRequest, RequestStatus } from "@/types/news"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Clock, Search, RefreshCw, ImageOff, Eye, Pencil, XCircle, Info, AlertTriangle } from "lucide-react"
+import {  Search, RefreshCw, ImageOff, Eye, Pencil, XCircle, Info, AlertTriangle } from "lucide-react"
 import { SkeletonRow } from "@/components/common/Skeleton"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
@@ -138,12 +138,12 @@ export default function TeamNewsRequests() {
         </div>
       )}
 
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      {/* <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <h1 className="text-2xl font-bold flex items-center gap-2">
           <Clock className="h-5 w-5 text-primary" />
           Yêu cầu bài viết của Phòng ban
         </h1>
-      </div>
+      </div> */}
 
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
