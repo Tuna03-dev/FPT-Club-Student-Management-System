@@ -2,6 +2,7 @@ package com.sep490.backendclubmanagement.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sep490.backendclubmanagement.dto.ApiResponse;
+import com.sep490.backendclubmanagement.dto.request.AssignTeamToReportRequirementRequest;
 import com.sep490.backendclubmanagement.dto.request.ClubReportRequirementFilterRequest;
 import com.sep490.backendclubmanagement.dto.request.CreateReportRequirementRequest;
 import com.sep490.backendclubmanagement.dto.request.CreateReportRequest;
@@ -275,6 +276,24 @@ public class ReportController {
     ) {
         Long userId = SecurityUtils.getCurrentUserId();
         ReportDetailResponse data = reportService.reviewReportByClub(request, userId);
+        return ApiResponse.success(data);
+    }
+
+    /**
+     * Assign a team to a report requirement (for CLUB_OFFICER only)
+     */
+    @PostMapping("/club/{clubId}/requirements/assign-team")
+    public ApiResponse<ReportRequirementResponse> assignTeamToReportRequirement(
+            @PathVariable Long clubId,
+            @RequestBody @Valid AssignTeamToReportRequirementRequest request
+    ) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        ReportRequirementResponse data = reportService.assignTeamToReportRequirement(
+                request.getClubReportRequirementId(),
+                request.getTeamId(),
+                clubId,
+                userId
+        );
         return ApiResponse.success(data);
     }
 }

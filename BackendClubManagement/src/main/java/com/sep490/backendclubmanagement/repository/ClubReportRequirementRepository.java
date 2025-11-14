@@ -55,6 +55,21 @@ public interface ClubReportRequirementRepository extends JpaRepository<ClubRepor
     );
 
     /**
+     * Find all ClubReportRequirements by clubId and teamId
+     * Fetch submissionReportRequirement eagerly to avoid LazyInitializationException
+     * Ordered by creation time (newest first)
+     */
+    @Query("SELECT crr FROM ClubReportRequirement crr " +
+           "JOIN FETCH crr.submissionReportRequirement " +
+           "WHERE crr.club.id = :clubId " +
+           "AND crr.teamId = :teamId " +
+           "ORDER BY crr.submissionReportRequirement.createdAt DESC")
+    List<ClubReportRequirement> findByClubIdAndTeamId(
+            @Param("clubId") Long clubId,
+            @Param("teamId") Long teamId
+    );
+
+    /**
      * Find all ClubReportRequirements by clubId with filters and pagination
      * Filters:
      * - keyword: search in title and description
@@ -80,7 +95,8 @@ public interface ClubReportRequirementRepository extends JpaRepository<ClubRepor
            "     (:filterUnsubmitted = true AND r IS NULL)) " +
            "AND (:filterOverdue IS NULL OR :filterOverdue = false OR " +
            "     (:filterOverdue = true AND srr.dueDate < :currentDate)) " +
-           "AND (:reportStatus IS NULL OR (r IS NOT NULL AND r.status = :reportStatus))",
+           "AND (:reportStatus IS NULL OR (r IS NOT NULL AND r.status = :reportStatus)) " +
+           "AND (:teamId IS NULL OR crr.teamId = :teamId)",
            countQuery = "SELECT COUNT(crr) FROM ClubReportRequirement crr " +
            "LEFT JOIN crr.report r " +
            "LEFT JOIN crr.submissionReportRequirement srr " +
@@ -96,7 +112,8 @@ public interface ClubReportRequirementRepository extends JpaRepository<ClubRepor
            "     (:filterUnsubmitted = true AND r IS NULL)) " +
            "AND (:filterOverdue IS NULL OR :filterOverdue = false OR " +
            "     (:filterOverdue = true AND srr.dueDate < :currentDate)) " +
-           "AND (:reportStatus IS NULL OR (r IS NOT NULL AND r.status = :reportStatus))")
+           "AND (:reportStatus IS NULL OR (r IS NOT NULL AND r.status = :reportStatus)) " +
+           "AND (:teamId IS NULL OR crr.teamId = :teamId)")
     Page<ClubReportRequirement> findByClubIdWithFilters(
             @Param("clubId") Long clubId,
             @Param("keyword") String keyword,
@@ -104,6 +121,7 @@ public interface ClubReportRequirementRepository extends JpaRepository<ClubRepor
             @Param("filterOverdue") Boolean filterOverdue,
             @Param("reportStatus") com.sep490.backendclubmanagement.entity.ReportStatus reportStatus,
             @Param("semesterId") Long semesterId,
+            @Param("teamId") Long teamId,
             @Param("currentDate") LocalDate currentDate,
             Pageable pageable
     );

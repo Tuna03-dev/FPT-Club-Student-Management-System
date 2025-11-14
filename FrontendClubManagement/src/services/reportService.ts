@@ -164,6 +164,7 @@ export interface ClubReportRequirementFilterRequest {
   keyword?: string;
   status?: string; // OVERDUE, UNSUBMITTED, DRAFT, PENDING_CLUB, etc.
   semesterId?: number;
+  teamId?: number; // Filter by team ID (for team officer to see only their assigned requirements)
 }
 
 /**
@@ -459,6 +460,28 @@ export async function getClubReportDetail(
   );
   if (!response.data) {
     throw new Error("Failed to get report detail");
+  }
+  return response.data;
+}
+
+/**
+ * Assign a team to a report requirement (for CLUB_OFFICER only)
+ */
+export interface AssignTeamToReportRequirementRequest {
+  clubReportRequirementId: number;
+  teamId: number;
+}
+
+export async function assignTeamToReportRequirement(
+  clubId: number,
+  request: AssignTeamToReportRequirementRequest
+): Promise<ReportRequirementResponse> {
+  const response = await axiosClient.post<ReportRequirementResponse>(
+    `/reports/club/${clubId}/requirements/assign-team`,
+    request
+  );
+  if (!response.data) {
+    throw new Error("Failed to assign team to report requirement");
   }
   return response.data;
 }

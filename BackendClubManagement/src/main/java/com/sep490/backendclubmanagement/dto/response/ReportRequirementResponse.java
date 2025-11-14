@@ -37,6 +37,7 @@ public class ReportRequirementResponse {
         private String clubName;
         private String clubCode;
         private String status;
+        private Long teamId;
         private ReportInfo report;
     }
 
@@ -63,6 +64,7 @@ public class ReportRequirementResponse {
         private LocalDateTime createdAt;
         private LocalDateTime updatedAt;
         private Boolean mustResubmit;
+        private UserInfo createdBy;
     }
 }
 

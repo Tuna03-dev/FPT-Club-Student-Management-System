@@ -208,5 +208,15 @@ public interface ReportServiceInterface {
      * @return Report detail response
      */
     ReportDetailResponse getClubReportDetail(Long reportId, Long clubId, Long userId);
+
+    /**
+     * Assign a team to a report requirement (for CLUB_OFFICER only)
+     * @param clubReportRequirementId Club Report Requirement ID
+     * @param teamId Team ID to assign
+     * @param clubId Club ID
+     * @param userId Current user ID
+     * @return Updated report requirement response
+     */
+    ReportRequirementResponse assignTeamToReportRequirement(Long clubReportRequirementId, Long teamId, Long clubId, Long userId);
 }
 

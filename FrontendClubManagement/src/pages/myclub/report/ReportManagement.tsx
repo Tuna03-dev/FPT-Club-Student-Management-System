@@ -16,6 +16,7 @@ import {
   getClubReports,
   getMyReports,
   getClubReportDetail,
+  assignTeamToReportRequirement,
   type CreateReportRequest,
   type UpdateReportRequest,
   type SubmitReportRequest,
@@ -29,6 +30,7 @@ import {
 import { toast } from "sonner";
 import { useClubPermissions } from "@/hooks/useClubPermissions";
 import { authService } from "@/services/authService";
+import { useTeams } from "@/hooks/useTeams";
 import {
   Card,
   CardContent,
@@ -63,6 +65,7 @@ import {
   X,
   Edit,
   Trash2,
+  UserPlus,
 } from "lucide-react";
 import {
   Pagination,
@@ -83,6 +86,14 @@ import {
 } from "@/components/ui/table";
 import type { ReportListItemResponse } from "@/types/dto/reportRequirement.dto";
 import { clubService, type SemesterDTO } from "@/services/clubService";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 type ReportType = "periodic" | "post_event";
 type ReportStatusFilter =
@@ -109,6 +120,7 @@ interface ReportRequest {
   required_details: string[];
   templateUrl?: string;
   status?: string; // UNSUBMITTED, SUBMITTED, APPROVED, REJECTED, RESUBMITTED
+  teamId?: number | null; // Team ID assigned to this requirement
   report?: {
     id: number;
     reportTitle: string;
@@ -117,6 +129,12 @@ interface ReportRequest {
     createdAt: string;
     updatedAt: string;
     mustResubmit?: boolean;
+    createdBy?: {
+      id: number;
+      fullName: string;
+      email: string;
+      studentCode?: string;
+    };
   };
 }
 
@@ -250,6 +268,17 @@ export function ClubReportManagement() {
     loading: permissionsLoading,
   } = useClubPermissions(clubId);
 
+  // Get teams for club officer to assign
+  const { data: teams, loading: teamsLoading } = useTeams(clubId);
+  
+  // Get current user's team ID if team officer
+  const currentUserTeamId = useMemo(() => {
+    if (!isTeamOfficer || !teams || teams.length === 0) return null;
+    // Get the first team where user is an officer
+    const userTeam = teams.find(team => team.myRoles && team.myRoles.length > 0);
+    return userTeam?.teamId || null;
+  }, [isTeamOfficer, teams]);
+
   // Helper function to map API response to ReportRequest format
   const mapRequirementToReportRequest = (req: any): ReportRequest => {
     const clubRequirement = req.clubRequirements?.[0];
@@ -280,6 +309,7 @@ export function ClubReportManagement() {
           createdAt: clubRequirement.report.createdAt,
           updatedAt: clubRequirement.report.updatedAt,
           mustResubmit: clubRequirement.report.mustResubmit,
+          createdBy: clubRequirement.report.createdBy,
         }
       : undefined;
 
@@ -298,6 +328,7 @@ export function ClubReportManagement() {
       templateUrl: req.templateUrl,
       status: clubRequirement?.status,
       report: reportInfo,
+      teamId: clubRequirement?.teamId || null,
     };
   };
 
@@ -352,6 +383,12 @@ export function ClubReportManagement() {
   const [resubmittingReport, setResubmittingReport] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editFileInputRef = useRef<HTMLInputElement>(null);
+  
+  // State for assign team modal
+  const [showAssignTeamModal, setShowAssignTeamModal] = useState(false);
+  const [selectedRequirementForAssign, setSelectedRequirementForAssign] = useState<ReportRequest | null>(null);
+  const [selectedTeamId, setSelectedTeamId] = useState<number | null>(null);
+  const [assigningTeam, setAssigningTeam] = useState(false);
 
   // Fetch semesters from API
   useEffect(() => {
@@ -397,6 +434,8 @@ export function ClubReportManagement() {
           status: statusFilter !== "all" ? statusFilter : undefined,
           semesterId:
             semesterFilter !== "all" ? Number(semesterFilter) : undefined,
+          // Backend will automatically filter by teamId for team officers
+          // For club officers, teamId can be passed explicitly if needed
         };
 
         const response = await getClubReportRequirementsForOfficerWithFilters(
@@ -405,6 +444,7 @@ export function ClubReportManagement() {
         );
 
         // Map API response to ReportRequest format
+        // Note: Backend already filters by teamId for team officers, so no need to filter here
         const mappedRequests: ReportRequest[] = response.content.map((req) =>
           mapRequirementToReportRequest(req)
         );
@@ -501,10 +541,12 @@ export function ClubReportManagement() {
 
     try {
       // Always refresh requests tab
+      // Note: Backend already filters by teamId for team officers
       const requirements = await getClubReportRequirementsForOfficer(clubId);
       const mappedRequests: ReportRequest[] = requirements.map((req) =>
         mapRequirementToReportRequest(req)
       );
+      
       setReportRequests(mappedRequests);
 
       // Always refresh submissions tab (my reports)
@@ -647,6 +689,56 @@ export function ClubReportManagement() {
     setDraftFileUrl("");
     setDraftFile(null);
     setShowSubmitDialog(true);
+  };
+
+  const handleOpenAssignTeamModal = (request: ReportRequest) => {
+    setSelectedRequirementForAssign(request);
+    setSelectedTeamId(null);
+    setShowAssignTeamModal(true);
+  };
+
+  const handleAssignTeam = async () => {
+    if (!clubId || !selectedRequirementForAssign || !selectedTeamId) {
+      toast.error("Vui lòng chọn phòng ban");
+      return;
+    }
+
+    try {
+      setAssigningTeam(true);
+      
+      // Find the actual club requirement ID from the API response
+      // We need to get it from the original requirement data
+      const requirement = await getClubReportRequirementsForOfficer(clubId);
+      const clubRequirement = requirement
+        .find((r) => r.id.toString() === selectedRequirementForAssign.request_id)
+        ?.clubRequirements?.[0];
+      
+      if (!clubRequirement) {
+        toast.error("Không tìm thấy yêu cầu báo cáo");
+        return;
+      }
+
+      await assignTeamToReportRequirement(clubId, {
+        clubReportRequirementId: clubRequirement.id,
+        teamId: selectedTeamId,
+      });
+
+      toast.success("Đã gán báo cáo cho phòng ban thành công");
+      setShowAssignTeamModal(false);
+      setSelectedRequirementForAssign(null);
+      setSelectedTeamId(null);
+      
+      // Refresh data
+      await refreshAllTabsData();
+    } catch (error: any) {
+      console.error("Error assigning team:", error);
+      toast.error(
+        error?.response?.data?.message ||
+        "Không thể gán báo cáo cho phòng ban. Vui lòng thử lại."
+      );
+    } finally {
+      setAssigningTeam(false);
+    }
   };
 
   const handleSaveDraft = async (requestId?: string) => {
@@ -1071,12 +1163,74 @@ export function ClubReportManagement() {
                             </div>
                           )}
 
-                          <div className="flex gap-2 pt-2">
+                          {/* Hiển thị thông báo khi báo cáo đã được giao cho phòng ban - chỉ hiển thị cho club officer hoặc team officer không phải team được gán */}
+                          {request.teamId && 
+                           (isClubPresident || (isTeamOfficer && request.teamId !== currentUserTeamId)) && (
+                            <div className="p-3 bg-green-50 border border-green-200 rounded text-sm text-green-800">
+                              <UserPlus className="h-4 w-4 inline mr-2" />
+                              Báo cáo đã được giao cho phòng ban{" "}
+                              {teams?.find((t) => t.teamId === request.teamId)?.teamName || ""}
+                            </div>
+                          )}
+
+                          {/* Hiển thị thông báo khi báo cáo ở trạng thái DRAFT và user không phải người tạo */}
+                          {request.status === "DRAFT" && request.report?.createdBy && (() => {
+                            const currentUser = authService.getCurrentUser();
+                            const isCreator = currentUser?.id === request.report?.createdBy?.id;
+                            if (!isCreator) {
+                              return (
+                                <div className="p-3 bg-gray-50 border border-gray-200 rounded text-sm text-gray-800">
+                                  <FileText className="h-4 w-4 inline mr-2" />
+                                  Người {request.report.createdBy.fullName} đã tạo báo cáo ở trạng thái bản nháp
+                                </div>
+                              );
+                            }
+                            return null;
+                          })()}
+
+                          <div className="flex gap-2 pt-2 flex-wrap">
                             {/* Hiển thị button dựa trên trạng thái yêu cầu và thông tin báo cáo từ backend */}
-                            {/* Nếu là club_president và status là DRAFT, không hiển thị nút */}
-                            {isClubPresident &&
-                            request.status ===
-                              "DRAFT" ? null : request.report || // Nếu có report, hiển thị nút xem (luôn hiển thị, kể cả khi quá hạn)
+                            {/* Nếu status là DRAFT, chỉ hiển thị nút xem cho người tạo */}
+                            {request.status === "DRAFT" && request.report ? (() => {
+                              const currentUser = authService.getCurrentUser();
+                              const isCreator = currentUser?.id === request.report?.createdBy?.id;
+                              if (isCreator) {
+                                return (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={async () => {
+                                      try {
+                                        setLoadingReportDetailId(request.request_id);
+                                        const reportDetail = await getClubReportByRequirementForOfficer(
+                                          Number(request.request_id),
+                                          clubId!
+                                        );
+                                        if (reportDetail) {
+                                          setSelectedReportDetail(reportDetail);
+                                          setShowDetailModal(true);
+                                        } else {
+                                          toast.error("Không tìm thấy báo cáo");
+                                        }
+                                      } catch (error) {
+                                        console.error("Error fetching report detail:", error);
+                                        toast.error("Không thể tải chi tiết báo cáo");
+                                      } finally {
+                                        setLoadingReportDetailId(null);
+                                      }
+                                    }}
+                                    className="bg-transparent"
+                                    disabled={loadingReportDetailId === request.request_id}
+                                  >
+                                    <Eye className="h-4 w-4 mr-1" />
+                                    {loadingReportDetailId === request.request_id
+                                      ? "Đang tải..."
+                                      : "Xem bản nháp"}
+                                  </Button>
+                                );
+                              }
+                              return null;
+                            })() : request.report || // Nếu có report, hiển thị nút xem (luôn hiển thị, kể cả khi quá hạn)
                               (request.status &&
                                 request.status !== "UNSUBMITTED" &&
                                 request.status !== null) ? (
@@ -1137,8 +1291,11 @@ export function ClubReportManagement() {
                                 })()}
                               </Button>
                             ) : (
-                              // Chỉ ẩn nút "Tạo báo cáo" nếu đã quá hạn
-                              !isDeadlineExp && (
+                              // Hiển thị nút "Tạo báo cáo" nếu:
+                              // - Chưa quá hạn VÀ
+                              // - (Không có teamId HOẶC (có teamId VÀ user là team officer VÀ teamId của requirement = teamId của user))
+                              !isDeadlineExp && 
+                              (!request.teamId || (isTeamOfficer && request.teamId === currentUserTeamId)) && (
                                 <Button
                                   size="sm"
                                   onClick={() =>
@@ -1158,6 +1315,21 @@ export function ClubReportManagement() {
                                 </Button>
                               )
                             )}
+                            
+                            {/* Nút "Giao báo cáo cho phòng ban" - chỉ hiển thị cho club officer, yêu cầu chưa có báo cáo và chưa được gán team */}
+                            {isClubPresident &&
+                              (!request.report || request.status === "UNSUBMITTED" || request.status === null) &&
+                              !request.teamId && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleOpenAssignTeamModal(request)}
+                                  className="border-green-600 text-green-600 hover:bg-green-50"
+                                >
+                                  <UserPlus className="h-4 w-4 mr-1" />
+                                  Giao báo cáo cho phòng ban
+                                </Button>
+                              )}
                           </div>
                         </div>
                       </CardContent>
@@ -3556,6 +3728,79 @@ export function ClubReportManagement() {
           </Card>
         </div>
       )}
+
+      {/* Modal chọn team để gán báo cáo */}
+      <Dialog open={showAssignTeamModal} onOpenChange={setShowAssignTeamModal}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Giao báo cáo cho phòng ban</DialogTitle>
+            <DialogDescription>
+              Chọn phòng ban để gán yêu cầu báo cáo này
+            </DialogDescription>
+          </DialogHeader>
+          
+          {selectedRequirementForAssign && (
+            <div className="space-y-4 py-4">
+              <div className="p-3 bg-gray-50 rounded-lg">
+                <p className="text-sm font-medium text-gray-900">
+                  {selectedRequirementForAssign.title}
+                </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  Hạn nộp: {new Date(selectedRequirementForAssign.deadline).toLocaleDateString("vi-VN")}
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Chọn phòng ban</Label>
+                {teamsLoading ? (
+                  <p className="text-sm text-muted-foreground">Đang tải danh sách phòng ban...</p>
+                ) : teams && teams.length > 0 ? (
+                  <Select
+                    value={selectedTeamId?.toString() || ""}
+                    onValueChange={(value) => setSelectedTeamId(Number(value))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Chọn phòng ban" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {teams.map((team) => (
+                        <SelectItem key={team.teamId} value={team.teamId.toString()}>
+                          {team.teamName}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    Không có phòng ban nào trong câu lạc bộ
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowAssignTeamModal(false);
+                setSelectedRequirementForAssign(null);
+                setSelectedTeamId(null);
+              }}
+              disabled={assigningTeam}
+            >
+              Hủy
+            </Button>
+            <Button
+              onClick={handleAssignTeam}
+              disabled={!selectedTeamId || assigningTeam || teamsLoading}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              {assigningTeam ? "Đang gán..." : "Gán báo cáo"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

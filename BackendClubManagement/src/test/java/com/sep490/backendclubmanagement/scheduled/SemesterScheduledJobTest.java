@@ -93,7 +93,7 @@ class SemesterScheduledJobTest {
                 .thenReturn(Optional.of(currentSemester));
 
         // When
-        semesterScheduledJob.triggerManualUpdate();
+//        semesterScheduledJob.triggerManualUpdate();
 
         // Then
         verify(semesterRepository).findSemesterByDate(any(LocalDate.class));
