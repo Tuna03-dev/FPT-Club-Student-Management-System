@@ -18,17 +18,11 @@ public class ClubCreationWorkFlowHistory extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "step_name", nullable = false, length = 100)
-    private String stepName;
-
     @Column(name = "action_date")
     private LocalDateTime actionDate;
 
     @Column(name = "comments", columnDefinition = "TEXT")
     private String comments;
-
-    @Column(name = "step_number")
-    private Integer stepNumber;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "request_establishment_id", nullable = false)
@@ -37,5 +31,9 @@ public class ClubCreationWorkFlowHistory extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "acted_by", nullable = false)
     private User actedBy;
+
+    @ManyToOne
+    @JoinColumn(name = "step_id")
+    private ClubCreationStep clubCreationStep;
 }
 
