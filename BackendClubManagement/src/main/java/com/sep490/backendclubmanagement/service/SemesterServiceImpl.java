@@ -37,4 +37,10 @@ public class SemesterServiceImpl implements SemesterService {
 
         return semesterMapper.toDtos(semesters);
     }
+
+    @Override
+    public Semester getCurrentSemester() throws AppException {
+        return semesterRepository.findByIsCurrentTrue()
+                .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND));
+    }
 }

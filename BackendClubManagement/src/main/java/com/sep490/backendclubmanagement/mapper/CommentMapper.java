@@ -18,6 +18,7 @@ public interface CommentMapper {
     @Mapping(source = "user.fullName", target = "userName")
     @Mapping(source = "user.avatarUrl", target = "userAvatar")
     @Mapping(source = "isEdited", target = "edited")
+    @Mapping(source = "rootParentCommentId", target ="rootParentId")
     @Mapping(target = "replies", ignore = true)
     CommentDTO toDTO(Comment comment);
 

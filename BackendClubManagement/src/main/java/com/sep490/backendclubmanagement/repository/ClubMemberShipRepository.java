@@ -139,9 +139,31 @@ public interface ClubMemberShipRepository extends JpaRepository<ClubMemberShip, 
         left join fetch rms.team t
         where cms.user.id = :userId
           and (:status is null or cms.status = :status)
+          and (:semesterId is null or rms.semester.id = :semesterId)
+          and (:isActive is null or rms.isActive = :isActive)
         """)
     List<ClubMemberShip> findByUserIdWithRoles(
             @Param("userId") Long userId,
+            @Param("status") ClubMemberShipStatus status,
+            @Param("semesterId") Long semesterId,
+            @Param("isActive") Boolean isActive
+    );
+
+    @Query("""
+       select distinct rm.team.id
+       from RoleMemberShip rm
+       join rm.clubMemberShip cms
+       join rm.semester s
+       where cms.user.id  = :userId
+         and cms.club.id  = :clubId
+         and cms.status   = :status
+         and rm.isActive  = true
+         and rm.team      is not null
+         and s.isCurrent  = true
+       """)
+    List<Long> findTeamIdsByUserAndClubAndStatus(
+            @Param("userId") Long userId,
+            @Param("clubId") Long clubId,
             @Param("status") ClubMemberShipStatus status
     );
 }

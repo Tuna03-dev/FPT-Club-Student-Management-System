@@ -332,7 +332,6 @@ SELECT CASE WHEN EXISTS (
     JOIN rm.semester s
     WHERE c.user.id = :userId
       AND c.club.id = :clubId
-      AND rm.team IS NULL
       AND COALESCE(rm.isActive, TRUE) = TRUE
       AND cr.roleLevel <= 2
       AND s.isCurrent = true

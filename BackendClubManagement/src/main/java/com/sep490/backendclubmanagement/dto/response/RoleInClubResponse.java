@@ -18,4 +18,8 @@ public class RoleInClubResponse {
 
     private Long teamId;
     private String teamName;
+    private Long semesterId;
+    private String semesterName;
+    private Boolean semesterIsCurrent;
+    private Boolean isActive;
 }
