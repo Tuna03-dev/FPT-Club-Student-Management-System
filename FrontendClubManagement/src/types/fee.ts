@@ -9,11 +9,14 @@ export interface Fee {
   dueDate: string;
   isMandatory: boolean;
   isDraft?: boolean;
+  hasEverExpired?: boolean; // Once true, amount cannot be edited
   totalMembers?: number;
   paidMembers?: number;
   status?: "active" | "completed" | "overdue";
   paidDate?: string;
   transactionReference?: string;
+  semesterId?: number; // For MEMBERSHIP fee type
+  semesterName?: string; // For display
 }
 
 export interface CreateFeeRequest {
@@ -24,6 +27,7 @@ export interface CreateFeeRequest {
   dueDate: string;
   isMandatory: boolean;
   isDraft?: boolean;
+  semesterId?: number; // For MEMBERSHIP fee type
 }
 
 export interface UpdateFeeRequest {
@@ -34,4 +38,5 @@ export interface UpdateFeeRequest {
   dueDate: string;
   isMandatory: boolean;
   isDraft?: boolean;
+  semesterId?: number; // For MEMBERSHIP fee type
 }

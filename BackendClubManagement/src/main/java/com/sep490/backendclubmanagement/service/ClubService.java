@@ -1,8 +1,10 @@
 package com.sep490.backendclubmanagement.service;
 
 import com.sep490.backendclubmanagement.dto.response.ClubDetailData;
+import com.sep490.backendclubmanagement.dto.response.ClubDto;
 import com.sep490.backendclubmanagement.dto.response.ClubPresidentData;
 import com.sep490.backendclubmanagement.entity.*;
+import com.sep490.backendclubmanagement.shared.ModelMapperUtils;
 import com.sep490.backendclubmanagement.exception.AppException;
 import com.sep490.backendclubmanagement.exception.ErrorCode;
 import com.sep490.backendclubmanagement.mapper.ClubMapper;
@@ -11,6 +13,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -95,6 +99,13 @@ public class ClubService implements ClubServiceInterface {
         }
 
         return null;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ClubDto> getAllClubs() {
+        List<Club> clubs = clubRepository.findAll();
+        return ModelMapperUtils.mapList(clubs, ClubDto.class);
     }
 }
 

@@ -28,8 +28,9 @@ import type {
   UpdateFeeRequest,
   FeeType,
 } from "@/types/fee";
-import { useMemo, useState, useCallback } from "react";
+import { useMemo, useState, useCallback, useEffect } from "react";
 import feeService from "@/services/feeService";
+import { clubService, type SemesterDTO } from "@/services/clubService";
 import { Switch } from "@/components/ui/switch";
 import { format, addDays } from "date-fns";
 import { z } from "zod";
@@ -135,10 +136,32 @@ export function FeesTable({
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [editingFee, setEditingFee] = useState<Fee | null>(null);
   const [isEditOpen, setIsEditOpen] = useState<boolean>(false);
+  const [isAmountLockedInEdit, setIsAmountLockedInEdit] =
+    useState<boolean>(false);
   const [deleteFeeId, setDeleteFeeId] = useState<number | null>(null);
   const [isDeleteOpen, setIsDeleteOpen] = useState<boolean>(false);
   const [deleteLoading, setDeleteLoading] = useState<boolean>(false);
   const [publishingFeeId, setPublishingFeeId] = useState<number | null>(null);
+  const [semesters, setSemesters] = useState<SemesterDTO[]>([]);
+  const [loadingSemesters, setLoadingSemesters] = useState<boolean>(false);
+
+  // Load semesters when component mounts
+  useEffect(() => {
+    const loadSemesters = async () => {
+      setLoadingSemesters(true);
+      try {
+        const response = await clubService.getSemesters(clubId);
+        if (response.code === 200 && response.data) {
+          setSemesters(response.data);
+        }
+      } catch (error) {
+        console.error("Error loading semesters:", error);
+      } finally {
+        setLoadingSemesters(false);
+      }
+    };
+    loadSemesters();
+  }, [clubId]);
 
   const schema = useMemo(
     () =>
@@ -154,7 +177,7 @@ export function FeesTable({
             ),
           amount: z.coerce
             .number()
-            .gt(0, { message: "Số tiền phải lớn hơn 0" }),
+            .min(2000, { message: "Số tiền tối thiểu là 2,000 VNĐ" }),
           dueDate: z
             .string()
             .refine((v) => !!v, { message: "Chọn hạn đóng" })
@@ -184,7 +207,21 @@ export function FeesTable({
           ]),
           description: z.string().optional(),
           isMandatory: z.boolean(),
+          semesterId: z.coerce.number().optional(),
         })
+        .refine(
+          (data) => {
+            // If feeType is MEMBERSHIP, semesterId is required
+            if (data.feeType === "MEMBERSHIP") {
+              return !!data.semesterId && data.semesterId > 0;
+            }
+            return true;
+          },
+          {
+            message: "Vui lòng chọn kỳ học cho phí hội viên",
+            path: ["semesterId"],
+          }
+        )
         .superRefine(async (data, ctx) => {
           const name = data.title;
           if (!name) return;
@@ -216,6 +253,7 @@ export function FeesTable({
       dueDate: format(addDays(new Date(), 7), "yyyy-MM-dd"),
       feeType: "MEMBERSHIP",
       isMandatory: true,
+      semesterId: undefined,
     },
   });
 
@@ -227,6 +265,7 @@ export function FeesTable({
       dueDate: format(addDays(new Date(), 7), "yyyy-MM-dd"),
       feeType: "MEMBERSHIP",
       isMandatory: true,
+      semesterId: undefined,
     });
   }, [form]);
 
@@ -251,6 +290,7 @@ export function FeesTable({
           feeType: values.feeType,
           isMandatory: values.isMandatory,
           isDraft: !publishImmediately,
+          semesterId: values.semesterId,
         };
         const apiRes = await feeService.createFee(clubId, dto);
         const createdFee = apiRes?.data;
@@ -263,7 +303,7 @@ export function FeesTable({
           }
           toast.success(
             publishImmediately
-              ? "Đã tạo và xuất bản khoản phí!"
+              ? "Đã tạo và kích hoạt khoản phí!"
               : "Đã lưu khoản phí dưới dạng bản nháp!"
           );
           setIsAddOpen(false);
@@ -296,9 +336,7 @@ export function FeesTable({
                 .string()
                 .min(1, { message: "Tên khoản phí không được để trống" })
             ),
-          amount: z.coerce
-            .number()
-            .gt(0, { message: "Số tiền phải lớn hơn 0" }),
+          amount: z.coerce.number(),
           dueDate: z
             .string()
             .refine((v) => !!v, { message: "Chọn hạn đóng" })
@@ -328,7 +366,35 @@ export function FeesTable({
           ]),
           description: z.string().optional(),
           isMandatory: z.boolean(),
+          semesterId: z.coerce.number().optional(),
         })
+        .refine(
+          (data) => {
+            // If feeType is MEMBERSHIP, semesterId is required
+            if (data.feeType === "MEMBERSHIP") {
+              return !!data.semesterId && data.semesterId > 0;
+            }
+            return true;
+          },
+          {
+            message: "Vui lòng chọn kỳ học cho phí hội viên",
+            path: ["semesterId"],
+          }
+        )
+        .refine(
+          (data) => {
+            // Use backend's hasEverExpired flag for validation
+            // If hasEverExpired = true, skip amount validation (field is disabled anyway)
+            if (editingFee?.hasEverExpired === true) return true;
+
+            // Otherwise, validate amount >= 2000
+            return data.amount >= 2000;
+          },
+          {
+            message: "Số tiền tối thiểu là 2,000 VNĐ",
+            path: ["amount"],
+          }
+        )
         .superRefine(async (data, ctx) => {
           const name = data.title;
           if (!name || !editingFee) return;
@@ -361,7 +427,11 @@ export function FeesTable({
 
   const handleEditClick = useCallback(
     (fee: Fee) => {
-      if ((fee.paidMembers ?? 0) > 0) return;
+      // Use backend's hasEverExpired flag - once true, amount is locked permanently
+      // This prevents bypass by changing dueDate then amount
+      const isAmountLocked = fee.hasEverExpired === true;
+      setIsAmountLockedInEdit(isAmountLocked);
+
       setEditingFee(fee);
       editForm.reset({
         title: fee.title,
@@ -370,6 +440,7 @@ export function FeesTable({
         dueDate: fee.dueDate,
         feeType: fee.feeType,
         isMandatory: fee.isMandatory,
+        semesterId: fee.semesterId,
       });
       setIsEditOpen(true);
     },
@@ -379,6 +450,17 @@ export function FeesTable({
   const handleUpdateFee = useCallback(
     async (values: EditFormValues) => {
       if (!editingFee) return;
+
+      // Security check: Prevent amount change if hasEverExpired = true
+      // Backend validates this, but we check client-side for better UX
+      if (isAmountLockedInEdit && values.amount !== editingFee.amount) {
+        toast.error(
+          "⚠️ Không thể thay đổi số tiền! Khoản phí này đã từng hết hạn nên số tiền đã bị khóa để đảm bảo tính nhất quán của dữ liệu tài chính.",
+          { duration: 5000 }
+        );
+        return;
+      }
+
       setSubmitting(true);
       try {
         const dto: UpdateFeeRequest = {
@@ -388,6 +470,7 @@ export function FeesTable({
           dueDate: values.dueDate,
           feeType: values.feeType,
           isMandatory: values.isMandatory,
+          semesterId: values.semesterId,
         };
         const apiRes = await feeService.updateFee(
           clubId,
@@ -419,7 +502,15 @@ export function FeesTable({
         setSubmitting(false);
       }
     },
-    [clubId, editForm, editingFee, onFeeCreated, pageNumber, refreshFees]
+    [
+      clubId,
+      editForm,
+      editingFee,
+      isAmountLockedInEdit,
+      onFeeCreated,
+      pageNumber,
+      refreshFees,
+    ]
   );
 
   const handlePublishFee = useCallback(
@@ -428,7 +519,7 @@ export function FeesTable({
       try {
         await feeService.publishFee(clubId, feeId);
         await refreshFees(pageNumber);
-        toast.success("Đã xuất bản khoản phí!");
+        toast.success("Đã kích hoạt khoản phí!");
         if (options?.closeEdit) {
           setIsEditOpen(false);
           setEditingFee(null);
@@ -438,8 +529,8 @@ export function FeesTable({
         toast.error(
           e && typeof e === "object" && "message" in e
             ? (e as { message?: string }).message ||
-                "Đã xảy ra lỗi khi xuất bản phí"
-            : "Đã xảy ra lỗi khi xuất bản phí"
+                "Đã xảy ra lỗi khi kích hoạt phí"
+            : "Đã xảy ra lỗi khi kích hoạt phí"
         );
       } finally {
         setPublishingFeeId(null);
@@ -607,7 +698,7 @@ export function FeesTable({
         <div>
           <CardTitle>Quản lý học phí & phí thành viên</CardTitle>
           <p className="text-sm text-muted-foreground mt-1">
-            Tạo và theo dõi các khoản phí, bao gồm bản nháp và đã xuất bản
+            Tạo và theo dõi các khoản phí, bao gồm bản nháp và đã kích hoạt
           </p>
         </div>
         <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
@@ -623,7 +714,7 @@ export function FeesTable({
               </DialogTitle>
               <span className="text-xs text-muted-foreground flex items-center gap-1">
                 <HelpCircle className="w-3 h-3" /> Điền thông tin bên dưới. Có
-                thể lưu nháp hoặc xuất bản ngay.
+                thể lưu nháp hoặc kích hoạt ngay.
               </span>
             </DialogHeader>
             <Form {...form}>
@@ -662,13 +753,13 @@ export function FeesTable({
                           <Input
                             id="fee-amount"
                             type="number"
-                            min={0}
+                            min={2000}
                             {...field}
                           />
                         </FormControl>
                         <FormMessage />
                         <div className="text-xs text-muted-foreground">
-                          Chỉ nhập số, không đơn vị
+                          Số tiền tối thiểu 2,000 VNĐ
                         </div>
                       </FormItem>
                     )}
@@ -721,6 +812,46 @@ export function FeesTable({
                     )}
                   />
                 </div>
+                {form.watch("feeType") === "MEMBERSHIP" && (
+                  <div>
+                    <FormField
+                      control={form.control}
+                      name="semesterId"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Kỳ học *</FormLabel>
+                          <FormControl>
+                            <select
+                              id="fee-semester"
+                              className="w-full border rounded p-2 mt-1"
+                              value={field.value || ""}
+                              onChange={(e) =>
+                                field.onChange(
+                                  e.target.value
+                                    ? Number(e.target.value)
+                                    : undefined
+                                )
+                              }
+                              disabled={loadingSemesters}
+                            >
+                              <option value="">-- Chọn kỳ học --</option>
+                              {semesters.map((semester) => (
+                                <option key={semester.id} value={semester.id}>
+                                  {semester.semesterName}
+                                  {semester.isCurrent ? " (Hiện tại)" : ""}
+                                </option>
+                              ))}
+                            </select>
+                          </FormControl>
+                          <FormMessage />
+                          <div className="text-xs text-muted-foreground">
+                            Chọn kỳ học để active thành viên khi đóng phí
+                          </div>
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                )}
                 <div className="md:col-span-2">
                   <FormField
                     control={form.control}
@@ -800,7 +931,7 @@ export function FeesTable({
                   form.handleSubmit((values) => handleCreateFee(values, true))()
                 }
               >
-                {submitting ? "Đang tạo..." : "Xuất bản"}
+                {submitting ? "Đang tạo..." : "Kích hoạt"}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -843,15 +974,22 @@ export function FeesTable({
                 {fees.map((fee) => (
                   <TableRow key={fee.id}>
                     <TableCell className="font-medium">
-                      <div className="flex items-center gap-2">
-                        {fee.title}
-                        {fee.isDraft && (
-                          <Badge
-                            className="bg-yellow-500/10 text-yellow-600 border-yellow-500"
-                            variant="outline"
-                          >
-                            Bản nháp
-                          </Badge>
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-2">
+                          {fee.title}
+                          {fee.isDraft && (
+                            <Badge
+                              className="bg-yellow-500/10 text-yellow-600 border-yellow-500"
+                              variant="outline"
+                            >
+                              Bản nháp
+                            </Badge>
+                          )}
+                        </div>
+                        {fee.semesterName && fee.feeType === "MEMBERSHIP" && (
+                          <div className="text-xs text-muted-foreground">
+                            Kỳ: {fee.semesterName}
+                          </div>
                         )}
                       </div>
                     </TableCell>
@@ -891,12 +1029,7 @@ export function FeesTable({
                           size="sm"
                           variant="ghost"
                           onClick={() => handleEditClick(fee)}
-                          disabled={(fee.paidMembers ?? 0) > 0}
-                          title={
-                            fee.paidMembers && fee.paidMembers > 0
-                              ? "Không thể chỉnh sửa khoản phí đã có người đóng"
-                              : "Chỉnh sửa"
-                          }
+                          title="Chỉnh sửa"
                         >
                           <Edit className="w-4 h-4 mr-1" /> Chỉnh sửa
                         </Button>
@@ -925,11 +1058,11 @@ export function FeesTable({
                             {publishingFeeId === Number(fee.id) ? (
                               <span className="flex items-center gap-1">
                                 <span className="animate-spin border-2 border-current rounded-full border-t-transparent w-4 h-4"></span>
-                                Đang xuất bản...
+                                Đang kích hoạt...
                               </span>
                             ) : (
                               <span className="flex items-center gap-1">
-                                <Send className="w-4 h-4" /> Xuất bản
+                                <Send className="w-4 h-4" /> Kích hoạt
                               </span>
                             )}
                           </Button>
@@ -951,9 +1084,17 @@ export function FeesTable({
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Coins className="w-6 h-6 text-primary" /> Chỉnh sửa khoản phí
+              {isAmountLockedInEdit && (
+                <span className="text-xs font-normal px-2 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded-full border border-amber-300 dark:border-amber-700">
+                  🔒 Số tiền đã khóa
+                </span>
+              )}
             </DialogTitle>
             <span className="text-xs text-muted-foreground flex items-center gap-1">
-              <HelpCircle className="w-3 h-3" /> Cập nhật thông tin khoản phí
+              <HelpCircle className="w-3 h-3" />
+              {isAmountLockedInEdit
+                ? "Phí đã từng hết hạn - Chỉ có thể chỉnh sửa thông tin khác"
+                : "Cập nhật thông tin khoản phí"}
             </span>
           </DialogHeader>
           <Form {...editForm}>
@@ -987,19 +1128,45 @@ export function FeesTable({
                   name="amount"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Số tiền (₫) *</FormLabel>
+                      <FormLabel className="flex items-center gap-2">
+                        Số tiền (₫) *
+                        {isAmountLockedInEdit && (
+                          <span className="text-xs font-normal text-amber-600 dark:text-amber-500">
+                            🔒 Đã khóa
+                          </span>
+                        )}
+                      </FormLabel>
                       <FormControl>
                         <Input
                           id="edit-fee-amount"
                           type="number"
-                          min={0}
+                          min={2000}
+                          disabled={isAmountLockedInEdit}
+                          className={
+                            isAmountLockedInEdit
+                              ? "bg-muted cursor-not-allowed"
+                              : ""
+                          }
                           {...field}
                         />
                       </FormControl>
                       <FormMessage />
-                      <div className="text-xs text-muted-foreground">
-                        Chỉ nhập số, không đơn vị
-                      </div>
+                      {isAmountLockedInEdit ? (
+                        <div className="text-xs bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-md p-2 mt-2">
+                          <p className="text-amber-800 dark:text-amber-400 font-medium">
+                            ⚠️ Không thể chỉnh sửa số tiền
+                          </p>
+                          <p className="text-amber-700 dark:text-amber-500 mt-1">
+                            Khoản phí này đã từng hết hạn. Bạn có thể gia hạn
+                            thêm thời gian nhưng không thể thay đổi số tiền để
+                            đảm bảo tính nhất quán của dữ liệu tài chính.
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="text-xs text-muted-foreground">
+                          Số tiền tối thiểu 2,000 VNĐ
+                        </div>
+                      )}
                     </FormItem>
                   )}
                 />
@@ -1051,6 +1218,46 @@ export function FeesTable({
                   )}
                 />
               </div>
+              {editForm.watch("feeType") === "MEMBERSHIP" && (
+                <div>
+                  <FormField
+                    control={editForm.control}
+                    name="semesterId"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Kỳ học *</FormLabel>
+                        <FormControl>
+                          <select
+                            id="edit-fee-semester"
+                            className="w-full border rounded p-2 mt-1"
+                            value={field.value || ""}
+                            onChange={(e) =>
+                              field.onChange(
+                                e.target.value
+                                  ? Number(e.target.value)
+                                  : undefined
+                              )
+                            }
+                            disabled={loadingSemesters}
+                          >
+                            <option value="">-- Chọn kỳ học --</option>
+                            {semesters.map((semester) => (
+                              <option key={semester.id} value={semester.id}>
+                                {semester.semesterName}
+                                {semester.isCurrent ? " (Hiện tại)" : ""}
+                              </option>
+                            ))}
+                          </select>
+                        </FormControl>
+                        <FormMessage />
+                        <div className="text-xs text-muted-foreground">
+                          Chọn kỳ học để active thành viên khi đóng phí
+                        </div>
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              )}
               <div className="md:col-span-2">
                 <FormField
                   control={editForm.control}
@@ -1105,6 +1312,7 @@ export function FeesTable({
               onClick={() => {
                 setIsEditOpen(false);
                 setEditingFee(null);
+                setIsAmountLockedInEdit(false);
                 editForm.reset();
               }}
               className="sm:mr-auto"
@@ -1123,8 +1331,8 @@ export function FeesTable({
                 }
               >
                 {publishingFeeId === Number(editingFee?.id)
-                  ? "Đang xuất bản..."
-                  : "Xuất bản ngay"}
+                  ? "Đang kích hoạt..."
+                  : "Kích hoạt ngay"}
               </Button>
             )}
             <Button

@@ -22,5 +22,6 @@ public interface ClubRoleRepository extends JpaRepository<ClubRole, Long> {
     boolean existsByClubIdAndRoleNameIgnoreCaseAndIdNot(Long clubId, String roleName, Long id);
     Optional<ClubRole> findByRoleName(String roleName);
     Optional<ClubRole> findByClubIdAndRoleCode(Long clubId, String roleCode);
+    Optional<ClubRole> findByRoleCodeAndClubIsNull(String roleCode);
 }
 

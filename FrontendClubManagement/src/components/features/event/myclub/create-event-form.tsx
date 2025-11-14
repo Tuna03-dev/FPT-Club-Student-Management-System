@@ -24,7 +24,7 @@ export interface EventFormData {
   startTime: string
   endTime: string
   eventType: string
-  eventImages: File[]
+  eventImages: File[] // Keep name for backward compatibility, but now supports both images and videos
 }
 
 export function CreateEventForm({ eventTypes, onSubmit, onSuccess, initialStartTime, initialEndTime }: CreateEventFormProps) {
@@ -49,6 +49,7 @@ export function CreateEventForm({ eventTypes, onSubmit, onSuccess, initialStartT
   }, [initialStartTime, initialEndTime])
 
   const [imagePreview, setImagePreview] = useState<string[]>([])
+  const [mediaTypes, setMediaTypes] = useState<Array<"image" | "video">>([]) // Track type of each media
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -70,13 +71,24 @@ export function CreateEventForm({ eventTypes, onSubmit, onSuccess, initialStartT
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || [])
 
-    // Validate file types
-    const validFiles = files.filter((file) =>
-      ["image/jpeg", "image/png", "image/webp", "image/gif"].includes(file.type),
-    )
+    // Validate file types - support both images and videos
+    const allowedTypes = [
+      "image/jpeg", "image/png", "image/webp", "image/gif",
+      "video/mp4", "video/webm", "video/ogg", "video/quicktime", "video/x-msvideo"
+    ]
+    
+    const validFiles = files.filter((file) => allowedTypes.includes(file.type))
 
     if (validFiles.length !== files.length) {
-      setError("Chỉ chấp nhận các file ảnh (JPEG, PNG, WebP, GIF)")
+      setError("Chỉ chấp nhận các file ảnh (JPEG, PNG, WebP, GIF) hoặc video (MP4, WebM, OGG)")
+      return
+    }
+
+    // Check file size (e.g., max 100MB for videos)
+    const maxSize = 100 * 1024 * 1024 // 100MB
+    const oversizedFiles = validFiles.filter((file) => file.size > maxSize)
+    if (oversizedFiles.length > 0) {
+      setError("File quá lớn. Kích thước tối đa là 100MB")
       return
     }
 
@@ -85,9 +97,11 @@ export function CreateEventForm({ eventTypes, onSubmit, onSuccess, initialStartT
       eventImages: [...prev.eventImages, ...validFiles],
     }))
 
-    // Create preview URLs
+    // Create preview URLs and track media types
     const newPreviews = validFiles.map((file) => URL.createObjectURL(file))
+    const newTypes = validFiles.map((file) => file.type.startsWith("video/") ? "video" : "image" as "image" | "video")
     setImagePreview((prev) => [...prev, ...newPreviews])
+    setMediaTypes((prev) => [...prev, ...newTypes])
     setError(null)
   }
 
@@ -98,6 +112,7 @@ export function CreateEventForm({ eventTypes, onSubmit, onSuccess, initialStartT
     }))
     URL.revokeObjectURL(imagePreview[index])
     setImagePreview((prev) => prev.filter((_, i) => i !== index))
+    setMediaTypes((prev) => prev.filter((_, i) => i !== index))
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -238,37 +253,51 @@ export function CreateEventForm({ eventTypes, onSubmit, onSuccess, initialStartT
         </Select>
       </div>
 
-      {/* Event Images */}
+      {/* Event Media (Images & Videos) */}
       <div className="space-y-2">
-        <Label htmlFor="eventImages">Hình ảnh sự kiện</Label>
+        <Label htmlFor="eventImages">Hình ảnh / Video sự kiện</Label>
         <div className="border-2 border-dashed border-border rounded-lg p-6 text-center cursor-pointer hover:bg-muted/50 transition">
           <input
             id="eventImages"
             type="file"
             multiple
-            accept="image/*"
+            accept="image/*,video/*"
             onChange={handleImageChange}
             disabled={isLoading}
             className="hidden"
           />
           <label htmlFor="eventImages" className="cursor-pointer block">
             <div className="text-sm text-muted-foreground">
-              Kéo thả hình ảnh hoặc <span className="text-primary font-medium">chọn từ máy tính</span>
+              Kéo thả hình ảnh/video hoặc <span className="text-primary font-medium">chọn từ máy tính</span>
             </div>
-            <div className="text-xs text-muted-foreground mt-1">Hỗ trợ: JPEG, PNG, WebP, GIF</div>
+            <div className="text-xs text-muted-foreground mt-1">Hỗ trợ: JPEG, PNG, WebP, GIF, MP4, WebM, OGG (tối đa 100MB/file)</div>
           </label>
         </div>
 
-        {/* Image Preview */}
+        {/* Media Preview */}
         {imagePreview.length > 0 && (
           <div className="grid grid-cols-3 gap-3 mt-4">
             {imagePreview.map((preview, index) => (
               <Card key={index} className="relative overflow-hidden group">
-                <img
-                  src={preview || "/placeholder.svg"}
-                  alt={`Preview ${index + 1}`}
-                  className="w-full h-24 object-cover"
-                />
+                {mediaTypes[index] === "video" ? (
+                  <video
+                    src={preview}
+                    className="w-full h-24 object-cover"
+                    controls={false}
+                    muted
+                  />
+                ) : (
+                  <img
+                    src={preview || "/placeholder.svg"}
+                    alt={`Preview ${index + 1}`}
+                    className="w-full h-24 object-cover"
+                  />
+                )}
+                {mediaTypes[index] === "video" && (
+                  <div className="absolute top-1 left-1 bg-black/60 text-white text-xs px-1.5 py-0.5 rounded">
+                    Video
+                  </div>
+                )}
                 <button
                   type="button"
                   onClick={() => removeImage(index)}
@@ -299,6 +328,7 @@ export function CreateEventForm({ eventTypes, onSubmit, onSuccess, initialStartT
               eventImages: [],
             })
             setImagePreview([])
+            setMediaTypes([])
             setError(null)
           }}
           disabled={isLoading}

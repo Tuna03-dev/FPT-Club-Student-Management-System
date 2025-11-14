@@ -226,3 +226,18 @@
   }
 }
 
+/* Hidden Google button container - initially hidden but will be made visible temporarily when triggered */
+.google-button-hidden-container {
+  position: fixed;
+  bottom: -1000px; /* Off-screen initially */
+  right: -1000px;
+  width: 240px;
+  height: 50px;
+  opacity: 0; /* Initially invisible */
+  pointer-events: auto; /* Critical: must allow interactions for Google iframe */
+  z-index: -1; /* Behind everything when hidden */
+  visibility: visible; /* Must be visible (not hidden) for iframe to work */
+  overflow: visible; /* Allow iframe to render properly */
+  transition: opacity 0.1s ease; /* Smooth transition when showing/hiding */
+}
+

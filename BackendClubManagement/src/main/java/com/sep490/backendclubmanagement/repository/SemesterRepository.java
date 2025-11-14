@@ -1,7 +1,9 @@
 package com.sep490.backendclubmanagement.repository;
 
+
 import com.sep490.backendclubmanagement.entity.Semester;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
@@ -36,7 +38,7 @@ public interface SemesterRepository extends JpaRepository<Semester, Long> {
 
     @Query("""
     SELECT DISTINCT s FROM Semester s
-    WHERE s.startDate <= :now 
+    WHERE s.startDate <= :now
       AND s.endDate >= :clubEstablishedAt
       AND EXISTS (
           SELECT rm FROM RoleMemberShip rm
@@ -50,6 +52,27 @@ public interface SemesterRepository extends JpaRepository<Semester, Long> {
             @Param("now") LocalDate now,
             @Param("clubEstablishedAt") LocalDate clubEstablishedAt
     );
+
+    /**
+     * Find semester by a specific date
+     * Returns the semester where the given date falls between startDate and endDate
+     */
+    @Query("SELECT s FROM Semester s WHERE :date BETWEEN s.startDate AND s.endDate")
+    Optional<Semester> findSemesterByDate(@Param("date") LocalDate date);
+
+    /**
+     * Set all semesters' isCurrent to false
+     */
+    @Modifying
+    @Query("UPDATE Semester s SET s.isCurrent = false")
+    void setAllSemestersNotCurrent();
+
+    /**
+     * Set a specific semester as current (isCurrent = true)
+     */
+    @Modifying
+    @Query("UPDATE Semester s SET s.isCurrent = true WHERE s.id = :semesterId")
+    void setCurrentSemester(@Param("semesterId") Long semesterId);
 }
 
 

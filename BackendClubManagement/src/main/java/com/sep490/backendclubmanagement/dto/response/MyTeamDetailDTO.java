@@ -16,4 +16,5 @@ public class MyTeamDetailDTO {
     private List<String> myRoles;   // vai trò của user trong team
     private Long memberCount;// tổng thành viên (distinct) của team
     private List<TeamMemberDTO> members;
+    private String linkGroupChat;
 }

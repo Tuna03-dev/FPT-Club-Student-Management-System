@@ -60,48 +60,111 @@ public class ClubRoleServiceImpl implements ClubRoleService {
             throw new AppException(ErrorCode.FORBIDDEN);
         }
 
-        // 3. Dùng ClubRoleRepository để CHECK TRÙNG
-        // 3.1. Trùng roleCode trong cùng club?
-        if (clubRoleRepository.existsByClubIdAndRoleCodeIgnoreCase(clubId, request.getRoleCode())) {
-            throw new AppException(ErrorCode.INVALID_INPUT);
+        // 3. Auto-generate roleCode from roleName if not provided
+        String roleCode = request.getRoleCode();
+        if (roleCode == null || roleCode.trim().isEmpty()) {
+            roleCode = generateRoleCode(request.getRoleName());
+
+            // Ensure uniqueness by appending number if needed
+            String baseCode = roleCode;
+            int counter = 1;
+            while (clubRoleRepository.existsByClubIdAndRoleCodeIgnoreCase(clubId, roleCode)) {
+                roleCode = baseCode + counter;
+                counter++;
+            }
+        } else {
+            // If roleCode is provided, check for duplicates
+            if (clubRoleRepository.existsByClubIdAndRoleCodeIgnoreCase(clubId, roleCode)) {
+                throw new AppException(ErrorCode.INVALID_INPUT, "Mã vai trò đã tồn tại");
+            }
         }
 
-        // 3.2. Trùng roleName trong cùng club?
+        // 4. Dùng ClubRoleRepository để CHECK TRÙNG roleName
         if (clubRoleRepository.existsByClubIdAndRoleNameIgnoreCase(clubId, request.getRoleName())) {
-            throw new AppException(ErrorCode.INVALID_INPUT);
+            throw new AppException(ErrorCode.INVALID_INPUT, "Tên vai trò đã tồn tại");
         }
 
-        // 4. Check roleLevel (không cho <= 2 để tránh trùng cấp admin)
+        // 5. Check roleLevel (không cho <= 2 để tránh trùng cấp admin)
         if (request.getRoleLevel() == null || request.getRoleLevel() <= 1) {
-            throw new AppException(ErrorCode.INVALID_INPUT);
+            throw new AppException(ErrorCode.INVALID_INPUT, "Cấp vai trò phải lớn hơn 1");
         }
 
-        // 5. Lấy club bằng repository
+        // 6. Lấy club bằng repository
         Club club = clubRepository.findById(clubId)
-                .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND));
+                .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND, "Club không tồn tại"));
 
-        // 6. Lấy SystemRole bằng repository (nếu có id)
+        // 7. Lấy SystemRole bằng repository (nếu có id)
         SystemRole systemRole = null;
         if (request.getSystemRoleId() != null) {
             systemRole = systemRoleRepository.findById(request.getSystemRoleId())
-                    .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND));
+                    .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND, "System role không tồn tại"));
         }
 
-        // 7. Build entity mới
+        // 8. Build entity mới với roleCode đã được generate
         ClubRole newRole = ClubRole.builder()
                 .roleName(request.getRoleName().trim())
-                .roleCode(request.getRoleCode().trim())
+                .roleCode(roleCode.trim())
                 .description(request.getDescription())
                 .roleLevel(request.getRoleLevel())
                 .club(club)
                 .systemRole(systemRole)
                 .build();
 
-        // 8. Lưu DB
+        // 9. Lưu DB
         ClubRole saved = clubRoleRepository.save(newRole);
 
-        // 9. Map sang DTO bằng ClubRoleMapper bạn đã có
+        // 10. Map sang DTO và trả về
         return clubRoleMapper.toDto(saved);
+    }
+
+    /**
+     * Generate roleCode from roleName
+     * Example: "Trưởng ban Truyền thông" -> "TRUONG_BAN_TRUYEN_THONG"
+     */
+    private String generateRoleCode(String roleName) {
+        if (roleName == null || roleName.trim().isEmpty()) {
+            return "ROLE_" + System.currentTimeMillis();
+        }
+
+        // Remove Vietnamese accents and convert to uppercase
+        String normalized = removeVietnameseAccents(roleName.trim());
+
+        // Replace spaces and special characters with underscore
+        String code = normalized
+                .toUpperCase()
+                .replaceAll("[^A-Z0-9]+", "_")
+                .replaceAll("^_+|_+$", ""); // Remove leading/trailing underscores
+
+        // Limit length to 50 characters
+        if (code.length() > 50) {
+            code = code.substring(0, 50);
+        }
+
+        return code;
+    }
+
+    /**
+     * Remove Vietnamese accents from string
+     */
+    private String removeVietnameseAccents(String str) {
+        if (str == null) return null;
+
+        str = str.replaceAll("[àáạảãâầấậẩẫăằắặẳẵ]", "a");
+        str = str.replaceAll("[ÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴ]", "A");
+        str = str.replaceAll("[èéẹẻẽêềếệểễ]", "e");
+        str = str.replaceAll("[ÈÉẸẺẼÊỀẾỆỂỄ]", "E");
+        str = str.replaceAll("[ìíịỉĩ]", "i");
+        str = str.replaceAll("[ÌÍỊỈĨ]", "I");
+        str = str.replaceAll("[òóọỏõôồốộổỗơờớợởỡ]", "o");
+        str = str.replaceAll("[ÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠ]", "O");
+        str = str.replaceAll("[ùúụủũôừứựửữ]", "u");
+        str = str.replaceAll("[ÙÚỤỦŨƯỪỨỰỬỮ]", "U");
+        str = str.replaceAll("[ỳýỵỷỹ]", "y");
+        str = str.replaceAll("[ỲÝỴỶỸ]", "Y");
+        str = str.replaceAll("đ", "d");
+        str = str.replaceAll("Đ", "D");
+
+        return str;
     }
 
     @Override

@@ -1,6 +1,7 @@
 package com.sep490.backendclubmanagement.repository;
 
 import com.sep490.backendclubmanagement.dto.request.EventRequest;
+import com.sep490.backendclubmanagement.dto.response.EventWithoutReportRequirementDto;
 import com.sep490.backendclubmanagement.dto.response.UpcomingEventDTO;
 import com.sep490.backendclubmanagement.entity.Club;
 import com.sep490.backendclubmanagement.entity.Event;
@@ -58,11 +59,28 @@ public interface EventRepository extends JpaRepository<Event, Long> {
     List<Event> findByIsDraftFalse();
 
     /**
+     * Lấy events theo clubId, không draft, giao với khoảng thời gian chỉ định
+     */
+    @Query("SELECT e FROM Event e " +
+           "WHERE (e.club.id = :clubId OR e.club.id IS NULL) " +
+           "AND e.isDraft = false " +
+           "AND (:startTime IS NULL OR :endTime IS NULL OR (e.endTime >= :startTime AND e.startTime <= :endTime))")
+    List<Event> findByClubIdAndIsDraftFalseInRange(Long clubId, LocalDateTime startTime, LocalDateTime endTime);
+
+    /**
      * Lấy tất cả events cho Staff (không bao gồm MEETING)
      */
     @Query("SELECT e FROM Event e WHERE e.isDraft = false " +
            "AND (e.eventType IS NULL OR UPPER(TRIM(e.eventType.typeName)) <> 'MEETING')")
     List<Event> findStaffAllEventsExcludingMeeting();
+
+    /**
+     * Lấy tất cả events cho Staff (không bao gồm MEETING) theo khoảng thời gian
+     */
+    @Query("SELECT e FROM Event e WHERE e.isDraft = false " +
+           "AND (e.eventType IS NULL OR UPPER(TRIM(e.eventType.typeName)) <> 'MEETING') " +
+           "AND (:startTime IS NULL OR :endTime IS NULL OR (e.endTime >= :startTime AND e.startTime <= :endTime))")
+    List<Event> findStaffAllEventsExcludingMeetingInRange(LocalDateTime startTime, LocalDateTime endTime);
 
     /**
      * Lấy events theo clubId cho Staff (không bao gồm MEETING)
@@ -72,6 +90,15 @@ public interface EventRepository extends JpaRepository<Event, Long> {
            "AND (e.eventType IS NULL OR UPPER(TRIM(e.eventType.typeName)) <> 'MEETING')")
     List<Event> findStaffEventsByClubIdExcludingMeeting(Long clubId);
 
+    /**
+     * Lấy events theo clubId cho Staff (không bao gồm MEETING) theo khoảng thời gian
+     */
+    @Query("SELECT e FROM Event e WHERE (e.club.id = :clubId OR e.club.id IS NULL) " +
+           "AND e.isDraft = false " +
+           "AND (e.eventType IS NULL OR UPPER(TRIM(e.eventType.typeName)) <> 'MEETING') " +
+           "AND (:startTime IS NULL OR :endTime IS NULL OR (e.endTime >= :startTime AND e.startTime <= :endTime))")
+    List<Event> findStaffEventsByClubIdExcludingMeetingInRange(Long clubId, LocalDateTime startTime, LocalDateTime endTime);
+
     // STAFF: các sự kiện CLB đã hủy (isDraft = true, không còn chờ duyệt)
     @Query("SELECT e FROM Event e LEFT JOIN RequestEvent re ON re.event = e AND re.status IN :pendingStatuses " +
            "WHERE e.isDraft = true AND e.club IS NOT NULL AND re.id IS NULL")
@@ -80,4 +107,31 @@ public interface EventRepository extends JpaRepository<Event, Long> {
     @Query("SELECT e FROM Event e LEFT JOIN RequestEvent re ON re.event = e AND re.status IN :pendingStatuses " +
            "WHERE e.isDraft = true AND e.club.id = :clubId AND re.id IS NULL")
     List<Event> findCancelledByStaffAndClubIdExcludingPending(Long clubId, java.util.List<com.sep490.backendclubmanagement.entity.RequestStatus> pendingStatuses);
+
+    /**
+     * Lấy draft events không có club (toàn trường) - cho STAFF
+     */
+    @Query("SELECT e FROM Event e WHERE e.isDraft = true AND e.club IS NULL")
+    List<Event> findByIsDraftTrueAndClubIsNull();
+
+    /**
+     * Lấy danh sách events chưa được yêu cầu nộp báo cáo
+     * Event chưa có yêu cầu báo cáo khi:
+     * - Event có club (không null)
+     * - Event không phải draft
+     * - Không tồn tại SubmissionReportRequirement với ClubReportRequirement cho club tổ chức sự kiện
+     */
+    @Query("SELECT new com.sep490.backendclubmanagement.dto.response.EventWithoutReportRequirementDto(" +
+            "e.id, e.title, c.id, c.clubName) " +
+            "FROM Event e " +
+            "JOIN e.club c " +
+            "WHERE e.club IS NOT NULL " +
+            "AND e.isDraft = false " +
+            "AND NOT EXISTS (" +
+            "    SELECT 1 FROM SubmissionReportRequirement srr " +
+            "    JOIN ClubReportRequirement crr ON crr.submissionReportRequirement.id = srr.id " +
+            "    WHERE srr.event.id = e.id AND crr.club.id = c.id" +
+            ") " +
+            "ORDER BY e.id DESC")
+    List<EventWithoutReportRequirementDto> findEventsWithoutReportRequirement();
 }

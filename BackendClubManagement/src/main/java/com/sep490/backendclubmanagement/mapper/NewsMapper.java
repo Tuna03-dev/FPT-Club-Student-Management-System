@@ -28,6 +28,8 @@ public interface NewsMapper {
     @Mapping(target = "authorRole",
             expression = "java(news.getClub() == null ? \"STAFF\" : \"CLUB\")")
 
+    @Mapping(source = "hidden",  target = "hidden")
+    @Mapping(source = "deleted", target = "deleted")
     // format updatedAt
     @Mapping(source = "updatedAt", target = "updatedAt", qualifiedByName = "toStringTime")
     NewsData toDto(News news);

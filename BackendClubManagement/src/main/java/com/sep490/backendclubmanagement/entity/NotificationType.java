@@ -1,0 +1,66 @@
+package com.sep490.backendclubmanagement.entity;
+
+public enum NotificationType {
+    // Payment related
+    PAYMENT_SUCCESS,
+    PAYMENT_FAILED,
+    PAYMENT_REMINDER,
+
+    // Post related
+    POST_APPROVED,
+    POST_REJECTED,
+    POST_PENDING_APPROVAL,
+    POST_LIKED,
+    POST_COMMENTED,
+
+    // News related
+    NEWS_PUBLISHED,
+    NEWS_APPROVED,
+    NEWS_REJECTED,
+    NEWS_PENDING_APPROVAL,
+
+    // Event related
+    EVENT_CREATED,
+    EVENT_UPDATED,
+    EVENT_CANCELLED,
+    EVENT_REMINDER,
+    EVENT_ATTENDANCE_CONFIRMED,
+
+    // Club related
+    CLUB_INVITATION,
+    CLUB_JOIN_REQUEST,
+    CLUB_JOIN_APPROVED,
+    CLUB_JOIN_REJECTED,
+    CLUB_ROLE_ASSIGNED,
+    CLUB_ROLE_REMOVED,
+    CLUB_ANNOUNCEMENT,
+
+    // Recruitment related
+    RECRUITMENT_OPENED,
+    RECRUITMENT_APPLICATION_SUBMITTED,
+    RECRUITMENT_APPLICATION_APPROVED,
+    RECRUITMENT_APPLICATION_REJECTED,
+
+    // Report related
+    REPORT_SUBMITTED,
+    REPORT_APPROVED,
+    REPORT_REJECTED,
+    REPORT_FEEDBACK,
+
+    // Fee related
+    FEE_ASSIGNED,
+    FEE_PAID,
+    FEE_OVERDUE,
+    FEE_REMINDER,
+
+    // System related
+    SYSTEM_ANNOUNCEMENT,
+    SYSTEM_WARNING,
+    SYSTEM_UPDATE,
+
+    // Others
+    MENTION,
+    FOLLOW,
+    GENERAL
+}
+

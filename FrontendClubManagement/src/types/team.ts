@@ -23,6 +23,7 @@ export interface MyTeamDetailDTO {
   myRoles: string[];       // vai trò của current user
   memberCount: number;     // tổng TV distinct
   members: TeamMemberDTO[];// danh sách thành viên (admin xem được hết)
+  linkGroupChat: string | null;
 }
 export interface CreateTeamPayload {
   clubId: number;

@@ -131,6 +131,18 @@ const getRoleColorByLevel = (roleLevel?: number): string => {
 const Members = () => {
   const [searchParams, setSearchParams] = useSearchParams();
 
+  // Get club ID from context/route (TODO: replace with actual clubId from route/context)
+  const clubId = 1;
+
+  // Check if user is officer from localStorage
+  const isOfficer = useMemo(() => {
+    const user = authService.getCurrentUser();
+    if (!user || !user.clubRoleList) return false;
+
+    const clubRole = user.clubRoleList.find((r) => r.clubId === clubId);
+    return clubRole?.systemRole === "CLUB_OFFICER";
+  }, [clubId]);
+
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTerm, setSelectedTerm] = useState("");
   const [selectedRole, setSelectedRole] = useState("all");
@@ -147,7 +159,6 @@ const Members = () => {
   const [teams, setTeams] = useState<TeamDTO[]>([]);
   const [initialLoad, setInitialLoad] = useState(true);
 
-  const clubId = 1; // TODO: replace with real club id from context/route
   const [isEditRoleOpen, setIsEditRoleOpen] = useState(false);
   const [selectedMemberRole, setSelectedMemberRole] = useState<string>("");
   const [isChangeStatusOpen, setIsChangeStatusOpen] = useState(false);
@@ -498,8 +509,13 @@ const Members = () => {
             </div>
             <div>
               <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-primary via-primary-glow to-primary bg-clip-text text-transparent">
-                Quản lý thành viên
+                {isOfficer ? "Quản lý thành viên" : "Danh sách thành viên"}
               </h1>
+              {!isOfficer && (
+                <p className="text-sm text-muted-foreground mt-1">
+                  Xem thông tin các thành viên trong CLB
+                </p>
+              )}
             </div>
           </div>
           <div className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-br from-primary/10 to-primary-glow/10 border border-primary/20">
@@ -507,6 +523,27 @@ const Members = () => {
             <span className="text-sm font-medium text-primary">CLB FPT</span>
           </div>
         </div>
+
+        {/* Info banner for regular members */}
+        {!isOfficer && (
+          <Card className="mb-6 border-blue-500/30 bg-blue-500/5">
+            <CardContent className="p-4">
+              <div className="flex items-start gap-3">
+                <Shield className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
+                <div className="flex-1">
+                  <h3 className="font-semibold text-blue-700 dark:text-blue-400 mb-1">
+                    Chế độ xem thành viên
+                  </h3>
+                  <p className="text-sm text-blue-600 dark:text-blue-300">
+                    Bạn có thể xem thông tin cơ bản của các thành viên trong
+                    CLB. Chỉ Chủ nhiệm và Phó Chủ nhiệm mới có quyền quản lý và
+                    chỉnh sửa thông tin thành viên.
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Tabs */}
         <Tabs
@@ -525,23 +562,130 @@ const Members = () => {
           }}
           className="mb-6"
         >
-          <TabsList className="grid w-full max-w-md grid-cols-2">
-            <TabsTrigger value="current" className="flex items-center gap-2">
-              <Users className="h-4 w-4" />
-              Thành viên hiện tại
-            </TabsTrigger>
-            <TabsTrigger value="left" className="flex items-center gap-2">
-              <UserX className="h-4 w-4" />
-              Đã rời CLB
-            </TabsTrigger>
-          </TabsList>
+          {isOfficer ? (
+            <TabsList className="grid w-full max-w-md grid-cols-2">
+              <TabsTrigger value="current" className="flex items-center gap-2">
+                <Users className="h-4 w-4" />
+                Thành viên hiện tại
+              </TabsTrigger>
+              <TabsTrigger value="left" className="flex items-center gap-2">
+                <UserX className="h-4 w-4" />
+                Đã rời CLB
+              </TabsTrigger>
+            </TabsList>
+          ) : (
+            <TabsList className="grid w-full max-w-md grid-cols-1">
+              <TabsTrigger value="current" className="flex items-center gap-2">
+                <Users className="h-4 w-4" />
+                Thành viên hiện tại
+              </TabsTrigger>
+            </TabsList>
+          )}
 
           <TabsContent value="current" className="space-y-6 mt-6">
             {/* Filters */}
             <Card className="border-primary/20 shadow-medium bg-card/80 backdrop-blur-sm">
               <CardContent className="pt-6">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <div className="relative">
+                {isOfficer ? (
+                  // Full filters for officers
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Tìm kiếm theo tên, email..."
+                        value={searchQuery}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setSearchQuery(value);
+                          updateUrlParams({ search: value || undefined });
+                        }}
+                        className="pl-10 border-primary/20 focus:border-primary"
+                      />
+                    </div>
+
+                    <Select
+                      value={selectedTerm}
+                      onValueChange={(value) => {
+                        if (!value) {
+                          const current = semesters.find((s) => s.isCurrent);
+                          const termId = current ? current.id.toString() : "";
+                          setSelectedTerm(termId);
+                          updateUrlParams({
+                            semester: termId === "" ? undefined : termId,
+                          });
+                        } else {
+                          setSelectedTerm(value);
+                          updateUrlParams({ semester: value });
+                        }
+                      }}
+                    >
+                      <SelectTrigger className="border-primary/20">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {semesters.map((semester) => (
+                          <SelectItem
+                            key={semester.id}
+                            value={semester.id.toString()}
+                          >
+                            <div className="flex items-center gap-2">
+                              <span>{semester.semesterName}</span>
+                              {semester.isCurrent && (
+                                <Badge variant="outline" className="text-xs">
+                                  Hiện tại
+                                </Badge>
+                              )}
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+
+                    <Select
+                      value={selectedRole}
+                      onValueChange={(value) => {
+                        setSelectedRole(value);
+                        updateUrlParams({
+                          role: value === "all" ? undefined : value,
+                        });
+                      }}
+                    >
+                      <SelectTrigger className="border-primary/20">
+                        <SelectValue placeholder="Chọn vai trò" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Tất cả vai trò</SelectItem>
+                        {clubRoles.map((role) => (
+                          <SelectItem key={role.id} value={role.id.toString()}>
+                            <div className="flex items-center gap-2">
+                              <span>{role.roleName}</span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+
+                    <Select
+                      value={selectedStatus}
+                      onValueChange={(value) => {
+                        setSelectedStatus(value);
+                        updateUrlParams({
+                          status: value === "" ? undefined : value,
+                        });
+                      }}
+                    >
+                      <SelectTrigger className="border-primary/20">
+                        <SelectValue placeholder="Trạng thái" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="active">Đang hoạt động</SelectItem>
+                        <SelectItem value="inactive">Tạm nghỉ</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : (
+                  // Simple search for members
+                  <div className="relative max-w-md">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
                       placeholder="Tìm kiếm theo tên, email..."
@@ -554,87 +698,7 @@ const Members = () => {
                       className="pl-10 border-primary/20 focus:border-primary"
                     />
                   </div>
-
-                  <Select
-                    value={selectedTerm}
-                    onValueChange={(value) => {
-                      if (!value) {
-                        const current = semesters.find((s) => s.isCurrent);
-                        const termId = current ? current.id.toString() : "";
-                        setSelectedTerm(termId);
-                        updateUrlParams({
-                          semester: termId === "" ? undefined : termId,
-                        });
-                      } else {
-                        setSelectedTerm(value);
-                        updateUrlParams({ semester: value });
-                      }
-                    }}
-                  >
-                    <SelectTrigger className="border-primary/20">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {semesters.map((semester) => (
-                        <SelectItem
-                          key={semester.id}
-                          value={semester.id.toString()}
-                        >
-                          <div className="flex items-center gap-2">
-                            <span>{semester.semesterName}</span>
-                            {semester.isCurrent && (
-                              <Badge variant="outline" className="text-xs">
-                                Hiện tại
-                              </Badge>
-                            )}
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-
-                  <Select
-                    value={selectedRole}
-                    onValueChange={(value) => {
-                      setSelectedRole(value);
-                      updateUrlParams({
-                        role: value === "all" ? undefined : value,
-                      });
-                    }}
-                  >
-                    <SelectTrigger className="border-primary/20">
-                      <SelectValue placeholder="Chọn vai trò" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Tất cả vai trò</SelectItem>
-                      {clubRoles.map((role) => (
-                        <SelectItem key={role.id} value={role.id.toString()}>
-                          <div className="flex items-center gap-2">
-                            <span>{role.roleName}</span>
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-
-                  <Select
-                    value={selectedStatus}
-                    onValueChange={(value) => {
-                      setSelectedStatus(value);
-                      updateUrlParams({
-                        status: value === "" ? undefined : value,
-                      });
-                    }}
-                  >
-                    <SelectTrigger className="border-primary/20">
-                      <SelectValue placeholder="Trạng thái" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="active">Đang hoạt động</SelectItem>
-                      <SelectItem value="inactive">Tạm nghỉ</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                )}
               </CardContent>
             </Card>
 
@@ -798,10 +862,12 @@ const Members = () => {
                                 <Mail className="h-3 w-3" />
                                 <span>{member.email}</span>
                               </div>
-                              <div className="flex items-center gap-1">
-                                <Phone className="h-3 w-3" />
-                                <span>{member.phoneNumber}</span>
-                              </div>
+                              {member.phoneNumber && (
+                                <div className="flex items-center gap-1">
+                                  <Phone className="h-3 w-3" />
+                                  <span>{member.phoneNumber}</span>
+                                </div>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -826,20 +892,22 @@ const Members = () => {
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="border-primary/30 hover:bg-primary hover:text-primary-foreground hover:border-primary shadow-sm hover:shadow-glow transition-all"
-                              onClick={() => setSelectedMember(member)}
-                            >
-                              <Eye className="h-4 w-4 mr-2" />
-                              <span className="hidden sm:inline">
-                                Xem chi tiết
-                              </span>
-                              <span className="sm:hidden">Chi tiết</span>
-                            </Button>
-                          </div>
+                          {isOfficer && (
+                            <div className="flex items-center gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="border-primary/30 hover:bg-primary hover:text-primary-foreground hover:border-primary shadow-sm hover:shadow-glow transition-all"
+                                onClick={() => setSelectedMember(member)}
+                              >
+                                <Eye className="h-4 w-4 mr-2" />
+                                <span className="hidden sm:inline">
+                                  Xem chi tiết
+                                </span>
+                                <span className="sm:hidden">Chi tiết</span>
+                              </Button>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </CardContent>
@@ -1119,10 +1187,12 @@ const Members = () => {
                                 <Mail className="h-3 w-3" />
                                 <span>{member.email}</span>
                               </div>
-                              <div className="flex items-center gap-1">
-                                <Phone className="h-3 w-3" />
-                                <span>{member.phoneNumber}</span>
-                              </div>
+                              {member.phoneNumber && (
+                                <div className="flex items-center gap-1">
+                                  <Phone className="h-3 w-3" />
+                                  <span>{member.phoneNumber}</span>
+                                </div>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -1149,20 +1219,22 @@ const Members = () => {
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="border-red-500/30 hover:bg-red-500 hover:text-white hover:border-red-500 shadow-sm hover:shadow-glow transition-all"
-                              onClick={() => setSelectedMember(member)}
-                            >
-                              <Eye className="h-4 w-4 mr-2" />
-                              <span className="hidden sm:inline">
-                                Xem chi tiết
-                              </span>
-                              <span className="sm:hidden">Chi tiết</span>
-                            </Button>
-                          </div>
+                          {isOfficer && (
+                            <div className="flex items-center gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="border-red-500/30 hover:bg-red-500 hover:text-white hover:border-red-500 shadow-sm hover:shadow-glow transition-all"
+                                onClick={() => setSelectedMember(member)}
+                              >
+                                <Eye className="h-4 w-4 mr-2" />
+                                <span className="hidden sm:inline">
+                                  Xem chi tiết
+                                </span>
+                                <span className="sm:hidden">Chi tiết</span>
+                              </Button>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </CardContent>
@@ -1456,6 +1528,7 @@ const Members = () => {
         roles={clubRoles}
         teams={teams}
         onUpdated={() => loadMembers()}
+        isOfficer={isOfficer}
       />
     </div>
   );

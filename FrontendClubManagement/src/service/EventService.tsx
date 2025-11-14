@@ -11,6 +11,8 @@ export interface EventData {
   clubId: number;
   clubName?: string;
   mediaUrls: string[];
+  mediaTypes?: string[]; // "IMAGE" or "VIDEO" - maps to mediaUrls by index
+  mediaIds?: number[]; // IDs của media - maps to mediaUrls by index
   eventTypeId?: number;
   eventTypeName?: string;
 }
@@ -46,7 +48,8 @@ export async function getAllEventsByFilter(
 ): Promise<EventResponse> {
   const res = await axiosClient.post<EventResponse>(
     "/events/get-all-by-filter",
-    payload
+    payload,
+    { timeout: 30000 }
   );
   if (!res.data) throw new Error("Empty response");
   return res.data;
@@ -67,35 +70,35 @@ export async function getAllClubs(): Promise<ClubDto[]> {
 }
 
 export async function getEventById(id: number): Promise<EventData> {
-  const res = await axiosClient.get<EventData>(`/events/${id}`);
+  const res = await axiosClient.get<EventData>(`/events/${id}`, { timeout: 30000 });
   if (!res.data) throw new Error("Event not found");
   return res.data;
 }
 
-export async function getEventsByClubId(clubId: number): Promise<EventData[]> {
-  const res = await axiosClient.get<EventData[]>(`/events/club/${clubId}`);
+export async function getEventsByClubId(clubId: number, params?: { startTime?: string; endTime?: string }): Promise<EventData[]> {
+  const res = await axiosClient.get<EventData[]>(`/events/club/${clubId}`, { params, timeout: 30000 });
   return res.data ?? [];
 }
 
 /**
  * Staff: Lấy tất cả events (không cần check membership)
  */
-export async function getStaffAllEvents(): Promise<EventData[]> {
-  const res = await axiosClient.get<EventData[]>("/events/staff/all");
+export async function getStaffAllEvents(params?: { startTime?: string; endTime?: string }): Promise<EventData[]> {
+  const res = await axiosClient.get<EventData[]>("/events/staff/all", { params, timeout: 30000 });
   return res.data ?? [];
 }
 
 /**
  * Staff: Lấy events theo clubId (không cần check membership)
  */
-export async function getStaffEventsByClubId(clubId: number): Promise<EventData[]> {
-  const res = await axiosClient.get<EventData[]>(`/events/staff/club/${clubId}`);
+export async function getStaffEventsByClubId(clubId: number, params?: { startTime?: string; endTime?: string }): Promise<EventData[]> {
+  const res = await axiosClient.get<EventData[]>(`/events/staff/club/${clubId}`, { params, timeout: 30000 });
   return res.data ?? [];
 }
 
 // ===== Staff Cancelled Events =====
 export async function getStaffCancelledEvents(clubId?: number): Promise<EventData[]> {
-  const res = await axiosClient.get<EventData[]>(`/events/staff/cancelled`, { params: clubId ? { clubId } : undefined });
+  const res = await axiosClient.get<EventData[]>(`/events/staff/cancelled`, { params: clubId ? { clubId } : undefined, timeout: 30000 });
   return res.data ?? [];
 }
 
@@ -155,6 +158,7 @@ export async function createEvent(payload: CreateEventPayload): Promise<EventDat
 }
 
 export interface UpdateEventPayload {
+  deleteMediaIds?: number[]; // IDs của media cần xóa
   title?: string;
   description?: string;
   location?: string;
@@ -172,6 +176,9 @@ export async function updateEvent(eventId: number, payload: UpdateEventPayload):
   if (payload.startTime != null) form.append("startTime", payload.startTime);
   if (payload.endTime != null) form.append("endTime", payload.endTime);
   if (payload.eventTypeId != null) form.append("eventTypeId", String(payload.eventTypeId));
+  if (payload.deleteMediaIds != null && payload.deleteMediaIds.length > 0) {
+    payload.deleteMediaIds.forEach((id) => form.append("deleteMediaIds", String(id)));
+  }
   (payload.images ?? []).forEach((file) => form.append("mediaFiles", file));
   const res = await axiosClient.put<EventData>(`/events/${eventId}`, form, {
     headers: { "Content-Type": "multipart/form-data" },
@@ -183,6 +190,13 @@ export async function updateEvent(eventId: number, payload: UpdateEventPayload):
 
 export async function deleteEvent(eventId: number): Promise<void> {
   await axiosClient.delete(`/events/${eventId}`);
+}
+
+// ===== Staff Publish Event =====
+export async function publishEventByStaff(eventId: number): Promise<EventData> {
+  const res = await axiosClient.post<EventData>(`/events/${eventId}/publish`, undefined, { timeout: 30000 });
+  if (!res.data) throw new Error("Publish event failed");
+  return res.data;
 }
 
 // ===== Pending Requests =====
@@ -207,7 +221,7 @@ export interface PendingRequestDto {
 }
 
 export async function getPendingRequests(): Promise<PendingRequestDto[]> {
-  const res = await axiosClient.get<PendingRequestDto[]>("/events/pending-requests");
+  const res = await axiosClient.get<PendingRequestDto[]>("/events/pending-requests", { timeout: 30000 });
   return res.data ?? [];
 }
 
@@ -243,7 +257,7 @@ export interface MyDraftEventDto {
 
 export async function getMyDraftEvents(clubId?: number): Promise<MyDraftEventDto[]> {
   const params = clubId ? { clubId } : undefined;
-  const res = await axiosClient.get<MyDraftEventDto[]>("/events/my-draft-events", { params });
+  const res = await axiosClient.get<MyDraftEventDto[]>("/events/my-draft-events", { params, timeout: 30000 });
   return res.data ?? [];
 }
 

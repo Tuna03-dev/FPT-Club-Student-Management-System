@@ -80,10 +80,21 @@ public class CloudinaryService {
 
     /**
      * Upload file (PDF, DOC, DOCX, etc.) to Cloudinary
+     * Uses default folder: club/recruitment/
      * @param file MultipartFile to upload
      * @return UploadResult with file URL and metadata
      */
     public UploadResult uploadFile(MultipartFile file) {
+        return uploadFile(file, "club/recruitment");
+    }
+
+    /**
+     * Upload file (PDF, DOC, DOCX, etc.) to Cloudinary with specified folder
+     * @param file MultipartFile to upload
+     * @param folder Folder path in Cloudinary (e.g., "club/reports", "club/recruitment")
+     * @return UploadResult with file URL and metadata
+     */
+    public UploadResult uploadFile(MultipartFile file, String folder) {
         try {
             // Get original filename to preserve file extension
             String originalFilename = file.getOriginalFilename();
@@ -108,7 +119,7 @@ public class CloudinaryService {
 
             // Generate timestamp to make filename unique
             long timestamp = System.currentTimeMillis();
-            String publicId = "club/recruitment/" + cleanFilename + "_" + timestamp + fileExtension;
+            String publicId = folder + "/" + cleanFilename + "_" + timestamp + fileExtension;
 
             // Build upload parameters
             Map<String, Object> uploadParams = new HashMap<>();
@@ -134,6 +145,42 @@ public class CloudinaryService {
         } catch (Exception e) {
             throw new RuntimeException("Cloudinary upload fail: " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * Upload video file to Cloudinary
+     * @param file MultipartFile video to upload
+     * @param folder Folder path in Cloudinary
+     * @return UploadResult with video URL and metadata
+     */
+    public UploadResult uploadVideo(MultipartFile file, String folder) {
+        try {
+            var result = cloudinary.uploader().upload(
+                    file.getBytes(),
+                    ObjectUtils.asMap(
+                            "folder", folder,
+                            "resource_type", "video",
+                            "overwrite", false
+                    )
+            );
+            return new UploadResult(
+                    (String) result.get("secure_url"),
+                    (String) result.get("public_id"),
+                    (String) result.get("format"),
+                    ((Number) result.get("bytes")).longValue());
+
+        } catch (Exception e) {
+            throw new RuntimeException("Cloudinary video upload fail: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Upload video file to Cloudinary (default folder)
+     * @param file MultipartFile video to upload
+     * @return UploadResult with video URL and metadata
+     */
+    public UploadResult uploadVideo(MultipartFile file) {
+        return uploadVideo(file, "club/events");
     }
 
     public record UploadResult(String url, String publicId, String format, long bytes) {}

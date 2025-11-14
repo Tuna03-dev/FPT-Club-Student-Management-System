@@ -54,6 +54,46 @@ public interface PostRepository extends JpaRepository<Post, Long> {
             "FROM Post p JOIN p.createdBy u " +
             "WHERE u.id IN :authorIds")
     List<ActivityDTO> findActivitiesByAuthorIds(@Param("authorIds") List<Long> authorIds);
+
+    // --- Pending Club-wide posts (chờ duyệt toàn CLB) ---
+    @EntityGraph(attributePaths = {
+            "club", "createdBy", "team",
+            "comments", "comments.user",
+            "likes", "likes.user",
+            "postMedia"
+    })
+    @Query("""
+           select p from Post p
+           where p.club.id = :clubId
+             and p.IsClubWide = true
+             and p.status = :status
+           """)
+    Page<Post> findPendingClubWidePosts(
+            @Param("clubId") Long clubId,
+            @Param("status") String status,
+            Pageable pageable
+    );
+
+    // --- Pending Team posts (chờ duyệt theo team) ---
+    @EntityGraph(attributePaths = {
+            "club", "createdBy", "team",
+            "comments", "comments.user",
+            "likes", "likes.user",
+            "postMedia"
+    })
+    @Query("""
+           select p from Post p
+           where p.club.id = :clubId
+             and p.team.id = :teamId
+             and p.status = :status
+           """)
+    Page<Post> findPendingTeamPosts(
+            @Param("clubId") Long clubId,
+            @Param("teamId") Long teamId,
+            @Param("status") String status,
+            Pageable pageable
+    );
+
     //Search
     @EntityGraph(attributePaths = {
             "club", "createdBy", "team",

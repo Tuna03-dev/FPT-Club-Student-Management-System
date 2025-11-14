@@ -1,127 +1,395 @@
-import { useNavigate, useParams, useLocation } from "react-router-dom";
-import { useEffect, useState } from "react";
-import { draftsApi } from "@/api/newsDrafts";
-import { createRequest } from "@/api/newsWorkflow";
-import { useTeamLeadGuard } from "@/hooks/useTeamLeadGuard";
-import type { NewsData, PageResp, RequestStatus } from "@/types/news";
-import ThumbnailPicker from "@/components/ThumbnailPicker";
+
+import { useNavigate, useParams, useLocation } from "react-router-dom"
+import { useEffect, useRef, useState } from "react"
+import { draftsApi } from "@/api/newsDrafts"
+import { requestsApi } from "@/api/newsRequests"
+import { useTeamLeadGuard } from "@/hooks/useTeamLeadGuard"
+import type { NewsData, RequestStatus } from "@/types/news"
+import { ArrowLeft, Send, Loader2, ImageIcon, Upload, X } from "lucide-react"
+import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select"
+
+const NEWS_TYPES = [
+  { value: "Tin chung", label: "Tin chung" },
+  { value: "Sự kiện", label: "Sự kiện" },
+  { value: "Thành tích", label: "Thành tích" },
+  { value: "Tuyển thành viên", label: "Tuyển thành viên" },
+  { value: "Lập trình", label: "Lập trình" },
+  { value: "Thể Thao", label: "Thể Thao" },
+] as const
+
+type FormErrors = {
+  title?: string
+  content?: string
+  newsType?: string
+  thumbnailUrl?: string
+}
 
 export default function TeamNewsEditor() {
-  const nav = useNavigate();
-  const { clubId: clubIdParam, teamId: teamIdParam } = useParams();
-  const clubId = Number(clubIdParam); 
-  const teamId = Number(teamIdParam);
-  const { allowed, error } = useTeamLeadGuard(clubId, teamId);
-  const location = useLocation() as { state?: { draft?: NewsData } };
+  const nav = useNavigate()
+  const { clubId: clubIdParam, teamId: teamIdParam } = useParams()
+  const clubId = Number(clubIdParam)
+  const teamId = Number(teamIdParam)
+  const { allowed, error } = useTeamLeadGuard(clubId, teamId)
+  const location = useLocation() as { state?: { draft?: NewsData } }
 
-  const [draftId, setDraftId] = useState<number | null>(null);
-  const [title, setTitle] = useState(""); 
-  const [content, setContent] = useState("");
-  const [thumbnailUrl, setThumbnailUrl] = useState<string>(""); 
-  const [newsType, setNewsType] = useState("");
-  const [saving, setSaving] = useState(false);
+  const [draftId, setDraftId] = useState<number | null>(null)
+  const [title, setTitle] = useState("")
+  const [content, setContent] = useState("")
+  const [thumbnailUrl, setThumbnailUrl] = useState<string>("") // URL thật (nếu có)
+  const [thumbPreview, setThumbPreview] = useState<string>("") // DataURL để preview đồng nhất UI
+  const [fileObj, setFileObj] = useState<File | null>(null)
+  const [newsType, setNewsType] = useState("")
+  const [saving, setSaving] = useState(false)
+  const [errors, setErrors] = useState<FormErrors>({})
+  // lấy draftId từ query
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search)
+    const did = Number(p.get("draftId"))
+    setDraftId(Number.isFinite(did) ? did : null)
+  }, [])
 
-  useEffect(() => { 
-    const p = new URLSearchParams(window.location.search); 
-    const did = Number(p.get("draftId")); 
-    setDraftId(Number.isFinite(did) ? did : null); 
-  }, []);
-
+  // prefill dữ liệu: ưu tiên state.draft, nếu không thì gọi get(draftId)
   useEffect(() => {
     if (location.state?.draft) {
-      const d = location.state.draft; 
-      setTitle(d.title||""); 
-      setContent(d.content||""); 
-      setThumbnailUrl(d.thumbnailUrl||""); 
-      setNewsType(d.newsType||""); 
-      return;
+      const d = location.state.draft
+      setTitle(d.title || "")
+      setContent(d.content || "")
+      setThumbnailUrl(d.thumbnailUrl || "")
+      setThumbPreview(d.thumbnailUrl || "")
+      setNewsType(d.newsType || "")
+      return
     }
-    const loadFallback = async () => {
-      if (!draftId) return;
+    const loadById = async () => {
+      if (!draftId) return
       try {
-        const resp = await draftsApi.list({ page: 0, size: 50, clubId, teamId } as any);
-        const page: PageResp<NewsData> | undefined = resp.data;
-        const found = page?.content?.find((d) => d.id === draftId);
-        if (found) { 
-          setTitle(found.title||""); 
-          setContent(found.content||""); 
-          setThumbnailUrl(found.thumbnailUrl||""); 
-          setNewsType(found.newsType||""); 
+        const res = await draftsApi.get(draftId)
+        const d = res.data as NewsData | undefined
+        if (d) {
+          setTitle(d.title || "")
+          setContent(d.content || "")
+          setThumbnailUrl(d.thumbnailUrl || "")
+          setThumbPreview(d.thumbnailUrl || "")
+          setNewsType(d.newsType || "")
         }
-      } catch {}
-    }; 
-    loadFallback();
-  }, [draftId, clubId, teamId, location.state]);
+      } catch { /* ignore */ }
+    }
+    loadById()
+  }, [draftId, location.state])
 
-  if (allowed === false) return <div className="p-4 text-sm text-red-600">Bạn không có quyền truy cập. {error}</div>;
-  if (allowed === null) return <div className="p-4 text-sm text-slate-500">Đang kiểm tra quyền…</div>;
+  if (allowed === false) return <div className="p-6 text-sm text-destructive">Bạn không có quyền truy cập. {error}</div>
+  if (allowed === null) return <div className="p-6 text-sm text-muted-foreground">Đang kiểm tra quyền…</div>
 
-  const validate = () => { 
-    if (!title.trim()) { alert("Thiếu tiêu đề"); return false; } 
-    if (!content.trim()) { alert("Thiếu nội dung"); return false; } 
-    return true; 
-  };
+  // validate: chỉ set lỗi để hiển thị UI (không đổi logic nghiệp vụ)
+  const validate = (): boolean => {
+    const next: FormErrors = {}
+    if (!title.trim()) next.title = "Vui lòng nhập tiêu đề"
+    if (!content.trim()) next.content = "Vui lòng nhập nội dung"
+    if (!newsType.trim()) next.newsType = "Vui lòng chọn loại bài viết"
+    if (!(thumbPreview || thumbnailUrl)) next.thumbnailUrl = "Vui lòng chọn ảnh thumbnail"
+    setErrors(next)
+    return Object.keys(next).length === 0
+  }
 
+  // giữ nguyên flow save -> drafts
   const saveDraft = async () => {
-    if (!validate()) return;
-    setSaving(true);
+    if (!validate()) return
+    setSaving(true)
     try {
+      const finalThumb = (thumbPreview || thumbnailUrl) || undefined
       if (draftId) {
-        const res = await draftsApi.update(draftId, { title, content, thumbnailUrl, newsType });
-        if (res.code !== 200 || !res.data) throw new Error(res.message || "Update draft failed");
-        alert(`Đã cập nhật nháp #${res.data.id}`);
+        const res = await draftsApi.update(draftId, {
+          title,
+          content,
+          thumbnailUrl: finalThumb,
+          newsType: newsType || undefined,
+        })
+        if (res.code !== 200 || !res.data) throw new Error(res.message || "Update draft failed")
+        alert(`Đã cập nhật nháp #${res.data.id}`)
       } else {
-        const res = await draftsApi.create({ title, content, thumbnailUrl, newsType, clubId, teamId } as any);
-        if (res.code !== 200 || !res.data) throw new Error(res.message || "Create draft failed");
-        alert(`Đã lưu nháp #${res.data.id}`);
+        const res = await draftsApi.create({
+          title,
+          content,
+          thumbnailUrl: finalThumb,
+          newsType: newsType || undefined,
+          clubId,
+          teamId,
+        } as any)
+        if (res.code !== 200 || !res.data) throw new Error(res.message || "Create draft failed")
+        alert(`Đã lưu nháp #${res.data.id}`)
       }
-      // 👇 Quay về TeamDetail tab drafts
-      nav(`/myclub/${clubId}/teams/${teamId}?tab=drafts`, { replace: true });
-    } catch (e:any) { alert(e?.message || "Không lưu được nháp"); }
-    finally { setSaving(false); }
-  };
+      nav(`/myclub/${clubId}/teams/${teamId}?tab=drafts`, { replace: true })
+    } catch (e: any) {
+      alert(e?.message || "Không lưu được nháp")
+    } finally {
+      setSaving(false)
+    }
+  }
 
+  // giữ nguyên flow submit -> requests
   const submitRequest = async () => {
-    if (!validate()) return;
-    setSaving(true);
+    if (!validate()) return
+    setSaving(true)
     try {
       if (draftId) {
-        const res = await draftsApi.submit(draftId);
-        if (res.code !== 200) throw new Error(res.message || "Submit draft failed");
-        const payload = res.data as { requestId: number; status: RequestStatus };
-        alert(`Đã submit nháp #${draftId} → request #${payload?.requestId}`);
+        const res = await draftsApi.submit(draftId)
+        if (res.code !== 200) throw new Error(res.message || "Submit draft failed")
+        const payload = res.data as { requestId: number; status: RequestStatus }
+        alert(`Đã submit nháp #${draftId} → request #${payload?.requestId}`)
       } else {
-        const res = await createRequest({ title, content, thumbnailUrl, newsType, clubId, teamId } as any);
-        if (res.code !== 200 || !res.data) throw new Error(res.message || "Create request failed");
-        alert(`Đã tạo request #${res.data.id}`);
+        const res = await requestsApi.create({
+          title,
+          content,
+          thumbnailUrl: (thumbPreview || thumbnailUrl) || undefined,
+          newsType: newsType || undefined,
+          clubId,
+          teamId,
+        })
+        if (res.code !== 200 || !res.data) throw new Error(res.message || "Create request failed")
+        alert(`Đã tạo request #${res.data.id}`)
       }
-      // 👇 Quay về TeamDetail tab requests
-      nav(`/myclub/${clubId}/teams/${teamId}?tab=requests`, { replace: true });
-    } catch (e:any) { alert(e?.message || "Không gửi được request"); }
-    finally { setSaving(false); }
-  };
+      nav(`/myclub/${clubId}/teams/${teamId}?tab=requests`, { replace: true })
+    } catch (e: any) {
+      alert(e?.message || "Không gửi được request")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const goBack = () => nav(-1)
+  void fileObj
 
   return (
-    <div className="p-4 space-y-4 max-w-4xl mx-auto">
-      <h1 className="text-2xl font-semibold">{draftId ? "Sửa nháp • Trưởng ban" : "Soạn news • Trưởng ban"}</h1>
-
-      <div className="grid gap-3">
-        <input className="border rounded p-2 w-full" placeholder="Tiêu đề" value={title} onChange={e=>setTitle(e.target.value)} />
-        <textarea className="border rounded p-2 w-full min-h-[200px]" placeholder="Nội dung" value={content} onChange={e=>setContent(e.target.value)} />
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <ThumbnailPicker value={thumbnailUrl} onChange={setThumbnailUrl} />
-          <input className="border rounded p-2" placeholder="News type (vd: EVENT)" value={newsType} onChange={e=>setNewsType(e.target.value)} />
+    <div className="min-h-screen bg-background">
+      {/* Header giống StaffNewsEditor */}
+      <div className="border-b border-border bg-background sticky top-0 z-40">
+        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
+          <button
+            onClick={goBack}
+            className="inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+            type="button"
+          >
+            <ArrowLeft className="h-4 w-4" /> Quay lại
+          </button>
+          <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+            {draftId ? `Sửa nháp #${draftId}` : "Tạo bài mới"}
+          </div>
         </div>
       </div>
 
-      <div className="flex gap-3">
-        <button onClick={saveDraft} disabled={saving} className="px-4 py-2 rounded bg-gray-900 text-white disabled:opacity-50">
-          {saving ? "Đang lưu…" : (draftId ? "Cập nhật nháp" : "Lưu bản nháp")}
-        </button>
-        <button onClick={submitRequest} disabled={saving} className="px-4 py-2 rounded bg-indigo-600 text-white disabled:opacity-50">
-          {saving ? "Đang gửi…" : (draftId ? "Submit nháp" : "Submit request")}
-        </button>
+      {/* Main Content: layout & style đồng nhất StaffNewsEditor */}
+      <div className="max-w-6xl mx-auto px-6 py-8">
+        <div className="mb-8">
+          <h1 className="text-3xl font-semibold tracking-tight text-foreground mb-2">
+            {draftId ? "Sửa bản nháp" : "Soạn bài viết mới"}
+          </h1>
+          <p className="text-sm text-muted-foreground">Quản lý nội dung tin tức cho đội của bạn</p>
+        </div>
+
+        <div className="space-y-6 pb-32">
+          {/* Thumbnail (DropImagePreview) */}
+          <div className="space-y-3">
+            <label className="text-sm font-semibold">Ảnh thumbnail</label>
+            <DropImagePreview
+              preview={thumbPreview || thumbnailUrl}
+              onPick={(file, dataUrl) => {
+                setFileObj(file) // giữ để nếu sau này cần upload ngay
+                setThumbPreview(dataUrl)
+                if (errors.thumbnailUrl) setErrors((x) => ({ ...x, thumbnailUrl: undefined }))
+              }}
+              onClear={() => {
+                setFileObj(null)
+                setThumbPreview("")
+                setThumbnailUrl("")
+              }}
+              errorMsg={errors.thumbnailUrl}
+            />
+          </div>
+
+          {/* Title */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-foreground">Tiêu đề</label>
+            <input
+              className={`w-full px-4 py-2.5 rounded-lg border bg-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:border-transparent transition-all ${
+                errors.title ? "border-rose-500 focus:ring-rose-200" : "border-border focus:ring-primary"
+              }`}
+              placeholder="Nhập tiêu đề bài viết"
+              value={title}
+              onChange={(e) => {
+                setTitle(e.target.value)
+                if (errors.title) setErrors((x) => ({ ...x, title: undefined }))
+              }}
+            />
+            {errors.title && <p className="text-rose-600 text-xs">{errors.title}</p>}
+          </div>
+
+          {/* News type */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-foreground">Loại bài viết</label>
+            <Select
+              value={newsType || undefined}
+              onValueChange={(v) => {
+                setNewsType(v)
+                if (errors.newsType) setErrors((x) => ({ ...x, newsType: undefined }))
+              }}
+            >
+              <SelectTrigger
+                className={`w-full px-4 py-2.5 rounded-lg border bg-background focus:ring-2 ${
+                  errors.newsType ? "border-rose-500 focus:ring-rose-200" : "border-border focus:ring-primary"
+                }`}
+              >
+                <SelectValue placeholder="Chọn loại" />
+              </SelectTrigger>
+              <SelectContent>
+                {NEWS_TYPES.map((t) => (
+                  <SelectItem key={t.value} value={t.value}>
+                    {t.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {errors.newsType && <p className="text-rose-600 text-xs">{errors.newsType}</p>}
+          </div>
+
+          {/* Content */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-foreground">Nội dung</label>
+            <textarea
+              className={`w-full px-4 py-2.5 rounded-lg border bg-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:border-transparent transition-all resize-none min-h-[200px] ${
+                errors.content ? "border-rose-500 focus:ring-rose-200" : "border-border focus:ring-primary"
+              }`}
+              placeholder="Viết nội dung bài viết của bạn"
+              value={content}
+              onChange={(e) => {
+                setContent(e.target.value)
+                if (errors.content) setErrors((x) => ({ ...x, content: undefined }))
+              }}
+              rows={10}
+            />
+            {errors.content && <p className="text-rose-600 text-xs">{errors.content}</p>}
+          </div>
+        </div>
+      </div>
+
+      {/* Footer actions giống StaffNewsEditor */}
+      <div className="fixed left-0 right-0 bottom-0 z-40 border-t border-border bg-background backdrop-blur-sm">
+        <div className="max-w-6xl mx-auto px-6 py-4 flex flex-wrap items-center justify-between gap-4">
+          <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+            {draftId ? `Chỉnh sửa nháp #${draftId}` : "Bản nháp mới"}
+          </div>
+          <div className="flex gap-3">
+            <button
+              onClick={saveDraft}
+              disabled={saving}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-border bg-background text-foreground hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+            >
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              {draftId ? "Cập nhật" : "Lưu nháp"}
+            </button>
+            <button
+              onClick={submitRequest}
+              disabled={saving}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+            >
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              {draftId ? "Gửi nháp" : "Gửi yêu cầu"}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
-  );
+  )
+}
+
+/** Drop-zone preview bằng DataURL (đồng nhất StaffNewsEditor), có hiển thị lỗi viền đỏ */
+function DropImagePreview({
+  preview,
+  onPick,
+  onClear,
+  errorMsg,
+}: {
+  preview?: string
+  onPick: (file: File, dataUrl: string) => void
+  onClear: () => void
+  errorMsg?: string
+}) {
+  const inputRef = useRef<HTMLInputElement | null>(null)
+  const [dragOver, setDragOver] = useState(false)
+  const hasImage = Boolean(preview)
+
+  const open = () => inputRef.current?.click()
+
+  const readAsDataURL = (file: File) =>
+    new Promise<string>((resolve, reject) => {
+      const fr = new FileReader()
+      fr.onload = () => resolve(String(fr.result || ""))
+      fr.onerror = reject
+      fr.readAsDataURL(file)
+    })
+
+  const handleFile = async (file?: File | null) => {
+    if (!file || !file.type.startsWith("image/")) return
+    const dataUrl = await readAsDataURL(file)
+    onPick(file, dataUrl)
+  }
+
+  return (
+    <div>
+      <div
+        className={`relative rounded-lg border-2 border-dashed transition-all ${
+          dragOver ? "border-blue-500 bg-blue-50" : errorMsg ? "border-rose-500 bg-rose-50/40" : "border-slate-300 bg-slate-50"
+        } p-3`}
+        onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+        onDragLeave={(e) => { e.preventDefault(); setDragOver(false) }}
+        onDrop={async (e) => {
+          e.preventDefault(); e.stopPropagation(); setDragOver(false)
+          await handleFile(e.dataTransfer.files?.[0])
+        }}
+        onPaste={(e) => {
+          if (e.clipboardData?.getData("text/plain")) e.preventDefault() // chặn dán link
+        }}
+      >
+        <div className="aspect-[16/9] w-full rounded-md bg-white overflow-hidden cursor-pointer" onClick={open}>
+          {hasImage ? (
+            <img src={preview} alt="thumbnail" className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-slate-400">
+              <ImageIcon className="h-5 w-5 mr-2" /> Kéo-thả hoặc bấm để chọn ảnh
+            </div>
+          )}
+        </div>
+
+        <div className="mt-3 flex gap-2">
+          <button
+            type="button"
+            onClick={open}
+            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md border bg-white hover:bg-slate-50 text-sm font-medium"
+          >
+            <Upload className="h-4 w-4" /> Chọn ảnh
+          </button>
+          {hasImage && (
+            <button
+              type="button"
+              onClick={onClear}
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md border bg-white hover:bg-slate-50 text-sm font-medium"
+            >
+              <X className="h-4 w-4" /> Xóa
+            </button>
+          )}
+        </div>
+      </div>
+      {errorMsg && <p className="text-rose-600 text-xs mt-2">{errorMsg}</p>}
+
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={async (e) => {
+          const f = e.target.files?.[0]
+          await handleFile(f || undefined)
+          if (inputRef.current) inputRef.current.value = ""
+        }}
+      />
+    </div>
+  )
 }

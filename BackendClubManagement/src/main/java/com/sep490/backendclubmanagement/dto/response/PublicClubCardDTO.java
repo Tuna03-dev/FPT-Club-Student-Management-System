@@ -23,4 +23,7 @@ public class PublicClubCardDTO {
     private Integer tagsOverflow;
     private String leaderName;
     private Integer memberCount;
+    
+    private Boolean hasActiveRecruitment;
+    private Long activeRecruitmentId;
 }

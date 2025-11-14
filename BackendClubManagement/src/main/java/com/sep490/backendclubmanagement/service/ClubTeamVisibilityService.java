@@ -114,7 +114,8 @@ public class ClubTeamVisibilityService {
                 /* member */ isMember,
                 myRoles,
                 memberCount,
-                members
+                members,
+                team.getLinkGroupChat()
         );
     }
 
@@ -128,7 +129,8 @@ public class ClubTeamVisibilityService {
                 .orElseThrow(() -> new ResourceNotFoundException("Current semester not found."));
         Long semesterId = currentSemester.getId();
 
-        boolean isPresident = clubMemberShipRepository.isClubPresidentInSemester(
+        // Kiểm tra user có phải CLUB_PRESIDENT của kì hiện tại không
+        boolean isPresident = roleMembershipRepository.isClubPresidentInCurrentSemester(
                 currentUser.getId(),
                 clubId,
                 semesterId

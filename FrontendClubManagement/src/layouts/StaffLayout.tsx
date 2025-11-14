@@ -8,6 +8,7 @@ import {
   Clock,
   FileText,
   Users,
+  Home,
 } from "lucide-react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useState } from "react";
@@ -35,10 +36,36 @@ const navItems = [
 
 // Management items for Staff
 const managementItems = [
-  { key: "manage_events", url: "/events", icon: Calendar, label: "Quản lý sự kiện" },
-  { key: "pending_requests", url: "/pending-requests", icon: Clock, label: "Yêu cầu chờ duyệt" },
-  { key: "pending_posts", url: "/pending-posts", icon: FileText, label: "Bài viết chờ duyệt" },
-  { key: "manage_members", url: "/members", icon: Users, label: "Quản lý thành viên" },
+  {
+    key: "manage_events",
+    url: "/events",
+    icon: Calendar,
+    label: "Quản lý sự kiện",
+  },
+  {
+    key: "pending_requests",
+    url: "/pending-requests",
+    icon: Clock,
+    label: "Yêu cầu chờ duyệt",
+  },
+  {
+    key: "pending_posts",
+    url: "/news",
+    icon: FileText,
+    label: "Bài viết chờ duyệt",
+  },
+  {
+    key: "manage_members",
+    url: "/members",
+    icon: Users,
+    label: "Quản lý thành viên",
+  },
+  {
+    key: "manage_reports",
+    url: "/reports",
+    icon: FileText,
+    label: "Quản lý báo cáo",
+  },
 ];
 
 const managementColors: Record<string, string> = {
@@ -46,6 +73,7 @@ const managementColors: Record<string, string> = {
   pending_requests: "bg-gradient-to-br from-orange-500 to-orange-600",
   pending_posts: "bg-gradient-to-br from-yellow-500 to-yellow-600",
   manage_members: "bg-gradient-to-br from-blue-500 to-blue-600",
+  manage_reports: "bg-gradient-to-br from-pink-500 to-pink-600",
 };
 
 export const StaffLayout = () => {
@@ -119,12 +147,25 @@ export const StaffLayout = () => {
 
             {/* Right: user */}
             <div className="flex items-center gap-2 flex-1 justify-end max-w-[320px]">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="hidden sm:flex items-center gap-2"
+                onClick={() => navigate("/")}
+              >
+                <Home className="h-4 w-4" />
+                <span>Trang chủ</span>
+              </Button>
               <NavLink to="/myclub/staff/settings">
                 <Button variant="ghost" size="icon" className="rounded-full">
                   <Settings className="h-5 w-5" />
                 </Button>
               </NavLink>
-              <Button variant="ghost" size="icon" className="rounded-full relative">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="rounded-full relative"
+              >
                 <Bell className="h-5 w-5" />
                 <span className="absolute top-1 right-1 h-2 w-2 bg-destructive rounded-full" />
               </Button>
@@ -139,7 +180,10 @@ export const StaffLayout = () => {
               </div>
 
               {/* Mobile menu */}
-              <DropdownMenu open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
+              <DropdownMenu
+                open={isMobileMenuOpen}
+                onOpenChange={setIsMobileMenuOpen}
+              >
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="icon" className="md:hidden">
                     <Menu className="h-5 w-5" />
@@ -158,7 +202,9 @@ export const StaffLayout = () => {
                           onClick={() => setIsMobileMenuOpen(false)}
                         >
                           <div
-                            className={`h-6 w-6 rounded-lg ${managementColors[item.key]} flex items-center justify-center text-white shadow-sm`}
+                            className={`h-6 w-6 rounded-lg ${
+                              managementColors[item.key]
+                            } flex items-center justify-center text-white shadow-sm`}
                           >
                             <item.icon className="h-3 w-3" />
                           </div>
@@ -188,7 +234,7 @@ export const StaffLayout = () => {
                   {managementItems.map((item) => (
                     <NavLink
                       key={item.key}
-                      to={`/myclub/staff${item.url}`}
+                      to={`/staff${item.url}`}
                       className={({ isActive }) =>
                         `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
                           isActive
@@ -198,7 +244,9 @@ export const StaffLayout = () => {
                       }
                     >
                       <div
-                        className={`h-8 w-8 rounded-lg ${managementColors[item.key]} flex items-center justify-center text-white shadow-sm`}
+                        className={`h-8 w-8 rounded-lg ${
+                          managementColors[item.key]
+                        } flex items-center justify-center text-white shadow-sm`}
                       >
                         <item.icon className="h-4 w-4" />
                       </div>
@@ -218,4 +266,3 @@ export const StaffLayout = () => {
     </TooltipProvider>
   );
 };
-

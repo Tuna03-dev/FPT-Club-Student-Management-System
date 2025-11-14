@@ -17,18 +17,21 @@ import { toast } from "sonner";
 interface CreatePostProps {
   onPostCreated?: () => void;
   clubId?: number;
+  teamId?: number; // If provided, post is for specific team
 }
 
 export const CreatePost = ({
   onPostCreated,
   clubId: clubIdProp,
+  teamId,
 }: CreatePostProps) => {
   const [isCreating, setIsCreating] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [content, setContent] = useState("");
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [selectedImages, setSelectedImages] = useState<string[]>([]);
-  const [clubWide, setClubWide] = useState(true);
+  // If teamId is provided, post is for team only (not clubWide)
+  const [clubWide, setClubWide] = useState(!teamId);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -111,6 +114,8 @@ export const CreatePost = ({
         clubWide,
         withinClub: true,
         status: "PUBLISHED", // Set status to published when posting
+        // Include teamId if posting to specific team
+        ...(teamId && { teamId }),
       };
 
       await postService.createPostWithMedia(request, selectedFiles);
@@ -123,7 +128,7 @@ export const CreatePost = ({
       // Clean up object URLs
       selectedImages.forEach((url) => URL.revokeObjectURL(url));
       setSelectedImages([]);
-      setClubWide(true);
+      setClubWide(!teamId); // Reset based on whether posting to team or club
       setShowForm(false);
 
       // Notify parent component
@@ -142,7 +147,7 @@ export const CreatePost = ({
     // Clean up object URLs
     selectedImages.forEach((url) => URL.revokeObjectURL(url));
     setSelectedImages([]);
-    setClubWide(true);
+    setClubWide(!teamId); // Reset based on whether posting to team or club
     setShowForm(false);
   };
 

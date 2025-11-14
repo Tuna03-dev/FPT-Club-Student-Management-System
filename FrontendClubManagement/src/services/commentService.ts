@@ -4,6 +4,8 @@ export interface CommentDTO {
   id: number;
   postId: number;
   parentId: number | null;
+  // rootParentId: id of the top-level comment this comment belongs to (null for top-level)
+  rootParentId?: number | null;
   userId: number;
   userName: string;
   userAvatar: string | null;
@@ -48,9 +50,7 @@ export const commentService = {
   /**
    * Lấy replies của một comment
    */
-  getReplies: async (
-    parentId: number
-  ): Promise<ApiResponse<CommentDTO[]>> => {
+  getReplies: async (parentId: number): Promise<ApiResponse<CommentDTO[]>> => {
     return axiosClient.get<CommentDTO[]>(`/comments/${parentId}/replies`);
   },
 
@@ -61,10 +61,7 @@ export const commentService = {
     postId: number,
     request: CreateCommentRequest
   ): Promise<ApiResponse<CommentDTO>> => {
-    return axiosClient.post<CommentDTO>(
-      `/comments/posts/${postId}`,
-      request
-    );
+    return axiosClient.post<CommentDTO>(`/comments/posts/${postId}`, request);
   },
 
   /**
@@ -86,4 +83,3 @@ export const commentService = {
 };
 
 export default commentService;
-

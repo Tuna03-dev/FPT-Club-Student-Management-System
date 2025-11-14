@@ -42,9 +42,16 @@ public class Fee extends BaseEntity {
     @Column(name = "is_draft", nullable = false)
     private Boolean isDraft = true;
 
+    @Column(name = "has_ever_expired", nullable = false)
+    private Boolean hasEverExpired = false; // Once true, amount can never be edited
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "club_id", nullable = false)
     private Club club;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "semester_id")
+    private Semester semester;
 
     @OneToMany(mappedBy = "fee", cascade = CascadeType.ALL)
     private Set<IncomeTransaction> incomeTransactions;

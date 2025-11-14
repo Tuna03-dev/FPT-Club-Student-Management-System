@@ -13,6 +13,8 @@ export interface ClubCard {
   totalTeams: number;
   topTags: string[];
   tagsOverflow: number;
+  hasActiveRecruitment?: boolean;
+  activeRecruitmentId?: number | null;
 }
 
 export interface ClubTeam {
