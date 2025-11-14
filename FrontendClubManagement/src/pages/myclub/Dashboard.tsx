@@ -39,7 +39,7 @@ export const Dashboard = () => {
         setLoading(true);
         setError(null);
 
-        const response = await postService.getClubWidePosts(clubId, {
+        const response = await postService.getClubFeed(clubId, {
           page: page,
           size: 10,
           sort: "createdAt,desc",
@@ -113,23 +113,29 @@ export const Dashboard = () => {
   };
 
   const convertPostToCard = (post: PostWithRelationsData) => {
-    const imageMedia = (post.media || []).filter((m) => m && m.mediaType === "IMAGE");
+    const imageMedia = (post.media || []).filter(
+      (m) => m && m.mediaType === "IMAGE"
+    );
     return {
-      postId: post.id, // ✅ Thêm postId (number)
-      clubId: clubId, // ✅ Thêm clubId
+      postId: post.id,
+      clubId: clubId,
       author: {
-        id: post.authorId, // ✅ Thêm authorId để check quyền
+        id: post.authorId,
         name: post.authorName || "Người dùng",
         avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=default",
         role: "Thành viên",
       },
       content: post.content || "",
       images: imageMedia.map((m) => m.mediaUrl),
-      imageIds: imageMedia.map((m) => m.id), // ✅ Thêm imageIds để edit/delete
+      imageIds: imageMedia.map((m) => m.id),
       timestamp: formatTimestamp(post.createdAt || new Date().toISOString()),
       likes: (post.likes || []).length,
       comments: (post.comments || []).length,
       shares: 0,
+      // Thêm thông tin team để hiển thị badge
+      teamId: post.teamId,
+      teamName: post.teamName,
+      isTeamPost: post.isTeamPost || !!post.teamId, // true nếu là post của team
     };
   };
 
