@@ -194,15 +194,9 @@ export const postService = {
   },
 
   // Search posts
-  async searchPosts(params: PostSearchParams): Promise<
-    ApiResponse<{
-      content: PostWithRelationsData[];
-      totalElements: number;
-      totalPages: number;
-      hasNext: boolean;
-      hasPrevious: boolean;
-    }>
-  > {
+  async searchPosts(
+    params: PostSearchParams
+  ): Promise<ApiResponse<SpringPageResponse<PostWithRelationsData>>> {
     const query = new URLSearchParams();
     query.set("q", params.q);
     if (params.clubId) query.set("clubId", String(params.clubId));
