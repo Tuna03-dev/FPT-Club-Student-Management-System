@@ -38,6 +38,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import Skeleton from "@/components/common/Skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import {
@@ -947,12 +948,60 @@ export function ClubReportManagement() {
               </Select>
             </div>
 
-            {/* Loading State */}
+            {/* Loading State: show card skeletons */}
             {loading && (
-              <div className="text-center py-12">
-                <p className="text-muted-foreground">
-                  Đang tải danh sách yêu cầu...
-                </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {Array.from({ length: pageSize }).map((_, idx) => (
+                  <Card
+                    key={idx}
+                    className="hover:shadow-lg transition-shadow animate-pulse"
+                  >
+                    <CardHeader>
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Skeleton width={80} height={20} />
+                            <Skeleton width={80} height={20} />
+                          </div>
+                          <CardTitle className="text-lg mb-1">
+                            <Skeleton width="60%" height={18} />
+                          </CardTitle>
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <Skeleton width={120} height={12} />
+                        </div>
+
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <Skeleton width={140} height={12} />
+                        </div>
+
+                        <div>
+                          <Label className="text-xs text-muted-foreground mb-2"></Label>
+                          <ul className="text-sm space-y-1 ml-4">
+                            <li className="list-disc text-muted-foreground">
+                              <Skeleton width="100%" height={10} />
+                            </li>
+                            <li className="list-disc text-muted-foreground">
+                              <Skeleton width="90%" height={10} />
+                            </li>
+                            <li className="list-disc text-muted-foreground">
+                              <Skeleton width="80%" height={10} />
+                            </li>
+                          </ul>
+                        </div>
+
+                        <div className="flex gap-2 pt-2">
+                          <Skeleton width={100} height={32} />
+                          <Skeleton width={120} height={32} />
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
               </div>
             )}
 
@@ -1578,10 +1627,45 @@ export function ClubReportManagement() {
 
             {/* Table for My Reports */}
             {loadingMyReports ? (
-              <div className="text-center py-12">
-                <p className="text-muted-foreground">
-                  Đang tải danh sách báo cáo...
-                </p>
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[250px]">Tiêu đề</TableHead>
+                      <TableHead className="w-[150px]">Ngày tạo</TableHead>
+                      <TableHead className="w-[150px]">Ngày nộp</TableHead>
+                      <TableHead className="w-[200px]">Người tạo</TableHead>
+
+                      <TableHead className="w-[120px]">Trạng thái</TableHead>
+                      <TableHead className="text-right">Thao tác</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {Array.from({ length: 5 }).map((_, i) => (
+                      <TableRow key={i} className="animate-pulse">
+                        <TableCell className="font-medium">
+                          <Skeleton width="80%" height={12} />
+                        </TableCell>
+
+                        <TableCell>
+                          <Skeleton width={80} height={12} />
+                        </TableCell>
+                        <TableCell>
+                          <Skeleton width={80} height={12} />
+                        </TableCell>
+                        <TableCell>
+                          <Skeleton width={120} height={12} />
+                        </TableCell>
+                        <TableCell>
+                          <Skeleton width={80} height={12} />
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Skeleton width={60} height={28} />
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               </div>
             ) : filteredMyReports.length === 0 ? (
               <div className="text-center py-12">
@@ -1808,10 +1892,45 @@ export function ClubReportManagement() {
 
             {/* Table for All Club Reports */}
             {loadingAllClubReports ? (
-              <div className="text-center py-12">
-                <p className="text-muted-foreground">
-                  Đang tải danh sách báo cáo...
-                </p>
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[250px]">Tiêu đề</TableHead>
+                      <TableHead className="w-[150px]">Ngày tạo</TableHead>
+                      <TableHead className="w-[150px]">Ngày nộp</TableHead>
+                      <TableHead className="w-[200px]">Người tạo</TableHead>
+
+                      <TableHead className="w-[120px]">Trạng thái</TableHead>
+                      <TableHead className="text-right">Thao tác</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {Array.from({ length: 5 }).map((_, i) => (
+                      <TableRow key={i} className="animate-pulse">
+                        <TableCell className="font-medium">
+                          <Skeleton width="80%" height={12} />
+                        </TableCell>
+
+                        <TableCell>
+                          <Skeleton width={80} height={12} />
+                        </TableCell>
+                        <TableCell>
+                          <Skeleton width={80} height={12} />
+                        </TableCell>
+                        <TableCell>
+                          <Skeleton width={120} height={12} />
+                        </TableCell>
+                        <TableCell>
+                          <Skeleton width={80} height={12} />
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Skeleton width={60} height={28} />
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               </div>
             ) : filteredAllClubReports.length === 0 ? (
               <div className="text-center py-12">
@@ -2238,8 +2357,9 @@ export function ClubReportManagement() {
                 // Nếu là Club_officer và status là DRAFT và là creator, hiển thị các nút
                 if (shouldShowForPresident) {
                   return (
-                    <div className="flex gap-2 justify-end pt-4 border-t">
+                    <div className="flex flex-col sm:flex-row gap-2 sm:justify-end pt-4 border-t">
                       <Button
+                        className="bg-green-600 hover:bg-green-700 text-white w-full sm:w-auto"
                         onClick={async () => {
                           if (!selectedReportDetail.id) {
                             toast.error("Không tìm thấy thông tin báo cáo");
@@ -2270,7 +2390,6 @@ export function ClubReportManagement() {
                             setApprovingReport(false);
                           }
                         }}
-                        className="bg-green-600 hover:bg-green-700 text-white"
                         disabled={approvingReport}
                       >
                         <CheckCircle className="h-4 w-4 mr-2" />
@@ -2278,6 +2397,7 @@ export function ClubReportManagement() {
                       </Button>
                       <Button
                         variant="outline"
+                        className="bg-transparent w-full sm:w-auto"
                         onClick={() => {
                           // Set up edit dialog
                           setDraftTitle(selectedReportDetail.reportTitle);
@@ -2298,7 +2418,6 @@ export function ClubReportManagement() {
                           setShowDetailModal(false);
                           setShowEditDialog(true);
                         }}
-                        className="bg-transparent"
                       >
                         <FileText className="h-4 w-4 mr-2" />
                         Chỉnh sửa
@@ -2350,8 +2469,9 @@ export function ClubReportManagement() {
                 // Nếu là Team_officer và status là DRAFT và là creator, hiển thị các nút
                 if (shouldShowForTeamOfficer) {
                   return (
-                    <div className="flex gap-2 justify-end pt-4 border-t">
+                    <div className="flex flex-col sm:flex-row gap-2 sm:justify-end pt-4 border-t">
                       <Button
+                        className="bg-green-600 hover:bg-green-700 text-white w-full sm:w-auto"
                         onClick={async () => {
                           if (!selectedReportDetail.id) {
                             toast.error("Không tìm thấy thông tin báo cáo");
@@ -2384,7 +2504,6 @@ export function ClubReportManagement() {
                             setSubmitting(false);
                           }
                         }}
-                        className="bg-green-600 hover:bg-green-700 text-white"
                         disabled={submitting}
                       >
                         <CheckCircle className="h-4 w-4 mr-2" />
@@ -2392,6 +2511,7 @@ export function ClubReportManagement() {
                       </Button>
                       <Button
                         variant="outline"
+                        className="bg-transparent w-full sm:w-auto"
                         onClick={() => {
                           // Set up edit dialog
                           setDraftTitle(selectedReportDetail.reportTitle);
@@ -2412,7 +2532,6 @@ export function ClubReportManagement() {
                           setShowDetailModal(false);
                           setShowEditDialog(true);
                         }}
-                        className="bg-transparent"
                       >
                         <FileText className="h-4 w-4 mr-2" />
                         Chỉnh sửa
@@ -2451,7 +2570,6 @@ export function ClubReportManagement() {
                             setDeletingReport(false);
                           }
                         }}
-                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
                         disabled={deletingReport}
                       >
                         <XCircle className="h-4 w-4 mr-2" />
@@ -2632,8 +2750,9 @@ export function ClubReportManagement() {
 
                   // Nếu không phải creator, hiển thị nút Từ chối như cũ
                   return (
-                    <div className="flex gap-2 justify-end pt-4 border-t">
+                    <div className="flex flex-col sm:flex-row gap-2 sm:justify-end pt-4 border-t">
                       <Button
+                        className="bg-green-600 hover:bg-green-700 text-white w-full sm:w-auto"
                         onClick={async () => {
                           if (!selectedReportDetail.id) {
                             toast.error("Không tìm thấy thông tin báo cáo");
@@ -2667,7 +2786,6 @@ export function ClubReportManagement() {
                             setApprovingReport(false);
                           }
                         }}
-                        className="bg-green-600 hover:bg-green-700 text-white"
                         disabled={approvingReport}
                       >
                         <CheckCircle className="h-4 w-4 mr-2" />
@@ -2679,11 +2797,11 @@ export function ClubReportManagement() {
                       </Button>
                       <Button
                         variant="outline"
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50 w-full sm:w-auto"
                         onClick={() => {
                           setShowRejectDialog(true);
                           setRejectReason("");
                         }}
-                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
                         disabled={approvingReport}
                       >
                         <XCircle className="h-4 w-4 mr-2" />
@@ -2740,8 +2858,9 @@ export function ClubReportManagement() {
 
                 if (shouldShowForTeamOfficer) {
                   return (
-                    <div className="flex gap-2 justify-end pt-4 border-t">
+                    <div className="flex flex-col sm:flex-row gap-2 sm:justify-end pt-4 border-t">
                       <Button
+                        className="bg-blue-600 hover:bg-blue-700 text-white w-full sm:w-auto"
                         onClick={() => {
                           // Set up edit dialog for resubmission
                           setDraftTitle(selectedReportDetail.reportTitle);
@@ -2764,7 +2883,6 @@ export function ClubReportManagement() {
                           setShowDetailModal(false);
                           setShowEditDialog(true);
                         }}
-                        className="bg-blue-600 hover:bg-blue-700 text-white"
                       >
                         <FileText className="h-4 w-4 mr-2" />
                         Sửa lại
@@ -2830,9 +2948,10 @@ export function ClubReportManagement() {
                 if (shouldShowForClubOfficer) {
                   // Club officer: hiển thị nút "Chỉnh sửa"
                   return (
-                    <div className="flex gap-2 justify-end pt-4 border-t">
+                    <div className="flex flex-col sm:flex-row gap-2 sm:justify-end pt-4 border-t">
                       <Button
                         variant="outline"
+                        className="bg-blue-600 hover:bg-blue-700 text-white w-full sm:w-auto"
                         onClick={() => {
                           // Set up edit dialog for resubmission to university
                           setDraftTitle(selectedReportDetail.reportTitle);
@@ -2855,7 +2974,6 @@ export function ClubReportManagement() {
                           setShowDetailModal(false);
                           setShowEditDialog(true);
                         }}
-                        className="bg-blue-600 hover:bg-blue-700 text-white"
                       >
                         <FileText className="h-4 w-4 mr-2" />
                         Chỉnh sửa
@@ -2867,18 +2985,19 @@ export function ClubReportManagement() {
                 if (shouldShowForTeamOfficer) {
                   // Team officer: hiển thị nút "Chỉnh sửa" và "Hủy"
                   return (
-                    <div className="flex gap-2 justify-end pt-4 border-t">
+                    <div className="flex flex-col sm:flex-row gap-2 sm:justify-end pt-4 border-t">
                       <Button
                         variant="outline"
+                        className="bg-transparent w-full sm:w-auto"
                         onClick={() => {
                           setShowDetailModal(false);
                         }}
-                        className="bg-transparent"
                       >
                         Hủy
                       </Button>
                       <Button
                         variant="outline"
+                        className="bg-blue-600 hover:bg-blue-700 text-white w-full sm:w-auto"
                         onClick={() => {
                           // Set up edit dialog for resubmission to club
                           setDraftTitle(selectedReportDetail.reportTitle);
@@ -2901,7 +3020,6 @@ export function ClubReportManagement() {
                           setShowDetailModal(false);
                           setShowEditDialog(true);
                         }}
-                        className="bg-blue-600 hover:bg-blue-700 text-white"
                       >
                         <FileText className="h-4 w-4 mr-2" />
                         Chỉnh sửa
@@ -2951,6 +3069,7 @@ export function ClubReportManagement() {
                 </Button>
                 <Button
                   variant="destructive"
+                  className="w-full sm:w-auto"
                   onClick={async () => {
                     if (!selectedReportDetail.id) {
                       toast.error("Không tìm thấy thông tin báo cáo");
@@ -3126,9 +3245,10 @@ export function ClubReportManagement() {
                   </div>
                 )}
               </div>
-              <div className="flex gap-2 justify-end pt-4">
+              <div className="flex flex-col sm:flex-row gap-2 sm:justify-end pt-4">
                 <Button
                   variant="outline"
+                  className="bg-transparent w-full sm:w-auto"
                   onClick={() => {
                     setShowSubmitDialog(false);
                     setEditingReportId(null);
@@ -3137,7 +3257,6 @@ export function ClubReportManagement() {
                     setDraftContent("");
                     setDraftFileUrl("");
                   }}
-                  className="bg-transparent"
                   disabled={savingDraft || submittingReport}
                 >
                   Hủy
@@ -3609,16 +3728,16 @@ export function ClubReportManagement() {
                   </div>
                 )}
               </div>
-              <div className="flex gap-2 justify-end pt-4">
+              <div className="flex flex-col sm:flex-row gap-2 sm:justify-end pt-4">
                 <Button
                   variant="outline"
+                  className="bg-transparent w-full sm:w-auto"
                   onClick={() => {
                     setShowEditDialog(false);
                     setEditingReportId(null);
                     setDraftFile(null);
                     setIsResubmitMode(false);
                   }}
-                  className="bg-transparent"
                   disabled={
                     savingDraft || submittingReport || resubmittingReport
                   }
