@@ -48,7 +48,7 @@ public class RequestNews extends BaseEntity {
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "news_id", unique = true)
     private News news;
-    @Column(name = "thumbnail_url", length = 500)
+    @Column(name = "thumbnail_url", columnDefinition = "TEXT")
     private String thumbnailUrl;
 
     @Column(name = "news_type", length = 100)

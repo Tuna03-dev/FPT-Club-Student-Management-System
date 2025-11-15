@@ -7,5 +7,6 @@ import java.util.List;
 
 public interface SemesterService {
     List<SemesterResponse> getSemestersFromClubEstablishment(Long clubId) throws AppException;
+    Long getCurrentSemesterId() throws AppException;
 }
 

@@ -16,6 +16,7 @@ public enum ErrorCode {
     ROLE_NOT_FOUND(HttpStatus.NOT_FOUND, 2001, "Role not found"),
     MEMBER_NOT_FOUND(HttpStatus.NOT_FOUND, 2002, "Member not found"),
     USER_NOT_FOUND(HttpStatus.NOT_FOUND, 2003, "User not found"),
+    SEMESTER_NOT_FOUND(HttpStatus.NOT_FOUND, 2004, "Semester not found"),
     UNAUTHENTICATED(HttpStatus.UNAUTHORIZED, 401, "User is not authenticated"),
     RECRUITMENT_CLOSED(HttpStatus.BAD_REQUEST, 3000, "Không thể chỉnh sửa đợt tuyển dụng đã đóng"),
     ALREADY_CLUB_MEMBER(HttpStatus.BAD_REQUEST, 3001, "Bạn đã là thành viên của câu lạc bộ này"),

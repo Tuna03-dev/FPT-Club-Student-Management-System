@@ -55,6 +55,8 @@ import RequestDetail from "@/pages/news/RequestDetail";
 import StaffNewsDetail from "@/pages/news/StaffNewsDetail";
 import StaffNewsEdit from "@/pages/news/StaffNewsEdit";
 import ClubDetailPage from "@/pages/myclub/ClubDetailPage";
+import StaffNotifications from "@/pages/myclub/staff/StaffNotifications";
+
 export const router = createBrowserRouter([
   {
     path: "/",
@@ -138,58 +140,6 @@ export const router = createBrowserRouter([
       </ProtectedRoute>
     ),
   },
-
-  // ===== Staff News (top-level như B) + BỔ SUNG các route chi tiết từ A =====
-  {
-    path: "/staff/news",
-    element: (
-      <ProtectedRoute>
-        <StaffNewsList />
-      </ProtectedRoute>
-    ),
-  },
-  {
-    path: "/staff/news-editor",
-    element: (
-      <ProtectedRoute>
-        <StaffNewsEditor />
-      </ProtectedRoute>
-    ),
-  },
-  // bổ sung từ A:
-  {
-    path: "/staff/news/:id",
-    element: (
-      <ProtectedRoute>
-        <StaffNewsDetail />
-      </ProtectedRoute>
-    ),
-  },
-  {
-    path: "/staff/news/:id/edit",
-    element: (
-      <ProtectedRoute>
-        <StaffNewsEdit />
-      </ProtectedRoute>
-    ),
-  },
-  {
-    path: "/staff/news/drafts/:draftId",
-    element: (
-      <ProtectedRoute>
-        <DraftDetail />
-      </ProtectedRoute>
-    ),
-  },
-  {
-    path: "/staff/news/requests/:id",
-    element: (
-      <ProtectedRoute>
-        <RequestDetail />
-      </ProtectedRoute>
-    ),
-  },
-
   // ===== Admin giữ nguyên theo B =====
   {
     path: "/admin",
@@ -322,6 +272,13 @@ export const router = createBrowserRouter([
         path: "report/:reportId/clubs",
         element: <PeriodicReportClubs />,
       },
+      { path: "news", element: <StaffNewsList /> },
+      { path: "news-editor", element: <StaffNewsEditor /> },
+      { path: "news/:id", element: <StaffNewsDetail /> },
+      { path: "news/:id/edit", element: <StaffNewsEdit /> },
+      { path: "news/drafts/:draftId", element: <DraftDetail /> },
+      { path: "news/requests/:id", element: <RequestDetail /> },
+      { path: "notifications", element: <StaffNotifications /> },
     ],
   },
 

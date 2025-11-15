@@ -7,6 +7,7 @@ import com.sep490.backendclubmanagement.dto.request.UpdateNewsRequest;
 import com.sep490.backendclubmanagement.dto.response.NewsRequestResponse;
 import com.sep490.backendclubmanagement.dto.response.PublishResult;
 import com.sep490.backendclubmanagement.entity.*;
+import com.sep490.backendclubmanagement.exception.AppException;
 import com.sep490.backendclubmanagement.mapper.NewsMapper;
 import com.sep490.backendclubmanagement.mapper.RequestNewsMapper;
 import com.sep490.backendclubmanagement.repository.*;
@@ -15,6 +16,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.Map;
 
 @Service
@@ -29,11 +31,12 @@ public class NewsWorkflowService {
     private final RequestNewsMapper mapper;
     private final NewsMapper newsMapper;
     private final TeamRepository teamRepo;
-    private final WebSocketService webSocketService; // ✅ Thêm realtime
+    private final WebSocketService webSocketService;
+    private final NotificationService notificationService;
 
     // ========== CREATE REQUEST ==========
     @Transactional
-    public NewsRequestResponse createRequest(Long me, CreateNewsRequest dto) {
+    public NewsRequestResponse createRequest(Long me, CreateNewsRequest dto) throws AppException {
         String title = dto.getTitle() == null ? "" : dto.getTitle().trim();
         String desc  = dto.getContent() == null ? "" : dto.getContent().trim();
         if (title.isEmpty()) throw new IllegalArgumentException("Tiêu đề không được để trống.");
@@ -93,7 +96,7 @@ public class NewsWorkflowService {
 
         requestRepo.save(req);
 
-        // ✅ Realtime: thông báo cho người duyệt cấp trên
+        // Realtime: thông báo cho người duyệt cấp trên
         Map<String, Object> payload = Map.of(
                 "requestId", req.getId(),
                 "clubId", club.getId(),
@@ -103,6 +106,56 @@ public class NewsWorkflowService {
             webSocketService.broadcastToClub(club.getId(), "NEWS_REQUEST", "CREATED", payload);
         } else {
             webSocketService.broadcastToSystemRole("STAFF", "NEWS_REQUEST", "CREATED", payload);
+        }
+
+        // Notification DB:
+        String actionUrl = "/news/requests/" + req.getId();
+
+        // Nếu trưởng ban tạo request -> gửi Chủ nhiệm/Phó chủ nhiệm
+        if (startStatus == RequestStatus.PENDING_CLUB) {
+            String notiTitle = "Yêu cầu tin tức mới từ ban trong CLB";
+            String msg = creator.getFullName() + " đã gửi yêu cầu tin tức cần duyệt.";
+
+            var managerIds = notificationService.getClubManagers(club.getId());
+            notificationService.sendToUsers(
+                    managerIds,
+                    me,
+                    notiTitle,
+                    msg,
+                    NotificationType.NEWS_PENDING_APPROVAL,
+                    NotificationPriority.NORMAL,
+                    actionUrl,
+                    club.getId(),
+                    attachedNews != null ? attachedNews.getId() : null,
+                    team != null ? team.getId() : null,
+                    req.getId()
+            );
+        }
+
+        // Nếu Chủ nhiệm/Phó tạo request trực tiếp (PENDING_UNIVERSITY, không phải staff) -> gửi Staff
+        if (startStatus == RequestStatus.PENDING_UNIVERSITY && !isStaff) {
+            String staffTitle = "Yêu cầu tin tức mới từ CLB " + club.getClubName();
+            String staffMsg = "CLB " + club.getClubName()
+                    + " đã tạo yêu cầu tin tức \"" + req.getRequestTitle() + "\" cần duyệt.";
+
+            String staffActionUrl = "/staff/news/" + req.getId();
+
+            List<User> staffUsers = userRepo.findBySystemRole_RoleNameIgnoreCase("STAFF");
+            List<Long> staffIds = staffUsers.stream().map(User::getId).toList();
+
+            notificationService.sendToUsers(
+                    staffIds,
+                    me,
+                    staffTitle,
+                    staffMsg,
+                    NotificationType.NEWS_PENDING_APPROVAL,
+                    NotificationPriority.NORMAL,
+                    staffActionUrl,
+                    club.getId(),
+                    attachedNews != null ? attachedNews.getId() : null,
+                    team != null ? team.getId() : null,
+                    req.getId()
+            );
         }
 
         RequestNews detail = requestRepo.findDetailById(req.getId()).orElseThrow();
@@ -152,7 +205,7 @@ public class NewsWorkflowService {
 
     // ========== CLUB APPROVE & SUBMIT ==========
     @Transactional
-    public NewsRequestResponse clubApproveAndSubmit(Long clubLeaderId, Long requestId, ApproveNewsRequest body) {
+    public NewsRequestResponse clubApproveAndSubmit(Long clubLeaderId, Long requestId, ApproveNewsRequest body) throws AppException {
         RequestNews r = requestRepo.findById(requestId).orElseThrow();
 
         if (!guard.canApproveAtClub(clubLeaderId, r.getClub().getId()))
@@ -166,7 +219,7 @@ public class NewsWorkflowService {
         r.setResponseMessage("Chủ nhiệm CLB đã duyệt và gửi lên cấp trường.");
         requestRepo.save(r);
 
-        // ✅ Realtime: gửi cho staff (và người tạo thấy update)
+        // Realtime: gửi cho staff (và người tạo thấy update)
         webSocketService.broadcastToSystemRole(
                 "STAFF", "NEWS_REQUEST", "FORWARDED",
                 Map.of("requestId", r.getId(), "clubId", r.getClub().getId(), "status", r.getStatus().name())
@@ -176,13 +229,57 @@ public class NewsWorkflowService {
                 Map.of("requestId", r.getId(), "status", r.getStatus().name())
         );
 
+        // Notification cho người tạo (trưởng ban)
+        String actionUrlForCreator = buildCreatorRequestUrl(r);
+
+        String titleForCreator = "Yêu cầu tin tức đã được Chủ nhiệm duyệt";
+        String msgForCreator = "Yêu cầu \"" + r.getRequestTitle() + "\" đã được Chủ nhiệm duyệt và gửi lên nhà trường.";
+
+        notificationService.sendToUser(
+                r.getCreatedBy().getId(),
+                clubLeaderId,
+                titleForCreator,
+                msgForCreator,
+                NotificationType.NEWS_APPROVED,
+                NotificationPriority.NORMAL,
+                actionUrlForCreator,
+                r.getClub() != null ? r.getClub().getId() : null,
+                r.getNews() != null ? r.getNews().getId() : null,
+                r.getTeam() != null ? r.getTeam().getId() : null,
+                r.getId(),
+                null
+        );
+
+        // Notification cho Staff
+        String staffTitle = "Yêu cầu tin tức mới từ CLB " + r.getClub().getClubName();
+        String staffMsg = "CLB " + r.getClub().getClubName()
+                + " đã gửi yêu cầu tin tức \"" + r.getRequestTitle() + "\" lên cấp trường.";
+        String staffActionUrl = "/staff/news/" + r.getId();
+
+        List<User> staffUsers = userRepo.findBySystemRole_RoleNameIgnoreCase("STAFF");
+        List<Long> staffIds = staffUsers.stream().map(User::getId).toList();
+
+        notificationService.sendToUsers(
+                staffIds,
+                clubLeaderId,
+                staffTitle,
+                staffMsg,
+                NotificationType.NEWS_PENDING_APPROVAL,
+                NotificationPriority.NORMAL,
+                staffActionUrl,
+                r.getClub() != null ? r.getClub().getId() : null,
+                r.getNews() != null ? r.getNews().getId() : null,
+                r.getTeam() != null ? r.getTeam().getId() : null,
+                r.getId()
+        );
+
         RequestNews detail = requestRepo.findDetailById(r.getId()).orElseThrow();
         return mapper.toDto(detail);
     }
 
     // ========== CLUB PRESIDENT REJECT ==========
     @Transactional
-    public NewsRequestResponse clubPresidentReject(Long userId, Long requestId, RejectNewsRequest body) {
+    public NewsRequestResponse clubPresidentReject(Long userId, Long requestId, RejectNewsRequest body) throws AppException {
         RequestNews r = requestRepo.findById(requestId).orElseThrow();
         Long clubId = r.getClub().getId();
 
@@ -195,10 +292,30 @@ public class NewsWorkflowService {
         r.setResponseMessage(body == null ? "" : body.getReason());
         requestRepo.save(r);
 
-        // ✅ Realtime: gửi cho người tạo & toàn CLB
+        // Realtime: gửi cho người tạo & toàn CLB
         Map<String, Object> payload = Map.of("requestId", r.getId(), "status", r.getStatus().name());
         webSocketService.broadcastToUser(r.getCreatedBy().getId(), "NEWS_REQUEST", "REJECTED", payload);
         webSocketService.broadcastToClub(clubId, "NEWS_REQUEST", "REJECTED", payload);
+
+        // Notification DB: gửi cho người tạo
+        String actionUrlForCreator = buildCreatorRequestUrl(r);
+        String title = "Yêu cầu tin tức bị từ chối ở cấp CLB";
+        String message = "Yêu cầu \"" + r.getRequestTitle() + "\" đã bị Chủ nhiệm CLB từ chối.";
+
+        notificationService.sendToUser(
+                r.getCreatedBy().getId(),
+                userId,
+                title,
+                message,
+                NotificationType.NEWS_REJECTED,
+                NotificationPriority.NORMAL,
+                actionUrlForCreator,
+                clubId,
+                r.getNews() != null ? r.getNews().getId() : null,
+                r.getTeam() != null ? r.getTeam().getId() : null,
+                r.getId(),
+                null
+        );
 
         RequestNews detail = requestRepo.findDetailById(r.getId()).orElseThrow();
         return mapper.toDto(detail);
@@ -206,7 +323,7 @@ public class NewsWorkflowService {
 
     // ========== STAFF APPROVE & PUBLISH ==========
     @Transactional
-    public NewsRequestResponse staffApproveAndPublish(Long staffId, Long requestId, ApproveNewsRequest body) {
+    public NewsRequestResponse staffApproveAndPublish(Long staffId, Long requestId, ApproveNewsRequest body) throws AppException {
         RequestNews r = requestRepo.findById(requestId).orElseThrow();
 
         if (!guard.isStaff(staffId)) throw new SecurityException("Chỉ Staff được duyệt ở cấp trường.");
@@ -254,10 +371,51 @@ public class NewsWorkflowService {
         r.setResponseMessage("Staff approved and published.");
         requestRepo.saveAndFlush(r);
 
-        // ✅ Realtime: broadcast toàn hệ thống + cho người tạo
+        // Realtime: broadcast toàn hệ thống + cho người tạo
         webSocketService.broadcastSystemWide("NEWS", "PUBLISHED", newsMapper.toDto(usedNews));
         webSocketService.broadcastToUser(r.getCreatedBy().getId(), "NEWS_REQUEST", "APPROVED",
                 Map.of("requestId", r.getId(), "status", r.getStatus().name()));
+
+        // Notification DB:
+        String newsUrl = "/news/" + usedNews.getId();
+        String titleForCreator = "Yêu cầu tin tức đã được duyệt và đăng";
+        String msgForCreator = "Bài viết \"" + usedNews.getTitle() + "\" đã được nhà trường duyệt và đăng.";
+
+        notificationService.sendToUser(
+                r.getCreatedBy().getId(),
+                staffId,
+                titleForCreator,
+                msgForCreator,
+                NotificationType.NEWS_APPROVED,
+                NotificationPriority.HIGH,
+                newsUrl,
+                r.getClub() != null ? r.getClub().getId() : null,
+                usedNews.getId(),
+                r.getTeam() != null ? r.getTeam().getId() : null,
+                r.getId(),
+                null
+        );
+
+        // Thông báo cho Chủ nhiệm/Phó chủ nhiệm (nếu là tin CLB)
+        if (r.getClub() != null) {
+            var managerIds = notificationService.getClubManagers(r.getClub().getId());
+            String titleForManagers = "Tin tức của CLB đã được đăng";
+            String msgForManagers = "Bài viết \"" + usedNews.getTitle() + "\" của CLB đã được nhà trường duyệt và đăng.";
+
+            notificationService.sendToUsers(
+                    managerIds,
+                    staffId,
+                    titleForManagers,
+                    msgForManagers,
+                    NotificationType.NEWS_PUBLISHED,
+                    NotificationPriority.NORMAL,
+                    newsUrl,
+                    r.getClub().getId(),
+                    usedNews.getId(),
+                    r.getTeam() != null ? r.getTeam().getId() : null,
+                    r.getId()
+            );
+        }
 
         RequestNews detail = requestRepo.findDetailById(r.getId()).orElseThrow();
         return mapper.toDto(detail);
@@ -265,7 +423,7 @@ public class NewsWorkflowService {
 
     // ========== STAFF REJECT ==========
     @Transactional
-    public NewsRequestResponse staffReject(Long staffId, Long requestId, RejectNewsRequest body) {
+    public NewsRequestResponse staffReject(Long staffId, Long requestId, RejectNewsRequest body) throws AppException {
         RequestNews r = requestRepo.findById(requestId).orElseThrow();
 
         if (!guard.isStaff(staffId)) throw new SecurityException("Chỉ Staff được từ chối ở cấp trường.");
@@ -276,10 +434,30 @@ public class NewsWorkflowService {
         r.setResponseMessage(body == null ? "" : body.getReason());
         requestRepo.save(r);
 
-        // ✅ Realtime: gửi cho người tạo + staff dashboard
+        // Realtime: gửi cho người tạo + staff dashboard
         Map<String, Object> payload = Map.of("requestId", r.getId(), "status", r.getStatus().name());
         webSocketService.broadcastToUser(r.getCreatedBy().getId(), "NEWS_REQUEST", "REJECTED", payload);
         webSocketService.broadcastToSystemRole("STAFF", "NEWS_REQUEST", "REJECTED", payload);
+
+        // Notification DB:
+        String actionUrlForCreator = buildCreatorRequestUrl(r);
+        String title = "Yêu cầu tin tức bị từ chối ở cấp trường";
+        String message = "Yêu cầu \"" + r.getRequestTitle() + "\" đã bị nhà trường từ chối.";
+
+        notificationService.sendToUser(
+                r.getCreatedBy().getId(),
+                staffId,
+                title,
+                message,
+                NotificationType.NEWS_REJECTED,
+                NotificationPriority.NORMAL,
+                actionUrlForCreator,
+                r.getClub() != null ? r.getClub().getId() : null,
+                r.getNews() != null ? r.getNews().getId() : null,
+                r.getTeam() != null ? r.getTeam().getId() : null,
+                r.getId(),
+                null
+        );
 
         RequestNews detail = requestRepo.findDetailById(r.getId()).orElseThrow();
         return mapper.toDto(detail);
@@ -310,7 +488,7 @@ public class NewsWorkflowService {
 
         newsRepo.save(news);
 
-        // ✅ Realtime
+        // Realtime
         webSocketService.broadcastSystemWide("NEWS", "PUBLISHED", newsMapper.toDto(news));
 
         return new PublishResult(news.getId(), newsMapper.toDto(news), "Đăng trực tiếp thành công");
@@ -348,8 +526,15 @@ public class NewsWorkflowService {
         r.setStatus(RequestStatus.CANCELED);
         requestRepo.save(r);
 
-        // ✅ Realtime
+        // Realtime
         webSocketService.broadcastToClub(clubId, "NEWS_REQUEST", "CANCELED",
                 Map.of("requestId", r.getId(), "status", r.getStatus().name()));
+    }
+
+    private String buildCreatorRequestUrl(RequestNews r) {
+        if (r.getTeam() != null) {
+            return "/teams/" + r.getTeam().getId() + "/news/requests/" + r.getId();
+        }
+        return "/news/requests/" + r.getId();
     }
 }
