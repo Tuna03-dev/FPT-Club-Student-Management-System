@@ -1,10 +1,19 @@
-import { useState, useRef } from "react";
-import { Image, X, Edit2 } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
+import { Image, X, Edit2, Users, Globe } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useTeams } from "@/hooks/useTeams";
+import { useClubOfficerFlag } from "@/hooks/useClubOfficerFlag";
 import {
   Dialog,
   DialogContent,
@@ -23,20 +32,37 @@ interface CreatePostProps {
 export const CreatePost = ({
   onPostCreated,
   clubId: clubIdProp,
-  teamId,
+  teamId: teamIdProp,
 }: CreatePostProps) => {
   const [isCreating, setIsCreating] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [content, setContent] = useState("");
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [selectedImages, setSelectedImages] = useState<string[]>([]);
-  // If teamId is provided, post is for team only (not clubWide)
-  const [clubWide, setClubWide] = useState(!teamId);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const clubId = clubIdProp ?? 1; // prefer prop, fallback to 1
+  const clubId = clubIdProp ?? 1;
+
+  // Post target: "club" or teamId
+  const [postTarget, setPostTarget] = useState<string>(
+    teamIdProp ? String(teamIdProp) : "club"
+  );
+
+  // Load teams and check if user is club officer
+  const { data: teams } = useTeams(clubId);
+  const { amOfficer: isClubOfficer } = useClubOfficerFlag(clubId);
+
+  // Filter teams: if club officer, show all; otherwise only show user's teams
+  const availableTeams = teams || [];
+
+  // Reset post target if teamIdProp changes
+  useEffect(() => {
+    if (teamIdProp) {
+      setPostTarget(String(teamIdProp));
+    }
+  }, [teamIdProp]);
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || []);
@@ -106,16 +132,17 @@ export const CreatePost = ({
     try {
       setIsCreating(true);
 
+      const isClubWide = postTarget === "club";
+      const targetTeamId = isClubWide ? undefined : Number(postTarget);
+
       const request: CreatePostRequest = {
-        // Autogenerate a title from the content since we don't collect title in the UI
         title: content.slice(0, 100) + "...",
         content: content.trim(),
         clubId,
-        clubWide,
+        clubWide: isClubWide,
         withinClub: true,
-        status: "PUBLISHED", // Set status to published when posting
-        // Include teamId if posting to specific team
-        ...(teamId && { teamId }),
+        status: "PUBLISHED",
+        ...(targetTeamId && { teamId: targetTeamId }),
       };
 
       await postService.createPostWithMedia(request, selectedFiles);
@@ -125,10 +152,9 @@ export const CreatePost = ({
       // Reset form
       setContent("");
       setSelectedFiles([]);
-      // Clean up object URLs
       selectedImages.forEach((url) => URL.revokeObjectURL(url));
       setSelectedImages([]);
-      setClubWide(!teamId); // Reset based on whether posting to team or club
+      setPostTarget(teamIdProp ? String(teamIdProp) : "club");
       setShowForm(false);
 
       // Notify parent component
@@ -144,10 +170,9 @@ export const CreatePost = ({
   const handleCancel = () => {
     setContent("");
     setSelectedFiles([]);
-    // Clean up object URLs
     selectedImages.forEach((url) => URL.revokeObjectURL(url));
     setSelectedImages([]);
-    setClubWide(!teamId); // Reset based on whether posting to team or club
+    setPostTarget(teamIdProp ? String(teamIdProp) : "club");
     setShowForm(false);
   };
 
@@ -183,6 +208,100 @@ export const CreatePost = ({
             </AvatarFallback>
           </Avatar>
           <div className="flex-1 space-y-3">
+            {/* Post Target Selector */}
+            {!teamIdProp && availableTeams.length > 0 && (
+              <div className="pb-3 border-b">
+                <Select value={postTarget} onValueChange={setPostTarget}>
+                  <SelectTrigger className="h-auto py-2 px-3 border-none shadow-none hover:bg-muted/50 transition-colors">
+                    <SelectValue>
+                      <div className="flex items-center gap-2">
+                        {postTarget === "club" ? (
+                          <>
+                            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                              <Globe className="h-4 w-4 text-primary" />
+                            </div>
+                            <div className="text-left">
+                              <div className="font-medium text-sm">
+                                Công khai
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                Mọi người trong CLB
+                              </div>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center">
+                              <Users className="h-4 w-4 text-blue-600" />
+                            </div>
+                            <div className="text-left">
+                              <div className="font-medium text-sm">
+                                {availableTeams.find(
+                                  (t) => t.teamId === Number(postTarget)
+                                )?.teamName || "Ban"}
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                Chỉ thành viên ban này
+                              </div>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent className="w-[300px]">
+                    <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
+                      Chọn đối tượng xem bài viết
+                    </div>
+                    <SelectItem value="club" className="py-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                          <Globe className="h-5 w-5 text-primary" />
+                        </div>
+                        <div className="flex-1">
+                          <div className="font-medium">Công khai</div>
+                          <div className="text-xs text-muted-foreground">
+                            Tất cả thành viên trong câu lạc bộ
+                          </div>
+                        </div>
+                      </div>
+                    </SelectItem>
+                    {availableTeams.length > 0 && (
+                      <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground mt-2">
+                        Đăng vào ban cụ thể
+                      </div>
+                    )}
+                    {availableTeams.map((team) => (
+                      <SelectItem
+                        key={team.teamId}
+                        value={String(team.teamId)}
+                        className="py-3"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center flex-shrink-0">
+                            <Users className="h-5 w-5 text-blue-600" />
+                          </div>
+                          <div className="flex-1">
+                            <div className="font-medium">{team.teamName}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {team.memberCount || 0} thành viên
+                              {!isClubOfficer &&
+                                team.myRoles &&
+                                team.myRoles.length > 0 && (
+                                  <span className="ml-1">
+                                    • Bạn là thành viên
+                                  </span>
+                                )}
+                            </div>
+                          </div>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
             <div>
               <Label htmlFor="content">Nội dung *</Label>
               <Textarea

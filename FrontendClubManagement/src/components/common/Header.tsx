@@ -11,7 +11,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { User, Users, LogOut, Shield, Building2 } from "lucide-react";
+import {
+  User,
+  Users,
+  LogOut,
+  Shield,
+  Building2,
+  PlusCircle,
+} from "lucide-react";
 import useMyClubs from "@/hooks/useMyClubs";
 import { toast } from "sonner";
 
@@ -139,9 +146,7 @@ const Header: React.FC = () => {
                       <p className="text-[14px] font-semibold text-gray-800">
                         {user.fullName}
                       </p>
-                      <p className="text-[13px] text-gray-500">
-                        {user.email}
-                      </p>
+                      <p className="text-[13px] text-gray-500">{user.email}</p>
                     </div>
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
@@ -170,6 +175,14 @@ const Header: React.FC = () => {
                             Câu lạc bộ của tôi
                           </DropdownMenuItem>
                         )}
+
+                      <DropdownMenuItem
+                        onClick={() => navigate("/create-club")}
+                        className="cursor-pointer text-[14px] text-gray-700"
+                      >
+                        <PlusCircle className="mr-2 h-4 w-4 text-orange-500" />
+                        Đăng ký thành lập CLB
+                      </DropdownMenuItem>
 
                       {isStaff && (
                         <DropdownMenuItem
@@ -240,7 +253,7 @@ const Header: React.FC = () => {
                             onClick={() => {
                               localStorage.setItem(
                                 "lastClubId",
-                                String(club.clubId),
+                                String(club.clubId)
                               );
                               setShowClubsList(false);
                               navigate(`/myclub/${club.clubId}`);

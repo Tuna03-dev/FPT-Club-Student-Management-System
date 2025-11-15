@@ -15,6 +15,8 @@ import java.util.List;
 @Repository
 public interface SemesterRepository extends JpaRepository<Semester, Long> {
 
+    Optional<Semester> findByIsCurrentTrue();
+
     @Query("SELECT s FROM Semester s WHERE NOW() BETWEEN s.startDate AND s.endDate")
     Optional<Semester> findCurrentSemester();
 

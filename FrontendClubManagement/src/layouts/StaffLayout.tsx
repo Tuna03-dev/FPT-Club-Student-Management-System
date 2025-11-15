@@ -9,6 +9,7 @@ import {
   FileText,
   Users,
   Home,
+  Building2,
 } from "lucide-react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useState } from "react";
@@ -37,6 +38,12 @@ const navItems = [
 
 // Management items for Staff
 const managementItems = [
+  {
+    key: "manage_club_creation",
+    url: "/club-creation",
+    icon: Building2,
+    label: "Thành lập CLB",
+  },
   {
     key: "manage_events",
     url: "/events",
@@ -76,6 +83,7 @@ const managementItems = [
 ];
 
 const managementColors: Record<string, string> = {
+  manage_club_creation: "bg-gradient-to-br from-purple-500 to-purple-600",
   manage_events: "bg-gradient-to-br from-green-500 to-green-600",
   pending_requests: "bg-gradient-to-br from-orange-500 to-orange-600",
   pending_posts: "bg-gradient-to-br from-yellow-500 to-yellow-600",

@@ -14,10 +14,17 @@ import {
   Wallet,
   Plus,
   Newspaper,
+  X,
 } from "lucide-react";
-import { NavLink, Outlet, useParams, useNavigate } from "react-router-dom";
+import {
+  NavLink,
+  Outlet,
+  useParams,
+  useNavigate,
+  useLocation,
+} from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -140,7 +147,10 @@ const managementColors: Record<string, string> = {
 export const ClubLayout = () => {
   const { t } = useTranslation("common");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [searchInput, setSearchInput] = useState("");
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const navigate = useNavigate();
+  const location = useLocation();
 
   const { clubId = "0" } = useParams();
   const numericClubId = Number(clubId);
@@ -155,7 +165,7 @@ export const ClubLayout = () => {
 
   // ===== Check permissions from localStorage (unified approach) =====
   const {
-    isClubPresident,
+    isClubOfficer,
     isTeamOfficer,
     loading: permissionsLoading,
   } = useClubPermissions(validClubId ? numericClubId : undefined);
@@ -180,10 +190,71 @@ export const ClubLayout = () => {
   // Determine user's role level
   const userRoleLevel: PermissionLevel = useMemo(() => {
     if (permissionsLoading) return "MEMBER"; // Default while loading
-    if (isClubPresident) return "CLUB_OFFICER";
+    if (isClubOfficer) return "CLUB_OFFICER";
     if (isTeamOfficer) return "TEAM_OFFICER";
     return "MEMBER";
-  }, [isClubPresident, isTeamOfficer, permissionsLoading]);
+  }, [isClubOfficer, isTeamOfficer, permissionsLoading]);
+
+  // Sync search input with URL params
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const q = params.get("q");
+    if (q) {
+      setSearchInput(q);
+    } else {
+      setSearchInput("");
+    }
+  }, [location.search]);
+
+  // Handle search input change with debounce
+  const handleSearchChange = (value: string) => {
+    setSearchInput(value);
+
+    // Clear existing timeout
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    // Set new timeout for debounced search
+    searchTimeoutRef.current = setTimeout(() => {
+      const params = new URLSearchParams(location.search);
+      if (value.trim()) {
+        params.set("q", value.trim());
+      } else {
+        params.delete("q");
+      }
+
+      // Navigate to dashboard with search param if not already there
+      const newSearch = params.toString();
+      const targetPath = `/myclub/${clubId}`;
+      const currentPath = location.pathname;
+
+      if (currentPath !== targetPath) {
+        navigate(`${targetPath}?${newSearch}`);
+      } else {
+        navigate(`${targetPath}?${newSearch}`, { replace: true });
+      }
+    }, 500);
+  };
+
+  // Handle clear search
+  const handleClearSearch = () => {
+    setSearchInput("");
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    const params = new URLSearchParams(location.search);
+    params.delete("q");
+    const newSearch = params.toString();
+    const targetPath = `/myclub/${clubId}`;
+
+    if (location.pathname === targetPath) {
+      navigate(`${targetPath}${newSearch ? "?" + newSearch : ""}`, {
+        replace: true,
+      });
+    }
+  };
 
   // Filter menu based on user permissions and update labels
   const filteredManagementItems = useMemo(() => {
@@ -237,7 +308,7 @@ export const ClubLayout = () => {
 
   return (
     <PermissionContext.Provider
-      value={{ isOfficer: isClubPresident, loading: permissionsLoading }}
+      value={{ isOfficer: isClubOfficer, loading: permissionsLoading }}
     >
       <TooltipProvider delayDuration={200}>
         <div className="h-screen w-full bg-background flex flex-col overflow-hidden">
@@ -252,10 +323,20 @@ export const ClubLayout = () => {
                 <div className="relative w-full max-w-[240px] hidden md:block">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
-                    type="search"
+                    type="text"
+                    value={searchInput}
+                    onChange={(e) => handleSearchChange(e.target.value)}
                     placeholder={t("search")}
-                    className="pl-9 h-9 bg-secondary/50 border-0"
+                    className="pl-9 pr-8 h-9 bg-secondary/50 border-0"
                   />
+                  {searchInput && (
+                    <button
+                      onClick={handleClearSearch}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -411,7 +492,7 @@ export const ClubLayout = () => {
                   </div>
 
                   {/* Nút tạo phòng ban: CHỈ hiển thị khi là CLUB_OFFICER */}
-                  {isClubPresident && (
+                  {isClubOfficer && (
                     <div className="px-3 mb-2">
                       <Button
                         variant="outline"

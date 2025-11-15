@@ -155,6 +155,36 @@ export async function getClubReportRequirementsForOfficer(
 }
 
 /**
+ * Club Report Requirement Filter Request
+ */
+export interface ClubReportRequirementFilterRequest {
+  page?: number;
+  size?: number;
+  sort?: string[];
+  keyword?: string;
+  status?: string; // OVERDUE, UNSUBMITTED, DRAFT, PENDING_CLUB, etc.
+  semesterId?: number;
+  teamId?: number; // Filter by team ID (for team officer to see only their assigned requirements)
+}
+
+/**
+ * Get all report requirements for a club with filters and pagination (for CLUB_OFFICER or TEAM_OFFICER)
+ */
+export async function getClubReportRequirementsForOfficerWithFilters(
+  clubId: number,
+  request: ClubReportRequirementFilterRequest
+): Promise<PageResponse<ReportRequirementResponse>> {
+  const response = await axiosClient.post<PageResponse<ReportRequirementResponse>>(
+    `/reports/club/${clubId}/requirements/officer/filter`,
+    request
+  );
+  if (!response.data) {
+    throw new Error("Failed to get club report requirements for officer with filters");
+  }
+  return response.data;
+}
+
+/**
  * Get report of a specific club for a specific report requirement (for CLUB_OFFICER or TEAM_OFFICER)
  * Returns null if club hasn't submitted report yet
  */
@@ -430,6 +460,28 @@ export async function getClubReportDetail(
   );
   if (!response.data) {
     throw new Error("Failed to get report detail");
+  }
+  return response.data;
+}
+
+/**
+ * Assign a team to a report requirement (for CLUB_OFFICER only)
+ */
+export interface AssignTeamToReportRequirementRequest {
+  clubReportRequirementId: number;
+  teamId: number;
+}
+
+export async function assignTeamToReportRequirement(
+  clubId: number,
+  request: AssignTeamToReportRequirementRequest
+): Promise<ReportRequirementResponse> {
+  const response = await axiosClient.post<ReportRequirementResponse>(
+    `/reports/club/${clubId}/requirements/assign-team`,
+    request
+  );
+  if (!response.data) {
+    throw new Error("Failed to assign team to report requirement");
   }
   return response.data;
 }

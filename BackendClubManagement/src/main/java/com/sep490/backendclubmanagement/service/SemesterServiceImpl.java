@@ -43,4 +43,9 @@ public class SemesterServiceImpl implements SemesterService {
                 .orElseThrow(() -> new AppException(ErrorCode.SEMESTER_NOT_FOUND));
         return sem.getId();
     }
+    @Override
+    public Semester getCurrentSemester() throws AppException {
+        return semesterRepository.findByIsCurrentTrue()
+                .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND));
+    }
 }

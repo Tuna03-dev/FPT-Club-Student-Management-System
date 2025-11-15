@@ -26,4 +26,7 @@ public class ClubReportRequirement extends BaseEntity {
 
     @OneToOne(mappedBy = "clubReportRequirement", cascade = CascadeType.ALL)
     private Report report;
+
+    @Column(name = "team_id", nullable = true)
+    private Long teamId;
 }

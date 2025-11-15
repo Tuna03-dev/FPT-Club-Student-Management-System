@@ -56,7 +56,8 @@ import StaffNewsDetail from "@/pages/news/StaffNewsDetail";
 import StaffNewsEdit from "@/pages/news/StaffNewsEdit";
 import ClubDetailPage from "@/pages/myclub/ClubDetailPage";
 import StaffNotifications from "@/pages/myclub/staff/StaffNotifications";
-
+import CreateClubPage from "@/pages/CreateClubPage";
+import ClubCreationManagement from "@/pages/staff/ClubCreationManagement";
 export const router = createBrowserRouter([
   {
     path: "/",
@@ -72,7 +73,6 @@ export const router = createBrowserRouter([
         ],
       },
 
-  
       {
         path: "news",
         children: [
@@ -114,6 +114,14 @@ export const router = createBrowserRouter([
         element: (
           <ProtectedRoute>
             <ProfileSettings />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "create-club",
+        element: (
+          <ProtectedRoute>
+            <CreateClubPage />
           </ProtectedRoute>
         ),
       },
@@ -262,6 +270,7 @@ export const router = createBrowserRouter([
       </ProtectedRoute>
     ),
     children: [
+      { path: "club-creation", element: <ClubCreationManagement /> },
       { path: "events", element: <StaffEventList /> },
       { path: "settings", element: <Settings /> },
       {
