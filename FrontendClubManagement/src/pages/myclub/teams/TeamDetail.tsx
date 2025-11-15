@@ -113,13 +113,13 @@ export default function TeamDetailPage() {
   const { allowed: isLead } = useTeamLeadGuard(cId, tId);
 
   // Check club-level permissions from localStorage
-  const { isClubPresident } = useClubPermissions(cId);
+  const { isClubOfficer } = useClubPermissions(cId);
 
   // Determine if user can view posts:
   // 1. CLUB_OFFICER can view all teams
   // 2. Team member can view their own team
   const memberFlag = !!data?.member;
-  const canViewPosts = isClubPresident || memberFlag;
+  const canViewPosts = isClubOfficer || memberFlag;
 
   // Posts state
   const [posts, setPosts] = useState<PostWithRelationsData[]>([]);
