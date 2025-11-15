@@ -164,7 +164,7 @@ export const ClubLayout = () => {
 
   // ===== Check permissions from localStorage (unified approach) =====
   const {
-    isClubPresident,
+    isClubOfficer,
     isTeamOfficer,
     loading: permissionsLoading,
   } = useClubPermissions(validClubId ? numericClubId : undefined);
@@ -189,10 +189,10 @@ export const ClubLayout = () => {
   // Determine user's role level
   const userRoleLevel: PermissionLevel = useMemo(() => {
     if (permissionsLoading) return "MEMBER"; // Default while loading
-    if (isClubPresident) return "CLUB_OFFICER";
+    if (isClubOfficer) return "CLUB_OFFICER";
     if (isTeamOfficer) return "TEAM_OFFICER";
     return "MEMBER";
-  }, [isClubPresident, isTeamOfficer, permissionsLoading]);
+  }, [isClubOfficer, isTeamOfficer, permissionsLoading]);
 
   // Sync search input with URL params
   useEffect(() => {
@@ -307,7 +307,7 @@ export const ClubLayout = () => {
 
   return (
     <PermissionContext.Provider
-      value={{ isOfficer: isClubPresident, loading: permissionsLoading }}
+      value={{ isOfficer: isClubOfficer, loading: permissionsLoading }}
     >
       <TooltipProvider delayDuration={200}>
         <div className="h-screen w-full bg-background flex flex-col overflow-hidden">
@@ -498,7 +498,7 @@ export const ClubLayout = () => {
                   </div>
 
                   {/* Nút tạo phòng ban: CHỈ hiển thị khi là CLUB_OFFICER */}
-                  {isClubPresident && (
+                  {isClubOfficer && (
                     <div className="px-3 mb-2">
                       <Button
                         variant="outline"
