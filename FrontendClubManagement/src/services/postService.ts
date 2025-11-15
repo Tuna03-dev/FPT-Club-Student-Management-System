@@ -44,6 +44,9 @@ export interface PostWithRelationsData {
   comments: CommentData[];
   likes: LikeData[];
   media: PostMediaData[];
+
+  // Field để phân biệt post club-wide vs team-specific
+  isTeamPost?: boolean; // true nếu post thuộc team cụ thể
 }
 
 export interface PostDTO {
@@ -128,7 +131,24 @@ interface SpringPageResponse<T> {
   empty: boolean;
 }
 export const postService = {
-  // Get club-wide posts
+  // Get club feed (club-wide + user's team posts) - NEW API
+  async getClubFeed(
+    clubId: number,
+    params: {
+      page?: number;
+      size?: number;
+      sort?: string;
+    } = {}
+  ): Promise<ApiResponse<SpringPageResponse<PostWithRelationsData>>> {
+    const query = new URLSearchParams();
+    query.set("page", String(params.page ?? 0));
+    query.set("size", String(params.size ?? 10));
+    query.set("sort", params.sort ?? "createdAt,desc");
+
+    return axiosClient.get(`/posts/${clubId}/feed?${query.toString()}`);
+  },
+
+  // Get club-wide posts (legacy - for specific use cases)
   async getClubWidePosts(
     clubId: number,
     params: {
