@@ -3,7 +3,6 @@ import {
   Users,
   Calendar,
   Bell,
-  Settings,
   Search,
   Menu,
   Shield,
@@ -17,7 +16,7 @@ import {
 } from "lucide-react";
 import { NavLink, Outlet, useParams, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -31,11 +30,14 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
-import { authService } from "@/services/authService";
+import { authService, type UserInfo } from "@/services/authService";
 import { useTeams } from "@/hooks/useTeams";
+import useMyClubs from "@/hooks/useMyClubs";
 import { PermissionContext } from "@/contexts/PermissionContext";
 import { useClubPermissions } from "@/hooks/useClubPermissions";
 
@@ -139,11 +141,43 @@ const managementColors: Record<string, string> = {
 export const ClubLayout = () => {
   const { t } = useTranslation("common");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [user, setUser] = useState<UserInfo | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [showClubsList, setShowClubsList] = useState(false);
   const navigate = useNavigate();
 
   const { clubId = "0" } = useParams();
   const numericClubId = Number(clubId);
   const validClubId = Number.isFinite(numericClubId) && numericClubId > 0;
+
+  // Load clubs list
+  const shouldLoadMyClubs = isAuthenticated && !!user;
+  const {
+    data: clubs,
+    loading: clubsLoading,
+    error: clubsError,
+  } = useMyClubs(shouldLoadMyClubs);
+
+  // Load user info
+  useEffect(() => {
+    const checkAuth = () => {
+      const currentUser = authService.getCurrentUser();
+      const authenticated = authService.isAuthenticated();
+      setUser(currentUser);
+      setIsAuthenticated(authenticated);
+    };
+
+    checkAuth();
+
+    window.addEventListener("storage", checkAuth);
+    const handleAuthChange = () => checkAuth();
+    window.addEventListener("auth-state-changed", handleAuthChange);
+
+    return () => {
+      window.removeEventListener("storage", checkAuth);
+      window.removeEventListener("auth-state-changed", handleAuthChange);
+    };
+  }, []);
 
   // ===== Teams for sidebar =====
   const {
@@ -213,6 +247,21 @@ export const ClubLayout = () => {
       });
   }, [userRoleLevel, permissionsLoading]);
   // CHỈ hiện "Quản lí tin tức" khi amOfficer === true
+
+  const getInitials = (name: string) =>
+    name
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2);
+
+  const normalizedSystemRole = user?.systemRole
+    ? String(user.systemRole).trim().toUpperCase()
+    : "";
+  const isAdmin =
+    normalizedSystemRole === "ADMIN" || normalizedSystemRole === "MANAGER";
+  const isStaff = normalizedSystemRole === "STAFF";
 
   const handleLogout = async () => {
     try {
@@ -292,29 +341,184 @@ export const ClubLayout = () => {
               </nav>
 
               {/* Right */}
-              <div className="flex items-center gap-2 flex-1 justify-end max-w-[320px]">
-                <NavLink to={`/myclub/${clubId}/settings`}>
-                  <Button variant="ghost" size="icon" className="rounded-full">
-                    <Settings className="h-5 w-5" />
-                  </Button>
-                </NavLink>
+              <div className="flex items-center gap-3 flex-1 justify-end max-w-[320px]">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="hidden sm:flex items-center gap-2 hover:bg-secondary/80"
+                  onClick={() => navigate("/")}
+                >
+                  <Home className="h-4 w-4" />
+                  <span className="font-medium">Trang chủ</span>
+                </Button>
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="rounded-full relative"
+                  className="rounded-full relative hover:bg-secondary/80"
                 >
                   <Bell className="h-5 w-5" />
-                  <span className="absolute top-1 right-1 h-2 w-2 bg-destructive rounded-full" />
+                  <span className="absolute top-1.5 right-1.5 h-2 w-2 bg-red-500 rounded-full animate-pulse" />
                 </Button>
-                <div className="flex items-center gap-2">
-                  <Avatar className="h-8 w-8 ring-2 ring-primary/20">
-                    <AvatarImage src="https://github.com/shadcn.png" />
-                    <AvatarFallback>U</AvatarFallback>
-                  </Avatar>
-                  <Button variant="ghost" size="sm" onClick={handleLogout}>
-                    {t("logout", "Đăng xuất")}
-                  </Button>
-                </div>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button className="flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 hover:bg-secondary/80 transition-all duration-200">
+                      <Avatar className="h-9 w-9 ring-2 ring-primary/20 hover:ring-primary/40 transition-all">
+                        <AvatarImage
+                          src={user?.avatarUrl}
+                          alt={user?.fullName}
+                        />
+                        <AvatarFallback className="bg-gradient-to-br from-primary/20 to-primary/10 text-primary text-sm font-semibold">
+                          {user ? getInitials(user.fullName) : "U"}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span className="hidden sm:block text-sm font-medium text-foreground max-w-[120px] truncate">
+                        {user?.fullName || "User"}
+                      </span>
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    align="end"
+                    className="w-60 max-h-[30rem] overflow-y-auto rounded-md shadow-lg"
+                  >
+                    <DropdownMenuLabel>
+                      <div className="flex flex-col space-y-0.5">
+                        <p className="text-sm font-semibold">
+                          {user?.fullName}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {user?.email}
+                        </p>
+                      </div>
+                    </DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+
+                    {!showClubsList ? (
+                      <>
+                        <DropdownMenuItem
+                          onClick={() => navigate("/profile")}
+                          className="cursor-pointer"
+                        >
+                          Thông tin cá nhân
+                        </DropdownMenuItem>
+
+                        {/* "Câu lạc bộ của tôi" chỉ khi có CLB */}
+                        {!clubsLoading &&
+                          !clubsError &&
+                          clubs &&
+                          clubs.length > 0 && (
+                            <DropdownMenuItem
+                              onClick={() => setShowClubsList(true)}
+                              onSelect={(e) => e.preventDefault()}
+                              className="cursor-pointer"
+                            >
+                              Câu lạc bộ của tôi
+                            </DropdownMenuItem>
+                          )}
+
+                        <DropdownMenuItem
+                          onClick={() => navigate("/create-club")}
+                          className="cursor-pointer"
+                        >
+                          Đăng ký thành lập CLB
+                        </DropdownMenuItem>
+
+                        {isStaff && (
+                          <DropdownMenuItem
+                            onClick={() => navigate("/staff/club-creation")}
+                            className="cursor-pointer"
+                          >
+                            Trang quản lý của ICPDP
+                          </DropdownMenuItem>
+                        )}
+
+                        {isAdmin && (
+                          <DropdownMenuItem
+                            onClick={() => navigate("/admin")}
+                            className="cursor-pointer"
+                          >
+                            Trang quản trị
+                          </DropdownMenuItem>
+                        )}
+
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          onClick={handleLogout}
+                          className="cursor-pointer text-red-600"
+                        >
+                          Đăng xuất
+                        </DropdownMenuItem>
+                      </>
+                    ) : (
+                      <>
+                        <DropdownMenuItem
+                          onClick={() => setShowClubsList(false)}
+                          onSelect={(e) => e.preventDefault()}
+                          className="cursor-pointer text-xs text-muted-foreground"
+                        >
+                          ← Quay lại
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuLabel className="text-sm font-semibold">
+                          CLB của bạn
+                        </DropdownMenuLabel>
+
+                        {clubsLoading && (
+                          <div className="px-3 py-2 text-sm text-muted-foreground">
+                            Đang tải danh sách CLB…
+                          </div>
+                        )}
+                        {clubsError && (
+                          <div className="px-3 py-2 text-sm text-red-600">
+                            {clubsError}
+                          </div>
+                        )}
+                        {!clubsLoading &&
+                          !clubsError &&
+                          (!clubs || clubs.length === 0) && (
+                            <div className="px-3 py-2 text-sm text-muted-foreground">
+                              Bạn chưa thuộc CLB nào.
+                            </div>
+                          )}
+
+                        {!clubsLoading &&
+                          !clubsError &&
+                          clubs?.map((club) => (
+                            <DropdownMenuItem
+                              key={club.clubId}
+                              onClick={() => {
+                                localStorage.setItem(
+                                  "lastClubId",
+                                  String(club.clubId)
+                                );
+                                setShowClubsList(false);
+                                navigate(`/myclub/${club.clubId}`);
+                              }}
+                              className="cursor-pointer"
+                            >
+                              <div className="flex items-center gap-3 w-full">
+                                {club.logoUrl ? (
+                                  <img
+                                    src={club.logoUrl}
+                                    alt={club.clubName}
+                                    className="h-9 w-9 rounded-md object-cover"
+                                  />
+                                ) : (
+                                  <div className="h-9 w-9 rounded-md bg-gradient-to-br from-primary/40 to-primary/60 flex items-center justify-center">
+                                    <span className="text-white font-bold text-sm">
+                                      {club.clubName?.charAt(0) || "C"}
+                                    </span>
+                                  </div>
+                                )}
+                                <span className="text-sm truncate">
+                                  {club.clubName}
+                                </span>
+                              </div>
+                            </DropdownMenuItem>
+                          ))}
+                      </>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
 
                 {/* Mobile menu */}
                 <DropdownMenu

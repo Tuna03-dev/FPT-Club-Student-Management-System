@@ -1,0 +1,131 @@
+package com.sep490.backendclubmanagement.controller;
+
+import com.sep490.backendclubmanagement.dto.ApiResponse;
+import com.sep490.backendclubmanagement.dto.request.CreateIncomeTransactionRequest;
+import com.sep490.backendclubmanagement.dto.request.UpdateIncomeTransactionRequest;
+import com.sep490.backendclubmanagement.dto.response.IncomeTransactionResponse;
+import com.sep490.backendclubmanagement.dto.response.PageResponse;
+import com.sep490.backendclubmanagement.entity.TransactionStatus;
+import com.sep490.backendclubmanagement.exception.AppException;
+import com.sep490.backendclubmanagement.service.IncomeTransactionService;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.web.bind.annotation.*;
+
+/**
+ * Controller for managing Income Transactions
+ * Handles all operations related to club income/revenue transactions
+ */
+@RestController
+@RequestMapping("/api/clubs/{clubId}/transactions/income")
+@RequiredArgsConstructor
+public class IncomeTransactionController {
+
+    private final IncomeTransactionService incomeTransactionService;
+
+    /**
+     * Get all income transactions for a club
+     * GET /api/clubs/{clubId}/transactions/income
+     */
+    @GetMapping
+    public ApiResponse<PageResponse<IncomeTransactionResponse>> getIncomeTransactions(
+            @PathVariable Long clubId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) TransactionStatus status
+    ) throws AppException {
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Order.desc("transactionDate")));
+
+        PageResponse<IncomeTransactionResponse> response;
+        if (status != null) {
+            response = incomeTransactionService.getIncomeTransactionsByStatus(clubId, status, pageable);
+        } else {
+            response = incomeTransactionService.getIncomeTransactions(clubId, pageable);
+        }
+
+        return ApiResponse.success(response);
+    }
+
+    /**
+     * Get income transaction by ID
+     * GET /api/clubs/{clubId}/transactions/income/{transactionId}
+     */
+    @GetMapping("/{transactionId}")
+    public ApiResponse<IncomeTransactionResponse> getIncomeTransactionById(
+            @PathVariable Long clubId,
+            @PathVariable Long transactionId
+    ) throws AppException {
+        IncomeTransactionResponse response = incomeTransactionService.getIncomeTransactionById(transactionId);
+        return ApiResponse.success(response);
+    }
+
+    /**
+     * Create a new income transaction
+     * POST /api/clubs/{clubId}/transactions/income
+     */
+    @PostMapping
+    public ApiResponse<IncomeTransactionResponse> createIncomeTransaction(
+            @PathVariable Long clubId,
+            @Valid @RequestBody CreateIncomeTransactionRequest request
+    ) throws AppException {
+        IncomeTransactionResponse response = incomeTransactionService.createIncomeTransaction(clubId, request);
+        return ApiResponse.success(response);
+    }
+
+    /**
+     * Update income transaction (only PENDING status can be updated)
+     * PUT /api/clubs/{clubId}/transactions/income/{transactionId}
+     */
+    @PutMapping("/{transactionId}")
+    public ApiResponse<IncomeTransactionResponse> updateIncomeTransaction(
+            @PathVariable Long clubId,
+            @PathVariable Long transactionId,
+            @Valid @RequestBody UpdateIncomeTransactionRequest request
+    ) throws AppException {
+        IncomeTransactionResponse response = incomeTransactionService.updateIncomeTransaction(transactionId, request);
+        return ApiResponse.success(response);
+    }
+
+    /**
+     * Approve income transaction (PENDING -> SUCCESS)
+     * POST /api/clubs/{clubId}/transactions/income/{transactionId}/approve
+     */
+    @PostMapping("/{transactionId}/approve")
+    public ApiResponse<IncomeTransactionResponse> approveIncomeTransaction(
+            @PathVariable Long clubId,
+            @PathVariable Long transactionId
+    ) throws AppException {
+        IncomeTransactionResponse response = incomeTransactionService.approveIncomeTransaction(transactionId);
+        return ApiResponse.success(response);
+    }
+
+    /**
+     * Reject income transaction (PENDING -> CANCELLED)
+     * POST /api/clubs/{clubId}/transactions/income/{transactionId}/reject
+     */
+    @PostMapping("/{transactionId}/reject")
+    public ApiResponse<IncomeTransactionResponse> rejectIncomeTransaction(
+            @PathVariable Long clubId,
+            @PathVariable Long transactionId
+    ) throws AppException {
+        IncomeTransactionResponse response = incomeTransactionService.rejectIncomeTransaction(transactionId);
+        return ApiResponse.success(response);
+    }
+
+    /**
+     * Delete income transaction
+     * DELETE /api/clubs/{clubId}/transactions/income/{transactionId}
+     */
+    @DeleteMapping("/{transactionId}")
+    public ApiResponse<Void> deleteIncomeTransaction(
+            @PathVariable Long clubId,
+            @PathVariable Long transactionId
+    ) throws AppException {
+        incomeTransactionService.deleteIncomeTransaction(transactionId);
+        return ApiResponse.success();
+    }
+}
+

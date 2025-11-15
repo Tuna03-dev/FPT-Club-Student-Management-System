@@ -22,7 +22,16 @@ public enum ErrorCode {
     INSUFFICIENT_PERMISSIONS(HttpStatus.FORBIDDEN, 4001, "Bạn không có quyền thực hiện thao tác này"),
     NOT_CLUB_OFFICER(HttpStatus.FORBIDDEN, 4002, "Chỉ cán bộ câu lạc bộ mới có quyền thực hiện thao tác này"),
     INVALID_INPUT(HttpStatus.BAD_REQUEST, 1001, "Dữ liệu không hợp lệ"),
-    ALREADY_APPLIED(HttpStatus.BAD_REQUEST, 3002, "Bạn đã nộp đơn ứng tuyển cho đợt tuyển dụng này!");
+    ALREADY_APPLIED(HttpStatus.BAD_REQUEST, 3002, "Bạn đã nộp đơn ứng tuyển cho đợt tuyển dụng này!"),
+
+    // Transaction related errors
+    CLUB_WALLET_NOT_FOUND(HttpStatus.NOT_FOUND, 5000, "Không tìm thấy ví câu lạc bộ"),
+    TRANSACTION_NOT_FOUND(HttpStatus.NOT_FOUND, 5001, "Không tìm thấy giao dịch"),
+    TRANSACTION_CANNOT_BE_UPDATED(HttpStatus.BAD_REQUEST, 5002, "Giao dịch không thể chỉnh sửa"),
+    TRANSACTION_ALREADY_PROCESSED(HttpStatus.BAD_REQUEST, 5003, "Giao dịch đã được xử lý"),
+    TRANSACTION_CANNOT_BE_DELETED(HttpStatus.BAD_REQUEST, 5004, "Giao dịch không thể xóa"),
+    INSUFFICIENT_WALLET_BALANCE(HttpStatus.BAD_REQUEST, 5005, "Số dư ví không đủ"),
+    FEE_NOT_FOUND(HttpStatus.NOT_FOUND, 5006, "Không tìm thấy khoản phí");
 
     private final HttpStatus httpStatus;
     private final int code;
