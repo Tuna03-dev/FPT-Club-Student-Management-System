@@ -27,4 +27,6 @@ public class NewsData {
     private String authorEmail;
     private String authorRole; // "STAFF" hoặc "CLUB"
 
+    private Boolean hidden;   // true = tin đang bị ẩn
+    private Boolean deleted;
 }

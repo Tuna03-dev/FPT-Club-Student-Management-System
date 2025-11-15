@@ -67,14 +67,23 @@ const LoginPage: React.FC = () => {
       console.log("Login result:", result);
 
       if (result.code === 200 && result.data) {
-        authService.setTokens(result.data.accessToken);
-        authService.setUser(result.data.user);
+        const { accessToken, user } = result.data;
+        authService.setTokens(accessToken);
+        authService.setUser(user);
 
         // Dispatch custom event to notify Header about auth state change
         window.dispatchEvent(new Event("auth-state-changed"));
 
         toast.success("Đăng nhập thành công!", { duration: 2000 });
-        navigate("/"); // Redirect to dashboard after successful login
+        const normalizedSystemRole = user?.systemRole
+          ? String(user.systemRole).trim().toUpperCase()
+          : "";
+
+        if (normalizedSystemRole === "STAFF") {
+          navigate("/staff/events", { replace: true });
+        } else {
+          navigate("/"); // Redirect to homepage after successful login
+        }
       } else if (result.code === 403) {
         toast.error("Tài khoản của bạn không thuộc tổ chức của chúng tôi");
       } else {

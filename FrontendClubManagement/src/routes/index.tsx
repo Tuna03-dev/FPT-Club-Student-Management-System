@@ -30,7 +30,6 @@ import Finance from "@/pages/myclub/finance/Finance";
 import { StudentRecruitment } from "@/pages/studentRecruitment/StudentRecruitment";
 import { ClubDetail } from "@/pages/clubDetail/ClubDetail";
 import LoginPage from "@/pages/login/Login";
-import ClubDetailPage from "@/pages/myclub/ClubDetailPage";
 import ClubsPage from "@/pages/myclub/ClubsPage";
 import PresidentNewsList from "@/pages/news/PresidentNewsList";
 import PresidentNewsEditor from "@/pages/news/PresidentNewsEditor";
@@ -42,6 +41,7 @@ import TeamNewsEditor from "@/pages/news/TeamNewsEditor";
 import Payment from "@/pages/myclub/payments/MemberPaymentPage";
 import TeamCreatePage from "@/pages/myclub/teams/TeamCreatePage";
 import RoleManagement from "@/pages/myclub/RoleManagement";
+import PendingPosts from "@/pages/myclub/PendingPosts";
 
 import ClubOfficerGuard from "@/components/guards/ClubOfficerGuard";
 import ForbiddenPage from "@/pages/ForbiddenPage";
@@ -49,6 +49,15 @@ import ForbiddenPage from "@/pages/ForbiddenPage";
 import { StaffReportManagement } from "@/pages/myclub/staff/reportManagement/StaffReport";
 import { PeriodicReportClubs } from "@/pages/myclub/staff/reportManagement/PeriodicReportClubs";
 import { ClubReportManagement } from "@/pages/myclub/report/ReportManagement";
+import ProfileSettings from "@/pages/ProfileSettings";
+
+// === BỔ SUNG từ A ===
+import DraftDetail from "@/pages/news/DraftDetail";
+import RequestDetail from "@/pages/news/RequestDetail";
+import StaffNewsDetail from "@/pages/news/StaffNewsDetail";
+import StaffNewsEdit from "@/pages/news/StaffNewsEdit";
+import ClubDetailPage from "@/pages/myclub/ClubDetailPage";
+import CreateClubPage from "@/pages/CreateClubPage";
 export const router = createBrowserRouter([
   {
     path: "/",
@@ -72,13 +81,19 @@ export const router = createBrowserRouter([
         ],
       },
 
+      // B giữ ClubsPage, bổ sung thêm /clubs/:id (từ A)
       {
         path: "clubs",
         children: [
           { index: true, element: <ClubsPage /> },
-          { path: ":id", element: <ClubDetailPage /> },
+          { path: ":id", element: <ClubDetailPage /> }, // bổ sung từ A
         ],
       },
+
+      // B vẫn giữ các biến thể cũ để không phá link đang dùng
+      { path: "club/:clubId", element: <ClubDetail /> },
+      { path: "clubDetail/:clubId", element: <ClubDetail /> },
+
       {
         path: "achievements",
         element: (
@@ -93,12 +108,29 @@ export const router = createBrowserRouter([
       },
 
       { path: "myRecruitmentApplication", element: <StudentRecruitment /> },
-      { path: "clubDetail/:clubId", element: <ClubDetail /> },
+      { path: "clubDetail/:clubId", element: <ClubDetail /> }, // giữ nguyên của B
+      {
+        path: "profile",
+        element: (
+          <ProtectedRoute>
+            <ProfileSettings />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "create-club",
+        element: (
+          <ProtectedRoute>
+            <CreateClubPage />
+          </ProtectedRoute>
+        ),
+      },
     ],
   },
 
   { path: "/login", element: <LoginPage /> },
 
+  // MyClub redirect + select
   {
     path: "/myclub",
     element: (
@@ -117,6 +149,7 @@ export const router = createBrowserRouter([
     ),
   },
 
+  // ===== Staff News (top-level như B) + BỔ SUNG các route chi tiết từ A =====
   {
     path: "/staff/news",
     element: (
@@ -133,7 +166,41 @@ export const router = createBrowserRouter([
       </ProtectedRoute>
     ),
   },
+  // bổ sung từ A:
+  {
+    path: "/staff/news/:id",
+    element: (
+      <ProtectedRoute>
+        <StaffNewsDetail />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/staff/news/:id/edit",
+    element: (
+      <ProtectedRoute>
+        <StaffNewsEdit />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/staff/news/drafts/:draftId",
+    element: (
+      <ProtectedRoute>
+        <DraftDetail />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/staff/news/requests/:id",
+    element: (
+      <ProtectedRoute>
+        <RequestDetail />
+      </ProtectedRoute>
+    ),
+  },
 
+  // ===== Admin giữ nguyên theo B =====
   {
     path: "/admin",
     element: (
@@ -147,9 +214,14 @@ export const router = createBrowserRouter([
       { path: "campus", element: <CampusManagement /> },
       { path: "semester", element: <SemesterManagement /> },
       { path: "settings", element: <div className="p-6">Cấu hình hệ thống</div> },
+      {
+        path: "settings",
+        element: <div className="p-6">Cấu hình hệ thống</div>,
+      },
     ],
   },
 
+  // ===== MyClub khu vực club =====
   {
     path: "/myclub/:clubId",
     element: (
@@ -177,12 +249,38 @@ export const router = createBrowserRouter([
         ),
       },
 
+      // === bổ sung từ A: chi tiết draft & request trong context club ===
+      {
+        path: "news/drafts/:draftId",
+        element: (
+          <ClubOfficerGuard>
+            <DraftDetail />
+          </ClubOfficerGuard>
+        ),
+      },
+      {
+        path: "news/requests/:id",
+        element: (
+          <ClubOfficerGuard>
+            <RequestDetail />
+          </ClubOfficerGuard>
+        ),
+      },
+
       { path: "members", element: <MemberList /> },
       {
         path: "roles",
         element: (
           <ClubOfficerGuard>
             <RoleManagement />
+          </ClubOfficerGuard>
+        ),
+      },
+      {
+        path: "pending-posts",
+        element: (
+          <ClubOfficerGuard>
+            <PendingPosts />
           </ClubOfficerGuard>
         ),
       },
@@ -196,12 +294,14 @@ export const router = createBrowserRouter([
       { path: "teams/:teamId", element: <TeamDetailPage /> },
       { path: "reports", element: <ClubReportManagement /> },
 
-      { path: "myclub", element: <Navigate to="." replace /> },
+      // Team-level news
       { path: "teams/:teamId/news-drafts", element: <TeamNewsDrafts /> },
       { path: "teams/:teamId/news-requests", element: <TeamNewsRequests /> },
       { path: "teams/:teamId/news-editor", element: <TeamNewsEditor /> },
-      { path: "teams/:teamId/news-requests", element: <TeamNewsRequests /> },
-      { path: "teams/:teamId/news-editor", element: <TeamNewsEditor /> },
+
+      // === bổ sung từ A: chi tiết draft & request trong context team ===
+      { path: "teams/:teamId/news/drafts/:draftId", element: <DraftDetail /> },
+      { path: "teams/:teamId/news/requests/:id", element: <RequestDetail /> },
 
       {
         path: "teams/create",
@@ -216,7 +316,7 @@ export const router = createBrowserRouter([
 
   { path: "/403", element: <ForbiddenPage /> },
 
-  // 404
+  // ===== Staff layout (events/settings/reports) giữ như B =====
   {
     path: "/staff",
     element: (
@@ -238,6 +338,7 @@ export const router = createBrowserRouter([
     ],
   },
 
+  // 404
   {
     path: "*",
     element: (

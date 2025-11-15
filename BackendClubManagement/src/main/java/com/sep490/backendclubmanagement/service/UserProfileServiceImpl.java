@@ -24,19 +24,25 @@ public class UserProfileServiceImpl implements UserProfileService {
     private final UserRepository userRepository;
     private final ClubMemberShipRepository clubMemberShipRepository;
     private final CloudinaryService cloudinaryService;
+    private final SemesterService semesterService;   // 👈 thêm vào
+
 
     @Override
     public UserProfileResponse getUserProfile(Long userId) throws AppException {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
-
+        Semester currentSemester = semesterService.getCurrentSemester();
         List<ClubMemberShip> memberships =
-                clubMemberShipRepository.findByUserIdWithRoles(userId, ClubMemberShipStatus.ACTIVE);
+                clubMemberShipRepository.findByUserIdWithRoles(
+                        userId,
+                        ClubMemberShipStatus.ACTIVE,
+                        null,
+                        true // isActive của RoleMembership
+                );
 
         List<ClubMembershipProfileResponse> clubDtos = memberships.stream()
-                .map(this::mapToClubMembershipProfile)
+                .map(this::mapToClubMembershipProfile)   // không cần currentSemester nữa
                 .toList();
-
         SystemRole systemRole = user.getSystemRole();
 
         return UserProfileResponse.builder()
@@ -111,14 +117,14 @@ public class UserProfileServiceImpl implements UserProfileService {
         return getUserProfile(userId);
     }
 
-    private ClubMembershipProfileResponse mapToClubMembershipProfile(ClubMemberShip cms) {
+    private ClubMembershipProfileResponse mapToClubMembershipProfile(ClubMemberShip cms ) {
         Club club = cms.getClub();
 
         List<RoleInClubResponse> roles = cms.getRoleMemberships().stream()
-                .filter(RoleMemberShip::getIsActive) // chỉ lấy role active
                 .map(rms -> {
                     ClubRole clubRole = rms.getClubRole();
                     Team team = rms.getTeam();
+                    Semester semester = rms.getSemester();
                     return RoleInClubResponse.builder()
                             .roleMembershipId(rms.getId())
                             .clubRoleId(clubRole != null ? clubRole.getId() : null)
@@ -127,6 +133,10 @@ public class UserProfileServiceImpl implements UserProfileService {
                             .clubRoleLevel(clubRole != null ? clubRole.getRoleLevel() : null)
                             .teamId(team != null ? team.getId() : null)
                             .teamName(team != null ? team.getTeamName() : null)
+                            .semesterId(semester != null ? semester.getId() : null)
+                            .semesterName(semester != null ? semester.getSemesterName() : null)
+                            .semesterIsCurrent(semester != null ? semester.getIsCurrent() : null)
+                            .isActive(rms.getIsActive())
                             .build();
                 })
                 .toList();

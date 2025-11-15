@@ -58,6 +58,7 @@ public class SecurityConfig {
             "/api/pay-os/webhook",
             "/ws/**",
             "/api/test/**",
+            "/api/admin-departments/**",
             "/api/profile/**"
 
     };

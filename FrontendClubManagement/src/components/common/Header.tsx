@@ -11,7 +11,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { User, Users, LogOut, Shield } from "lucide-react";
+import {
+  User,
+  Users,
+  LogOut,
+  Shield,
+  Building2,
+  PlusCircle,
+} from "lucide-react";
 import useMyClubs from "@/hooks/useMyClubs";
 import { toast } from "sonner";
 
@@ -21,11 +28,13 @@ const Header: React.FC = () => {
   const [showClubsList, setShowClubsList] = useState(false);
   const navigate = useNavigate();
 
+  const shouldLoadMyClubs = isAuthenticated && !!user;
+
   const {
     data: clubs,
     loading: clubsLoading,
     error: clubsError,
-  } = useMyClubs();
+  } = useMyClubs(shouldLoadMyClubs);
 
   useEffect(() => {
     const checkAuth = () => {
@@ -34,10 +43,13 @@ const Header: React.FC = () => {
       setUser(currentUser);
       setIsAuthenticated(authenticated);
     };
+
     checkAuth();
+
     window.addEventListener("storage", checkAuth);
     const handleAuthChange = () => checkAuth();
     window.addEventListener("auth-state-changed", handleAuthChange);
+
     return () => {
       window.removeEventListener("storage", checkAuth);
       window.removeEventListener("auth-state-changed", handleAuthChange);
@@ -54,8 +66,12 @@ const Header: React.FC = () => {
     toast.success("Đăng xuất thành công!", { duration: 2000 });
   };
 
+  const normalizedSystemRole = user?.systemRole
+    ? String(user.systemRole).trim().toUpperCase()
+    : "";
   const isAdmin =
-    user?.systemRole === "ADMIN" || user?.systemRole === "MANAGER";
+    normalizedSystemRole === "ADMIN" || normalizedSystemRole === "MANAGER";
+  const isStaff = normalizedSystemRole === "STAFF";
 
   const getInitials = (name: string) =>
     name
@@ -89,7 +105,6 @@ const Header: React.FC = () => {
             {[
               { path: "/", label: "Trang chủ" },
               { path: "/clubs", label: "Câu lạc bộ" },
-              { path: "/myclub/select", label: "CLB của tôi" },
               { path: "/events", label: "Sự kiện" },
               { path: "/news", label: "Tin tức" },
               { path: "/about", label: "Giới thiệu" },
@@ -146,7 +161,7 @@ const Header: React.FC = () => {
                         Thông tin cá nhân
                       </DropdownMenuItem>
 
-                      {/* Hiển thị “Câu lạc bộ của tôi” chỉ khi có CLB */}
+                      {/* “Câu lạc bộ của tôi” chỉ khi có CLB */}
                       {!clubsLoading &&
                         !clubsError &&
                         clubs &&
@@ -160,6 +175,24 @@ const Header: React.FC = () => {
                             Câu lạc bộ của tôi
                           </DropdownMenuItem>
                         )}
+
+                      <DropdownMenuItem
+                        onClick={() => navigate("/create-club")}
+                        className="cursor-pointer text-[14px] text-gray-700"
+                      >
+                        <PlusCircle className="mr-2 h-4 w-4 text-orange-500" />
+                        Đăng ký thành lập CLB
+                      </DropdownMenuItem>
+
+                      {isStaff && (
+                        <DropdownMenuItem
+                          onClick={() => navigate("/staff/events")}
+                          className="cursor-pointer text-[14px] text-gray-700"
+                        >
+                          <Building2 className="mr-2 h-4 w-4 text-orange-500" />
+                          Trang quản lý của ICPDP
+                        </DropdownMenuItem>
+                      )}
 
                       {isAdmin && (
                         <DropdownMenuItem
@@ -194,7 +227,6 @@ const Header: React.FC = () => {
                         CLB của bạn
                       </DropdownMenuLabel>
 
-                      {/* Trạng thái tải */}
                       {clubsLoading && (
                         <div className="px-3 py-2 text-[14px] text-gray-500">
                           Đang tải danh sách CLB…
@@ -213,7 +245,6 @@ const Header: React.FC = () => {
                           </div>
                         )}
 
-                      {/* Danh sách CLB thực tế */}
                       {!clubsLoading &&
                         !clubsError &&
                         clubs?.map((club) => (

@@ -1,5 +1,10 @@
-import { useState, useEffect } from "react";
-import { useParams, useSearchParams, useNavigate } from "react-router-dom";
+import { useState, useEffect, useMemo } from "react";
+import {
+  useParams,
+  useSearchParams,
+  useNavigate,
+  Link,
+} from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -19,18 +24,33 @@ import {
   Clock,
   Zap,
   Award,
-  TrendingUp,
   Mail,
   Phone,
   Globe,
+  Eye,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 import { getClubDetailById, type ClubDetailData } from "@/services/clubService";
 import {
   getRecruitmentsByClubId,
   type RecruitmentData,
   getMyApplications,
 } from "@/services/recruitmentService";
+import { getVisibleTeams } from "@/api/teams";
+import type { VisibleTeamDTO } from "@/types/team";
+import { getEventsByClubId, type EventData } from "@/service/EventService";
+import {
+  getAllNewsByFilter,
+  type NewsData as NewsDataService,
+} from "@/service/NewsService";
 import { ClubApplicationForm } from "./ClubApplication";
 import { useMyClubs } from "@/hooks/useMyClubs";
 import {
@@ -91,7 +111,20 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
   const [club, setClub] = useState<ClubDetailData | null>(null);
   const [recruitments, setRecruitments] = useState<RecruitmentData[]>([]);
   const [recruitmentsLoaded, setRecruitmentsLoaded] = useState(false);
-  const [loadingRecruitments, setLoadingRecruitments] = useState(false);
+  const [, setLoadingRecruitments] = useState(false);
+  const [teams, setTeams] = useState<VisibleTeamDTO[]>([]);
+  const [teamsLoaded, setTeamsLoaded] = useState(false);
+  const [loadingTeams, setLoadingTeams] = useState(false);
+  const [events, setEvents] = useState<Event[]>([]);
+  const [eventsLoaded, setEventsLoaded] = useState(false);
+  const [loadingEvents, setLoadingEvents] = useState(false);
+  const [eventsCurrentPage, setEventsCurrentPage] = useState(1);
+  const eventsPerPage = 3;
+  const [news, setNews] = useState<News[]>([]);
+  const [newsLoaded, setNewsLoaded] = useState(false);
+  const [loadingNews, setLoadingNews] = useState(false);
+  const [newsCurrentPage, setNewsCurrentPage] = useState(1);
+  const newsPerPage = 3;
   const [error, setError] = useState<string | null>(null);
   const [selectedRecruitmentId, setSelectedRecruitmentId] = useState<
     number | null
@@ -104,57 +137,10 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
   >(null);
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
 
-  const formatRecruitmentStatus = (status?: string) => {
-    if (!status) return "";
-    const s = status.toLowerCase();
-    if (s === "open") return "Đang mở";
-    if (s === "closed") return "Đã đóng";
-    if (s === "draft") return "Bản nháp";
-    if (s === "cancelled" || s === "canceled") return "Đã hủy";
-    return status;
-  };
-
-  const normalizeRequirements = (req?: string | string[]) => {
-    if (!req) return [] as string[];
-    if (Array.isArray(req)) return req.filter(Boolean);
-    // Split by line breaks or bullets/semicolons and trim
-    return req
-      .split(/\r?\n|;|•|\u2022|-/)
-      .map((s) => s.trim())
-      .filter(Boolean);
-  };
-
   // Get user's clubs to check if already a member
   const { data: myClubs } = useMyClubs();
 
-  // Fetch club data only (isRecruiting is included in response)
-  useEffect(() => {
-    const fetchClubData = async () => {
-      if (!clubId) {
-        setError("Club ID not found");
-        setLoading(false);
-        return;
-      }
-
-      try {
-        setLoading(true);
-        setError(null);
-
-        const clubData = await getClubDetailById(Number(clubId));
-        setClub(clubData);
-        // Note: clubData.isRecruiting is already set by Backend
-      } catch (err) {
-        console.error("Error fetching club data:", err);
-        setError("Không thể tải thông tin câu lạc bộ");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchClubData();
-  }, [clubId]);
-
-  // Fetch recruitments when tab is clicked
+  // Fetch recruitments function
   const fetchRecruitments = async () => {
     if (recruitmentsLoaded || !clubId) return;
 
@@ -173,105 +159,218 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
     }
   };
 
-  // Load recruitments when recruitment tab is activated
+  // Fetch club data and recruitments in parallel
   useEffect(() => {
-    if (activeTab === "recruitment") {
-      fetchRecruitments();
+    const fetchClubData = async () => {
+      if (!clubId) {
+        setError("Club ID not found");
+        setLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        setError(null);
+
+        // Fetch club data and recruitments in parallel
+        await Promise.all([
+          getClubDetailById(Number(clubId)).then((clubData) => {
+            setClub(clubData);
+            // Note: clubData.isRecruiting is already set by Backend
+          }),
+          fetchRecruitments(), // Fetch recruitments early, don't wait for isRecruiting
+        ]);
+      } catch (err) {
+        console.error("Error fetching club data:", err);
+        setError("Không thể tải thông tin câu lạc bộ");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchClubData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clubId]);
+
+  // Fetch teams when teams tab is activated
+  const fetchTeams = async () => {
+    if (teamsLoaded || !clubId) return;
+
+    try {
+      setLoadingTeams(true);
+      const teamsData = await getVisibleTeams(Number(clubId));
+      setTeams(teamsData);
+      setTeamsLoaded(true);
+    } catch (err) {
+      console.error("Error fetching teams:", err);
+    } finally {
+      setLoadingTeams(false);
     }
+  };
+
+  // Fetch events when events tab is activated
+  const fetchEvents = async () => {
+    if (eventsLoaded || !clubId) return;
+
+    try {
+      setLoadingEvents(true);
+      const eventsData = await getEventsByClubId(Number(clubId));
+
+      // Map EventData to Event interface
+      const mappedEvents: Event[] = eventsData.map((eventData: EventData) => {
+        const startDate = new Date(eventData.startTime);
+        const endDate = new Date(eventData.endTime);
+
+        // Format date as DD/MM/YYYY
+        const dateStr = startDate.toLocaleDateString("vi-VN");
+
+        // Format time as HH:mm - HH:mm
+        const startTimeStr = startDate.toLocaleTimeString("vi-VN", {
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+        const endTimeStr = endDate.toLocaleTimeString("vi-VN", {
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+        const timeStr = `${startTimeStr} - ${endTimeStr}`;
+
+        return {
+          id: eventData.id.toString(),
+          title: eventData.title,
+          date: dateStr,
+          time: timeStr,
+          location: eventData.location,
+          description: eventData.description,
+          attendees: 0, // API doesn't provide this, can be updated later
+          image: eventData.mediaUrls?.[0] || "/placeholder.svg",
+        };
+      });
+
+      setEvents(mappedEvents);
+      setEventsLoaded(true);
+    } catch (err) {
+      console.error("Error fetching events:", err);
+    } finally {
+      setLoadingEvents(false);
+    }
+  };
+
+  // Load teams when teams tab is activated
+  useEffect(() => {
+    if (activeTab === "teams") {
+      fetchTeams();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
+
+  // Fetch news when news tab is activated
+  const fetchNews = async () => {
+    if (newsLoaded || !clubId) return;
+
+    try {
+      setLoadingNews(true);
+      const newsResponse = await getAllNewsByFilter({
+        clubId: Number(clubId),
+        page: 0,
+        size: 100, // Get all news, we'll paginate on frontend
+      });
+
+      // Map NewsDataService to News interface
+      const mappedNews: News[] = newsResponse.data.map(
+        (newsData: NewsDataService) => {
+          const updatedDate = new Date(newsData.updatedAt);
+
+          // Format date as DD/MM/YYYY
+          const dateStr = updatedDate.toLocaleDateString("vi-VN");
+
+          return {
+            id: newsData.id.toString(),
+            title: newsData.title,
+            content: newsData.content,
+            date: dateStr,
+            author: newsData.clubName || "Câu lạc bộ",
+            image: newsData.thumbnailUrl || "/placeholder.svg",
+            views: 0, // API doesn't provide this
+            likes: 0, // API doesn't provide this
+          };
+        }
+      );
+
+      setNews(mappedNews);
+      setNewsLoaded(true);
+    } catch (err) {
+      console.error("Error fetching news:", err);
+    } finally {
+      setLoadingNews(false);
+    }
+  };
+
+  // Load events when events tab is activated
+  useEffect(() => {
+    if (activeTab === "events") {
+      fetchEvents();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
+
+  // Load news when news tab is activated
+  useEffect(() => {
+    if (activeTab === "news") {
+      fetchNews();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
+
+  // Reset events page when events change
+  useEffect(() => {
+    setEventsCurrentPage(1);
+  }, [events]);
+
+  // Reset news page when news change
+  useEffect(() => {
+    setNewsCurrentPage(1);
+  }, [news]);
+
+  // Calculate paginated events
+  const paginatedEvents = useMemo(() => {
+    const startIndex = (eventsCurrentPage - 1) * eventsPerPage;
+    const endIndex = startIndex + eventsPerPage;
+    return events.slice(startIndex, endIndex);
+  }, [events, eventsCurrentPage, eventsPerPage]);
+
+  const totalEventsPages = Math.ceil(events.length / eventsPerPage);
+
+  // Calculate paginated news
+  const paginatedNews = useMemo(() => {
+    const startIndex = (newsCurrentPage - 1) * newsPerPage;
+    const endIndex = startIndex + newsPerPage;
+    return news.slice(startIndex, endIndex);
+  }, [news, newsCurrentPage, newsPerPage]);
+
+  const totalNewsPages = Math.ceil(news.length / newsPerPage);
 
   useEffect(() => {
     const tab = searchParams.get("tab");
-    if (tab === "recruitment") {
-      setActiveTab("recruitment");
+    if (tab === "teams") {
+      setActiveTab("teams");
+    } else if (tab === "events") {
+      setActiveTab("events");
+    } else if (tab === "news") {
+      setActiveTab("news");
     }
   }, [searchParams]);
 
+  // Handle recruitmentId from URL query parameter
   useEffect(() => {
-    // When recruitment tab is active and list loaded, try to scroll to anchor
-    if (activeTab !== "recruitment") return;
-    if (!recruitmentsLoaded) return;
-    const hash = window.location.hash;
-    if (hash && hash.startsWith("#recruitment-")) {
-      const el = document.querySelector(hash);
-      if (el) {
-        setTimeout(() => {
-          el.scrollIntoView({ behavior: "smooth", block: "start" });
-        }, 0);
+    const recruitmentIdParam = searchParams.get("recruitmentId");
+    if (recruitmentIdParam) {
+      const recruitmentId = parseInt(recruitmentIdParam, 10);
+      if (!isNaN(recruitmentId)) {
+        setSelectedRecruitmentId(recruitmentId);
       }
     }
-  }, [activeTab, recruitmentsLoaded]);
-
-  const events: Event[] = [
-    {
-      id: "1",
-      title: "Cuộc thi lập trình ACM ICPC 2024",
-      date: "2024-02-20",
-      time: "08:00 - 17:00",
-      location: "Phòng Lab 301, Tòa A",
-      description:
-        "Cuộc thi lập trình cấp trường với các bài toán thử thách từ dễ đến khó",
-      attendees: 45,
-      image: "/programming-competition.jpg",
-    },
-    {
-      id: "2",
-      title: "Workshop: React Advanced Patterns",
-      date: "2024-02-15",
-      time: "14:00 - 16:30",
-      location: "Phòng 205, Tòa B",
-      description:
-        "Tìm hiểu các pattern nâng cao trong React từ các chuyên gia",
-      attendees: 32,
-      image: "/react-workshop.jpg",
-    },
-    {
-      id: "3",
-      title: "Hackathon: Build Your Startup",
-      date: "2024-03-01",
-      time: "09:00 - 21:00",
-      location: "Hội trường A",
-      description: "Hackathon 12 tiếng để xây dựng ý tưởng startup của bạn",
-      attendees: 120,
-      image: "/hackathon-event.png",
-    },
-  ];
-
-  const news: News[] = [
-    {
-      id: "1",
-      title: "CLB Lập trình đạt giải Nhất cuộc thi Code Challenge 2024",
-      content:
-        "Với sự chuẩn bị kỹ lưỡng và tinh thần đoàn kết, đội tuyển CLB Lập trình đã xuất sắc giành giải Nhất tại cuộc thi Code Challenge 2024 cấp trường...",
-      date: "2024-01-18",
-      author: "Nguyễn Văn A",
-      image: "/award-winning.jpg",
-      views: 234,
-      likes: 45,
-    },
-    {
-      id: "2",
-      title: "Thông báo tuyển thành viên mới - Kỳ Spring 2024",
-      content:
-        "CLB Lập trình FPT thông báo tuyển thành viên mới cho kỳ Spring 2024. Chúng tôi đang tìm kiếm những sinh viên đam mê lập trình...",
-      date: "2024-01-15",
-      author: "Trần Thị B",
-      image: "/recruitment-concept.png",
-      views: 567,
-      likes: 89,
-    },
-    {
-      id: "3",
-      title: "Kết quả cuộc bình chọn: Chọn dự án tốt nhất của CLB",
-      content:
-        "Sau 2 tuần bình chọn, dự án 'Smart Study Assistant' của nhóm Nguyễn Văn C đã giành chiến thắng với 234 phiếu bình chọn...",
-      date: "2024-01-10",
-      author: "Lê Văn C",
-      image: "/voting-results.jpg",
-      views: 345,
-      likes: 67,
-    },
-  ];
+  }, [searchParams]);
 
   // Format date helper
   const formatDate = (dateString: string) => {
@@ -459,7 +558,7 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
   return (
     <div className="min-h-screen bg-background">
       {/* Hero Banner */}
-      <div className="relative h-64 md:h-80 bg-gradient-to-r from-blue-500 to-purple-600 overflow-hidden">
+      <div className="relative h-48 md:h-64 bg-gradient-to-r from-blue-500 to-purple-600 overflow-hidden">
         <img
           src={club.bannerUrl || "/placeholder.svg"}
           alt={club.clubName}
@@ -531,14 +630,11 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
                     </p>
                   </div>
                 </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex flex-wrap gap-3 items-center">
-                {club.isRecruiting && (
-                  <div className="ml-auto md:ml-2">
-                    <Badge className="relative bg-red-500 hover:bg-red-600 text-white animate-pulse shadow-lg">
-                      <Zap className="h-3 w-3 mr-1 animate-bounce" />
+                {/* Recruitment Info with Animation */}
+                {club.isRecruiting && recruitments.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <Badge className="relative bg-red-500 hover:bg-red-600 text-white animate-pulse shadow-lg h-auto py-2 px-3">
+                      <Zap className="h-4 w-4 mr-1 animate-bounce" />
                       Đang tuyển
                       <span className="absolute -top-1 -right-1 flex h-3 w-3">
                         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
@@ -550,11 +646,58 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
               </div>
             </div>
           </div>
+          {/* Recruitment Info Card */}
+          {club.isRecruiting && recruitments.length > 0 && (
+            <div className="mt-3 p-3 bg-gradient-to-r from-red-50 to-orange-50 border border-red-200 rounded-lg">
+              {/* Recruitment Details - Compact */}
+              <div className="space-y-2">
+                {recruitments.slice(0, 2).map((recruitment) => (
+                  <div
+                    key={recruitment.id}
+                    className="bg-white/80 rounded-md p-3 border border-red-100 flex items-center justify-between gap-3"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-semibold text-sm text-foreground truncate mb-1">
+                        {recruitment.title}
+                      </h4>
+                      <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
+                        <div className="flex items-center gap-1">
+                          <Calendar className="h-3 w-3 flex-shrink-0" />
+                          <span>
+                            Bắt đầu: {formatDate(recruitment.startDate)}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Calendar className="h-3 w-3 flex-shrink-0" />
+                          <span>
+                            Hết hạn: {formatDate(recruitment.endDate)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    <Button
+                      size="sm"
+                      onClick={() => handleApplyClick(recruitment.id)}
+                      className="bg-red-500 hover:bg-red-600 text-white text-sm px-3 py-2 h-auto flex-shrink-0"
+                    >
+                      <Award className="h-4 w-4 mr-1" />
+                      Ứng tuyển
+                    </Button>
+                  </div>
+                ))}
+                {recruitments.length > 2 && (
+                  <p className="text-sm text-center text-muted-foreground pt-1">
+                    +{recruitments.length - 2} đợt tuyển khác
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
       {/* Main Content */}
-      <div className="px-4 md:px-8 py-8">
+      <div className="px-4 md:px-8 pt-4 pb-8">
         <div className="max-w-6xl mx-auto">
           <Tabs
             value={activeTab}
@@ -565,15 +708,7 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
               <TabsTrigger value="overview">Tổng quan</TabsTrigger>
               <TabsTrigger value="events">Sự kiện</TabsTrigger>
               <TabsTrigger value="news">Tin tức</TabsTrigger>
-              <TabsTrigger value="recruitment" className="relative">
-                Tuyển thành viên
-                {club.isRecruiting && (
-                  <span className="absolute top-1 right-1 flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
-                  </span>
-                )}
-              </TabsTrigger>
+              <TabsTrigger value="teams">Phòng ban</TabsTrigger>
             </TabsList>
 
             {/* Overview Tab */}
@@ -711,55 +846,138 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-2xl font-bold">Sự kiện của câu lạc bộ</h2>
                 <Badge variant="secondary">
-                  Tổng: {formatNumber(club.totalEvents)} sự kiện
+                  Tổng: {formatNumber(events.length)} sự kiện
                 </Badge>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {events.map((event) => (
-                  <Card
-                    key={event.id}
-                    className="overflow-hidden hover:shadow-lg transition-shadow"
-                  >
-                    <div className="relative h-40 bg-gradient-to-br from-blue-400 to-purple-500 overflow-hidden">
-                      <img
-                        src={event.image || "/placeholder.svg"}
-                        alt={event.title}
-                        className="w-full h-full object-cover opacity-80"
-                      />
-                    </div>
-                    <CardContent className="pt-4">
-                      <h3 className="font-semibold text-lg mb-2 line-clamp-2">
-                        {event.title}
-                      </h3>
-                      <p className="text-sm text-muted-foreground mb-4 line-clamp-2">
-                        {event.description}
-                      </p>
+              {/* Loading state */}
+              {loadingEvents ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {[...Array(6)].map((_, index) => (
+                    <Card key={index} className="overflow-hidden">
+                      <Skeleton className="h-40 w-full" />
+                      <CardContent className="pt-4 space-y-3">
+                        <Skeleton className="h-6 w-full" />
+                        <Skeleton className="h-4 w-full" />
+                        <Skeleton className="h-4 w-3/4" />
+                        <Skeleton className="h-4 w-1/2" />
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              ) : events.length > 0 ? (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {paginatedEvents.map((event) => (
+                      <Card
+                        key={event.id}
+                        className="overflow-hidden hover:shadow-lg transition-shadow flex flex-col"
+                      >
+                        <div className="relative h-40 bg-gradient-to-br from-blue-400 to-purple-500 overflow-hidden">
+                          <img
+                            src={event.image || "/placeholder.svg"}
+                            alt={event.title}
+                            className="w-full h-full object-cover opacity-80"
+                          />
+                        </div>
+                        <CardContent className="pt-4 flex flex-col flex-1">
+                          <h3 className="font-semibold text-lg mb-2 line-clamp-2">
+                            {event.title}
+                          </h3>
+                          <p className="text-sm text-muted-foreground mb-4 line-clamp-2">
+                            {event.description}
+                          </p>
 
-                      <div className="space-y-2 mb-4">
-                        <div className="flex items-center gap-2 text-sm">
-                          <Calendar className="h-4 w-4 text-muted-foreground" />
-                          <span>{event.date}</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-sm">
-                          <Clock className="h-4 w-4 text-muted-foreground" />
-                          <span>{event.time}</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-sm">
-                          <MapPin className="h-4 w-4 text-muted-foreground" />
-                          <span className="line-clamp-1">{event.location}</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-sm">
-                          <Users className="h-4 w-4 text-muted-foreground" />
-                          <span>{event.attendees} người tham gia</span>
-                        </div>
-                      </div>
+                          <div className="space-y-2 mb-4">
+                            <div className="flex items-center gap-2 text-sm">
+                              <Calendar className="h-4 w-4 text-muted-foreground" />
+                              <span>{event.date}</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-sm">
+                              <Clock className="h-4 w-4 text-muted-foreground" />
+                              <span>{event.time}</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-sm">
+                              <MapPin className="h-4 w-4 text-muted-foreground" />
+                              <span className="line-clamp-1">
+                                {event.location}
+                              </span>
+                            </div>
+                          </div>
 
-                      {/* <Button className="w-full">Tham gia sự kiện</Button> */}
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
+                          <div className="mt-auto">
+                            <Link to={`/events/${event.id}`}>
+                              <Button className="w-full" variant="outline">
+                                <Eye className="h-4 w-4 mr-2" />
+                                Xem chi tiết
+                              </Button>
+                            </Link>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+
+                  {/* Pagination */}
+                  {totalEventsPages > 1 && (
+                    <Pagination>
+                      <PaginationContent>
+                        <PaginationItem>
+                          <PaginationPrevious
+                            onClick={() =>
+                              setEventsCurrentPage((prev) =>
+                                Math.max(1, prev - 1)
+                              )
+                            }
+                            className={
+                              eventsCurrentPage === 1
+                                ? "pointer-events-none opacity-50"
+                                : "cursor-pointer"
+                            }
+                          />
+                        </PaginationItem>
+                        {[...Array(totalEventsPages)].map((_, index) => {
+                          const page = index + 1;
+                          return (
+                            <PaginationItem key={page}>
+                              <PaginationLink
+                                onClick={() => setEventsCurrentPage(page)}
+                                isActive={eventsCurrentPage === page}
+                                className="cursor-pointer"
+                              >
+                                {page}
+                              </PaginationLink>
+                            </PaginationItem>
+                          );
+                        })}
+                        <PaginationItem>
+                          <PaginationNext
+                            onClick={() =>
+                              setEventsCurrentPage((prev) =>
+                                Math.min(totalEventsPages, prev + 1)
+                              )
+                            }
+                            className={
+                              eventsCurrentPage === totalEventsPages
+                                ? "pointer-events-none opacity-50"
+                                : "cursor-pointer"
+                            }
+                          />
+                        </PaginationItem>
+                      </PaginationContent>
+                    </Pagination>
+                  )}
+                </>
+              ) : (
+                <Card>
+                  <CardContent className="text-center py-12">
+                    <Calendar className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                    <p className="text-muted-foreground">
+                      Câu lạc bộ chưa có sự kiện nào
+                    </p>
+                  </CardContent>
+                </Card>
+              )}
             </TabsContent>
 
             {/* News Tab */}
@@ -767,61 +985,140 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-2xl font-bold">Tin tức của câu lạc bộ</h2>
                 <Badge variant="secondary">
-                  Tổng: {formatNumber(club.totalPosts)} tin tức
+                  Tổng: {formatNumber(news.length)} tin tức
                 </Badge>
               </div>
 
-              <div className="space-y-4">
-                {news.map((item) => (
-                  <Card
-                    key={item.id}
-                    className="overflow-hidden hover:shadow-lg transition-shadow cursor-pointer"
-                  >
-                    <div className="flex flex-col md:flex-row">
-                      <div className="relative h-40 md:h-auto md:w-48 bg-gradient-to-br from-blue-400 to-purple-500 flex-shrink-0">
-                        <img
-                          src={item.image || "/placeholder.svg"}
-                          alt={item.title}
-                          className="w-full h-full object-cover opacity-80"
-                        />
+              {/* Loading state */}
+              {loadingNews ? (
+                <div className="space-y-4">
+                  {[...Array(3)].map((_, index) => (
+                    <Card key={index} className="overflow-hidden">
+                      <div className="flex flex-col md:flex-row">
+                        <Skeleton className="h-40 md:h-auto md:w-48 flex-shrink-0" />
+                        <CardContent className="flex-1 pt-4 space-y-3">
+                          <Skeleton className="h-6 w-full" />
+                          <Skeleton className="h-4 w-full" />
+                          <Skeleton className="h-4 w-3/4" />
+                          <Skeleton className="h-3 w-1/2" />
+                        </CardContent>
                       </div>
-                      <CardContent className="flex-1 pt-4">
-                        <div className="flex items-start justify-between mb-2">
-                          <h3 className="font-semibold text-lg line-clamp-2 flex-1">
-                            {item.title}
-                          </h3>
-                        </div>
-                        <p className="text-sm text-muted-foreground mb-3 line-clamp-2">
-                          {item.content}
-                        </p>
-
-                        <div className="flex items-center justify-between text-xs text-muted-foreground">
-                          <div className="flex items-center gap-4">
-                            <span>{item.date}</span>
-                            <span>Bởi {item.author}</span>
+                    </Card>
+                  ))}
+                </div>
+              ) : news.length > 0 ? (
+                <>
+                  <div className="space-y-4">
+                    {paginatedNews.map((item) => (
+                      <Card
+                        key={item.id}
+                        className="overflow-hidden hover:shadow-lg transition-shadow flex flex-col"
+                      >
+                        <div className="flex flex-col md:flex-row flex-1">
+                          <div className="relative h-40 md:h-auto md:w-48 bg-gradient-to-br from-blue-400 to-purple-500 flex-shrink-0">
+                            <img
+                              src={item.image || "/placeholder.svg"}
+                              alt={item.title}
+                              className="w-full h-full object-cover opacity-80"
+                            />
                           </div>
-                          {/* <div className="flex items-center gap-3">
-                            <div className="flex items-center gap-1">
-                              <Eye className="h-4 w-4" />
-                              <span>{item.views}</span>
+                          <CardContent className="flex-1 pt-4 flex flex-col">
+                            <div className="flex items-start justify-between mb-2">
+                              <h3 className="font-semibold text-lg line-clamp-2 flex-1">
+                                {item.title}
+                              </h3>
                             </div>
-                            <div className="flex items-center gap-1">
-                              <Heart className="h-4 w-4" />
-                              <span>{item.likes}</span>
+                            <p className="text-sm text-muted-foreground mb-3 line-clamp-2">
+                              {item.content}
+                            </p>
+
+                            <div className="flex items-center justify-between text-xs text-muted-foreground mb-3">
+                              <div className="flex items-center gap-4">
+                                <span>{item.date}</span>
+                                <span>Bởi {item.author}</span>
+                              </div>
                             </div>
-                          </div> */}
+
+                            <div className="mt-auto">
+                              <Link to={`/news/${item.id}`}>
+                                <Button className="w-full" variant="outline">
+                                  <Eye className="h-4 w-4 mr-2" />
+                                  Xem chi tiết
+                                </Button>
+                              </Link>
+                            </div>
+                          </CardContent>
                         </div>
-                      </CardContent>
-                    </div>
-                  </Card>
-                ))}
-              </div>
+                      </Card>
+                    ))}
+                  </div>
+
+                  {/* Pagination */}
+                  {totalNewsPages > 1 && (
+                    <Pagination>
+                      <PaginationContent>
+                        <PaginationItem>
+                          <PaginationPrevious
+                            onClick={() =>
+                              setNewsCurrentPage((prev) =>
+                                Math.max(1, prev - 1)
+                              )
+                            }
+                            className={
+                              newsCurrentPage === 1
+                                ? "pointer-events-none opacity-50"
+                                : "cursor-pointer"
+                            }
+                          />
+                        </PaginationItem>
+                        {[...Array(totalNewsPages)].map((_, index) => {
+                          const page = index + 1;
+                          return (
+                            <PaginationItem key={page}>
+                              <PaginationLink
+                                onClick={() => setNewsCurrentPage(page)}
+                                isActive={newsCurrentPage === page}
+                                className="cursor-pointer"
+                              >
+                                {page}
+                              </PaginationLink>
+                            </PaginationItem>
+                          );
+                        })}
+                        <PaginationItem>
+                          <PaginationNext
+                            onClick={() =>
+                              setNewsCurrentPage((prev) =>
+                                Math.min(totalNewsPages, prev + 1)
+                              )
+                            }
+                            className={
+                              newsCurrentPage === totalNewsPages
+                                ? "pointer-events-none opacity-50"
+                                : "cursor-pointer"
+                            }
+                          />
+                        </PaginationItem>
+                      </PaginationContent>
+                    </Pagination>
+                  )}
+                </>
+              ) : (
+                <Card>
+                  <CardContent className="text-center py-12">
+                    <MessageSquare className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                    <p className="text-muted-foreground">
+                      Câu lạc bộ chưa có tin tức nào
+                    </p>
+                  </CardContent>
+                </Card>
+              )}
             </TabsContent>
 
-            {/* Recruitment Tab */}
-            <TabsContent value="recruitment" className="space-y-6">
-              {/* Loading state for recruitments */}
-              {loadingRecruitments ? (
+            {/* Teams Tab */}
+            <TabsContent value="teams" className="space-y-6">
+              {/* Loading state for teams */}
+              {loadingTeams ? (
                 <div className="space-y-6">
                   {/* Header Skeleton */}
                   <div className="flex items-center justify-between">
@@ -829,9 +1126,9 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
                     <Skeleton className="h-6 w-24 rounded-full" />
                   </div>
 
-                  {/* Recruitment Cards Skeleton */}
-                  <div className="space-y-4">
-                    {[...Array(3)].map((_, index) => (
+                  {/* Team Cards Skeleton */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {[...Array(6)].map((_, index) => (
                       <Card
                         key={index}
                         className="hover:shadow-lg transition-shadow"
@@ -839,37 +1136,14 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
                         <CardHeader>
                           <div className="flex items-start justify-between">
                             <div className="flex-1 space-y-2">
-                              <div className="flex items-center gap-2">
-                                <Skeleton className="h-5 w-5 rounded" />
-                                <Skeleton className="h-6 w-64" />
-                              </div>
-                              <Skeleton className="h-4 w-96" />
+                              <Skeleton className="h-6 w-32" />
+                              <Skeleton className="h-4 w-full" />
+                              <Skeleton className="h-4 w-5/6" />
                             </div>
-                            <Skeleton className="h-6 w-20 rounded-full" />
                           </div>
                         </CardHeader>
-                        <CardContent className="space-y-4">
-                          {/* Requirements */}
-                          <div className="space-y-2">
-                            <Skeleton className="h-4 w-20" />
-                            <div className="space-y-1">
-                              <Skeleton className="h-3 w-full" />
-                              <Skeleton className="h-3 w-5/6" />
-                            </div>
-                          </div>
-
-                          {/* Stats Grid */}
-                          <div className="grid grid-cols-3 gap-4 p-3 rounded-lg bg-accent/5">
-                            {[...Array(3)].map((_, i) => (
-                              <div key={i} className="space-y-1">
-                                <Skeleton className="h-3 w-16" />
-                                <Skeleton className="h-4 w-20" />
-                              </div>
-                            ))}
-                          </div>
-
-                          {/* Apply Button */}
-                          <Skeleton className="h-10 w-full rounded" />
+                        <CardContent>
+                          <Skeleton className="h-4 w-24" />
                         </CardContent>
                       </Card>
                     ))}
@@ -878,107 +1152,46 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
               ) : (
                 <>
                   <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-2xl font-bold">
-                      Tuyển dụng thành viên
-                    </h2>
-                    <Badge variant="secondary">
-                      {recruitments.length} đợt tuyển
-                    </Badge>
+                    <h2 className="text-2xl font-bold">Phòng ban</h2>
+                    <Badge variant="secondary">{teams.length} phòng ban</Badge>
                   </div>
 
-                  {recruitments.length > 0 ? (
-                    <div className="space-y-4">
-                      {recruitments.map((recruitment) => (
+                  {teams.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {teams.map((team) => (
                         <Card
-                          key={recruitment.id}
-                          id={`recruitment-${recruitment.id}`}
+                          key={team.teamId}
                           className="hover:shadow-lg transition-shadow"
                         >
                           <CardHeader>
-                            <div className="flex items-start justify-between">
-                              <div>
-                                <CardTitle className="flex items-center gap-2">
-                                  <Award className="h-5 w-5 text-accent" />
-                                  {recruitment.title}
-                                </CardTitle>
-                                <CardDescription className="mt-1">
-                                  {recruitment.description}
-                                </CardDescription>
-                              </div>
-                              <Badge
-                                variant="secondary"
-                                className="bg-green-100 text-green-700"
-                              >
-                                {formatRecruitmentStatus(
-                                  recruitment.status as unknown as string
-                                )}
-                              </Badge>
-                            </div>
-                          </CardHeader>
-                          <CardContent className="space-y-4">
-                            {/* Requirements */}
-                            {normalizeRequirements(
-                              recruitment.requirements as unknown as
-                                | string
-                                | string[]
-                            ).length > 0 && (
-                              <div>
-                                <p className="text-sm font-semibold mb-2">
-                                  Yêu cầu:
-                                </p>
-                                <ul className="list-disc pl-5 space-y-1">
-                                  {normalizeRequirements(
-                                    recruitment.requirements as unknown as
-                                      | string
-                                      | string[]
-                                  ).map((item, idx) => (
-                                    <li
-                                      key={idx}
-                                      className="text-sm text-foreground"
-                                    >
-                                      {item}
-                                    </li>
-                                  ))}
-                                </ul>
-                              </div>
+                            <CardTitle className="flex items-center gap-2">
+                              <Users className="h-5 w-5 text-blue-600" />
+                              {team.teamName}
+                            </CardTitle>
+                            {team.description && (
+                              <CardDescription className="mt-2 line-clamp-3">
+                                {team.description}
+                              </CardDescription>
                             )}
-
-                            {/* Stats */}
-                            <div className="grid grid-cols-2 gap-4 p-3 bg-accent/5 rounded-lg">
-                              <div>
-                                <p className="text-xs text-muted-foreground">
-                                  Bắt đầu
-                                </p>
-                                <p className="font-semibold text-sm">
-                                  {formatDate(recruitment.startDate)}
-                                </p>
+                          </CardHeader>
+                          {team.memberCount !== undefined && (
+                            <CardContent>
+                              <div className="flex items-center justify-between mb-3">
+                                <span className="text-sm text-muted-foreground">
+                                  Thành viên: {team.memberCount}
+                                </span>
                               </div>
-                              <div>
-                                <p className="text-xs text-muted-foreground">
-                                  Hạn chót
-                                </p>
-                                <p className="font-semibold text-sm">
-                                  {formatDate(recruitment.endDate)}
-                                </p>
-                              </div>
-                            </div>
-
-                            <Button
-                              className="w-full"
-                              onClick={() => handleApplyClick(recruitment.id)}
-                            >
-                              Ứng tuyển ngay
-                            </Button>
-                          </CardContent>
+                            </CardContent>
+                          )}
                         </Card>
                       ))}
                     </div>
                   ) : (
                     <Card>
                       <CardContent className="text-center py-12">
-                        <TrendingUp className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                        <Users className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
                         <p className="text-muted-foreground">
-                          Hiện tại câu lạc bộ không có đợt tuyển dụng nào
+                          Câu lạc bộ chưa có phòng ban nào
                         </p>
                       </CardContent>
                     </Card>

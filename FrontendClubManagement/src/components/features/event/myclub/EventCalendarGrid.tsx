@@ -1,8 +1,8 @@
-"use client"
+
 import { Card } from "@/components/ui/card"
 import { EventCalendarHeader } from "./EventCalendarHeader"
 import { EventCell } from "./EventCell"
-
+// Define the CalendarEvent interface
 export interface CalendarEvent {
   id: string
   title: string
@@ -32,7 +32,6 @@ const dayNames = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"]
 export function EventCalendarGrid({
   currentDate,
   monthDays,
-  events,
   onPrevMonth,
   onNextMonth,
   onCreateEvent,

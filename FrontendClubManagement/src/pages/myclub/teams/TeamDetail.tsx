@@ -1,25 +1,24 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useTeamDetail } from "@/hooks/useTeamDetail";
 import { useTeamLeadGuard } from "@/hooks/useTeamLeadGuard";
+import { useClubPermissions } from "@/hooks/useClubPermissions";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import {
-  FileText,
-  Users,
-  Edit2,
-  Plus,
-  Search,
-  Heart,
-  MessageCircle,
-  MoreHorizontal,
-  Clock,
-} from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { FileText, Users, Edit2, Plus, Search, Clock } from "lucide-react";
+import { toast } from "sonner";
 
 import TeamNewsDrafts from "@/pages/news/TeamNewsDrafts";
 import TeamNewsRequests from "@/pages/news/TeamNewsRequests";
+import { CreatePost } from "@/components/features/post/CreatePost";
+import { PostCard } from "@/components/features/post/PostCard";
+import {
+  postService,
+  type PostWithRelationsData,
+} from "@/services/postService";
 
 /* ===== helpers ===== */
 type RoleTone = "leader" | "deputy" | "member" | "other";
@@ -78,7 +77,11 @@ function MemberListRow({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-3 flex-wrap">
             <h3 className="font-semibold truncate">{fullName}</h3>
-            <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${roleBadgeClass(roleName)}`}>
+            <span
+              className={`px-2.5 py-1 rounded-full text-xs font-medium ${roleBadgeClass(
+                roleName
+              )}`}
+            >
               {roleName ?? "—"}
             </span>
           </div>
@@ -87,82 +90,6 @@ function MemberListRow({
             {studentCode ? <span>MSSV: {studentCode}</span> : null}
           </div>
         </div>
-      </div>
-    </Card>
-  );
-}
-function PostCard({
-  author,
-  content,
-  image,
-  timestamp,
-  likes,
-  comments,
-  maxLength = 160,
-}: {
-  author: { name: string; avatar?: string; role?: string };
-  content: string;
-  image?: string;
-  timestamp: string;
-  likes: number;
-  comments: number;
-  maxLength?: number;
-}) {
-  const [expanded, setExpanded] = useState(false);
-  const over = content.length > maxLength;
-  const shown = over && !expanded ? content.slice(0, maxLength) + "..." : content;
-
-  return (
-    <Card className="overflow-hidden shadow-sm">
-      <div className="flex items-start justify-between p-4">
-        <div className="flex gap-3">
-          <Avatar>
-            <AvatarImage src={author.avatar || ""} />
-            <AvatarFallback className="bg-primary/10 text-primary">
-              {author.name.charAt(0)}
-            </AvatarFallback>
-          </Avatar>
-        </div>
-        <div className="flex-1 pl-2">
-          <h3 className="font-semibold">{author.name}</h3>
-          <p className="text-sm text-muted-foreground">
-            {author.role ?? "Thành viên"} · {timestamp}
-          </p>
-        </div>
-        <Button variant="ghost" size="icon">
-          <MoreHorizontal className="h-5 w-5" />
-        </Button>
-      </div>
-
-      <div className="px-4 pb-3">
-        <p className="whitespace-pre-wrap">{shown}</p>
-        {over && (
-          <Button
-            variant="link"
-            className="p-0 h-auto text-primary"
-            onClick={() => setExpanded((v) => !v)}
-          >
-            {expanded ? "Ẩn bớt" : "Xem thêm"}
-          </Button>
-        )}
-      </div>
-
-      {image && <img src={image} alt="Post" className="w-full object-cover max-h-96" />}
-
-      <div className="flex items-center justify-between px-4 py-2 text-sm text-muted-foreground border-t">
-        <span>{likes} lượt thích</span>
-        <span>{comments} bình luận</span>
-      </div>
-
-      <div className="flex items-center border-t">
-        <Button variant="ghost" className="flex-1 gap-2 rounded-none" size="sm">
-          <Heart className="h-5 w-5" />
-          <span className="hidden sm:inline">Thích</span>
-        </Button>
-        <Button variant="ghost" className="flex-1 gap-2 rounded-none border-x" size="sm">
-          <MessageCircle className="h-5 w-5" />
-          <span className="hidden sm:inline">Bình luận</span>
-        </Button>
       </div>
     </Card>
   );
@@ -183,7 +110,146 @@ export default function TeamDetailPage() {
   const [search, setSearch] = useState("");
 
   const { data, loading, error } = useTeamDetail(cId, tId);
-  const { allowed: isLead, error: guardErr } = useTeamLeadGuard(cId, tId);
+  const { allowed: isLead } = useTeamLeadGuard(cId, tId);
+
+  // Check club-level permissions from localStorage
+  const { isClubPresident } = useClubPermissions(cId);
+
+  // Determine if user can view posts:
+  // 1. CLUB_OFFICER can view all teams
+  // 2. Team member can view their own team
+  const memberFlag = !!data?.member;
+  const canViewPosts = isClubPresident || memberFlag;
+
+  // Posts state
+  const [posts, setPosts] = useState<PostWithRelationsData[]>([]);
+  const [postsLoading, setPostsLoading] = useState(true);
+  const [postsError, setPostsError] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const loadingRef = useRef(false);
+
+  // Load team posts
+  const loadPosts = useCallback(
+    async (page: number, append: boolean = false) => {
+      if (loadingRef.current) return;
+
+      try {
+        loadingRef.current = true;
+        setPostsLoading(true);
+        setPostsError(null);
+
+        const response = await postService.getTeamPosts(cId, tId, {
+          page: page,
+          size: 10,
+          sort: "createdAt,desc",
+        });
+
+        if (response.code === 200 && response.data) {
+          const newPosts = response.data.content;
+          setPosts((prev) => (append ? [...prev, ...newPosts] : newPosts));
+          setCurrentPage(page);
+          setTotalPages(response.data.totalPages);
+        } else {
+          const message = response.message || "Không thể tải bài viết";
+          setPostsError(message);
+          toast.error(message);
+        }
+      } catch (err) {
+        console.error("Error loading team posts:", err);
+        const message = "Có lỗi khi tải bài viết";
+        setPostsError(message);
+        toast.error(message);
+      } finally {
+        setPostsLoading(false);
+        loadingRef.current = false;
+      }
+    },
+    [cId, tId]
+  );
+
+  // Load initial posts when tab is active and user can view posts
+  useEffect(() => {
+    if (activeTab === "posts" && canViewPosts && !loading) {
+      loadPosts(0, false);
+    }
+  }, [activeTab, canViewPosts, loading, loadPosts]);
+
+  // Infinite scroll
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+
+  const loadMore = useCallback(() => {
+    if (loadingRef.current) return;
+    if (currentPage >= totalPages - 1) return;
+    loadPosts(currentPage + 1, true);
+  }, [currentPage, totalPages, loadPosts]);
+
+  useEffect(() => {
+    const node = sentinelRef.current;
+    if (!node || activeTab !== "posts") return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (
+          entries[0].isIntersecting &&
+          currentPage < totalPages - 1 &&
+          !loadingRef.current
+        ) {
+          loadMore();
+        }
+      },
+      { threshold: 0.5 }
+    );
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [loadMore, currentPage, totalPages, activeTab]);
+
+  const refreshPosts = () => {
+    setCurrentPage(0);
+    setTotalPages(0);
+    setPosts([]);
+    loadPosts(0, false);
+  };
+
+  const convertPostToCard = (post: PostWithRelationsData) => {
+    const imageMedia = (post.media || []).filter(
+      (m) => m && m.mediaType === "IMAGE"
+    );
+    return {
+      postId: post.id,
+      clubId: cId,
+      author: {
+        id: post.authorId,
+        name: post.authorName || "Người dùng",
+        avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=default",
+        role: "Thành viên",
+      },
+      content: post.content || "",
+      images: imageMedia.map((m) => m.mediaUrl),
+      imageIds: imageMedia.map((m) => m.id),
+      timestamp: formatTimestamp(post.createdAt || new Date().toISOString()),
+      likes: (post.likes || []).length,
+      comments: (post.comments || []).length,
+      shares: 0,
+    };
+  };
+
+  const formatTimestamp = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffInHours = Math.floor(
+      (now.getTime() - date.getTime()) / (1000 * 60 * 60)
+    );
+
+    if (diffInHours < 1) return "Vừa xong";
+    if (diffInHours < 24) return `${diffInHours} giờ trước`;
+
+    const diffInDays = Math.floor(diffInHours / 24);
+    if (diffInDays < 7) return `${diffInDays} ngày trước`;
+
+    return date.toLocaleDateString("vi-VN");
+  };
 
   // Đồng bộ URL → state (khi back/forward hoặc điều hướng từ editor)
   useEffect(() => {
@@ -205,46 +271,42 @@ export default function TeamDetailPage() {
 
   // Nếu không phải leader thì chặn tab drafts/requests
   useEffect(() => {
-    if (isLead === false && (activeTab === "drafts" || activeTab === "requests")) {
+    if (
+      isLead === false &&
+      (activeTab === "drafts" || activeTab === "requests")
+    ) {
       setActiveTab("posts");
     }
   }, [isLead, activeTab]);
 
-  // Nếu không phải member thì chặn tab posts → chuyển sang members
+  // Nếu không có quyền xem posts thì chặn tab posts → chuyển sang members
   useEffect(() => {
-    const memberFlag = !!data?.member;
-    if (!memberFlag && activeTab === "posts") {
+    if (!canViewPosts && activeTab === "posts") {
       setActiveTab("members");
     }
-  }, [data?.member, activeTab]);
+  }, [canViewPosts, activeTab]);
 
   // ❌ ĐỪNG return sớm trước các hooks khác
   // Thay vì return, hiển thị loading/error trong JSX bên dưới
 
   const teamName = data?.teamName ?? "";
   const teamDesc = data?.description ?? "";
-  const myRoles = data?.myRoles ?? [];
-  const memberFlag = !!data?.member;
-  const rawMembers = data?.members ?? [];
-  const totalCount = (data?.memberCount ?? rawMembers.length) || 0;
+
+  // Wrap rawMembers in useMemo to prevent dependency issues
+  const rawMembers = useMemo(() => data?.members ?? [], [data?.members]);
 
   // Các useMemo luôn được gọi (kể cả loading/error) để giữ thứ tự hooks ổn định
   const members = useMemo(
     () =>
-      rawMembers.map((m: any) => ({
+      rawMembers.map((m) => ({
         id: m.userId,
         name: m.fullName,
-        roleName: m.roleName as string | undefined,
-        email: m.email as string | undefined,
-        studentCode: m.studentCode as string | undefined,
-        avatarUrl: (m.avatarUrl as string | undefined) || "",
+        roleName: m.roleName,
+        email: m.email,
+        studentCode: m.studentCode,
+        avatarUrl: m.avatarUrl || "",
       })),
     [rawMembers]
-  );
-
-  const leader = useMemo(
-    () => members.find((m) => roleToneFrom(m.roleName) === "leader"),
-    [members]
   );
 
   const filteredMembers = useMemo(() => {
@@ -270,27 +332,15 @@ export default function TeamDetailPage() {
     return arr;
   }, [filteredMembers]);
 
-  const mockPosts = useMemo(() => [
-    {
-      author: {
-        name: leader?.name || teamName || "Team",
-        avatar: leader?.avatarUrl || "",
-        role: leader?.roleName || "Trưởng ban",
-      },
-      content:
-        "Đội vừa kick-off sprint mới. Mục tiêu: hoàn thiện backlog và onboard thành viên mới.",
-      image: "",
-      timestamp: new Date().toLocaleDateString("vi-VN"),
-      likes: 12,
-      comments: 3,
-    },
-  ], [leader?.name, leader?.avatarUrl, leader?.roleName, teamName]);
+  const hasMore = currentPage < totalPages - 1;
 
   return (
     <div className="min-h-screen bg-background">
       {/* LOADING / ERROR / PARAMS INVALID */}
       {!Number.isFinite(cId) || !Number.isFinite(tId) ? (
-        <div className="p-6 text-sm text-muted-foreground">Tham số không hợp lệ.</div>
+        <div className="p-6 text-sm text-muted-foreground">
+          Tham số không hợp lệ.
+        </div>
       ) : error ? (
         <div className="p-6 text-red-600">{error}</div>
       ) : loading ? (
@@ -306,7 +356,9 @@ export default function TeamDetailPage() {
                     {(teamName || "T").charAt(0)}
                   </div>
                   <div className="flex-1">
-                    <h1 className="text-3xl font-bold mb-1">{teamName || "—"}</h1>
+                    <h1 className="text-3xl font-bold mb-1">
+                      {teamName || "—"}
+                    </h1>
                     <p className="text-sm opacity-90">{teamDesc || "—"}</p>
                   </div>
                 </div>
@@ -315,7 +367,9 @@ export default function TeamDetailPage() {
                   {isLead && (
                     <Button
                       className="bg-white text-primary hover:bg-white/90"
-                      onClick={() => nav(`/myclub/${cId}/teams/${tId}/news-editor`)}
+                      onClick={() =>
+                        nav(`/myclub/${cId}/teams/${tId}/news-editor`)
+                      }
                     >
                       <Plus className="w-4 h-4 mr-2" />
                       Tạo news
@@ -337,17 +391,37 @@ export default function TeamDetailPage() {
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
               <div className="flex gap-8">
                 {[
-                  // Posts chỉ hiển thị nếu user thuộc team
-                  { id: "posts", label: "Bài đăng", icon: FileText, show: !!memberFlag },
+                  // Posts: CLUB_OFFICER hoặc thành viên team
+                  {
+                    id: "posts",
+                    label: "Bài đăng",
+                    icon: FileText,
+                    show: canViewPosts,
+                  },
                   // Members luôn hiển thị để mọi thành viên CLB xem
-                  { id: "members", label: "Thành viên", icon: Users, show: true },
+                  {
+                    id: "members",
+                    label: "Thành viên",
+                    icon: Users,
+                    show: true,
+                  },
                   // Drafts/Requests: chỉ leader
-                  { id: "drafts", label: "Drafts", icon: FileText, show: !!isLead },
-                  { id: "requests", label: "Requests", icon: Clock, show: !!isLead },
+                  {
+                    id: "drafts",
+                    label: "Bản Nháp tin tức",
+                    icon: FileText,
+                    show: !!isLead,
+                  },
+                  {
+                    id: "requests",
+                    label: "Tin tức chờ duyệt",
+                    icon: Clock,
+                    show: !!isLead,
+                  },
                 ]
                   .filter((t) => t.show)
                   .map((tab) => {
-                    const Icon = tab.icon as any;
+                    const Icon = tab.icon;
                     const active = activeTab === (tab.id as Tab);
                     return (
                       <button
@@ -370,38 +444,133 @@ export default function TeamDetailPage() {
 
           {/* BODY */}
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            <div className="mb-6 text-sm text-muted-foreground">
-              <span className="mr-4">
-                Bạn thuộc team:{" "}
-                <span className={memberFlag ? "text-green-600" : ""}>
-                  {memberFlag ? "Có" : "Không"}
-                </span>
-              </span>
-              <span className="mr-4">
-                Vai trò của bạn: {myRoles.length ? myRoles.join(", ") : "—"}
-              </span>
-              <span>Tổng thành viên: {totalCount}</span>
-              {guardErr ? <span className="ml-4 text-red-600">{guardErr}</span> : null}
-            </div>
+            {/* Access Denied Message for Posts */}
+            {activeTab === "posts" && !canViewPosts && (
+              <Card className="p-6 border-yellow-500/20 bg-yellow-500/5">
+                <CardContent>
+                  <div className="text-center space-y-4">
+                    <div className="text-yellow-700 dark:text-yellow-400 font-semibold">
+                      Bạn không có quyền xem bài đăng của phòng ban này
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      Chỉ thành viên của phòng ban hoặc Chủ nhiệm/Phó Chủ nhiệm
+                      CLB mới có thể xem bài đăng.
+                    </p>
+                    <Button
+                      variant="outline"
+                      onClick={() => setActiveTab("members")}
+                    >
+                      Xem danh sách thành viên
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
-            {activeTab === "posts" && memberFlag && (
-              <div>
-                <div className="flex justify-between items-center mb-6">
-                  <h2 className="text-2xl font-bold">Bài đăng gần đây</h2>
+            {activeTab === "posts" && canViewPosts && (
+              <div className="max-w-3xl mx-auto">
+                {/* Create Post */}
+                <div className="mb-4">
+                  <CreatePost
+                    onPostCreated={refreshPosts}
+                    clubId={cId}
+                    teamId={tId}
+                  />
                 </div>
-                <div className="space-y-6">
-                  {mockPosts.map((p, i) => (
-                    <PostCard
-                      key={i}
-                      author={p.author}
-                      content={p.content}
-                      image={p.image}
-                      timestamp={p.timestamp}
-                      likes={p.likes}
-                      comments={p.comments}
-                    />
-                  ))}
-                </div>
+
+                {/* Loading State - First Load */}
+                {postsLoading && posts.length === 0 && (
+                  <div className="space-y-4">
+                    {Array.from({ length: 3 }).map((_, index) => (
+                      <Card key={index} className="p-6">
+                        <CardContent className="space-y-4">
+                          <div className="flex items-center gap-3">
+                            <Skeleton className="h-10 w-10 rounded-full" />
+                            <div className="space-y-2">
+                              <Skeleton className="h-4 w-32" />
+                              <Skeleton className="h-3 w-20" />
+                            </div>
+                          </div>
+                          <Skeleton className="h-4 w-full" />
+                          <Skeleton className="h-4 w-3/4" />
+                          <Skeleton className="h-32 w-full" />
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+
+                {/* Error State */}
+                {postsError && posts.length === 0 && (
+                  <Card className="p-6 border-destructive/20">
+                    <CardContent>
+                      <div className="text-center space-y-4">
+                        <div className="text-destructive font-semibold">
+                          {postsError}
+                        </div>
+                        <button
+                          onClick={refreshPosts}
+                          className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+                        >
+                          Thử lại
+                        </button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Posts Feed */}
+                {posts.length > 0 && (
+                  <div className="space-y-4">
+                    {posts.map((post) => (
+                      <PostCard
+                        key={post.id}
+                        {...convertPostToCard(post)}
+                        onPostUpdated={refreshPosts}
+                        onPostDeleted={refreshPosts}
+                      />
+                    ))}
+                  </div>
+                )}
+
+                {/* Empty State */}
+                {!postsLoading && posts.length === 0 && !postsError && (
+                  <Card className="p-6">
+                    <CardContent>
+                      <div className="text-center space-y-4">
+                        <div className="text-muted-foreground">
+                          Chưa có bài viết nào
+                        </div>
+                        <button
+                          onClick={refreshPosts}
+                          className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+                        >
+                          Tải lại
+                        </button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Infinite Scroll Sentinel */}
+                {hasMore && (
+                  <div ref={sentinelRef} className="py-8 text-center">
+                    {postsLoading && (
+                      <div className="animate-pulse text-muted-foreground">
+                        Đang tải thêm...
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* No More Posts */}
+                {!postsLoading && !hasMore && posts.length > 0 && (
+                  <div className="flex justify-center py-4">
+                    <div className="text-muted-foreground text-sm">
+                      Đã hiển thị tất cả bài viết
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 

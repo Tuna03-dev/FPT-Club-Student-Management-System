@@ -8,6 +8,7 @@ import {
   Clock,
   FileText,
   Users,
+  Home,
 } from "lucide-react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useState } from "react";
@@ -49,7 +50,7 @@ const managementItems = [
   },
   {
     key: "pending_posts",
-    url: "/pending-posts",
+    url: "/news",
     icon: FileText,
     label: "Bài viết chờ duyệt",
   },
@@ -146,6 +147,15 @@ export const StaffLayout = () => {
 
             {/* Right: user */}
             <div className="flex items-center gap-2 flex-1 justify-end max-w-[320px]">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="hidden sm:flex items-center gap-2"
+                onClick={() => navigate("/")}
+              >
+                <Home className="h-4 w-4" />
+                <span>Trang chủ</span>
+              </Button>
               <NavLink to="/myclub/staff/settings">
                 <Button variant="ghost" size="icon" className="rounded-full">
                   <Settings className="h-5 w-5" />

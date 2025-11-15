@@ -62,6 +62,35 @@ public class PostController {
         return ApiResponse.success(data);
     }
 
+    // 2.1) Bài chờ duyệt toàn CLB (club-wide pending)
+    // GET /posts/{clubId}/club-wide/pending?Pageable...
+    @GetMapping("/{clubId}/club-wide/pending")
+    public ApiResponse<Page<PostWithRelationsData>> getPendingClubWidePosts(
+            @PathVariable Long clubId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "5") int size,
+            @RequestParam(defaultValue = "createdAt,desc") String sort
+    ) {
+        Pageable pageable = PageRequest.of(page, size, parseSort(sort));
+        Page<PostWithRelationsData> data = postService.getPendingClubWidePosts(clubId, pageable);
+        return ApiResponse.success(data);
+    }
+
+    // 2.2) Bài chờ duyệt theo team
+    // GET /posts/{clubId}/teams/{teamId}/pending?Pageable...
+    @GetMapping("/{clubId}/teams/{teamId}/pending")
+    public ApiResponse<Page<PostWithRelationsData>> getPendingTeamPosts(
+            @PathVariable Long clubId,
+            @PathVariable Long teamId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "5") int size,
+            @RequestParam(defaultValue = "createdAt,desc") String sort
+    ) {
+        Pageable pageable = PageRequest.of(page, size, parseSort(sort));
+        Page<PostWithRelationsData> data = postService.getPendingTeamPosts(clubId, teamId, pageable);
+        return ApiResponse.success(data);
+    }
+
     // 3) Search post theo từ khóa trong title/content (dùng để share theo chủ đề)
     // GET /posts/search?q=keyword&clubId=1&teamId=2&clubWide=true&page=0&size=10&sort=createdAt,desc
     // /posts/search?q=nhạc&clubId=2
@@ -77,6 +106,19 @@ public class PostController {
     ) {
         Pageable pageable = PageRequest.of(page, size, parseSort(sort));
         Page<PostWithRelationsData> data = postService.searchPosts(clubId, teamId, clubWide, q, pageable);
+        return ApiResponse.success(data);
+    }
+    // GET /api/posts/{clubId}/feed?page=0&size=10&sort=createdAt,desc
+    @GetMapping("/{clubId}/feed")
+    public ApiResponse<Page<PostWithRelationsData>> getClubFeed(
+            @PathVariable Long clubId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "createdAt,desc") String sort
+    ) throws Exception {
+        Pageable pageable = PageRequest.of(page, size, parseSort(sort));
+        Long userId = userService.getCurrentUserId();
+        Page<PostWithRelationsData> data = postService.getClubFeed(clubId, userId, pageable);
         return ApiResponse.success(data);
     }
 

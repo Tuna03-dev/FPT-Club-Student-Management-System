@@ -37,6 +37,7 @@ import java.util.stream.Collectors;
 public class FeeService {
     private final FeeRepository feeRepository;
     private final ClubRepository clubRepository;
+    private final SemesterRepository semesterRepository;
     private final FeeMapper feeMapper;
     private final PayOSIntegrationService payOSIntegrationService;
     private final UserRepository userRepository;
@@ -45,6 +46,7 @@ public class FeeService {
     private final PayOSPaymentRepository payOSPaymentRepository;
     private final WebSocketService webSocketService;
     private final RoleMemberShipRepository roleMemberShipRepository;
+    private final ClubMemberShipRepository clubMemberShipRepository;
 
     @Value("${app.frontend.url:http://localhost:5173}")
     private String frontendUrl;
@@ -144,6 +146,14 @@ public class FeeService {
         Club club = clubRepository.findById(clubId)
             .orElseThrow(() -> new AppException(ErrorCode.CLUB_NOT_FOUND));
         boolean isDraft = request.getIsDraft() == null || Boolean.TRUE.equals(request.getIsDraft());
+
+        // Handle semester for MEMBERSHIP fee type
+        Semester semester = null;
+        if (request.getFeeType() == FeeType.MEMBERSHIP && request.getSemesterId() != null) {
+            semester = semesterRepository.findById(request.getSemesterId())
+                .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND, "Semester not found"));
+        }
+
         Fee fee = Fee.builder()
                 .title(request.getTitle())
                 .description(request.getDescription())
@@ -153,6 +163,7 @@ public class FeeService {
                 .isMandatory(request.getIsMandatory())
                 .isDraft(isDraft)
                 .club(club)
+                .semester(semester)
                 .build();
         Fee saved = feeRepository.save(fee);
         return feeMapper.toFeeDetailResponse(saved);
@@ -174,6 +185,25 @@ public class FeeService {
         // Check if title already exists (excluding current fee)
         if (isFeeTitleExistsExcluding(fee.getClub().getId(), request.getTitle(), feeId)) {
             throw new AppException(ErrorCode.VALIDATION_ERROR, "Tên khoản phí đã tồn tại");
+        }
+
+        // Check if trying to update amount when fee has ever expired
+        // Once a fee has expired, the amount can NEVER be changed again
+        // Even if the due date is updated to make it "active" again
+        if (Boolean.TRUE.equals(fee.getHasEverExpired()) &&
+            fee.getAmount().compareTo(request.getAmount()) != 0) {
+            throw new AppException(ErrorCode.VALIDATION_ERROR,
+                "Không thể chỉnh sửa số tiền của khoản phí đã hết hạn. " +
+                "Khoản phí này đã từng hết hạn, do đó số tiền không được phép thay đổi dù ngày hết hạn có được cập nhật.");
+        }
+
+        // Handle semester for MEMBERSHIP fee type
+        if (request.getFeeType() == FeeType.MEMBERSHIP && request.getSemesterId() != null) {
+            Semester semester = semesterRepository.findById(request.getSemesterId())
+                .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND, "Semester not found"));
+            fee.setSemester(semester);
+        } else {
+            fee.setSemester(null);
         }
 
         // Update fee fields
@@ -486,6 +516,11 @@ public class FeeService {
         clubWallet.setTotalIncome(clubWallet.getTotalIncome().add(fee.getAmount()));
         clubWalletRepository.save(clubWallet);
 
+        // 8️⃣ Tự động active member nếu là phí MEMBERSHIP và có semester
+        if (fee.getFeeType() == FeeType.MEMBERSHIP && fee.getSemester() != null) {
+            activateMemberForSemester(user, fee.getClub(), fee.getSemester());
+        }
+
         log.info("[PayOS] Giao dịch thành công | user={} | fee={} | amount={} | orderCode={}",
                 user.getFullName(), fee.getTitle(), fee.getAmount(), orderCode);
 
@@ -526,6 +561,70 @@ public class FeeService {
     public List<FeeDetailResponse> getUnpaidFeesByUser(Long clubId, Long userId) {
         List<Fee> fees = feeRepository.findUnpaidFeesByClubIdAndUserId(clubId, userId);
         return fees.stream().map(feeMapper::toFeeDetailResponse).collect(Collectors.toList());
+    }
+
+    /**
+     * Activate member for a specific semester when MEMBERSHIP fee is paid
+     * This ensures the member is active in the semester corresponding to the fee
+     */
+    @Transactional
+    protected void activateMemberForSemester(User user, Club club, Semester semester) {
+        try {
+            // 1. Find or create ClubMemberShip
+            ClubMemberShip clubMemberShip = clubMemberShipRepository.findByClubIdAndUserId(club.getId(), user.getId());
+
+            if (clubMemberShip == null) {
+                // Create new membership if not exists
+                clubMemberShip = ClubMemberShip.builder()
+                        .user(user)
+                        .club(club)
+                        .joinDate(java.time.LocalDate.now())
+                        .status(ClubMemberShipStatus.ACTIVE)
+                        .build();
+                clubMemberShip = clubMemberShipRepository.save(clubMemberShip);
+                log.info("[Fee Payment] Created new ClubMemberShip for user={} in club={}",
+                        user.getFullName(), club.getClubName());
+            }
+
+            // 2. Find existing RoleMemberShip for this semester
+            List<RoleMemberShip> existingRoles = roleMemberShipRepository
+                    .findByClubMemberShipIdAndSemesterId(clubMemberShip.getId(), semester.getId());
+
+            if (!existingRoles.isEmpty()) {
+                // Activate existing role membership
+                for (RoleMemberShip rm : existingRoles) {
+                    if (!Boolean.TRUE.equals(rm.getIsActive())) {
+                        rm.setIsActive(true);
+                        roleMemberShipRepository.save(rm);
+                        log.info("[Fee Payment] Activated existing RoleMemberShip for user={} in semester={}",
+                                user.getFullName(), semester.getSemesterName());
+                    } else {
+                        log.info("[Fee Payment] User={} is already active in semester={}",
+                                user.getFullName(), semester.getSemesterName());
+                    }
+                }
+            } else {
+                // Create new RoleMemberShip with default member role (no specific club role or team)
+                RoleMemberShip newRoleMemberShip = RoleMemberShip.builder()
+                        .clubMemberShip(clubMemberShip)
+                        .semester(semester)
+                        .isActive(true)
+                        .clubRole(null) // Default member has no specific club role
+                        .team(null) // Not assigned to any team initially
+                        .build();
+                roleMemberShipRepository.save(newRoleMemberShip);
+                log.info("[Fee Payment] Created new RoleMemberShip for user={} in semester={}",
+                        user.getFullName(), semester.getSemesterName());
+            }
+
+            log.info("[Fee Payment] Successfully activated member: user={}, club={}, semester={}",
+                    user.getFullName(), club.getClubName(), semester.getSemesterName());
+
+        } catch (Exception e) {
+            log.error("[Fee Payment] Failed to activate member: user={}, club={}, semester={}, error={}",
+                    user.getFullName(), club.getClubName(), semester.getSemesterName(), e.getMessage(), e);
+            // Don't throw exception - payment already succeeded, member activation is secondary
+        }
     }
 }
 

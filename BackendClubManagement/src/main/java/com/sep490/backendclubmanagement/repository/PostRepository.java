@@ -54,6 +54,46 @@ public interface PostRepository extends JpaRepository<Post, Long> {
             "FROM Post p JOIN p.createdBy u " +
             "WHERE u.id IN :authorIds")
     List<ActivityDTO> findActivitiesByAuthorIds(@Param("authorIds") List<Long> authorIds);
+
+    // --- Pending Club-wide posts (chờ duyệt toàn CLB) ---
+    @EntityGraph(attributePaths = {
+            "club", "createdBy", "team",
+            "comments", "comments.user",
+            "likes", "likes.user",
+            "postMedia"
+    })
+    @Query("""
+           select p from Post p
+           where p.club.id = :clubId
+             and p.IsClubWide = true
+             and p.status = :status
+           """)
+    Page<Post> findPendingClubWidePosts(
+            @Param("clubId") Long clubId,
+            @Param("status") String status,
+            Pageable pageable
+    );
+
+    // --- Pending Team posts (chờ duyệt theo team) ---
+    @EntityGraph(attributePaths = {
+            "club", "createdBy", "team",
+            "comments", "comments.user",
+            "likes", "likes.user",
+            "postMedia"
+    })
+    @Query("""
+           select p from Post p
+           where p.club.id = :clubId
+             and p.team.id = :teamId
+             and p.status = :status
+           """)
+    Page<Post> findPendingTeamPosts(
+            @Param("clubId") Long clubId,
+            @Param("teamId") Long teamId,
+            @Param("status") String status,
+            Pageable pageable
+    );
+
     //Search
     @EntityGraph(attributePaths = {
             "club", "createdBy", "team",
@@ -80,5 +120,43 @@ public interface PostRepository extends JpaRepository<Post, Long> {
             @Param("q")        String q,             // từ khóa
             Pageable pageable
     );
+
+    // Chủ nhiệm / phó chủ nhiệm: thấy TẤT CẢ post của CLB (mọi team + club-wide)
+    @EntityGraph(attributePaths = {
+            "club", "createdBy", "team",
+            "comments", "comments.user",
+            "likes", "likes.user",
+            "postMedia"
+    })
+    Page<Post> findByClub_IdAndStatus(
+            Long clubId,
+            String status,
+            Pageable pageable
+    );
+
+    // Member / trưởng ban: thấy bài club-wide + bài của các team mình
+    @EntityGraph(attributePaths = {
+            "club", "createdBy", "team",
+            "comments", "comments.user",
+            "likes", "likes.user",
+            "postMedia"
+    })
+    @Query("""
+       select p
+       from Post p
+       where p.club.id = :clubId
+         and p.status   = :status
+         and (
+               p.IsClubWide = true
+            or p.team.id in :teamIds
+         )
+       """)
+    Page<Post> findFeedForMemberInClub(
+            @Param("clubId") Long clubId,
+            @Param("status") String status,
+            @Param("teamIds") List<Long> teamIds,
+            Pageable pageable
+    );
+
 
 }
