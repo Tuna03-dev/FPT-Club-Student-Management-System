@@ -11,6 +11,7 @@ import {
   X,
   Trash2,
   Edit,
+  Users,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -25,9 +26,11 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { useTranslation } from "react-i18next";
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
 import commentService, { type CommentDTO } from "@/services/commentService";
+import likeService from "@/services/likeService";
 import { authService } from "@/services/authService";
 import { useWebSocket, type WebSocketMessage } from "@/hooks/useWebSocket";
 import { formatDistanceToNow } from "date-fns";
@@ -53,6 +56,10 @@ interface PostCardProps {
   maxLength?: number;
   onPostUpdated?: () => void; // Callback when post is updated
   onPostDeleted?: () => void; // Callback when post is deleted
+  // Team info
+  teamId?: number;
+  teamName?: string;
+  isTeamPost?: boolean; // true if post belongs to a specific team
 }
 
 export const PostCard = ({
@@ -68,8 +75,12 @@ export const PostCard = ({
   maxLength = 150,
   onPostUpdated,
   onPostDeleted,
+  teamId,
+  teamName,
+  isTeamPost = false,
 }: PostCardProps) => {
   const { t } = useTranslation("common");
+  const navigate = useNavigate();
   const [isExpanded, setIsExpanded] = useState(false);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
@@ -94,6 +105,10 @@ export const PostCard = ({
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   // --- THÊM STATE CHO DIALOG XÓA COMMENT ---
   const [deleteCommentId, setDeleteCommentId] = useState<number | null>(null);
+  // --- LIKE STATE ---
+  const [isLiked, setIsLiked] = useState(false);
+  const [likeCount, setLikeCount] = useState(likes);
+  const [isLiking, setIsLiking] = useState(false);
   const [isDeletingComment, setIsDeletingComment] = useState(false);
   const deleteTargetIsReply = commentsList
     .flatMap((c) => c.replies || [])
@@ -188,6 +203,22 @@ export const PostCard = ({
     }
   }, [postId]);
 
+  // Load initial like status
+  useEffect(() => {
+    const checkLikeStatus = async () => {
+      try {
+        const response = await likeService.isLikedByMe(postId);
+        if (response.code === 200 && response.data !== undefined) {
+          setIsLiked(response.data);
+        }
+      } catch (error) {
+        console.error("Error checking like status:", error);
+      }
+    };
+
+    checkLikeStatus();
+  }, [postId]);
+
   // Load comments when showing comments section
   useEffect(() => {
     if (showComments && postId) {
@@ -197,17 +228,36 @@ export const PostCard = ({
 
   // WebSocket subscription for realtime updates
   useEffect(() => {
-    if (!isConnected || !clubId || !showComments) return;
+    if (!isConnected || !clubId) return;
 
     const unsubscribe = subscribeToClub(clubId, (message: WebSocketMessage) => {
       if (message.type === "POST" && message.payload) {
-        const payload = message.payload as {
-          comment: CommentDTO;
-          postId: number;
-          action: string;
-        };
+        const payload = message.payload as
+          | { comment: CommentDTO; postId: number; action: string }
+          | {
+              postId: number;
+              userId: number;
+              liked: boolean;
+              totalLikes: number;
+            };
 
-        if (payload.postId !== postId) return;
+        // Handle like updates
+        if (
+          message.action === "UPDATED" &&
+          "totalLikes" in payload &&
+          payload.postId === postId
+        ) {
+          // Real-time like update from other users or same user on different device
+          setLikeCount(payload.totalLikes);
+
+          // If current user liked/unliked from another device, update isLiked
+          if (currentUser && payload.userId === currentUser.id) {
+            setIsLiked(payload.liked);
+          }
+        }
+
+        // Handle comment updates
+        if (!("comment" in payload) || payload.postId !== postId) return;
 
         if (message.action === "COMMENT_NEW") {
           // Add new comment to list
@@ -280,7 +330,7 @@ export const PostCard = ({
     });
 
     return unsubscribe;
-  }, [isConnected, clubId, postId, showComments, subscribeToClub]);
+  }, [isConnected, clubId, postId, showComments, subscribeToClub, currentUser]);
 
   // Handle create comment
   const handleCreateComment = useCallback(async () => {
@@ -474,6 +524,42 @@ export const PostCard = ({
     []
   );
 
+  // Handle toggle like
+  const handleToggleLike = useCallback(async () => {
+    if (isLiking) return;
+
+    try {
+      setIsLiking(true);
+
+      // Optimistic update
+      const newIsLiked = !isLiked;
+      const newCount = newIsLiked ? likeCount + 1 : likeCount - 1;
+      setIsLiked(newIsLiked);
+      setLikeCount(newCount);
+
+      const response = await likeService.toggleLike(postId);
+
+      if (response.code === 200 && response.data) {
+        // Update with actual data from server
+        setIsLiked(response.data.liked);
+        setLikeCount(response.data.count);
+      } else {
+        // Revert on error
+        setIsLiked(!newIsLiked);
+        setLikeCount(likeCount);
+        toast.error("Không thể thực hiện thao tác");
+      }
+    } catch (error) {
+      console.error("Error toggling like:", error);
+      // Revert on error
+      setIsLiked(!isLiked);
+      setLikeCount(likeCount);
+      toast.error("Có lỗi xảy ra");
+    } finally {
+      setIsLiking(false);
+    }
+  }, [isLiking, isLiked, likeCount, postId]);
+
   // Handle delete post
   const handleDeletePost = useCallback(async () => {
     if (!confirm("Bạn có chắc muốn xóa bài viết này?")) return;
@@ -598,12 +684,33 @@ export const PostCard = ({
               {author.name?.charAt(0) ?? "?"}
             </AvatarFallback>
           </Avatar>
-          <div>
-            <h3 className="font-semibold text-foreground text-sm sm:text-base">
-              {author.name ?? "Người dùng"}
-            </h3>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <h3 className="font-semibold text-foreground text-sm sm:text-base">
+                {author.name ?? "Người dùng"}
+              </h3>
+              {isTeamPost && teamName && (
+                <>
+                  <span className="text-muted-foreground text-xs">›</span>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (clubId && teamId) {
+                        navigate(`/myclub/${clubId}/teams/${teamId}`);
+                      }
+                    }}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 bg-muted/60 rounded-md hover:bg-muted transition-colors cursor-pointer"
+                  >
+                    <Users className="h-3 w-3 text-muted-foreground" />
+                    <span className="font-medium text-foreground text-xs sm:text-sm">
+                      {teamName}
+                    </span>
+                  </button>
+                </>
+              )}
+            </div>
             <p className="text-xs sm:text-sm text-muted-foreground">
-              {author.role} · {timestamp}
+              {timestamp}
             </p>
           </div>
         </div>
@@ -693,7 +800,7 @@ export const PostCard = ({
 
       {/* Stats */}
       <div className="flex items-center justify-between px-4 sm:px-5 py-2.5 text-xs sm:text-sm text-muted-foreground border-t border-border">
-        <span>{likes} lượt thích</span>
+        <span>{likeCount} lượt thích</span>
         <div className="flex gap-3">
           <span>
             {showComments && commentsList.length > 0
@@ -711,11 +818,21 @@ export const PostCard = ({
       <div className="flex items-center border-t border-border">
         <Button
           variant="ghost"
-          className="flex-1 gap-2 rounded-none py-2.5 sm:py-3"
+          className={`flex-1 gap-2 rounded-none py-2.5 sm:py-3 transition-colors ${
+            isLiked ? "text-red-500 hover:text-red-600" : ""
+          }`}
           size="sm"
+          onClick={handleToggleLike}
+          disabled={isLiking}
         >
-          <Heart className="h-4 w-4 sm:h-5 sm:w-5" />
-          <span className="text-sm sm:text-base">Thích</span>
+          <Heart
+            className={`h-4 w-4 sm:h-5 sm:w-5 transition-all ${
+              isLiked ? "fill-current" : ""
+            }`}
+          />
+          <span className="text-sm sm:text-base">
+            {isLiked ? "Đã thích" : "Thích"}
+          </span>
         </Button>
         <Button
           variant="ghost"

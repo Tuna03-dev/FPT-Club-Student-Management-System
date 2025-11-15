@@ -4,6 +4,7 @@ import com.sep490.backendclubmanagement.dto.request.CreatePostRequest;
 import com.sep490.backendclubmanagement.dto.request.UpdatePostRequest;
 import com.sep490.backendclubmanagement.dto.response.*;
 import com.sep490.backendclubmanagement.entity.*;
+import com.sep490.backendclubmanagement.repository.ClubMemberShipRepository;
 import com.sep490.backendclubmanagement.repository.PostRepository;
 import com.sep490.backendclubmanagement.util.PostStatus;
 import jakarta.persistence.EntityManager;
@@ -26,6 +27,8 @@ public class PostService {
     private final PostRepository postRepository;
     private final CloudinaryService cloudinaryService;
     private final ClubRoleService clubRoleService;
+    private final ClubMemberShipRepository clubMemberShipRepository; // 👈 thêm
+
     @PersistenceContext
     private EntityManager em;
 
@@ -41,6 +44,48 @@ public class PostService {
         Page<Post> page = postRepository.findTeamPosts(clubId, teamId, "PUBLISHED", pageable);
         return page.map(this::toDetailsDTO);
     }
+
+    public Page<PostWithRelationsData> getClubFeed(Long clubId, Long userId, Pageable pageable) {
+        // 1) Kiểm tra có phải Chủ nhiệm / Phó chủ nhiệm CLB không
+        boolean isClubBoss = clubRoleService.isClubLeaderOrVice(userId, clubId);
+
+        if (isClubBoss) {
+            // Chủ nhiệm / phó: thấy toàn bộ post trong CLB
+            Page<Post> page = postRepository.findByClub_IdAndStatus(
+                    clubId,
+                    PostStatus.PUBLISHED,
+                    pageable
+            );
+            return page.map(this::toDetailsDTO);
+        } else {
+            // Member / trưởng ban: thấy club-wide + các team mình thuộc (kỳ hiện tại, active)
+            var teamIds = clubMemberShipRepository.findTeamIdsByUserAndClubAndStatus(
+                    userId,
+                    clubId,
+                    ClubMemberShipStatus.ACTIVE
+            );
+
+            if (teamIds == null || teamIds.isEmpty()) {
+                // Không thuộc team nào → chỉ thấy bài toàn CLB
+                Page<Post> page = postRepository.findClubWidePosts(
+                        clubId,
+                        true,                       // clubWide
+                        PostStatus.PUBLISHED,
+                        pageable
+                );
+                return page.map(this::toDetailsDTO);
+            }
+
+            Page<Post> page = postRepository.findFeedForMemberInClub(
+                    clubId,
+                    PostStatus.PUBLISHED,
+                    teamIds,
+                    pageable
+            );
+            return page.map(this::toDetailsDTO);
+        }
+    }
+
 
     // Bài chờ duyệt toàn CLB (club-wide pending)
     public Page<PostWithRelationsData> getPendingClubWidePosts(Long clubId, Pageable pageable) {
@@ -355,6 +400,8 @@ public class PostService {
         Post saved = postRepository.save(p);
         return toDetailsDTO(saved);
     }
+
+
 
     /** Tuỳ chọn: sắp xếp lại displayOrder tăng dần, null sẽ bị đẩy về cuối và đánh lại số. */
     private void reindexDisplayOrder(Post p) {

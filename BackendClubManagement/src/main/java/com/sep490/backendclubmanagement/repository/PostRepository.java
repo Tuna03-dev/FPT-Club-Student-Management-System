@@ -121,4 +121,42 @@ public interface PostRepository extends JpaRepository<Post, Long> {
             Pageable pageable
     );
 
+    // Chủ nhiệm / phó chủ nhiệm: thấy TẤT CẢ post của CLB (mọi team + club-wide)
+    @EntityGraph(attributePaths = {
+            "club", "createdBy", "team",
+            "comments", "comments.user",
+            "likes", "likes.user",
+            "postMedia"
+    })
+    Page<Post> findByClub_IdAndStatus(
+            Long clubId,
+            String status,
+            Pageable pageable
+    );
+
+    // Member / trưởng ban: thấy bài club-wide + bài của các team mình
+    @EntityGraph(attributePaths = {
+            "club", "createdBy", "team",
+            "comments", "comments.user",
+            "likes", "likes.user",
+            "postMedia"
+    })
+    @Query("""
+       select p
+       from Post p
+       where p.club.id = :clubId
+         and p.status   = :status
+         and (
+               p.IsClubWide = true
+            or p.team.id in :teamIds
+         )
+       """)
+    Page<Post> findFeedForMemberInClub(
+            @Param("clubId") Long clubId,
+            @Param("status") String status,
+            @Param("teamIds") List<Long> teamIds,
+            Pageable pageable
+    );
+
+
 }

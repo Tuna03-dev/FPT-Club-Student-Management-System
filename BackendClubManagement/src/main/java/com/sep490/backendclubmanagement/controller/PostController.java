@@ -108,6 +108,19 @@ public class PostController {
         Page<PostWithRelationsData> data = postService.searchPosts(clubId, teamId, clubWide, q, pageable);
         return ApiResponse.success(data);
     }
+    // GET /api/posts/{clubId}/feed?page=0&size=10&sort=createdAt,desc
+    @GetMapping("/{clubId}/feed")
+    public ApiResponse<Page<PostWithRelationsData>> getClubFeed(
+            @PathVariable Long clubId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "createdAt,desc") String sort
+    ) throws Exception {
+        Pageable pageable = PageRequest.of(page, size, parseSort(sort));
+        Long userId = userService.getCurrentUserId();
+        Page<PostWithRelationsData> data = postService.getClubFeed(clubId, userId, pageable);
+        return ApiResponse.success(data);
+    }
 
 @PostMapping(path = "/create/with-media", consumes = "multipart/form-data")
 public ApiResponse<PostWithRelationsData> createPostWithMedia(

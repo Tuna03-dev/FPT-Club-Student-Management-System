@@ -9,6 +9,7 @@ export interface Fee {
   dueDate: string;
   isMandatory: boolean;
   isDraft?: boolean;
+  hasEverExpired?: boolean; // Once true, amount cannot be edited
   totalMembers?: number;
   paidMembers?: number;
   status?: "active" | "completed" | "overdue";
