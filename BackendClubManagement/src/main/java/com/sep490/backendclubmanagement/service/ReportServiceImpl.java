@@ -464,10 +464,9 @@ public class ReportServiceImpl implements ReportServiceInterface {
         // Only allow updating draft reports, rejected reports (for resubmission), or pending club reports
         if (report.getStatus() != ReportStatus.DRAFT 
                 && report.getStatus() != ReportStatus.REJECTED_CLUB 
-                && report.getStatus() != ReportStatus.REJECTED_UNIVERSITY
-                && report.getStatus() != ReportStatus.PENDING_CLUB) {
+                && report.getStatus() != ReportStatus.REJECTED_UNIVERSITY) {
             throw new ForbiddenException(
-                    "Chỉ có thể cập nhật báo cáo ở trạng thái nháp (DRAFT), bị từ chối (REJECTED), hoặc chờ CLB phê duyệt (PENDING_CLUB). " +
+                    "Chỉ có thể cập nhật báo cáo ở trạng thái nháp (DRAFT), bị từ chối (REJECTED). " +
                     "Trạng thái hiện tại: " + report.getStatus()
             );
         }
@@ -482,20 +481,6 @@ public class ReportServiceImpl implements ReportServiceInterface {
         // Get current semester
         Semester currentSemester = semesterRepository.findCurrentSemester()
                 .orElseThrow(() -> new NotFoundException("Current semester not found"));
-
-        // For PENDING_CLUB status, also check if user is club officer
-        if (report.getStatus() == ReportStatus.PENDING_CLUB) {
-            if (report.getClubReportRequirement() == null || report.getClubReportRequirement().getClub() == null) {
-                throw new NotFoundException("Report must have an associated club");
-            }
-            
-            boolean isClubOfficer = roleMemberShipRepository.isClubOfficerOrTeamOfficerInCurrentSemester(
-                    userId, report.getClubReportRequirement().getClub().getId(), currentSemester.getId());
-            
-            if (!isClubOfficer) {
-                throw new ForbiddenException("Bạn không có quyền cập nhật báo cáo này. Chỉ club officer mới được chỉnh sửa báo cáo ở trạng thái PENDING_CLUB.");
-            }
-        }
 
         // Update report
         report.setReportTitle(request.getReportTitle());
@@ -1311,9 +1296,10 @@ public class ReportServiceImpl implements ReportServiceInterface {
 
         // Only allow reviewing reports with status PENDING_CLUB or UPDATED_PENDING_CLUB
         if (report.getStatus() != ReportStatus.PENDING_CLUB
-                && report.getStatus() != ReportStatus.UPDATED_PENDING_CLUB) {
+                && report.getStatus() != ReportStatus.UPDATED_PENDING_CLUB
+                && report.getStatus() != ReportStatus.DRAFT) {
             throw new ForbiddenException(
-                    "Chỉ có thể duyệt/từ chối báo cáo ở trạng thái chờ CLB phê duyệt (PENDING_CLUB hoặc UPDATED_PENDING_CLUB). " +
+                    "Chỉ có thể duyệt/từ chối báo cáo ở trạng thái chờ CLB phê duyệt (PENDING_CLUB,UPDATED_PENDING_CLUB,DRAFT). " +
                     "Trạng thái hiện tại: " + report.getStatus()
             );
         }
@@ -1335,6 +1321,15 @@ public class ReportServiceImpl implements ReportServiceInterface {
             throw new ForbiddenException(
                     "Chỉ chủ nhiệm câu lạc bộ (club president) trong kỳ hiện tại và đang hoạt động " +
                     "mới có quyền duyệt/từ chối báo cáo ở cấp CLB."
+            );
+        }
+
+        // Check if user is the creator
+        boolean isCreator = report.getCreatedBy() != null && report.getCreatedBy().getId().equals(userId);
+
+        if (report.getStatus() == ReportStatus.DRAFT && !isCreator) {
+            throw new ForbiddenException(
+                    "Người dùng không phải là người đã tạo bản nháp báo cáo này. "
             );
         }
 
