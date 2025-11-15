@@ -45,6 +45,7 @@ import { authService } from "@/services/authService";
 import { useTeams } from "@/hooks/useTeams";
 import { PermissionContext } from "@/contexts/PermissionContext";
 import { useClubPermissions } from "@/hooks/useClubPermissions";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 
 const navItems = [
   { key: "dashboard", url: "", icon: Home },
@@ -379,14 +380,7 @@ export const ClubLayout = () => {
                     <Settings className="h-5 w-5" />
                   </Button>
                 </NavLink>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="rounded-full relative"
-                >
-                  <Bell className="h-5 w-5" />
-                  <span className="absolute top-1 right-1 h-2 w-2 bg-destructive rounded-full" />
-                </Button>
+                <NotificationBell />
                 <div className="flex items-center gap-2">
                   <Avatar className="h-8 w-8 ring-2 ring-primary/20">
                     <AvatarImage src="https://github.com/shadcn.png" />
