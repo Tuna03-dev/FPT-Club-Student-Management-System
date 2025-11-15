@@ -56,7 +56,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { ClubPermissionGuard } from "@/components/ClubPermissionGuard";
 import { useDebounce } from "@/hooks/useDebounce";
 
 type RecruitmentStatus = "draft" | "open" | "closed" | "cancelled";
@@ -648,25 +647,24 @@ export function RecruitmentManagement() {
   };
 
   return (
-    <ClubPermissionGuard clubId={clubId}>
-      <div className="min-h-screen bg-background">
-        {/* Header */}
-        <div className="">
-          <div className="container mx-auto px-4 py-6">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-              <div>
-                <h1 className="text-3xl font-bold text-foreground">
-                  Quản lý Tuyển dụng
-                </h1>
-                <p className="text-muted-foreground mt-1">
-                  Tạo và quản lý các đợt tuyển thành viên mới
-                </p>
-              </div>
-              <div className="flex gap-2 w-full md:w-auto">
-                <Button
-                  variant={activeTab === "list" ? "default" : "outline"}
-                  onClick={() => setActiveTab("list")}
-                  className={`
+    <div className="min-h-screen bg-background">
+      {/* Header */}
+      <div className="">
+        <div className="container mx-auto px-4 py-6">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+              <h1 className="text-3xl font-bold text-foreground">
+                Quản lý Tuyển dụng
+              </h1>
+              <p className="text-muted-foreground mt-1">
+                Tạo và quản lý các đợt tuyển thành viên mới
+              </p>
+            </div>
+            <div className="flex gap-2 w-full md:w-auto">
+              <Button
+                variant={activeTab === "list" ? "default" : "outline"}
+                onClick={() => setActiveTab("list")}
+                className={`
                     transition-all duration-300 ease-in-out flex-1 md:flex-none
                     ${
                       activeTab === "list"
@@ -674,18 +672,18 @@ export function RecruitmentManagement() {
                         : "border-primary/30"
                     }
                   `}
-                >
-                  <FileText className="h-4 w-4 mr-2" />
-                  Danh sách
-                </Button>
-                <Button
-                  variant={activeTab === "create" ? "default" : "outline"}
-                  onClick={() => {
-                    setEditingRecruitment(null);
-                    setEditLoading(false); // Reset edit loading state
-                    setActiveTab("create");
-                  }}
-                  className={`
+              >
+                <FileText className="h-4 w-4 mr-2" />
+                Danh sách
+              </Button>
+              <Button
+                variant={activeTab === "create" ? "default" : "outline"}
+                onClick={() => {
+                  setEditingRecruitment(null);
+                  setEditLoading(false); // Reset edit loading state
+                  setActiveTab("create");
+                }}
+                className={`
                     transition-all duration-300 ease-in-out flex-1 md:flex-none
                     ${
                       activeTab === "create"
@@ -693,798 +691,784 @@ export function RecruitmentManagement() {
                         : "border-primary/30 "
                     }
                   `}
-                >
-                  {activeTab === "create" && editingRecruitment ? (
-                    <>
-                      <Edit className="h-4 w-4 mr-2" />
-                      Chỉnh sửa
-                    </>
-                  ) : (
-                    <>
-                      <Plus className="h-4 w-4 mr-2" />
-                      Tạo mới
-                    </>
-                  )}
-                </Button>
-              </div>
+              >
+                {activeTab === "create" && editingRecruitment ? (
+                  <>
+                    <Edit className="h-4 w-4 mr-2" />
+                    Chỉnh sửa
+                  </>
+                ) : (
+                  <>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Tạo mới
+                  </>
+                )}
+              </Button>
             </div>
           </div>
         </div>
+      </div>
 
-        <div className="container mx-auto px-4 py-8">
-          {/* Recruitment List Tab */}
-          {activeTab === "list" && (
-            <div className="space-y-6">
-              {/* Search and Filters */}
-              <div className="flex flex-col sm:flex-row gap-4">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-                  <Input
-                    placeholder="Tìm kiếm đợt tuyển dụng..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-10"
-                  />
-                </div>
-                <Select
-                  value={statusFilter}
-                  onValueChange={(value) =>
-                    setStatusFilter(value as RecruitmentStatus | "all")
-                  }
-                >
-                  <SelectTrigger className="w-[180px]">
-                    <SelectValue placeholder="Trạng thái" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Tất cả trạng thái</SelectItem>
-                    <SelectItem value="draft">Bản nháp</SelectItem>
-                    <SelectItem value="open">Đang mở</SelectItem>
-                    <SelectItem value="closed">Đã đóng</SelectItem>
-                    <SelectItem value="cancelled">Đã hủy</SelectItem>
-                  </SelectContent>
-                </Select>
+      <div className="container mx-auto px-4 py-8">
+        {/* Recruitment List Tab */}
+        {activeTab === "list" && (
+          <div className="space-y-6">
+            {/* Search and Filters */}
+            <div className="flex flex-col sm:flex-row gap-4">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                <Input
+                  placeholder="Tìm kiếm đợt tuyển dụng..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10"
+                />
               </div>
+              <Select
+                value={statusFilter}
+                onValueChange={(value) =>
+                  setStatusFilter(value as RecruitmentStatus | "all")
+                }
+              >
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Trạng thái" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tất cả trạng thái</SelectItem>
+                  <SelectItem value="draft">Bản nháp</SelectItem>
+                  <SelectItem value="open">Đang mở</SelectItem>
+                  <SelectItem value="closed">Đã đóng</SelectItem>
+                  <SelectItem value="cancelled">Đã hủy</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
 
-              {/* Loading State */}
-              {loading && (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {[...Array(4)].map((_, index) => (
-                    <Card
-                      key={index}
-                      className="hover:shadow-lg transition-shadow"
-                    >
-                      <CardHeader>
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1 space-y-3">
-                            {/* Title */}
-                            <Skeleton className="h-5 w-3/4" />
-                            {/* Badges */}
-                            <div className="flex items-center gap-2">
-                              <Skeleton className="h-5 w-20 rounded-full" />
-                              {index === 1 && (
-                                <Skeleton className="h-5 w-32 rounded-full" />
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="space-y-4">
-                          {/* Description - 3 lines */}
-                          <div className="space-y-2">
-                            <Skeleton className="h-3 w-full" />
-                            <Skeleton className="h-3 w-full" />
-                            <Skeleton className="h-3 w-4/5" />
-                          </div>
-
-                          {/* Grid stats - 2x2 */}
-                          <div className="grid grid-cols-2 gap-4 text-sm">
-                            {[...Array(4)].map((_, i) => (
-                              <div key={i} className="space-y-1">
-                                <Skeleton className="h-3 w-20" />
-                                <Skeleton className="h-4 w-24" />
-                              </div>
-                            ))}
-                          </div>
-
-                          {/* Action buttons */}
-                          <div className="flex gap-2 flex-wrap">
-                            <Skeleton className="h-9 w-20" />
-                            <Skeleton className="h-9 w-24" />
-                            <Skeleton className="h-9 w-20" />
-                            <Skeleton className="h-9 w-20" />
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              )}
-
-              {/* Error State */}
-              {error && !loading && (
-                <div className="text-center py-12">
-                  <p className="text-red-500 mb-4">{error}</p>
-                  <Button
-                    variant="outline"
-                    onClick={() => window.location.reload()}
+            {/* Loading State */}
+            {loading && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {[...Array(4)].map((_, index) => (
+                  <Card
+                    key={index}
+                    className="hover:shadow-lg transition-shadow"
                   >
-                    Thử lại
-                  </Button>
-                </div>
-              )}
+                    <CardHeader>
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1 space-y-3">
+                          {/* Title */}
+                          <Skeleton className="h-5 w-3/4" />
+                          {/* Badges */}
+                          <div className="flex items-center gap-2">
+                            <Skeleton className="h-5 w-20 rounded-full" />
+                            {index === 1 && (
+                              <Skeleton className="h-5 w-32 rounded-full" />
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-4">
+                        {/* Description - 3 lines */}
+                        <div className="space-y-2">
+                          <Skeleton className="h-3 w-full" />
+                          <Skeleton className="h-3 w-full" />
+                          <Skeleton className="h-3 w-4/5" />
+                        </div>
 
-              {/* Recruitment Cards */}
-              {!loading && !error && (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {recruitments.map((recruitment) => (
-                    <Card
-                      key={recruitment.recruitment_id}
-                      className="hover:shadow-lg transition-shadow"
-                    >
-                      <CardHeader>
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <CardTitle className="text-lg mb-2">
-                              {recruitment.title}
-                            </CardTitle>
-                            <div className="flex items-center gap-2 mb-2">
+                        {/* Grid stats - 2x2 */}
+                        <div className="grid grid-cols-2 gap-4 text-sm">
+                          {[...Array(4)].map((_, i) => (
+                            <div key={i} className="space-y-1">
+                              <Skeleton className="h-3 w-20" />
+                              <Skeleton className="h-4 w-24" />
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Action buttons */}
+                        <div className="flex gap-2 flex-wrap">
+                          <Skeleton className="h-9 w-20" />
+                          <Skeleton className="h-9 w-24" />
+                          <Skeleton className="h-9 w-20" />
+                          <Skeleton className="h-9 w-20" />
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+
+            {/* Error State */}
+            {error && !loading && (
+              <div className="text-center py-12">
+                <p className="text-red-500 mb-4">{error}</p>
+                <Button
+                  variant="outline"
+                  onClick={() => window.location.reload()}
+                >
+                  Thử lại
+                </Button>
+              </div>
+            )}
+
+            {/* Recruitment Cards */}
+            {!loading && !error && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {recruitments.map((recruitment) => (
+                  <Card
+                    key={recruitment.recruitment_id}
+                    className="hover:shadow-lg transition-shadow"
+                  >
+                    <CardHeader>
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <CardTitle className="text-lg mb-2">
+                            {recruitment.title}
+                          </CardTitle>
+                          <div className="flex items-center gap-2 mb-2">
+                            <Badge className={statusColors[recruitment.status]}>
+                              {statusLabels[recruitment.status]}
+                            </Badge>
+                            {recruitment.status === "closed" && (
                               <Badge
-                                className={statusColors[recruitment.status]}
+                                variant="outline"
+                                className="text-xs text-muted-foreground"
                               >
-                                {statusLabels[recruitment.status]}
+                                🔒 Không thể chỉnh sửa
                               </Badge>
-                              {recruitment.status === "closed" && (
-                                <Badge
-                                  variant="outline"
-                                  className="text-xs text-muted-foreground"
-                                >
-                                  🔒 Không thể chỉnh sửa
-                                </Badge>
-                              )}
-                              {/* <Badge variant="outline" className="text-xs">
+                            )}
+                            {/* <Badge variant="outline" className="text-xs">
                               {recruitment.semester_name}
                             </Badge> */}
-                            </div>
                           </div>
                         </div>
-                      </CardHeader>
-                      <CardContent>
-                        <p className="text-sm text-muted-foreground mb-4 line-clamp-3">
-                          {recruitment.description}
-                        </p>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-sm text-muted-foreground mb-4 line-clamp-3">
+                        {recruitment.description}
+                      </p>
 
-                        <div className="grid grid-cols-2 gap-4 mb-4 text-sm">
-                          <div>
-                            <span className="text-muted-foreground">
-                              Bắt đầu:
-                            </span>
-                            <div className="font-medium">
-                              {new Date(
-                                recruitment.start_date
-                              ).toLocaleDateString("vi-VN")}
-                            </div>
-                          </div>
-                          <div>
-                            <span className="text-muted-foreground">
-                              Kết thúc:
-                            </span>
-                            <div className="font-medium">
-                              {new Date(
-                                recruitment.end_date
-                              ).toLocaleDateString("vi-VN")}
-                            </div>
-                          </div>
-                          <div>
-                            <span className="text-muted-foreground">
-                              Đơn ứng tuyển:
-                            </span>
-                            <div className="font-medium">
-                              {recruitment.totalApplications ?? 0}
-                            </div>
-                          </div>
-                          <div>
-                            <span className="text-muted-foreground">
-                              Đã duyệt:
-                            </span>
-                            <div className="font-medium text-green-600">
-                              {recruitment.acceptedApplications ?? 0}
-                            </div>
+                      <div className="grid grid-cols-2 gap-4 mb-4 text-sm">
+                        <div>
+                          <span className="text-muted-foreground">
+                            Bắt đầu:
+                          </span>
+                          <div className="font-medium">
+                            {new Date(
+                              recruitment.start_date
+                            ).toLocaleDateString("vi-VN")}
                           </div>
                         </div>
-
-                        <div className="flex gap-2 flex-wrap">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              setSelectedRecruitment(recruitment);
-                              setActiveTab("applications");
-                            }}
-                            className="bg-transparent"
-                          >
-                            <Eye className="h-4 w-4 mr-2" />
-                            Các đơn ứng tuyển
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="bg-transparent"
-                            onClick={() => handleEditRecruitment(recruitment)}
-                            disabled={recruitment.status === "closed"}
-                            title={
-                              recruitment.status === "closed"
-                                ? "Không thể chỉnh sửa đợt tuyển dụng đã đóng"
-                                : "Chỉnh sửa đợt tuyển dụng"
-                            }
-                          >
-                            <Edit className="h-4 w-4 mr-2" />
-                            Chỉnh sửa
-                          </Button>
-                          {recruitment.status === "draft" && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() =>
-                                showStatusChangeDialog(
-                                  recruitment.recruitment_id,
-                                  "OPEN",
-                                  recruitment.title
-                                )
-                              }
-                              disabled={
-                                changingStatusId === recruitment.recruitment_id
-                              }
-                              className="bg-transparent text-green-600 border-green-200 hover:bg-green-50 hover:text-green-700"
-                            >
-                              {changingStatusId ===
-                              recruitment.recruitment_id ? (
-                                <>
-                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                  Đang xử lý...
-                                </>
-                              ) : (
-                                <>
-                                  <Unlock className="h-4 w-4 mr-2" />
-                                  Mở đơn
-                                </>
-                              )}
-                            </Button>
-                          )}
-                          {recruitment.status === "open" && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() =>
-                                showStatusChangeDialog(
-                                  recruitment.recruitment_id,
-                                  "CLOSED",
-                                  recruitment.title
-                                )
-                              }
-                              disabled={
-                                changingStatusId === recruitment.recruitment_id
-                              }
-                              className="bg-transparent text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
-                            >
-                              {changingStatusId ===
-                              recruitment.recruitment_id ? (
-                                <>
-                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                  Đang xử lý...
-                                </>
-                              ) : (
-                                <>
-                                  <Lock className="h-4 w-4 mr-2" />
-                                  Đóng đơn
-                                </>
-                              )}
-                            </Button>
-                          )}
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="bg-transparent"
-                            disabled={recruitment.status === "closed"}
-                            onClick={async () => {
-                              try {
-                                const shareUrl = `${window.location.origin}/clubDetail/${recruitment.club_id}?tab=recruitment#recruitment-${recruitment.recruitment_id}`;
-                                await navigator.clipboard.writeText(shareUrl);
-                                toast.success("Đã sao chép đường dẫn chia sẻ");
-                              } catch (e) {
-                                toast.error("Không thể sao chép đường dẫn");
-                              }
-                            }}
-                          >
-                            <Share2 className="h-4 w-4 mr-2" />
-                            Chia sẻ
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              )}
-
-              {!loading && !error && recruitments.length === 0 && (
-                <div className="text-center py-12">
-                  <FileText className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
-                  <p className="text-muted-foreground">
-                    Không tìm thấy đợt tuyển dụng nào
-                  </p>
-                  <Button
-                    variant="outline"
-                    className="mt-4 bg-transparent"
-                    onClick={() => setActiveTab("create")}
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Tạo đợt tuyển dụng mới
-                  </Button>
-                </div>
-              )}
-
-              {/* Pagination for Recruitments */}
-              {!loading && !error && recruitmentsTotalPages > 1 && (
-                <div className="space-y-4">
-                  {/* Results info */}
-                  <div className="flex items-center justify-between text-sm text-muted-foreground">
-                    <div>
-                      Hiển thị{" "}
-                      <span className="font-semibold">
-                        {Math.min(
-                          recruitmentsPage * recruitmentsPageSize + 1,
-                          recruitmentsTotalElements
-                        )}{" "}
-                        -{" "}
-                        {Math.min(
-                          (recruitmentsPage + 1) * recruitmentsPageSize,
-                          recruitmentsTotalElements
-                        )}
-                      </span>{" "}
-                      trong tổng số{" "}
-                      <span className="font-semibold">
-                        {recruitmentsTotalElements}
-                      </span>{" "}
-                      đợt tuyển dụng
-                    </div>
-                    <div>
-                      Trang {recruitmentsPage + 1} / {recruitmentsTotalPages}
-                    </div>
-                  </div>
-
-                  {/* Pagination controls */}
-                  <div className="flex justify-center">
-                    <Pagination>
-                      <PaginationContent>
-                        <PaginationItem>
-                          <PaginationPrevious
-                            onClick={() => {
-                              if (recruitmentsPage > 0) {
-                                setRecruitmentsPage(recruitmentsPage - 1);
-                                window.scrollTo({
-                                  top: 0,
-                                  behavior: "smooth",
-                                });
-                              }
-                            }}
-                            className={
-                              recruitmentsPage === 0
-                                ? "pointer-events-none opacity-50"
-                                : "cursor-pointer"
-                            }
-                          />
-                        </PaginationItem>
-
-                        {/* First page */}
-                        {recruitmentsPage > 2 && (
-                          <>
-                            <PaginationItem>
-                              <PaginationLink
-                                onClick={() => {
-                                  setRecruitmentsPage(0);
-                                  window.scrollTo({
-                                    top: 0,
-                                    behavior: "smooth",
-                                  });
-                                }}
-                                className="cursor-pointer"
-                              >
-                                1
-                              </PaginationLink>
-                            </PaginationItem>
-                            {recruitmentsPage > 3 && (
-                              <PaginationItem>
-                                <PaginationEllipsis />
-                              </PaginationItem>
+                        <div>
+                          <span className="text-muted-foreground">
+                            Kết thúc:
+                          </span>
+                          <div className="font-medium">
+                            {new Date(recruitment.end_date).toLocaleDateString(
+                              "vi-VN"
                             )}
-                          </>
-                        )}
+                          </div>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">
+                            Đơn ứng tuyển:
+                          </span>
+                          <div className="font-medium">
+                            {recruitment.totalApplications ?? 0}
+                          </div>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">
+                            Đã duyệt:
+                          </span>
+                          <div className="font-medium text-green-600">
+                            {recruitment.acceptedApplications ?? 0}
+                          </div>
+                        </div>
+                      </div>
 
-                        {/* Pages around current page */}
-                        {Array.from(
-                          { length: Math.min(5, recruitmentsTotalPages) },
-                          (_, i) => {
-                            let pageNum;
-                            if (recruitmentsTotalPages <= 5) {
-                              pageNum = i;
-                            } else if (recruitmentsPage <= 2) {
-                              pageNum = i;
-                            } else if (
-                              recruitmentsPage >=
-                              recruitmentsTotalPages - 3
-                            ) {
-                              pageNum = recruitmentsTotalPages - 5 + i;
-                            } else {
-                              pageNum = recruitmentsPage - 2 + i;
-                            }
-
-                            if (
-                              pageNum < 0 ||
-                              pageNum >= recruitmentsTotalPages
-                            )
-                              return null;
-                            if (recruitmentsPage > 2 && pageNum === 0)
-                              return null;
-                            if (
-                              recruitmentsPage < recruitmentsTotalPages - 3 &&
-                              pageNum === recruitmentsTotalPages - 1
-                            )
-                              return null;
-
-                            return (
-                              <PaginationItem key={pageNum}>
-                                <PaginationLink
-                                  onClick={() => {
-                                    setRecruitmentsPage(pageNum);
-                                    window.scrollTo({
-                                      top: 0,
-                                      behavior: "smooth",
-                                    });
-                                  }}
-                                  isActive={recruitmentsPage === pageNum}
-                                  className="cursor-pointer"
-                                >
-                                  {pageNum + 1}
-                                </PaginationLink>
-                              </PaginationItem>
-                            );
+                      <div className="flex gap-2 flex-wrap">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedRecruitment(recruitment);
+                            setActiveTab("applications");
+                          }}
+                          className="bg-transparent"
+                        >
+                          <Eye className="h-4 w-4 mr-2" />
+                          Các đơn ứng tuyển
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="bg-transparent"
+                          onClick={() => handleEditRecruitment(recruitment)}
+                          disabled={recruitment.status === "closed"}
+                          title={
+                            recruitment.status === "closed"
+                              ? "Không thể chỉnh sửa đợt tuyển dụng đã đóng"
+                              : "Chỉnh sửa đợt tuyển dụng"
                           }
-                        )}
-
-                        {/* Last page */}
-                        {recruitmentsPage < recruitmentsTotalPages - 3 && (
-                          <>
-                            {recruitmentsPage < recruitmentsTotalPages - 4 && (
-                              <PaginationItem>
-                                <PaginationEllipsis />
-                              </PaginationItem>
+                        >
+                          <Edit className="h-4 w-4 mr-2" />
+                          Chỉnh sửa
+                        </Button>
+                        {recruitment.status === "draft" && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() =>
+                              showStatusChangeDialog(
+                                recruitment.recruitment_id,
+                                "OPEN",
+                                recruitment.title
+                              )
+                            }
+                            disabled={
+                              changingStatusId === recruitment.recruitment_id
+                            }
+                            className="bg-transparent text-green-600 border-green-200 hover:bg-green-50 hover:text-green-700"
+                          >
+                            {changingStatusId === recruitment.recruitment_id ? (
+                              <>
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                Đang xử lý...
+                              </>
+                            ) : (
+                              <>
+                                <Unlock className="h-4 w-4 mr-2" />
+                                Mở đơn
+                              </>
                             )}
+                          </Button>
+                        )}
+                        {recruitment.status === "open" && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() =>
+                              showStatusChangeDialog(
+                                recruitment.recruitment_id,
+                                "CLOSED",
+                                recruitment.title
+                              )
+                            }
+                            disabled={
+                              changingStatusId === recruitment.recruitment_id
+                            }
+                            className="bg-transparent text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
+                          >
+                            {changingStatusId === recruitment.recruitment_id ? (
+                              <>
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                Đang xử lý...
+                              </>
+                            ) : (
+                              <>
+                                <Lock className="h-4 w-4 mr-2" />
+                                Đóng đơn
+                              </>
+                            )}
+                          </Button>
+                        )}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="bg-transparent"
+                          disabled={recruitment.status === "closed"}
+                          onClick={async () => {
+                            try {
+                              const shareUrl = `${window.location.origin}/clubDetail/${recruitment.club_id}?tab=recruitment#recruitment-${recruitment.recruitment_id}`;
+                              await navigator.clipboard.writeText(shareUrl);
+                              toast.success("Đã sao chép đường dẫn chia sẻ");
+                            } catch (e) {
+                              toast.error("Không thể sao chép đường dẫn");
+                            }
+                          }}
+                        >
+                          <Share2 className="h-4 w-4 mr-2" />
+                          Chia sẻ
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+
+            {!loading && !error && recruitments.length === 0 && (
+              <div className="text-center py-12">
+                <FileText className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
+                <p className="text-muted-foreground">
+                  Không tìm thấy đợt tuyển dụng nào
+                </p>
+                <Button
+                  variant="outline"
+                  className="mt-4 bg-transparent"
+                  onClick={() => setActiveTab("create")}
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Tạo đợt tuyển dụng mới
+                </Button>
+              </div>
+            )}
+
+            {/* Pagination for Recruitments */}
+            {!loading && !error && recruitmentsTotalPages > 1 && (
+              <div className="space-y-4">
+                {/* Results info */}
+                <div className="flex items-center justify-between text-sm text-muted-foreground">
+                  <div>
+                    Hiển thị{" "}
+                    <span className="font-semibold">
+                      {Math.min(
+                        recruitmentsPage * recruitmentsPageSize + 1,
+                        recruitmentsTotalElements
+                      )}{" "}
+                      -{" "}
+                      {Math.min(
+                        (recruitmentsPage + 1) * recruitmentsPageSize,
+                        recruitmentsTotalElements
+                      )}
+                    </span>{" "}
+                    trong tổng số{" "}
+                    <span className="font-semibold">
+                      {recruitmentsTotalElements}
+                    </span>{" "}
+                    đợt tuyển dụng
+                  </div>
+                  <div>
+                    Trang {recruitmentsPage + 1} / {recruitmentsTotalPages}
+                  </div>
+                </div>
+
+                {/* Pagination controls */}
+                <div className="flex justify-center">
+                  <Pagination>
+                    <PaginationContent>
+                      <PaginationItem>
+                        <PaginationPrevious
+                          onClick={() => {
+                            if (recruitmentsPage > 0) {
+                              setRecruitmentsPage(recruitmentsPage - 1);
+                              window.scrollTo({
+                                top: 0,
+                                behavior: "smooth",
+                              });
+                            }
+                          }}
+                          className={
+                            recruitmentsPage === 0
+                              ? "pointer-events-none opacity-50"
+                              : "cursor-pointer"
+                          }
+                        />
+                      </PaginationItem>
+
+                      {/* First page */}
+                      {recruitmentsPage > 2 && (
+                        <>
+                          <PaginationItem>
+                            <PaginationLink
+                              onClick={() => {
+                                setRecruitmentsPage(0);
+                                window.scrollTo({
+                                  top: 0,
+                                  behavior: "smooth",
+                                });
+                              }}
+                              className="cursor-pointer"
+                            >
+                              1
+                            </PaginationLink>
+                          </PaginationItem>
+                          {recruitmentsPage > 3 && (
                             <PaginationItem>
+                              <PaginationEllipsis />
+                            </PaginationItem>
+                          )}
+                        </>
+                      )}
+
+                      {/* Pages around current page */}
+                      {Array.from(
+                        { length: Math.min(5, recruitmentsTotalPages) },
+                        (_, i) => {
+                          let pageNum;
+                          if (recruitmentsTotalPages <= 5) {
+                            pageNum = i;
+                          } else if (recruitmentsPage <= 2) {
+                            pageNum = i;
+                          } else if (
+                            recruitmentsPage >=
+                            recruitmentsTotalPages - 3
+                          ) {
+                            pageNum = recruitmentsTotalPages - 5 + i;
+                          } else {
+                            pageNum = recruitmentsPage - 2 + i;
+                          }
+
+                          if (pageNum < 0 || pageNum >= recruitmentsTotalPages)
+                            return null;
+                          if (recruitmentsPage > 2 && pageNum === 0)
+                            return null;
+                          if (
+                            recruitmentsPage < recruitmentsTotalPages - 3 &&
+                            pageNum === recruitmentsTotalPages - 1
+                          )
+                            return null;
+
+                          return (
+                            <PaginationItem key={pageNum}>
                               <PaginationLink
                                 onClick={() => {
-                                  setRecruitmentsPage(
-                                    recruitmentsTotalPages - 1
-                                  );
+                                  setRecruitmentsPage(pageNum);
                                   window.scrollTo({
                                     top: 0,
                                     behavior: "smooth",
                                   });
                                 }}
+                                isActive={recruitmentsPage === pageNum}
                                 className="cursor-pointer"
                               >
-                                {recruitmentsTotalPages}
+                                {pageNum + 1}
                               </PaginationLink>
                             </PaginationItem>
-                          </>
-                        )}
+                          );
+                        }
+                      )}
 
-                        <PaginationItem>
-                          <PaginationNext
-                            onClick={() => {
-                              if (
-                                recruitmentsPage <
-                                recruitmentsTotalPages - 1
-                              ) {
-                                setRecruitmentsPage(recruitmentsPage + 1);
+                      {/* Last page */}
+                      {recruitmentsPage < recruitmentsTotalPages - 3 && (
+                        <>
+                          {recruitmentsPage < recruitmentsTotalPages - 4 && (
+                            <PaginationItem>
+                              <PaginationEllipsis />
+                            </PaginationItem>
+                          )}
+                          <PaginationItem>
+                            <PaginationLink
+                              onClick={() => {
+                                setRecruitmentsPage(recruitmentsTotalPages - 1);
                                 window.scrollTo({
                                   top: 0,
                                   behavior: "smooth",
                                 });
-                              }
-                            }}
-                            className={
-                              recruitmentsPage === recruitmentsTotalPages - 1
-                                ? "pointer-events-none opacity-50"
-                                : "cursor-pointer"
+                              }}
+                              className="cursor-pointer"
+                            >
+                              {recruitmentsTotalPages}
+                            </PaginationLink>
+                          </PaginationItem>
+                        </>
+                      )}
+
+                      <PaginationItem>
+                        <PaginationNext
+                          onClick={() => {
+                            if (recruitmentsPage < recruitmentsTotalPages - 1) {
+                              setRecruitmentsPage(recruitmentsPage + 1);
+                              window.scrollTo({
+                                top: 0,
+                                behavior: "smooth",
+                              });
                             }
-                          />
-                        </PaginationItem>
-                      </PaginationContent>
-                    </Pagination>
+                          }}
+                          className={
+                            recruitmentsPage === recruitmentsTotalPages - 1
+                              ? "pointer-events-none opacity-50"
+                              : "cursor-pointer"
+                          }
+                        />
+                      </PaginationItem>
+                    </PaginationContent>
+                  </Pagination>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Create/Edit Recruitment Tab */}
+        {activeTab === "create" && (
+          <RecruitmentForm
+            clubId={clubId}
+            editingRecruitment={editingRecruitment}
+            onSave={handleSaveRecruitment}
+            onCancel={handleCancelForm}
+            createLoading={createLoading}
+            editLoading={editLoading}
+          />
+        )}
+
+        {/* Applications Tab */}
+        {activeTab === "applications" && selectedRecruitment && (
+          <ApplicationsList
+            selectedRecruitment={selectedRecruitment}
+            applications={applications}
+            applicationsLoading={applicationsLoading}
+            onUpdateApplicationStatus={handleUpdateApplicationStatus}
+            currentPage={applicationsPage}
+            totalPages={applicationsTotalPages}
+            totalElements={applicationsTotalElements}
+            onPageChange={(page) => setApplicationsPage(page)}
+            searchQuery={applicationsSearchQuery}
+            onSearchChange={setApplicationsSearchQuery}
+            statusFilter={applicationsStatusFilter}
+            onStatusFilterChange={setApplicationsStatusFilter}
+          />
+        )}
+      </div>
+
+      {/* Status Change Confirmation Dialog */}
+      <Dialog
+        open={statusChangeDialog?.open || false}
+        onOpenChange={(open) => !open && setStatusChangeDialog(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <div className="flex items-center gap-3">
+              <div
+                className={`p-3 rounded-full ${
+                  statusChangeDialog?.newStatus === "OPEN"
+                    ? "bg-green-100"
+                    : "bg-red-100"
+                }`}
+              >
+                <AlertTriangle
+                  className={`h-6 w-6 ${
+                    statusChangeDialog?.newStatus === "OPEN"
+                      ? "text-green-600"
+                      : "text-red-600"
+                  }`}
+                />
+              </div>
+              <div>
+                <DialogTitle>
+                  {statusChangeDialog?.newStatus === "OPEN"
+                    ? "Xác nhận mở đơn tuyển dụng"
+                    : "Xác nhận đóng đơn tuyển dụng"}
+                </DialogTitle>
+              </div>
+            </div>
+          </DialogHeader>
+          <DialogDescription className="py-4">
+            <div className="space-y-3">
+              <p className="text-base">
+                {statusChangeDialog?.newStatus === "OPEN" ? (
+                  <>
+                    Bạn có chắc chắn muốn{" "}
+                    <strong className="text-green-600">mở đơn</strong> cho đợt
+                    tuyển dụng:
+                  </>
+                ) : (
+                  <>
+                    Bạn có chắc chắn muốn{" "}
+                    <strong className="text-red-600">đóng đơn</strong> cho đợt
+                    tuyển dụng:
+                  </>
+                )}
+              </p>
+              <div className="bg-muted p-3 rounded-lg">
+                <p className="font-medium text-foreground">
+                  "{statusChangeDialog?.title}"
+                </p>
+              </div>
+              {statusChangeDialog?.newStatus === "OPEN" && (
+                <>
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                    <p className="text-sm text-green-800">
+                      ✓ Sinh viên sẽ có thể nộp đơn ứng tuyển sau khi mở
+                    </p>
                   </div>
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                    <p className="text-sm text-amber-800">
+                      ⚠️ Tất cả các đợt tuyển dụng khác đang mở sẽ tự động
+                      chuyển sang trạng thái "Đã đóng"
+                    </p>
+                  </div>
+                </>
+              )}
+              {statusChangeDialog?.newStatus === "CLOSED" && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                  <p className="text-sm text-red-800">
+                    ⚠️ Sau khi đóng, đợt tuyển dụng sẽ không thể chỉnh sửa và
+                    sinh viên không thể nộp đơn nữa
+                  </p>
                 </div>
               )}
             </div>
-          )}
+          </DialogDescription>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setStatusChangeDialog(null)}
+              disabled={changingStatusId !== null}
+            >
+              Hủy
+            </Button>
+            <Button
+              onClick={confirmStatusChange}
+              disabled={changingStatusId !== null}
+              className={
+                statusChangeDialog?.newStatus === "OPEN"
+                  ? "bg-green-600 hover:bg-green-700"
+                  : "bg-red-600 hover:bg-red-700"
+              }
+            >
+              {changingStatusId ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Đang xử lý...
+                </>
+              ) : (
+                <>
+                  {statusChangeDialog?.newStatus === "OPEN"
+                    ? "Mở đơn"
+                    : "Đóng đơn"}
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-          {/* Create/Edit Recruitment Tab */}
-          {activeTab === "create" && (
-            <RecruitmentForm
-              clubId={clubId}
-              editingRecruitment={editingRecruitment}
-              onSave={handleSaveRecruitment}
-              onCancel={handleCancelForm}
-              createLoading={createLoading}
-              editLoading={editLoading}
-            />
-          )}
-
-          {/* Applications Tab */}
-          {activeTab === "applications" && selectedRecruitment && (
-            <ApplicationsList
-              selectedRecruitment={selectedRecruitment}
-              applications={applications}
-              applicationsLoading={applicationsLoading}
-              onUpdateApplicationStatus={handleUpdateApplicationStatus}
-              currentPage={applicationsPage}
-              totalPages={applicationsTotalPages}
-              totalElements={applicationsTotalElements}
-              onPageChange={(page) => setApplicationsPage(page)}
-              searchQuery={applicationsSearchQuery}
-              onSearchChange={setApplicationsSearchQuery}
-              statusFilter={applicationsStatusFilter}
-              onStatusFilterChange={setApplicationsStatusFilter}
-            />
-          )}
-        </div>
-
-        {/* Status Change Confirmation Dialog */}
-        <Dialog
-          open={statusChangeDialog?.open || false}
-          onOpenChange={(open) => !open && setStatusChangeDialog(null)}
-        >
-          <DialogContent>
-            <DialogHeader>
-              <div className="flex items-center gap-3">
-                <div
-                  className={`p-3 rounded-full ${
-                    statusChangeDialog?.newStatus === "OPEN"
-                      ? "bg-green-100"
-                      : "bg-red-100"
-                  }`}
-                >
-                  <AlertTriangle
-                    className={`h-6 w-6 ${
-                      statusChangeDialog?.newStatus === "OPEN"
-                        ? "text-green-600"
-                        : "text-red-600"
-                    }`}
-                  />
-                </div>
-                <div>
-                  <DialogTitle>
-                    {statusChangeDialog?.newStatus === "OPEN"
-                      ? "Xác nhận mở đơn tuyển dụng"
-                      : "Xác nhận đóng đơn tuyển dụng"}
-                  </DialogTitle>
-                </div>
+      {/* Cancel Form Confirmation Dialog */}
+      <Dialog open={cancelFormDialog} onOpenChange={setCancelFormDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <div className="flex items-center gap-3">
+              <div className="p-3 rounded-full bg-amber-100">
+                <AlertTriangle className="h-6 w-6 text-amber-600" />
               </div>
-            </DialogHeader>
-            <DialogDescription className="py-4">
-              <div className="space-y-3">
-                <p className="text-base">
-                  {statusChangeDialog?.newStatus === "OPEN" ? (
-                    <>
-                      Bạn có chắc chắn muốn{" "}
-                      <strong className="text-green-600">mở đơn</strong> cho đợt
-                      tuyển dụng:
-                    </>
-                  ) : (
-                    <>
-                      Bạn có chắc chắn muốn{" "}
-                      <strong className="text-red-600">đóng đơn</strong> cho đợt
-                      tuyển dụng:
-                    </>
-                  )}
-                </p>
+              <div>
+                <DialogTitle>Xác nhận hủy thao tác</DialogTitle>
+              </div>
+            </div>
+          </DialogHeader>
+          <DialogDescription className="py-4">
+            <div className="space-y-3">
+              <p className="text-base">
+                Bạn có chắc chắn muốn hủy{" "}
+                {editingRecruitment ? "chỉnh sửa" : "tạo mới"} đợt tuyển dụng?
+              </p>
+              {editingRecruitment && (
                 <div className="bg-muted p-3 rounded-lg">
                   <p className="font-medium text-foreground">
-                    "{statusChangeDialog?.title}"
+                    "{editingRecruitment.title}"
                   </p>
                 </div>
-                {statusChangeDialog?.newStatus === "OPEN" && (
-                  <>
-                    <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-                      <p className="text-sm text-green-800">
-                        ✓ Sinh viên sẽ có thể nộp đơn ứng tuyển sau khi mở
-                      </p>
-                    </div>
-                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-                      <p className="text-sm text-amber-800">
-                        ⚠️ Tất cả các đợt tuyển dụng khác đang mở sẽ tự động
-                        chuyển sang trạng thái "Đã đóng"
-                      </p>
-                    </div>
-                  </>
-                )}
-                {statusChangeDialog?.newStatus === "CLOSED" && (
-                  <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-                    <p className="text-sm text-red-800">
-                      ⚠️ Sau khi đóng, đợt tuyển dụng sẽ không thể chỉnh sửa và
-                      sinh viên không thể nộp đơn nữa
-                    </p>
-                  </div>
-                )}
+              )}
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                <p className="text-sm text-amber-800">
+                  ⚠️ Các thay đổi chưa lưu sẽ bị mất
+                </p>
               </div>
-            </DialogDescription>
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => setStatusChangeDialog(null)}
-                disabled={changingStatusId !== null}
-              >
-                Hủy
-              </Button>
-              <Button
-                onClick={confirmStatusChange}
-                disabled={changingStatusId !== null}
-                className={
-                  statusChangeDialog?.newStatus === "OPEN"
-                    ? "bg-green-600 hover:bg-green-700"
-                    : "bg-red-600 hover:bg-red-700"
-                }
-              >
-                {changingStatusId ? (
+            </div>
+          </DialogDescription>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setCancelFormDialog(false)}
+            >
+              Tiếp tục chỉnh sửa
+            </Button>
+            <Button variant="destructive" onClick={confirmCancelForm}>
+              Hủy bỏ
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Save with OPEN Status Confirmation Dialog */}
+      <Dialog
+        open={saveWithOpenStatusDialog?.open || false}
+        onOpenChange={(open) => !open && setSaveWithOpenStatusDialog(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <div className="flex items-center gap-3">
+              <div className="p-3 rounded-full bg-green-100">
+                <AlertTriangle className="h-6 w-6 text-green-600" />
+              </div>
+              <div>
+                <DialogTitle>
+                  Xác nhận{" "}
+                  {saveWithOpenStatusDialog?.isEdit ? "cập nhật" : "tạo"} đợt
+                  tuyển dụng
+                </DialogTitle>
+              </div>
+            </div>
+          </DialogHeader>
+          <DialogDescription className="py-4">
+            <div className="space-y-3">
+              <p className="text-base">
+                {saveWithOpenStatusDialog?.isEdit ? (
                   <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Đang xử lý...
+                    Bạn đang cập nhật đợt tuyển dụng với trạng thái{" "}
+                    <strong className="text-green-600">"Đang mở"</strong>
                   </>
                 ) : (
                   <>
-                    {statusChangeDialog?.newStatus === "OPEN"
-                      ? "Mở đơn"
-                      : "Đóng đơn"}
+                    Bạn đang tạo đợt tuyển dụng mới với trạng thái{" "}
+                    <strong className="text-green-600">"Đang mở"</strong>
                   </>
                 )}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        {/* Cancel Form Confirmation Dialog */}
-        <Dialog open={cancelFormDialog} onOpenChange={setCancelFormDialog}>
-          <DialogContent>
-            <DialogHeader>
-              <div className="flex items-center gap-3">
-                <div className="p-3 rounded-full bg-amber-100">
-                  <AlertTriangle className="h-6 w-6 text-amber-600" />
-                </div>
-                <div>
-                  <DialogTitle>Xác nhận hủy thao tác</DialogTitle>
-                </div>
-              </div>
-            </DialogHeader>
-            <DialogDescription className="py-4">
-              <div className="space-y-3">
-                <p className="text-base">
-                  Bạn có chắc chắn muốn hủy{" "}
-                  {editingRecruitment ? "chỉnh sửa" : "tạo mới"} đợt tuyển dụng?
+              </p>
+              <div className="bg-muted p-3 rounded-lg">
+                <p className="font-medium text-foreground">
+                  "{saveWithOpenStatusDialog?.requestData.title}"
                 </p>
-                {editingRecruitment && (
-                  <div className="bg-muted p-3 rounded-lg">
-                    <p className="font-medium text-foreground">
-                      "{editingRecruitment.title}"
-                    </p>
-                  </div>
-                )}
-                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-                  <p className="text-sm text-amber-800">
-                    ⚠️ Các thay đổi chưa lưu sẽ bị mất
-                  </p>
-                </div>
               </div>
-            </DialogDescription>
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => setCancelFormDialog(false)}
-              >
-                Tiếp tục chỉnh sửa
-              </Button>
-              <Button variant="destructive" onClick={confirmCancelForm}>
-                Hủy bỏ
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        {/* Save with OPEN Status Confirmation Dialog */}
-        <Dialog
-          open={saveWithOpenStatusDialog?.open || false}
-          onOpenChange={(open) => !open && setSaveWithOpenStatusDialog(null)}
-        >
-          <DialogContent>
-            <DialogHeader>
-              <div className="flex items-center gap-3">
-                <div className="p-3 rounded-full bg-green-100">
-                  <AlertTriangle className="h-6 w-6 text-green-600" />
-                </div>
-                <div>
-                  <DialogTitle>
-                    Xác nhận{" "}
-                    {saveWithOpenStatusDialog?.isEdit ? "cập nhật" : "tạo"} đợt
-                    tuyển dụng
-                  </DialogTitle>
-                </div>
-              </div>
-            </DialogHeader>
-            <DialogDescription className="py-4">
-              <div className="space-y-3">
-                <p className="text-base">
-                  {saveWithOpenStatusDialog?.isEdit ? (
-                    <>
-                      Bạn đang cập nhật đợt tuyển dụng với trạng thái{" "}
-                      <strong className="text-green-600">"Đang mở"</strong>
-                    </>
-                  ) : (
-                    <>
-                      Bạn đang tạo đợt tuyển dụng mới với trạng thái{" "}
-                      <strong className="text-green-600">"Đang mở"</strong>
-                    </>
-                  )}
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                <p className="text-sm text-amber-800 font-medium">
+                  ⚠️ Lưu ý quan trọng:
                 </p>
-                <div className="bg-muted p-3 rounded-lg">
-                  <p className="font-medium text-foreground">
-                    "{saveWithOpenStatusDialog?.requestData.title}"
-                  </p>
-                </div>
-                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-                  <p className="text-sm text-amber-800 font-medium">
-                    ⚠️ Lưu ý quan trọng:
-                  </p>
-                  <p className="text-sm text-amber-800 mt-2">
-                    Tất cả các đợt tuyển dụng khác đang ở trạng thái "Đang mở"
-                    sẽ tự động chuyển sang trạng thái "Đã đóng" để đảm bảo chỉ
-                    có một đợt tuyển dụng mở tại một thời điểm.
-                  </p>
-                </div>
-                <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-                  <p className="text-sm text-green-800">
-                    ✓ Sinh viên sẽ có thể nộp đơn ứng tuyển cho đợt tuyển dụng
-                    này
-                  </p>
-                </div>
+                <p className="text-sm text-amber-800 mt-2">
+                  Tất cả các đợt tuyển dụng khác đang ở trạng thái "Đang mở" sẽ
+                  tự động chuyển sang trạng thái "Đã đóng" để đảm bảo chỉ có một
+                  đợt tuyển dụng mở tại một thời điểm.
+                </p>
               </div>
-            </DialogDescription>
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => setSaveWithOpenStatusDialog(null)}
-                disabled={createLoading}
-              >
-                Hủy
-              </Button>
-              <Button
-                onClick={confirmSaveWithOpenStatus}
-                disabled={createLoading}
-                className="bg-green-600 hover:bg-green-700"
-              >
-                {createLoading ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Đang xử lý...
-                  </>
-                ) : (
-                  <>
-                    Xác nhận{" "}
-                    {saveWithOpenStatusDialog?.isEdit ? "cập nhật" : "tạo"}
-                  </>
-                )}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </div>
-    </ClubPermissionGuard>
+              <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                <p className="text-sm text-green-800">
+                  ✓ Sinh viên sẽ có thể nộp đơn ứng tuyển cho đợt tuyển dụng này
+                </p>
+              </div>
+            </div>
+          </DialogDescription>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setSaveWithOpenStatusDialog(null)}
+              disabled={createLoading}
+            >
+              Hủy
+            </Button>
+            <Button
+              onClick={confirmSaveWithOpenStatus}
+              disabled={createLoading}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              {createLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Đang xử lý...
+                </>
+              ) : (
+                <>
+                  Xác nhận{" "}
+                  {saveWithOpenStatusDialog?.isEdit ? "cập nhật" : "tạo"}
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }
