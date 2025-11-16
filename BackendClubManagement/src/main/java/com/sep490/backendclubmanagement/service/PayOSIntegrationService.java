@@ -14,6 +14,7 @@ import com.sep490.backendclubmanagement.exception.ErrorCode;
 import com.sep490.backendclubmanagement.repository.ClubRepository;
 import com.sep490.backendclubmanagement.repository.ClubWalletRepository;
 import com.sep490.backendclubmanagement.repository.PayOSPaymentRepository;
+import com.sep490.backendclubmanagement.security.EncryptionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -49,6 +50,7 @@ public class PayOSIntegrationService {
     private final ClubRepository clubRepository;
     private final ClubWalletRepository clubWalletRepository;
     private final PayOSPaymentRepository payOSPaymentRepository;
+    private final EncryptionService encryptionService;
 
     private static final String PAYOS_PAYMENT_REQUEST_ENDPOINT = "https://api-merchant.payos.vn/v2/payment-requests";
 
@@ -60,9 +62,16 @@ public class PayOSIntegrationService {
         ClubWallet wallet = clubWalletRepository.findByClub_Id(clubId).orElse(null);
         boolean configured = wallet != null && wallet.getPayOsClientId() != null && !wallet.getPayOsClientId().isBlank();
         boolean active = configured && (wallet.getPayOsStatus() == null || wallet.getPayOsStatus().equalsIgnoreCase("ACTIVE"));
+
+        // Mask sensitive clientId before returning to client
+        String maskedClientId = null;
+        if (wallet != null && wallet.getPayOsClientId() != null) {
+            maskedClientId = encryptionService.maskSensitiveData(wallet.getPayOsClientId());
+        }
+
         return PayOSConfigResponse.builder()
                 .clubId(clubId)
-                .clientId(wallet != null ? wallet.getPayOsClientId() : null)
+                .clientId(maskedClientId)
                 .active(active)
                 .configured(configured)
                 .build();
@@ -100,9 +109,13 @@ public class PayOSIntegrationService {
             log.error("[PayOS] Error confirming webhook via PayOS SDK: {}", ex.getMessage(), ex);
             throw new RuntimeException("PayOS webhook confirmation failed: " + ex.getMessage(), ex);
         }
+
+        // Mask sensitive clientId before returning to client
+        String maskedClientId = encryptionService.maskSensitiveData(wallet.getPayOsClientId());
+
         return PayOSConfigResponse.builder()
                 .clubId(clubId)
-                .clientId(wallet.getPayOsClientId())
+                .clientId(maskedClientId)
                 .active(wallet.getPayOsStatus() == null || wallet.getPayOsStatus().equalsIgnoreCase("ACTIVE"))
                 .configured(true)
                 .build();
