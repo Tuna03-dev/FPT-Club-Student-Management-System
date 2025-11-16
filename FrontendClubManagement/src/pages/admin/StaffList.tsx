@@ -7,10 +7,10 @@ import { staffManagementService, type StaffSummary } from "@/services/admin/staf
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
 import { Pagination, PaginationContent, PaginationItem, PaginationLink } from "@/components/ui/pagination";
-import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
+import { ChevronLeftIcon, ChevronRightIcon, Eye, Plus } from "lucide-react";
 import { useDebounce } from "@/hooks/useDebounce";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Eye } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 
 
 const defaultSort = ["id,desc"];
@@ -24,6 +24,24 @@ export default function StaffList() {
   const [page, setPage] = useState(1);
   const [size, setSize] = useState(10);
   const debouncedKeyword = useDebounce(keyword, 400);
+
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createLoading, setCreateLoading] = useState(false);
+  const [createForm, setCreateForm] = useState<{
+    email: string;
+    fullName: string;
+    phoneNumber: string;
+    studentCode: string;
+    gender: string;
+    isActive: boolean;
+  }>({
+    email: "",
+    fullName: "",
+    phoneNumber: "",
+    studentCode: "",
+    gender: "",
+    isActive: true,
+  });
 
   const fetchData = async () => {
     try {
@@ -48,6 +66,49 @@ export default function StaffList() {
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedKeyword, page, size, onlyActive]);
+
+  const openCreateModal = () => {
+    setCreateForm({
+      email: "",
+      fullName: "",
+      phoneNumber: "",
+      studentCode: "",
+      gender: "",
+      isActive: true,
+    });
+    setCreateOpen(true);
+  };
+
+  const handleCreate = async () => {
+    const email = createForm.email.trim();
+    const fullName = createForm.fullName.trim();
+    if (!email) {
+      toast.error("Vui lòng nhập email");
+      return;
+    }
+    if (!fullName) {
+      toast.error("Vui lòng nhập họ tên");
+      return;
+    }
+    try {
+      setCreateLoading(true);
+      await staffManagementService.create({
+        email,
+        fullName,
+        phoneNumber: createForm.phoneNumber.trim() || undefined,
+        studentCode: createForm.studentCode.trim() || undefined,
+        gender: createForm.gender || undefined,
+        isActive: createForm.isActive,
+      });
+      toast.success("Tạo staff thành công");
+      setCreateOpen(false);
+      fetchData();
+    } catch (e: any) {
+      toast.error(e?.message || "Tạo staff thất bại");
+    } finally {
+      setCreateLoading(false);
+    }
+  };
 
   const toggleActive = async (s: StaffSummary) => {
     try {
@@ -146,14 +207,21 @@ export default function StaffList() {
   return (
     <div className="p-4 md:p-6 space-y-4">
       <div className="flex items-center justify-between gap-4">
-        <h1 className="text-xl font-semibold">Quản lý Staff</h1>
+        <h1 className="text-xl font-semibold">Quản lý nhân viên</h1>
         <div className="flex items-center gap-2">
           <Input
             placeholder="Tìm kiếm..."
             value={keyword}
-            onChange={(e) => setKeyword(e.target.value)}
+            onChange={(e) => {
+              setKeyword(e.target.value);
+              setPage(1);
+            }}
             className="w-64"
           />
+          <Button onClick={openCreateModal} className="gap-2">
+            <Plus className="h-4 w-4" />
+            Thêm nhân viên mới
+          </Button>
           {/* Filter theo trạng thái (tùy chọn) */}
           {/* <Select .../> có thể bổ sung sau */}
         </div>
@@ -172,11 +240,25 @@ export default function StaffList() {
           </TableHeader>
           <TableBody>
             {loading ? (
-              <TableRow>
-                <TableCell colSpan={6} className="text-center text-muted-foreground">
-                  Đang tải...
-                </TableCell>
-              </TableRow>
+              Array.from({ length: size }).map((_, index) => (
+                <TableRow key={`skeleton-${index}`}>
+                  <TableCell>
+                    <Skeleton className="h-5 w-48" />
+                  </TableCell>
+                  <TableCell>
+                    <Skeleton className="h-5 w-56" />
+                  </TableCell>
+                  <TableCell>
+                    <Skeleton className="h-5 w-32" />
+                  </TableCell>
+                  <TableCell>
+                    <Skeleton className="h-5 w-28" />
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Skeleton className="h-8 w-20 ml-auto" />
+                  </TableCell>
+                </TableRow>
+              ))
             ) : data.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={6} className="text-center text-muted-foreground">
@@ -191,12 +273,18 @@ export default function StaffList() {
                   <TableCell>{s.phoneNumber || "-"}</TableCell>
                   <TableCell>{s.isActive ? "Đang hoạt động" : "Ngừng hoạt động"}</TableCell>
                   <TableCell className="text-right">
-                    <div className="inline-flex items-center gap-2">
-                      <Switch
-                        checked={s.isActive}
-                        onCheckedChange={() => toggleActive(s)}
-                        aria-label="toggle-active"
-                      />
+                    <div className="inline-flex items-center gap-3">
+                      <div className="flex flex-col items-end">
+                        <Switch
+                          checked={s.isActive}
+                          onCheckedChange={() => toggleActive(s)}
+                          aria-label="toggle-active"
+                          title={s.isActive ? "Nhấn để ngừng hoạt động staff này" : "Nhấn để kích hoạt staff này"}
+                        />
+                        <span className="mt-1 text-xs text-muted-foreground">
+                          {s.isActive ? "Tắt để ngừng hoạt động" : "Bật để kích hoạt"}
+                        </span>
+                      </div>
                       <button
                         className="inline-flex p-2 rounded-md hover:bg-secondary transition"
                         title="Xem chi tiết"
@@ -265,6 +353,83 @@ export default function StaffList() {
           </Pagination>
         </div>
       </div>
+
+      {/* Create Staff Modal */}
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent className="sm:max-w-xl rounded-xl border bg-card shadow-lg">
+          <DialogHeader>
+            <DialogTitle className="text-xl">Tạo nhân viên mới</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid gap-2">
+              <label className="text-sm font-medium text-muted-foreground">Email *</label>
+              <Input
+                value={createForm.email}
+                onChange={(e) => setCreateForm((prev) => ({ ...prev, email: e.target.value }))}
+                placeholder="nhanvien@example.com"
+              />
+            </div>
+            <div className="grid gap-2">
+              <label className="text-sm font-medium text-muted-foreground">Họ tên *</label>
+              <Input
+                value={createForm.fullName}
+                onChange={(e) => setCreateForm((prev) => ({ ...prev, fullName: e.target.value }))}
+                placeholder="Nguyễn Văn A"
+              />
+            </div>
+            <div className="grid gap-2 md:grid-cols-2 md:gap-4">
+              <div className="grid gap-2">
+                <label className="text-sm font-medium text-muted-foreground">Số điện thoại</label>
+                <Input
+                  value={createForm.phoneNumber}
+                  onChange={(e) => setCreateForm((prev) => ({ ...prev, phoneNumber: e.target.value }))}
+                  placeholder="0123456789"
+                />
+              </div>
+              <div className="grid gap-2">
+                <label className="text-sm font-medium text-muted-foreground">Mã định danh</label>
+                <Input
+                  value={createForm.studentCode}
+                  onChange={(e) => setCreateForm((prev) => ({ ...prev, studentCode: e.target.value }))}
+                  placeholder="Nhập mã (nếu có)"
+                />
+              </div>
+            </div>
+            <div className="grid gap-2 md:grid-cols-2 md:gap-4">
+              <div className="grid gap-2">
+                <label className="text-sm font-medium text-muted-foreground">Giới tính</label>
+                <select
+                  className="h-9 rounded-md border px-2 bg-background"
+                  value={createForm.gender}
+                  onChange={(e) => setCreateForm((prev) => ({ ...prev, gender: e.target.value }))}
+                >
+                  <option value="">Chưa chọn</option>
+                  <option value="MALE">Nam</option>
+                  <option value="FEMALE">Nữ</option>
+                </select>
+              </div>
+              <div className="grid gap-2">
+                <label className="text-sm font-medium text-muted-foreground">Trạng thái</label>
+                <div className="flex h-9 items-center rounded-md border px-3">
+                  <Switch
+                    checked={createForm.isActive}
+                    onCheckedChange={(checked) => setCreateForm((prev) => ({ ...prev, isActive: checked }))}
+                  />
+                  <span className="ml-2 text-sm">{createForm.isActive ? "Đang hoạt động" : "Ngừng hoạt động"}</span>
+                </div>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setCreateOpen(false)} disabled={createLoading}>
+                Hủy
+              </Button>
+              <Button onClick={handleCreate} disabled={createLoading}>
+                {createLoading ? "Đang tạo..." : "Tạo staff"}
+              </Button>
+            </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-xl rounded-xl border bg-card shadow-lg">
