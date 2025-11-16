@@ -9,6 +9,7 @@ import {
   FileText,
   Users,
   Home,
+  Building2,
 } from "lucide-react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useState } from "react";
@@ -29,6 +30,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { authService } from "@/services/authService";
 import { useTranslation } from "react-i18next";
+import { StaffNotificationBell } from "@/components/notifications/StaffNotificationBell";
 
 const navItems = [
   { key: "events", url: "/events", icon: Calendar, label: "Sự kiện" },
@@ -36,6 +38,12 @@ const navItems = [
 
 // Management items for Staff
 const managementItems = [
+  {
+    key: "manage_club_creation",
+    url: "/club-creation",
+    icon: Building2,
+    label: "Thành lập CLB",
+  },
   {
     key: "manage_events",
     url: "/events",
@@ -66,14 +74,22 @@ const managementItems = [
     icon: FileText,
     label: "Quản lý báo cáo",
   },
+  {
+    key: "staff_notifications",
+    url: "/notifications",
+    icon: Bell,
+    label: "Thông báo",
+  },
 ];
 
 const managementColors: Record<string, string> = {
+  manage_club_creation: "bg-gradient-to-br from-purple-500 to-purple-600",
   manage_events: "bg-gradient-to-br from-green-500 to-green-600",
   pending_requests: "bg-gradient-to-br from-orange-500 to-orange-600",
   pending_posts: "bg-gradient-to-br from-yellow-500 to-yellow-600",
   manage_members: "bg-gradient-to-br from-blue-500 to-blue-600",
   manage_reports: "bg-gradient-to-br from-pink-500 to-pink-600",
+  staff_notifications: "bg-gradient-to-br from-purple-500 to-purple-600", 
 };
 
 export const StaffLayout = () => {
@@ -161,14 +177,7 @@ export const StaffLayout = () => {
                   <Settings className="h-5 w-5" />
                 </Button>
               </NavLink>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="rounded-full relative"
-              >
-                <Bell className="h-5 w-5" />
-                <span className="absolute top-1 right-1 h-2 w-2 bg-destructive rounded-full" />
-              </Button>
+              <StaffNotificationBell />
               <div className="flex items-center gap-2">
                 <Avatar className="h-8 w-8 ring-2 ring-primary/20">
                   <AvatarImage src="https://github.com/shadcn.png" />

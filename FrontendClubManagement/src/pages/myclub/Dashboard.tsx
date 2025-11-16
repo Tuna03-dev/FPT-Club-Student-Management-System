@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useLocation } from "react-router-dom";
 import { CreatePost } from "@/components/features/post/CreatePost";
 import { PostCard } from "@/components/features/post/PostCard";
 import {
@@ -21,6 +21,11 @@ export const Dashboard = () => {
   const loadingRef = useRef(false);
 
   const { clubId: clubIdParam } = useParams<{ clubId: string }>();
+  const location = useLocation();
+
+  // Get search query from URL params
+  const searchParams = new URLSearchParams(location.search);
+  const searchQuery = searchParams.get("q") || "";
   const clubId = clubIdParam ? parseInt(clubIdParam, 10) : 1;
 
   useEffect(() => {
@@ -31,7 +36,7 @@ export const Dashboard = () => {
 
   // Load posts function
   const loadPosts = useCallback(
-    async (page: number, append: boolean = false) => {
+    async (page: number, append: boolean = false, query: string = "") => {
       if (loadingRef.current) return; // Prevent double loading
 
       try {
@@ -39,11 +44,24 @@ export const Dashboard = () => {
         setLoading(true);
         setError(null);
 
-        const response = await postService.getClubFeed(clubId, {
-          page: page,
-          size: 10,
-          sort: "createdAt,desc",
-        });
+        let response;
+        if (query.trim()) {
+          // Search mode
+          response = await postService.searchPosts({
+            q: query.trim(),
+            clubId: clubId,
+            page: page,
+            size: 10,
+            sort: "createdAt,desc",
+          });
+        } else {
+          // Normal feed mode
+          response = await postService.getClubFeed(clubId, {
+            page: page,
+            size: 10,
+            sort: "createdAt,desc",
+          });
+        }
 
         if (response.code === 200 && response.data) {
           const newPosts = response.data.content;
@@ -71,8 +89,9 @@ export const Dashboard = () => {
 
   // Load initial posts
   useEffect(() => {
-    loadPosts(0, false);
-  }, [clubId, loadPosts]);
+    loadPosts(0, false, searchQuery);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clubId, location.search]);
 
   // IntersectionObserver sentinel-based infinite scroll
   const sentinelRef = useRef<HTMLDivElement | null>(null);
@@ -81,8 +100,8 @@ export const Dashboard = () => {
     if (loadingRef.current) return;
     if (currentPage >= totalPages - 1) return;
 
-    loadPosts(currentPage + 1, true);
-  }, [currentPage, totalPages, loadPosts]);
+    loadPosts(currentPage + 1, true, searchQuery);
+  }, [currentPage, totalPages, loadPosts, searchQuery]);
 
   useEffect(() => {
     const node = sentinelRef.current;
@@ -109,7 +128,7 @@ export const Dashboard = () => {
     setCurrentPage(0);
     setTotalPages(0);
     setPosts([]);
-    loadPosts(0, false);
+    loadPosts(0, false, searchQuery);
   };
 
   const convertPostToCard = (post: PostWithRelationsData) => {
@@ -161,6 +180,14 @@ export const Dashboard = () => {
     <div className="min-h-full bg-secondary/20">
       <div className="max-w-3xl mx-auto p-4 space-y-4">
         <CreatePost onPostCreated={refreshPosts} clubId={clubId} />
+
+        {/* Search Indicator */}
+        {searchQuery && (
+          <div className="text-sm text-muted-foreground px-4 py-2 bg-secondary/50 rounded-lg">
+            Kết quả tìm kiếm cho:{" "}
+            <span className="font-medium">"{searchQuery}"</span>
+          </div>
+        )}
 
         {/* Loading State - First Load */}
         {loading && posts.length === 0 && (

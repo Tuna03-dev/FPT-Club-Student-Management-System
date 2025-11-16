@@ -1,4 +1,4 @@
-import { axiosClient} from "@/api/axiosClient";
+import { axiosClient } from "@/api/axiosClient";
 
 export type StaffSummary = {
 	id: number;
@@ -35,6 +35,15 @@ export type UpdateStaffProfileRequest = {
 	dateOfBirth?: string; // yyyy-MM-dd
 	gender?: string;
 	avatarFile?: File; // optional
+};
+
+export type CreateStaffPayload = {
+	email: string;
+	fullName: string;
+	phoneNumber?: string;
+	gender?: string;
+	studentCode?: string;
+	isActive?: boolean;
 };
 
 const baseUrl = "/admin";
@@ -76,6 +85,14 @@ export const staffManagementService = {
 			}
 		);
 		if (res.code !== 200 || !res.data) throw new Error(res.message || "Failed to update profile");
+		return res.data;
+	},
+
+	async create(payload: CreateStaffPayload): Promise<StaffSummary> {
+		const res = await axiosClient.post<StaffSummary>(`${baseUrl}/staff/create`, payload);
+		if (res.code !== 200 || !res.data) {
+			throw new Error(res.message || "Không thể tạo staff");
+		}
 		return res.data;
 	},
 
