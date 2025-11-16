@@ -433,14 +433,7 @@ export const ClubLayout = () => {
                   <Home className="h-4 w-4" />
                   <span className="font-medium">Trang chủ</span>
                 </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="rounded-full relative hover:bg-secondary/80"
-                >
-                  <Bell className="h-5 w-5" />
-                  <span className="absolute top-1.5 right-1.5 h-2 w-2 bg-red-500 rounded-full animate-pulse" />
-                </Button>
+                <NotificationBell />
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <button className="flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 hover:bg-secondary/80 transition-all duration-200">

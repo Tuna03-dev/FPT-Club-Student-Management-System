@@ -90,7 +90,8 @@ export default function Finance() {
   const [feesLoading, setFeesLoading] = useState<boolean>(false);
   const [isAddTransactionOpen, setIsAddTransactionOpen] = useState(false);
   const [isEditTransactionOpen, setIsEditTransactionOpen] = useState(false);
-  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+  const [editingTransaction, setEditingTransaction] =
+    useState<Transaction | null>(null);
   const [isAddFeeOpen, setIsAddFeeOpen] = useState(false);
   const [clientId, setClientId] = useState("");
   const [apiKey, setApiKey] = useState("");
@@ -385,7 +386,11 @@ export default function Finance() {
     data: Partial<CreateOutcomeTransactionRequest>
   ) => {
     try {
-      await transactionService.updateOutcomeTransaction(numericClubId, id, data);
+      await transactionService.updateOutcomeTransaction(
+        numericClubId,
+        id,
+        data
+      );
       await fetchOutcomeTransactions(outcomePage);
     } catch (error) {
       console.error("Failed to update outcome transaction:", error);
