@@ -32,6 +32,7 @@ public class OutcomeTransactionServiceImpl implements OutcomeTransactionService 
     private final OutcomeTransactionMapper outcomeTransactionMapper;
     private final UserService userService;
     private final RoleMemberShipRepository roleMemberShipRepository;
+    private final ClubWalletService clubWalletService;
 
     /**
      * Get all outcome transactions for a club with pagination
@@ -133,17 +134,12 @@ public class OutcomeTransactionServiceImpl implements OutcomeTransactionService 
 
         OutcomeTransaction savedTransaction = outcomeTransactionRepository.save(transaction);
 
-        // If user is CLUB_OFFICER, auto-approve and update wallet balance immediately
-        if (isClubOfficer) {
-            // Check if wallet has sufficient balance
-            if (clubWallet.getBalance().compareTo(request.getAmount()) < 0) {
-                throw new AppException(ErrorCode.INSUFFICIENT_WALLET_BALANCE);
-            }
+        // Process wallet update (TiDB doesn't support triggers - handle in application)
+        // This will check balance and throw exception if insufficient
+        clubWalletService.processOutcomeTransaction(savedTransaction, null);
 
-            clubWallet.setBalance(clubWallet.getBalance().subtract(request.getAmount()));
-            clubWallet.setTotalOutcome(clubWallet.getTotalOutcome().add(request.getAmount()));
-            clubWalletRepository.save(clubWallet);
-            log.info("Created and auto-approved outcome transaction: {} for club: {} by CLUB_OFFICER", transactionCode, clubId);
+        if (isClubOfficer) {
+            log.info("Created and auto-approved outcome transaction: {} for club: {} by CLUB_OFFICER. Wallet updated.", transactionCode, clubId);
         } else {
             log.info("Created outcome transaction: {} for club: {} with PENDING status", transactionCode, clubId);
         }
@@ -192,23 +188,22 @@ public class OutcomeTransactionServiceImpl implements OutcomeTransactionService 
             throw new AppException(ErrorCode.TRANSACTION_ALREADY_PROCESSED);
         }
 
-        // Check if wallet has sufficient balance
-        ClubWallet clubWallet = transaction.getClubWallet();
-        if (clubWallet.getBalance().compareTo(transaction.getAmount()) < 0) {
-            throw new AppException(ErrorCode.INSUFFICIENT_WALLET_BALANCE);
-        }
+        // Store old state for wallet processing
+        OutcomeTransaction oldTransaction = OutcomeTransaction.builder()
+                .status(transaction.getStatus())
+                .amount(transaction.getAmount())
+                .clubWallet(transaction.getClubWallet())
+                .build();
 
-        // Update transaction status
+        // Update transaction status to SUCCESS
         transaction.setStatus(TransactionStatus.SUCCESS);
-
-        // Update club wallet balance
-        clubWallet.setBalance(clubWallet.getBalance().subtract(transaction.getAmount()));
-        clubWallet.setTotalOutcome(clubWallet.getTotalOutcome().add(transaction.getAmount()));
-
-        clubWalletRepository.save(clubWallet);
         OutcomeTransaction approvedTransaction = outcomeTransactionRepository.save(transaction);
 
-        log.info("Approved outcome transaction: {}, amount: {}", transactionId, transaction.getAmount());
+        // Process wallet update (TiDB doesn't support triggers - handle in application)
+        // This will check balance and throw exception if insufficient
+        clubWalletService.processOutcomeTransaction(approvedTransaction, oldTransaction);
+
+        log.info("Approved outcome transaction: {}, amount: {}. Wallet updated.", transactionId, transaction.getAmount());
 
         return outcomeTransactionMapper.toResponse(approvedTransaction);
     }

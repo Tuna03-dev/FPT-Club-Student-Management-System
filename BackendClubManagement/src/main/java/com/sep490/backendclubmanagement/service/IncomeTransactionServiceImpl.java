@@ -33,6 +33,7 @@ public class IncomeTransactionServiceImpl implements IncomeTransactionService {
     private final IncomeTransactionMapper incomeTransactionMapper;
     private final UserService userService;
     private final RoleMemberShipRepository roleMemberShipRepository;
+    private final ClubWalletService clubWalletService;
 
     /**
      * Get all income transactions for a club with pagination
@@ -109,15 +110,14 @@ public class IncomeTransactionServiceImpl implements IncomeTransactionService {
         User createdBy = userRepository.findById(currentUserId)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
 
-        // Check user's role in the club to determine transaction status
-        // existsClubAdmin checks if user has roleLevel <= 2 (CLUB_OFFICER) in current semester
+
         boolean isClubOfficer = roleMemberShipRepository.existsClubAdmin(currentUserId, clubId);
         TransactionStatus initialStatus = isClubOfficer ? TransactionStatus.SUCCESS : TransactionStatus.PENDING;
 
-        // Generate unique reference
+
         String reference = generateUniqueReference("INC");
 
-        // Build income transaction
+
         IncomeTransaction.IncomeTransactionBuilder builder = IncomeTransaction.builder()
                 .reference(reference)
                 .amount(request.getAmount())
@@ -129,14 +129,14 @@ public class IncomeTransactionServiceImpl implements IncomeTransactionService {
                 .clubWallet(clubWallet)
                 .createdBy(createdBy);
 
-        // Link to fee if provided
+
         if (request.getFeeId() != null) {
             Fee fee = feeRepository.findById(request.getFeeId())
                     .orElseThrow(() -> new AppException(ErrorCode.FEE_NOT_FOUND));
             builder.fee(fee);
         }
 
-        // Link to user if provided
+
         if (request.getUserId() != null) {
             User user = userRepository.findById(request.getUserId())
                     .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
@@ -145,12 +145,10 @@ public class IncomeTransactionServiceImpl implements IncomeTransactionService {
 
         IncomeTransaction savedTransaction = incomeTransactionRepository.save(builder.build());
 
-        // If user is CLUB_OFFICER, auto-approve and update wallet balance immediately
+        clubWalletService.processIncomeTransaction(savedTransaction, null);
+
         if (isClubOfficer) {
-            clubWallet.setBalance(clubWallet.getBalance().add(request.getAmount()));
-            clubWallet.setTotalIncome(clubWallet.getTotalIncome().add(request.getAmount()));
-            clubWalletRepository.save(clubWallet);
-            log.info("Created and auto-approved income transaction: {} for club: {} by CLUB_OFFICER", reference, clubId);
+            log.info("Created and auto-approved income transaction: {} for club: {} by CLUB_OFFICER. Wallet updated.", reference, clubId);
         } else {
             log.info("Created income transaction: {} for club: {} with PENDING status", reference, clubId);
         }
@@ -215,18 +213,22 @@ public class IncomeTransactionServiceImpl implements IncomeTransactionService {
             throw new AppException(ErrorCode.TRANSACTION_ALREADY_PROCESSED);
         }
 
-        // Update transaction status
+        // Store old state for wallet processing
+        IncomeTransaction oldTransaction = IncomeTransaction.builder()
+                .status(transaction.getStatus())
+                .amount(transaction.getAmount())
+                .clubWallet(transaction.getClubWallet())
+                .build();
+
+        // Update transaction status to SUCCESS
         transaction.setStatus(TransactionStatus.SUCCESS);
-
-        // Update club wallet balance
-        ClubWallet clubWallet = transaction.getClubWallet();
-        clubWallet.setBalance(clubWallet.getBalance().add(transaction.getAmount()));
-        clubWallet.setTotalIncome(clubWallet.getTotalIncome().add(transaction.getAmount()));
-
-        clubWalletRepository.save(clubWallet);
         IncomeTransaction approvedTransaction = incomeTransactionRepository.save(transaction);
 
-        log.info("Approved income transaction: {}, amount: {}", transactionId, transaction.getAmount());
+        // Process wallet update (TiDB doesn't support triggers - handle in application)
+        clubWalletService.processIncomeTransaction(approvedTransaction, oldTransaction);
+
+        log.info("Approved income transaction: {}, amount: {}. Wallet updated.", transactionId, transaction.getAmount());
+
 
         return incomeTransactionMapper.toResponse(approvedTransaction);
     }
