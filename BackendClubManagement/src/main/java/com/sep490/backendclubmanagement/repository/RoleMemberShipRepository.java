@@ -520,14 +520,18 @@ WHERE cm.club.id = :clubId
         FROM RoleMemberShip rm
         JOIN rm.clubMemberShip cm
         JOIN rm.clubRole cr
+        LEFT JOIN cr.systemRole sr
         WHERE cm.user.id = :userId
           AND cm.club.id = :clubId
-          AND cm.status = 'ACTIVE'
           AND rm.semester.id = :semesterId
           AND COALESCE(rm.isActive, TRUE) = TRUE
-          AND UPPER(TRIM(cr.roleCode)) = 'CLUB_PRESIDENT'
+          AND cr IS NOT NULL
+          AND (
+              UPPER(TRIM(cr.roleCode)) ='CLUB_OFFICER'
+              OR (sr IS NOT NULL AND UPPER(TRIM(sr.roleName)) = 'CLUB_OFFICER')
+          )
     """)
-    boolean isClubPresidentInCurrentSemester(@Param("userId") Long userId,
+    boolean isClubOfficerInCurrentSemester(@Param("userId") Long userId,
                                              @Param("clubId") Long clubId,
                                              @Param("semesterId") Long semesterId);
 

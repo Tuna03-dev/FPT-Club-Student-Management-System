@@ -334,7 +334,7 @@ export function ClubReportManagement() {
   };
 
   const [activeTab, setActiveTab] = useState<
-    "requests" | "submissions" | "approval"
+    "requests" | "my_reports" | "club_reports"
   >("requests");
   const [selectedRequest, setSelectedRequest] = useState<ReportRequest | null>(
     null
@@ -483,7 +483,7 @@ export function ClubReportManagement() {
   // Fetch my reports when submissions tab is active
   useEffect(() => {
     const fetchMyReports = async () => {
-      if (!clubId || activeTab !== "submissions") return;
+      if (!clubId || activeTab !== "my_reports") return;
 
       try {
         setLoadingMyReports(true);
@@ -519,7 +519,7 @@ export function ClubReportManagement() {
   // Fetch all club reports when approval tab is active (only for club officers)
   useEffect(() => {
     const fetchAllClubReports = async () => {
-      if (!clubId || activeTab !== "approval" || !isClubOfficer) return;
+      if (!clubId || activeTab !== "club_reports" || !isClubOfficer) return;
 
       try {
         setLoadingAllClubReports(true);
@@ -859,12 +859,12 @@ export function ClubReportManagement() {
                 Yêu cầu nộp
               </Button>
               <Button
-                variant={activeTab === "submissions" ? "default" : "outline"}
-                onClick={() => setActiveTab("submissions")}
+                variant={activeTab === "my_reports" ? "default" : "outline"}
+                onClick={() => setActiveTab("my_reports")}
                 className={`
                   transition-all duration-300 ease-in-out w-full md:w-auto md:flex-none
                   ${
-                    activeTab === "submissions"
+                    activeTab === "my_reports"
                       ? "bg-primary text-primary-foreground shadow-md md:scale-105 border-primary ring-2 ring-primary/30"
                       : "border-primary/30"
                   }
@@ -875,12 +875,12 @@ export function ClubReportManagement() {
               </Button>
               {isClubOfficer && (
                 <Button
-                  variant={activeTab === "approval" ? "default" : "outline"}
-                  onClick={() => setActiveTab("approval")}
+                  variant={activeTab === "club_reports" ? "default" : "outline"}
+                  onClick={() => setActiveTab("club_reports")}
                   className={`
                     transition-all duration-300 ease-in-out w-full md:w-auto md:flex-none
                     ${
-                      activeTab === "approval"
+                      activeTab === "club_reports"
                         ? "bg-primary text-primary-foreground shadow-md md:scale-105 border-primary ring-2 ring-primary/30"
                         : "border-primary/30"
                     }
@@ -1573,7 +1573,7 @@ export function ClubReportManagement() {
           </div>
         )}
 
-        {activeTab === "submissions" && (
+        {activeTab === "my_reports" && (
           <div className="space-y-6">
             {/* Search and Filters */}
             <div className="flex flex-col sm:flex-row gap-4">
@@ -1838,7 +1838,7 @@ export function ClubReportManagement() {
           </div>
         )}
 
-        {activeTab === "approval" && (
+        {activeTab === "club_reports" && (
           <div className="space-y-6">
             {/* Search and Filters */}
             <div className="flex flex-col sm:flex-row gap-4">

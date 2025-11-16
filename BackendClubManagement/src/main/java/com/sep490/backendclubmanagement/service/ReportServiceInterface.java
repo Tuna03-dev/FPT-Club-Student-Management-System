@@ -10,6 +10,8 @@ import com.sep490.backendclubmanagement.dto.response.PageResponse;
 import com.sep490.backendclubmanagement.dto.response.ReportDetailResponse;
 import com.sep490.backendclubmanagement.dto.response.ReportListItemResponse;
 import com.sep490.backendclubmanagement.dto.response.ReportRequirementResponse;
+import jakarta.validation.Valid;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
@@ -107,15 +109,15 @@ public interface ReportServiceInterface {
      * @param userId Current user ID
      * @return List of report list item responses
      */
-    List<ReportListItemResponse> getClubReports(Long clubId, Long userId);
+    PageResponse<ReportListItemResponse> getClubReports(ReportFilterRequest request, Long userId);
 
     /**
      * Get my draft reports for a club
-     * @param clubId Club ID
+     * @param request Filter request containing status, clubId, semesterId, reportType, keyword, and pagination
      * @param userId Current user ID
      * @return List of draft report list item responses
      */
-    List<ReportListItemResponse> getMyDraftReports(Long clubId, Long userId);
+    PageResponse<ReportListItemResponse> getMyReports(ReportFilterRequest request, Long userId);
 
     /**
      * Get all report requirements with filters and pagination (for staff only)

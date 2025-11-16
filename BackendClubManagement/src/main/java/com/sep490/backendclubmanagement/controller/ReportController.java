@@ -143,24 +143,24 @@ public class ReportController {
     /**
      * Get all reports for a club (club president can see all, team officer can see their own)
      */
-    @GetMapping("/club/{clubId}")
-    public ApiResponse<List<ReportListItemResponse>> getClubReports(
-            @PathVariable Long clubId
+    @PostMapping("/club/{clubId}")
+    public ApiResponse<PageResponse<ReportListItemResponse>> getClubReports(
+            @RequestBody @Valid ReportFilterRequest request
     ) {
         Long userId = SecurityUtils.getCurrentUserId();
-        List<ReportListItemResponse> data = reportService.getClubReports(clubId, userId);
+        PageResponse<ReportListItemResponse> data = reportService.getClubReports(request, userId);
         return ApiResponse.success(data);
     }
 
     /**
-     * Get my draft reports for a club
+     * Get my reports for a club
      */
-    @GetMapping("/club/{clubId}/drafts")
-    public ApiResponse<List<ReportListItemResponse>> getMyDraftReports(
-            @PathVariable Long clubId
+    @PostMapping("/club/{clubId}/my-reports")
+    public ApiResponse<PageResponse<ReportListItemResponse>> getMyReports(
+            @RequestBody @Valid ReportFilterRequest request
     ) {
         Long userId = SecurityUtils.getCurrentUserId();
-        List<ReportListItemResponse> data = reportService.getMyDraftReports(clubId, userId);
+        PageResponse<ReportListItemResponse> data = reportService.getMyReports(request, userId);
         return ApiResponse.success(data);
     }
 
