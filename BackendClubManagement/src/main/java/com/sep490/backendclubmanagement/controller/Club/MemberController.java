@@ -7,6 +7,7 @@ import com.sep490.backendclubmanagement.dto.request.UpdateMemberStatusRequest;
 import com.sep490.backendclubmanagement.dto.request.UpdateMemberTeamRequest;
 import com.sep490.backendclubmanagement.dto.response.MemberResponse;
 import com.sep490.backendclubmanagement.dto.response.PageResponse;
+import com.sep490.backendclubmanagement.dto.response.SimpleMemberResponse;
 import com.sep490.backendclubmanagement.entity.ClubMemberShipStatus;
 import com.sep490.backendclubmanagement.exception.AppException;
 import com.sep490.backendclubmanagement.service.MemberService;
@@ -14,6 +15,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/clubs")
@@ -63,6 +66,16 @@ public class MemberController {
 
         PageResponse<MemberResponse> result = memberService.getLeftMembers(
                 clubId, searchTerm, pageable);
+
+        return ApiResponse.success(result);
+    }
+
+    // Get all active members for selection (e.g., fee assignment)
+    @GetMapping("/{clubId}/members/all-active")
+    public ApiResponse<List<SimpleMemberResponse>> getAllActiveMembers(
+            @PathVariable Long clubId) {
+
+        List<SimpleMemberResponse> result = memberService.getAllActiveMembersForSelection(clubId);
 
         return ApiResponse.success(result);
     }

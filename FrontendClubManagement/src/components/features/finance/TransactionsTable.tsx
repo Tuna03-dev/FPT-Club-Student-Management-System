@@ -1,4 +1,5 @@
 // src/components/finance/TransactionsTable.tsx
+import React from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -24,6 +25,14 @@ import { Badge } from "@/components/ui/badge";
 import { CheckCircle, Clock, Edit, Plus, Trash2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import Skeleton from "@/components/common/Skeleton";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import type { Fee } from "@/types/fee";
 
 // Match với backend enum TransactionStatus
 type TransactionStatus = "PENDING" | "COMPLETED" | "CANCELLED" | "FAILED";
@@ -98,6 +107,7 @@ interface TransactionsTableProps {
   isAddOpen: boolean;
   setIsAddOpen: (open: boolean) => void;
   loading?: boolean;
+  fees?: Fee[]; // Danh sách khoản phí để chọn (cho Income transactions)
 }
 
 export function TransactionsTable({
@@ -111,7 +121,20 @@ export function TransactionsTable({
   isAddOpen,
   setIsAddOpen,
   loading = false,
+  fees = [],
 }: TransactionsTableProps) {
+  const [feeSearch, setFeeSearch] = React.useState("");
+
+  const filteredFees = React.useMemo(() => {
+    if (!feeSearch) return fees;
+    const searchLower = feeSearch.toLowerCase();
+    return fees.filter(
+      (fee) =>
+        fee.title.toLowerCase().includes(searchLower) ||
+        fee.amount.toString().includes(searchLower)
+    );
+  }, [fees, feeSearch]);
+
   const getStatusBadge = (status: TransactionStatus) => {
     const variants = {
       COMPLETED: {
@@ -236,12 +259,66 @@ export function TransactionsTable({
                       </div>
                       <div>
                         <Label>Liên kết khoản phí (nếu có)</Label>
-                        <Input
-                          type="number"
-                          placeholder="ID của khoản phí liên quan"
-                        />
+                        <Select>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Chọn khoản phí..." />
+                          </SelectTrigger>
+                          <SelectContent
+                            className="max-h-[350px]"
+                            position="popper"
+                            side="top"
+                            align="start"
+                            sideOffset={4}
+                          >
+                            <div className="sticky top-0 z-10 bg-popover px-2 pt-2 pb-1 border-b">
+                              <Input
+                                placeholder="Tìm kiếm..."
+                                value={feeSearch}
+                                onChange={(e) => setFeeSearch(e.target.value)}
+                                className="h-8"
+                                onClick={(e) => e.stopPropagation()}
+                                onKeyDown={(e) => e.stopPropagation()}
+                              />
+                            </div>
+                            <div className="p-1 pt-2">
+                              <SelectItem value="none">
+                                Không liên kết
+                              </SelectItem>
+                              {filteredFees
+                                .filter((fee) => !fee.isDraft)
+                                .map((fee) => (
+                                  <SelectItem
+                                    key={fee.id}
+                                    value={fee.id.toString()}
+                                  >
+                                    <div className="flex flex-col py-1">
+                                      <span className="font-medium">
+                                        {fee.title}
+                                      </span>
+                                      <span className="text-xs text-muted-foreground">
+                                        {fee.amount.toLocaleString("vi-VN")} ₫ -{" "}
+                                        {new Date(
+                                          fee.dueDate
+                                        ).toLocaleDateString("vi-VN")}
+                                      </span>
+                                    </div>
+                                  </SelectItem>
+                                ))}
+                              {filteredFees.filter((fee) => !fee.isDraft)
+                                .length === 0 && (
+                                <div className="py-6 text-center text-sm text-muted-foreground">
+                                  {feeSearch
+                                    ? "Không tìm thấy khoản phí"
+                                    : "Chưa có khoản phí nào"}
+                                </div>
+                              )}
+                            </div>
+                          </SelectContent>
+                        </Select>
                         <p className="text-xs text-muted-foreground mt-1">
-                          Nếu giao dịch này thu từ một khoản phí đã tạo trước
+                          {fees.length > 0
+                            ? "Chọn khoản phí mà giao dịch này liên quan"
+                            : "Chưa có khoản phí nào được kích hoạt"}
                         </p>
                       </div>
                     </div>

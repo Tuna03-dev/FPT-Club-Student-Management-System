@@ -8,6 +8,7 @@ import com.sep490.backendclubmanagement.dto.response.PageResponse;
 import com.sep490.backendclubmanagement.entity.TransactionStatus;
 import com.sep490.backendclubmanagement.exception.AppException;
 import com.sep490.backendclubmanagement.service.IncomeTransactionService;
+import com.sep490.backendclubmanagement.service.IncomeTransactionServiceImpl;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
@@ -24,7 +25,7 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 public class IncomeTransactionController {
 
-    private final IncomeTransactionService incomeTransactionService;
+    private final IncomeTransactionService incomeTransactionServiceImpl;
 
     /**
      * Get all income transactions for a club
@@ -41,9 +42,9 @@ public class IncomeTransactionController {
 
         PageResponse<IncomeTransactionResponse> response;
         if (status != null) {
-            response = incomeTransactionService.getIncomeTransactionsByStatus(clubId, status, pageable);
+            response = incomeTransactionServiceImpl.getIncomeTransactionsByStatus(clubId, status, pageable);
         } else {
-            response = incomeTransactionService.getIncomeTransactions(clubId, pageable);
+            response = incomeTransactionServiceImpl.getIncomeTransactions(clubId, pageable);
         }
 
         return ApiResponse.success(response);
@@ -58,7 +59,7 @@ public class IncomeTransactionController {
             @PathVariable Long clubId,
             @PathVariable Long transactionId
     ) throws AppException {
-        IncomeTransactionResponse response = incomeTransactionService.getIncomeTransactionById(transactionId);
+        IncomeTransactionResponse response = incomeTransactionServiceImpl.getIncomeTransactionById(transactionId);
         return ApiResponse.success(response);
     }
 
@@ -71,7 +72,7 @@ public class IncomeTransactionController {
             @PathVariable Long clubId,
             @Valid @RequestBody CreateIncomeTransactionRequest request
     ) throws AppException {
-        IncomeTransactionResponse response = incomeTransactionService.createIncomeTransaction(clubId, request);
+        IncomeTransactionResponse response = incomeTransactionServiceImpl.createIncomeTransaction(clubId, request);
         return ApiResponse.success(response);
     }
 
@@ -85,7 +86,7 @@ public class IncomeTransactionController {
             @PathVariable Long transactionId,
             @Valid @RequestBody UpdateIncomeTransactionRequest request
     ) throws AppException {
-        IncomeTransactionResponse response = incomeTransactionService.updateIncomeTransaction(transactionId, request);
+        IncomeTransactionResponse response = incomeTransactionServiceImpl.updateIncomeTransaction(transactionId, request);
         return ApiResponse.success(response);
     }
 
@@ -98,7 +99,7 @@ public class IncomeTransactionController {
             @PathVariable Long clubId,
             @PathVariable Long transactionId
     ) throws AppException {
-        IncomeTransactionResponse response = incomeTransactionService.approveIncomeTransaction(transactionId);
+        IncomeTransactionResponse response = incomeTransactionServiceImpl.approveIncomeTransaction(transactionId);
         return ApiResponse.success(response);
     }
 
@@ -111,7 +112,7 @@ public class IncomeTransactionController {
             @PathVariable Long clubId,
             @PathVariable Long transactionId
     ) throws AppException {
-        IncomeTransactionResponse response = incomeTransactionService.rejectIncomeTransaction(transactionId);
+        IncomeTransactionResponse response = incomeTransactionServiceImpl.rejectIncomeTransaction(transactionId);
         return ApiResponse.success(response);
     }
 
@@ -124,7 +125,7 @@ public class IncomeTransactionController {
             @PathVariable Long clubId,
             @PathVariable Long transactionId
     ) throws AppException {
-        incomeTransactionService.deleteIncomeTransaction(transactionId);
+        incomeTransactionServiceImpl.deleteIncomeTransaction(transactionId);
         return ApiResponse.success();
     }
 }

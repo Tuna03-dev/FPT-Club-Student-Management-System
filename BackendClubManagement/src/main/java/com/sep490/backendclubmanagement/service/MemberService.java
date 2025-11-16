@@ -2,9 +2,12 @@ package com.sep490.backendclubmanagement.service;
 
 import com.sep490.backendclubmanagement.dto.response.MemberResponse;
 import com.sep490.backendclubmanagement.dto.response.PageResponse;
+import com.sep490.backendclubmanagement.dto.response.SimpleMemberResponse;
 import com.sep490.backendclubmanagement.entity.ClubMemberShipStatus;
 import com.sep490.backendclubmanagement.exception.AppException;
 import org.springframework.data.domain.Pageable;
+
+import java.util.List;
 
 public interface MemberService {
     
@@ -25,6 +28,9 @@ public interface MemberService {
         String searchTerm,
         Pageable pageable
     );
+
+    // Get all active members for selection (e.g., fee assignment)
+    List<SimpleMemberResponse> getAllActiveMembersForSelection(Long clubId);
 
     void updateMemberRole(Long clubId, Long userId, Long roleId, Long semesterId, Long currentUserId) throws AppException;
 

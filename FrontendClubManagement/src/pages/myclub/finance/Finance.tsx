@@ -11,12 +11,16 @@ import {
 } from "@/components/features/finance/TransactionsTable";
 import { FeesTable } from "@/components/features/finance/FeesTable";
 import { PayOSIntegration } from "@/components/features/finance/PayOsIntegration";
+import { CreateTransactionDialog } from "@/components/features/finance/CreateTransactionDialog";
+import { EditTransactionDialog } from "@/components/features/finance/EditTransactionDialog";
 import type { Fee } from "@/types/fee";
 import type { PageResponse } from "@/types";
 import feeService from "@/services/feeService";
 import transactionService, {
   type IncomeTransactionResponse,
   type OutcomeTransactionResponse,
+  type CreateIncomeTransactionRequest,
+  type CreateOutcomeTransactionRequest,
 } from "@/services/transactionService";
 
 const PAGE_SIZE = 10;
@@ -85,6 +89,8 @@ export default function Finance() {
   const [feesPage, setFeesPage] = useState<PageResponse<Fee> | null>(null);
   const [feesLoading, setFeesLoading] = useState<boolean>(false);
   const [isAddTransactionOpen, setIsAddTransactionOpen] = useState(false);
+  const [isEditTransactionOpen, setIsEditTransactionOpen] = useState(false);
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [isAddFeeOpen, setIsAddFeeOpen] = useState(false);
   const [clientId, setClientId] = useState("");
   const [apiKey, setApiKey] = useState("");
@@ -93,6 +99,9 @@ export default function Finance() {
   const [currentPage, setCurrentPage] = useState(0);
   const [incomePage, setIncomePage] = useState(0);
   const [outcomePage, setOutcomePage] = useState(0);
+  const [activeTransactionTab, setActiveTransactionTab] = useState<
+    "INCOME" | "OUTCOME"
+  >("INCOME");
 
   const fetchIncomeTransactions = useCallback(
     async (page: number = 0) => {
@@ -313,14 +322,14 @@ export default function Finance() {
   ) => {
     try {
       if (type === "INCOME") {
-        await transactionService.cancelTransaction(
+        await transactionService.rejectTransaction(
           numericClubId,
           Number(id),
           "income"
         );
         await fetchIncomeTransactions(incomePage);
       } else if (type === "OUTCOME") {
-        await transactionService.cancelTransaction(
+        await transactionService.rejectTransaction(
           numericClubId,
           Number(id),
           "outcome"
@@ -331,6 +340,56 @@ export default function Finance() {
     } catch (e) {
       console.error("Failed to cancel transaction", e);
       toast.error("Không thể hủy giao dịch");
+    }
+  };
+
+  const handleCreateIncomeTransaction = async (
+    data: CreateIncomeTransactionRequest
+  ) => {
+    try {
+      await transactionService.createIncomeTransaction(numericClubId, data);
+      await fetchIncomeTransactions(incomePage);
+    } catch (error) {
+      console.error("Failed to create income transaction:", error);
+      throw error;
+    }
+  };
+
+  const handleCreateOutcomeTransaction = async (
+    data: CreateOutcomeTransactionRequest
+  ) => {
+    try {
+      await transactionService.createOutcomeTransaction(numericClubId, data);
+      await fetchOutcomeTransactions(outcomePage);
+    } catch (error) {
+      console.error("Failed to create outcome transaction:", error);
+      throw error;
+    }
+  };
+
+  const handleUpdateIncomeTransaction = async (
+    id: number,
+    data: Partial<CreateIncomeTransactionRequest>
+  ) => {
+    try {
+      await transactionService.updateIncomeTransaction(numericClubId, id, data);
+      await fetchIncomeTransactions(incomePage);
+    } catch (error) {
+      console.error("Failed to update income transaction:", error);
+      throw error;
+    }
+  };
+
+  const handleUpdateOutcomeTransaction = async (
+    id: number,
+    data: Partial<CreateOutcomeTransactionRequest>
+  ) => {
+    try {
+      await transactionService.updateOutcomeTransaction(numericClubId, id, data);
+      await fetchOutcomeTransactions(outcomePage);
+    } catch (error) {
+      console.error("Failed to update outcome transaction:", error);
+      throw error;
     }
   };
 
@@ -370,10 +429,17 @@ export default function Finance() {
           loading={incomeLoading || outcomeLoading}
         />
 
-        <Tabs defaultValue="income" className="w-full">
+        <Tabs
+          defaultValue="income"
+          className="w-full"
+          onValueChange={(value) => {
+            if (value === "income") setActiveTransactionTab("INCOME");
+            if (value === "outcome") setActiveTransactionTab("OUTCOME");
+          }}
+        >
           <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="income">Thu (Income)</TabsTrigger>
-            <TabsTrigger value="outcome">Chi (Outcome)</TabsTrigger>
+            <TabsTrigger value="income">Thu</TabsTrigger>
+            <TabsTrigger value="outcome">Chi</TabsTrigger>
             <TabsTrigger value="fees">Quản lý phí</TabsTrigger>
             <TabsTrigger value="payos">Tích hợp PayOS</TabsTrigger>
           </TabsList>
@@ -382,8 +448,14 @@ export default function Finance() {
             <TransactionsTable
               transactions={incomeTransactions}
               transactionType="INCOME"
-              onAddTransaction={() => setIsAddTransactionOpen(true)}
-              onEditTransaction={() => {}}
+              onAddTransaction={() => {
+                setActiveTransactionTab("INCOME");
+                setIsAddTransactionOpen(true);
+              }}
+              onEditTransaction={(transaction) => {
+                setEditingTransaction(transaction);
+                setIsEditTransactionOpen(true);
+              }}
               onDeleteTransaction={(id) =>
                 handleDeleteTransaction(id, "INCOME")
               }
@@ -396,6 +468,7 @@ export default function Finance() {
               isAddOpen={isAddTransactionOpen}
               setIsAddOpen={setIsAddTransactionOpen}
               loading={incomeLoading}
+              fees={feesPage?.content ?? []}
             />
           </TabsContent>
 
@@ -403,8 +476,14 @@ export default function Finance() {
             <TransactionsTable
               transactions={outcomeTransactions}
               transactionType="OUTCOME"
-              onAddTransaction={() => setIsAddTransactionOpen(true)}
-              onEditTransaction={() => {}}
+              onAddTransaction={() => {
+                setActiveTransactionTab("OUTCOME");
+                setIsAddTransactionOpen(true);
+              }}
+              onEditTransaction={(transaction) => {
+                setEditingTransaction(transaction);
+                setIsEditTransactionOpen(true);
+              }}
               onDeleteTransaction={(id) =>
                 handleDeleteTransaction(id, "OUTCOME")
               }
@@ -453,6 +532,28 @@ export default function Finance() {
             />
           </TabsContent>
         </Tabs>
+
+        {/* Create Transaction Dialog */}
+        <CreateTransactionDialog
+          open={isAddTransactionOpen}
+          onOpenChange={setIsAddTransactionOpen}
+          transactionType={activeTransactionTab}
+          fees={feesPage?.content ?? []}
+          clubId={numericClubId}
+          onCreateIncome={handleCreateIncomeTransaction}
+          onCreateOutcome={handleCreateOutcomeTransaction}
+        />
+
+        {/* Edit Transaction Dialog */}
+        <EditTransactionDialog
+          open={isEditTransactionOpen}
+          onOpenChange={setIsEditTransactionOpen}
+          transaction={editingTransaction}
+          fees={feesPage?.content ?? []}
+          clubId={numericClubId}
+          onUpdateIncome={handleUpdateIncomeTransaction}
+          onUpdateOutcome={handleUpdateOutcomeTransaction}
+        />
       </div>
     </div>
   );

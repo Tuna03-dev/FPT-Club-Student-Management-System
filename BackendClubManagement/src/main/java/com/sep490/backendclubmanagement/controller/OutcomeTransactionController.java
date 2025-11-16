@@ -8,6 +8,7 @@ import com.sep490.backendclubmanagement.dto.response.PageResponse;
 import com.sep490.backendclubmanagement.entity.TransactionStatus;
 import com.sep490.backendclubmanagement.exception.AppException;
 import com.sep490.backendclubmanagement.service.OutcomeTransactionService;
+import com.sep490.backendclubmanagement.service.OutcomeTransactionServiceImpl;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
@@ -24,7 +25,7 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 public class OutcomeTransactionController {
 
-    private final OutcomeTransactionService outcomeTransactionService;
+    private final OutcomeTransactionService outcomeTransactionServiceImpl;
 
     /**
      * Get all outcome transactions for a club
@@ -41,9 +42,9 @@ public class OutcomeTransactionController {
 
         PageResponse<OutcomeTransactionResponse> response;
         if (status != null) {
-            response = outcomeTransactionService.getOutcomeTransactionsByStatus(clubId, status, pageable);
+            response = outcomeTransactionServiceImpl.getOutcomeTransactionsByStatus(clubId, status, pageable);
         } else {
-            response = outcomeTransactionService.getOutcomeTransactions(clubId, pageable);
+            response = outcomeTransactionServiceImpl.getOutcomeTransactions(clubId, pageable);
         }
 
         return ApiResponse.success(response);
@@ -58,7 +59,7 @@ public class OutcomeTransactionController {
             @PathVariable Long clubId,
             @PathVariable Long transactionId
     ) throws AppException {
-        OutcomeTransactionResponse response = outcomeTransactionService.getOutcomeTransactionById(transactionId);
+        OutcomeTransactionResponse response = outcomeTransactionServiceImpl.getOutcomeTransactionById(transactionId);
         return ApiResponse.success(response);
     }
 
@@ -71,7 +72,7 @@ public class OutcomeTransactionController {
             @PathVariable Long clubId,
             @Valid @RequestBody CreateOutcomeTransactionRequest request
     ) throws AppException {
-        OutcomeTransactionResponse response = outcomeTransactionService.createOutcomeTransaction(clubId, request);
+        OutcomeTransactionResponse response = outcomeTransactionServiceImpl.createOutcomeTransaction(clubId, request);
         return ApiResponse.success(response);
     }
 
@@ -85,7 +86,7 @@ public class OutcomeTransactionController {
             @PathVariable Long transactionId,
             @Valid @RequestBody UpdateOutcomeTransactionRequest request
     ) throws AppException {
-        OutcomeTransactionResponse response = outcomeTransactionService.updateOutcomeTransaction(transactionId, request);
+        OutcomeTransactionResponse response = outcomeTransactionServiceImpl.updateOutcomeTransaction(transactionId, request);
         return ApiResponse.success(response);
     }
 
@@ -98,7 +99,7 @@ public class OutcomeTransactionController {
             @PathVariable Long clubId,
             @PathVariable Long transactionId
     ) throws AppException {
-        OutcomeTransactionResponse response = outcomeTransactionService.approveOutcomeTransaction(transactionId);
+        OutcomeTransactionResponse response = outcomeTransactionServiceImpl.approveOutcomeTransaction(transactionId);
         return ApiResponse.success(response);
     }
 
@@ -111,7 +112,7 @@ public class OutcomeTransactionController {
             @PathVariable Long clubId,
             @PathVariable Long transactionId
     ) throws AppException {
-        OutcomeTransactionResponse response = outcomeTransactionService.rejectOutcomeTransaction(transactionId);
+        OutcomeTransactionResponse response = outcomeTransactionServiceImpl.rejectOutcomeTransaction(transactionId);
         return ApiResponse.success(response);
     }
 
@@ -124,7 +125,7 @@ public class OutcomeTransactionController {
             @PathVariable Long clubId,
             @PathVariable Long transactionId
     ) throws AppException {
-        outcomeTransactionService.deleteOutcomeTransaction(transactionId);
+        outcomeTransactionServiceImpl.deleteOutcomeTransaction(transactionId);
         return ApiResponse.success();
     }
 }

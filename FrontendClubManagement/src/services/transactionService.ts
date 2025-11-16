@@ -56,6 +56,7 @@ export interface CreateIncomeTransactionRequest {
   source: string;
   notes?: string;
   feeId?: number;
+  userId?: number; // ID người đóng tiền (optional)
 }
 
 // Create Outcome Transaction Request
@@ -181,15 +182,15 @@ export const transactionService = {
   },
 
   // Hủy giao dịch (chuyển sang CANCELLED)
-  async cancelTransaction(
+  async rejectTransaction(
     clubId: number,
     transactionId: number,
     type: "income" | "outcome"
   ): Promise<
     ApiResponse<IncomeTransactionResponse | OutcomeTransactionResponse>
   > {
-    const url = `/clubs/${clubId}/transactions/${type}/${transactionId}/cancel`;
-    return axiosClient.patch<
+    const url = `/clubs/${clubId}/transactions/${type}/${transactionId}/reject`;
+    return axiosClient.post<
       IncomeTransactionResponse | OutcomeTransactionResponse
     >(url, {});
   },
