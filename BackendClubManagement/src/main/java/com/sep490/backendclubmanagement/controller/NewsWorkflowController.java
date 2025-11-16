@@ -8,6 +8,7 @@ import com.sep490.backendclubmanagement.dto.request.RejectNewsRequest;
 import com.sep490.backendclubmanagement.dto.request.UpdateNewsRequest;
 import com.sep490.backendclubmanagement.dto.response.NewsRequestResponse;
 import com.sep490.backendclubmanagement.dto.response.PublishResult;
+import com.sep490.backendclubmanagement.exception.AppException;
 import com.sep490.backendclubmanagement.service.NewsWorkflowService;
 import com.sep490.backendclubmanagement.service.UserService;
 import lombok.RequiredArgsConstructor;
@@ -28,7 +29,7 @@ public class NewsWorkflowController {
     public ApiResponse<NewsRequestResponse> createRequest(
             @AuthenticationPrincipal User principal,
             @RequestBody CreateNewsRequest body
-    ){
+    ) throws AppException {
         Long me = userService.getIdByEmail(principal.getUsername());
         return ApiResponse.success(workflow.createRequest(me, body));
     }
@@ -50,7 +51,7 @@ public class NewsWorkflowController {
             @AuthenticationPrincipal User principal,
             @PathVariable Long id,
             @RequestBody(required = false) ApproveNewsRequest body
-    ) {
+    ) throws AppException {
         Long me = userService.getIdByEmail(principal.getUsername());
         return ApiResponse.success(workflow.clubApproveAndSubmit(me, id, body));
     }
@@ -61,7 +62,7 @@ public class NewsWorkflowController {
             @AuthenticationPrincipal User principal,
             @PathVariable Long id,
             @RequestBody RejectNewsRequest body
-    ){
+    ) throws AppException {
         Long me = userService.getIdByEmail(principal.getUsername());
         return ApiResponse.success(workflow.clubPresidentReject(me, id, body));
     }
@@ -71,7 +72,7 @@ public class NewsWorkflowController {
     public ApiResponse<NewsRequestResponse> staffApprovePublish(
             @AuthenticationPrincipal User principal,
             @PathVariable Long id
-    ){
+    ) throws AppException {
         Long me = userService.getIdByEmail(principal.getUsername());
         return ApiResponse.success(workflow.staffApproveAndPublish(me, id, null));
     }
@@ -82,7 +83,7 @@ public class NewsWorkflowController {
             @AuthenticationPrincipal User principal,
             @PathVariable Long id,
             @RequestBody RejectNewsRequest body
-    ){
+    ) throws AppException {
         Long me = userService.getIdByEmail(principal.getUsername());
         return ApiResponse.success(workflow.staffReject(me, id, body));
     }

@@ -1,8 +1,8 @@
-
 import { useNavigate, useParams, useLocation } from "react-router-dom"
 import { useEffect, useRef, useState } from "react"
 import { draftsApi } from "@/api/newsDrafts"
 import { requestsApi } from "@/api/newsRequests"
+import { uploadImageOnly } from "@/api/uploads"
 import { useTeamLeadGuard } from "@/hooks/useTeamLeadGuard"
 import type { NewsData, RequestStatus } from "@/types/news"
 import { ArrowLeft, Send, Loader2, ImageIcon, Upload, X } from "lucide-react"
@@ -16,6 +16,27 @@ const NEWS_TYPES = [
   { value: "Lập trình", label: "Lập trình" },
   { value: "Thể Thao", label: "Thể Thao" },
 ] as const
+
+/* ===== Validate ảnh ===== */
+const LIMITS = {
+  imageMaxMB: 5,
+} as const
+
+const ALLOW_TYPES: ReadonlySet<string> = new Set<string>([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/jpg",
+])
+
+function validateImageFile(file: File): string | null {
+  if (!ALLOW_TYPES.has(file.type)) return "Ảnh phải là JPG/PNG/WEBP."
+  const mb = file.size / (1024 * 1024)
+  if (mb > LIMITS.imageMaxMB)
+    return `Kích thước tối đa ${LIMITS.imageMaxMB}MB. Ảnh hiện tại ~${mb.toFixed(1)}MB.`
+
+  return null
+}
 
 type FormErrors = {
   title?: string
@@ -35,12 +56,13 @@ export default function TeamNewsEditor() {
   const [draftId, setDraftId] = useState<number | null>(null)
   const [title, setTitle] = useState("")
   const [content, setContent] = useState("")
-  const [thumbnailUrl, setThumbnailUrl] = useState<string>("") // URL thật (nếu có)
-  const [thumbPreview, setThumbPreview] = useState<string>("") // DataURL để preview đồng nhất UI
+  const [thumbnailUrl, setThumbnailUrl] = useState<string>("") // Cloudinary URL
+  const [thumbPreview, setThumbPreview] = useState<string>("") // dataURL để show UI
   const [fileObj, setFileObj] = useState<File | null>(null)
   const [newsType, setNewsType] = useState("")
   const [saving, setSaving] = useState(false)
   const [errors, setErrors] = useState<FormErrors>({})
+
   // lấy draftId từ query
   useEffect(() => {
     const p = new URLSearchParams(window.location.search)
@@ -48,7 +70,7 @@ export default function TeamNewsEditor() {
     setDraftId(Number.isFinite(did) ? did : null)
   }, [])
 
-  // prefill dữ liệu: ưu tiên state.draft, nếu không thì gọi get(draftId)
+  // Prefill dữ liệu draft
   useEffect(() => {
     if (location.state?.draft) {
       const d = location.state.draft
@@ -59,6 +81,7 @@ export default function TeamNewsEditor() {
       setNewsType(d.newsType || "")
       return
     }
+
     const loadById = async () => {
       if (!draftId) return
       try {
@@ -76,10 +99,12 @@ export default function TeamNewsEditor() {
     loadById()
   }, [draftId, location.state])
 
-  if (allowed === false) return <div className="p-6 text-sm text-destructive">Bạn không có quyền truy cập. {error}</div>
-  if (allowed === null) return <div className="p-6 text-sm text-muted-foreground">Đang kiểm tra quyền…</div>
+  if (allowed === false)
+    return <div className="p-6 text-sm text-destructive">Bạn không có quyền truy cập. {error}</div>
+  if (allowed === null)
+    return <div className="p-6 text-sm text-muted-foreground">Đang kiểm tra quyền…</div>
 
-  // validate: chỉ set lỗi để hiển thị UI (không đổi logic nghiệp vụ)
+  /* ===== Validate form ===== */
   const validate = (): boolean => {
     const next: FormErrors = {}
     if (!title.trim()) next.title = "Vui lòng nhập tiêu đề"
@@ -90,12 +115,25 @@ export default function TeamNewsEditor() {
     return Object.keys(next).length === 0
   }
 
-  // giữ nguyên flow save -> drafts
+  /* ===== Save draft ===== */
   const saveDraft = async () => {
     if (!validate()) return
+
     setSaving(true)
     try {
-      const finalThumb = (thumbPreview || thumbnailUrl) || undefined
+      let finalThumb = thumbnailUrl || undefined
+
+      if (fileObj) {
+        const err = validateImageFile(fileObj)
+        if (err) {
+          alert(err)
+          setSaving(false)
+          return
+        }
+        const up = await uploadImageOnly(fileObj)
+        finalThumb = up.url
+      }
+
       if (draftId) {
         const res = await draftsApi.update(draftId, {
           title,
@@ -117,6 +155,7 @@ export default function TeamNewsEditor() {
         if (res.code !== 200 || !res.data) throw new Error(res.message || "Create draft failed")
         alert(`Đã lưu nháp #${res.data.id}`)
       }
+
       nav(`/myclub/${clubId}/teams/${teamId}?tab=drafts`, { replace: true })
     } catch (e: any) {
       alert(e?.message || "Không lưu được nháp")
@@ -125,7 +164,7 @@ export default function TeamNewsEditor() {
     }
   }
 
-  // giữ nguyên flow submit -> requests
+  /* ===== Submit request ===== */
   const submitRequest = async () => {
     if (!validate()) return
     setSaving(true)
@@ -136,17 +175,32 @@ export default function TeamNewsEditor() {
         const payload = res.data as { requestId: number; status: RequestStatus }
         alert(`Đã submit nháp #${draftId} → request #${payload?.requestId}`)
       } else {
+        let finalThumb = thumbnailUrl || undefined
+
+        if (fileObj) {
+          const err = validateImageFile(fileObj)
+          if (err) {
+            alert(err)
+            setSaving(false)
+            return
+          }
+          const up = await uploadImageOnly(fileObj)
+          finalThumb = up.url
+        }
+
         const res = await requestsApi.create({
           title,
           content,
-          thumbnailUrl: (thumbPreview || thumbnailUrl) || undefined,
+          thumbnailUrl: finalThumb,
           newsType: newsType || undefined,
           clubId,
           teamId,
         })
+
         if (res.code !== 200 || !res.data) throw new Error(res.message || "Create request failed")
         alert(`Đã tạo request #${res.data.id}`)
       }
+
       nav(`/myclub/${clubId}/teams/${teamId}?tab=requests`, { replace: true })
     } catch (e: any) {
       alert(e?.message || "Không gửi được request")
@@ -156,11 +210,10 @@ export default function TeamNewsEditor() {
   }
 
   const goBack = () => nav(-1)
-  void fileObj
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header giống StaffNewsEditor */}
+      {/* Header */}
       <div className="border-b border-border bg-background sticky top-0 z-40">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <button
@@ -176,7 +229,7 @@ export default function TeamNewsEditor() {
         </div>
       </div>
 
-      {/* Main Content: layout & style đồng nhất StaffNewsEditor */}
+      {/* Main */}
       <div className="max-w-6xl mx-auto px-6 py-8">
         <div className="mb-8">
           <h1 className="text-3xl font-semibold tracking-tight text-foreground mb-2">
@@ -186,13 +239,13 @@ export default function TeamNewsEditor() {
         </div>
 
         <div className="space-y-6 pb-32">
-          {/* Thumbnail (DropImagePreview) */}
+          {/* Thumbnail */}
           <div className="space-y-3">
             <label className="text-sm font-semibold">Ảnh thumbnail</label>
             <DropImagePreview
               preview={thumbPreview || thumbnailUrl}
               onPick={(file, dataUrl) => {
-                setFileObj(file) // giữ để nếu sau này cần upload ngay
+                setFileObj(file)
                 setThumbPreview(dataUrl)
                 if (errors.thumbnailUrl) setErrors((x) => ({ ...x, thumbnailUrl: undefined }))
               }}
@@ -209,9 +262,8 @@ export default function TeamNewsEditor() {
           <div className="space-y-2">
             <label className="text-sm font-medium text-foreground">Tiêu đề</label>
             <input
-              className={`w-full px-4 py-2.5 rounded-lg border bg-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:border-transparent transition-all ${
-                errors.title ? "border-rose-500 focus:ring-rose-200" : "border-border focus:ring-primary"
-              }`}
+              className={`w-full px-4 py-2.5 rounded-lg border bg-background placeholder:text-muted-foreground 
+              ${errors.title ? "border-rose-500" : "border-border"}`}
               placeholder="Nhập tiêu đề bài viết"
               value={title}
               onChange={(e) => {
@@ -233,9 +285,8 @@ export default function TeamNewsEditor() {
               }}
             >
               <SelectTrigger
-                className={`w-full px-4 py-2.5 rounded-lg border bg-background focus:ring-2 ${
-                  errors.newsType ? "border-rose-500 focus:ring-rose-200" : "border-border focus:ring-primary"
-                }`}
+                className={`w-full px-4 py-2.5 rounded-lg border bg-background 
+                ${errors.newsType ? "border-rose-500" : "border-border"}`}
               >
                 <SelectValue placeholder="Chọn loại" />
               </SelectTrigger>
@@ -254,9 +305,9 @@ export default function TeamNewsEditor() {
           <div className="space-y-2">
             <label className="text-sm font-medium text-foreground">Nội dung</label>
             <textarea
-              className={`w-full px-4 py-2.5 rounded-lg border bg-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:border-transparent transition-all resize-none min-h-[200px] ${
-                errors.content ? "border-rose-500 focus:ring-rose-200" : "border-border focus:ring-primary"
-              }`}
+              className={`w-full px-4 py-2.5 rounded-lg border bg-background placeholder:text-muted-foreground 
+              resize-none min-h-[200px] 
+              ${errors.content ? "border-rose-500" : "border-border"}`}
               placeholder="Viết nội dung bài viết của bạn"
               value={content}
               onChange={(e) => {
@@ -270,7 +321,7 @@ export default function TeamNewsEditor() {
         </div>
       </div>
 
-      {/* Footer actions giống StaffNewsEditor */}
+      {/* Footer actions */}
       <div className="fixed left-0 right-0 bottom-0 z-40 border-t border-border bg-background backdrop-blur-sm">
         <div className="max-w-6xl mx-auto px-6 py-4 flex flex-wrap items-center justify-between gap-4">
           <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
@@ -280,15 +331,15 @@ export default function TeamNewsEditor() {
             <button
               onClick={saveDraft}
               disabled={saving}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-border bg-background text-foreground hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-border bg-background text-foreground hover:bg-muted transition-colors disabled:opacity-50 text-sm font-medium"
             >
-              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              {saving && <Loader2 className="h-4 w-4 animate-spin" />}
               {draftId ? "Cập nhật" : "Lưu nháp"}
             </button>
             <button
               onClick={submitRequest}
               disabled={saving}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50 text-sm font-medium"
             >
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               {draftId ? "Gửi nháp" : "Gửi yêu cầu"}
@@ -300,7 +351,8 @@ export default function TeamNewsEditor() {
   )
 }
 
-/** Drop-zone preview bằng DataURL (đồng nhất StaffNewsEditor), có hiển thị lỗi viền đỏ */
+/* ===== Component: DropImagePreview ===== */
+
 function DropImagePreview({
   preview,
   onPick,
@@ -335,17 +387,19 @@ function DropImagePreview({
   return (
     <div>
       <div
-        className={`relative rounded-lg border-2 border-dashed transition-all ${
-          dragOver ? "border-blue-500 bg-blue-50" : errorMsg ? "border-rose-500 bg-rose-50/40" : "border-slate-300 bg-slate-50"
-        } p-3`}
+        className={`relative rounded-lg border-2 border-dashed transition-all 
+        ${dragOver ? "border-blue-500 bg-blue-50"
+          : errorMsg ? "border-rose-500 bg-rose-50/40"
+          : "border-slate-300 bg-slate-50"} p-3`}
         onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
-        onDragLeave={(e) => { e.preventDefault(); setDragOver(false) }}
+        onDragLeave={() => setDragOver(false)}
         onDrop={async (e) => {
-          e.preventDefault(); e.stopPropagation(); setDragOver(false)
+          e.preventDefault()
+          setDragOver(false)
           await handleFile(e.dataTransfer.files?.[0])
         }}
         onPaste={(e) => {
-          if (e.clipboardData?.getData("text/plain")) e.preventDefault() // chặn dán link
+          if (e.clipboardData?.getData("text/plain")) e.preventDefault()
         }}
       >
         <div className="aspect-[16/9] w-full rounded-md bg-white overflow-hidden cursor-pointer" onClick={open}>
@@ -353,7 +407,7 @@ function DropImagePreview({
             <img src={preview} alt="thumbnail" className="w-full h-full object-cover" />
           ) : (
             <div className="w-full h-full flex items-center justify-center text-slate-400">
-              <ImageIcon className="h-5 w-5 mr-2" /> Kéo-thả hoặc bấm để chọn ảnh
+              <ImageIcon className="h-5 w-5 mr-2" /> Kéo-thả hoặc chọn ảnh
             </div>
           )}
         </div>
@@ -362,7 +416,7 @@ function DropImagePreview({
           <button
             type="button"
             onClick={open}
-            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md border bg-white hover:bg-slate-50 text-sm font-medium"
+            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md border bg-white hover:bg-slate-50 text-sm"
           >
             <Upload className="h-4 w-4" /> Chọn ảnh
           </button>
@@ -370,7 +424,7 @@ function DropImagePreview({
             <button
               type="button"
               onClick={onClear}
-              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md border bg-white hover:bg-slate-50 text-sm font-medium"
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md border bg-white hover:bg-slate-50 text-sm"
             >
               <X className="h-4 w-4" /> Xóa
             </button>

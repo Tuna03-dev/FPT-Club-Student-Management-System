@@ -554,6 +554,34 @@ WHERE cm.club.id = :clubId
     boolean isClubOfficerOrTeamOfficerInCurrentSemester(@Param("userId") Long userId,
                                            @Param("clubId") Long clubId,
                                            @Param("semesterId") Long semesterId);
+    
+    /**
+     * Find team ID of a team officer in a club for a specific semester
+     * Returns the team ID if user is a team officer (not club officer) in the current semester
+     */
+    @Query("""
+        SELECT rm.team.id
+        FROM RoleMemberShip rm
+        JOIN rm.clubMemberShip cm
+        JOIN rm.clubRole cr
+        LEFT JOIN cr.systemRole sr
+        WHERE cm.user.id = :userId
+          AND cm.club.id = :clubId
+          AND rm.semester.id = :semesterId
+          AND COALESCE(rm.isActive, TRUE) = TRUE
+          AND rm.team IS NOT NULL
+          AND cr IS NOT NULL
+          AND (
+              (UPPER(TRIM(cr.roleCode)) = 'TEAM_OFFICER' AND sr IS NULL)
+              OR (sr IS NOT NULL AND UPPER(TRIM(sr.roleName)) = 'TEAM_OFFICER')
+          )
+        ORDER BY rm.id DESC
+    """)
+    Optional<Long> findTeamIdByUserIdAndClubIdAndSemesterId(
+            @Param("userId") Long userId,
+            @Param("clubId") Long clubId,
+            @Param("semesterId") Long semesterId
+    );
     @Query("""
         SELECT CASE WHEN COUNT(rm) > 0 THEN true ELSE false END
         FROM RoleMemberShip rm

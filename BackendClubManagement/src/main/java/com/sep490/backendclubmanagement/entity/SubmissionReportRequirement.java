@@ -30,7 +30,7 @@ public class SubmissionReportRequirement extends BaseEntity {
 
     @Column(name = "report_type", length = 100)
     @Enumerated(EnumType.STRING)
-    private ReportType reportType; // MONTHLY, QUARTERLY, SEMESTER, ANNUAL, AD_HOC
+    private ReportType reportType;
 
     @Column(name = "template_url", length = 500)
     private String templateUrl;

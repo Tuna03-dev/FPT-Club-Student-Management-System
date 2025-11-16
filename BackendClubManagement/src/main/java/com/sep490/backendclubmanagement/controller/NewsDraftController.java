@@ -4,6 +4,7 @@ import com.sep490.backendclubmanagement.dto.ApiResponse;
 import com.sep490.backendclubmanagement.dto.request.CreateDraftRequest;
 import com.sep490.backendclubmanagement.dto.request.UpdateDraftRequest;
 import com.sep490.backendclubmanagement.dto.response.NewsData;
+import com.sep490.backendclubmanagement.exception.AppException;
 import com.sep490.backendclubmanagement.service.NewsDraftService;
 import com.sep490.backendclubmanagement.service.UserService;
 import lombok.RequiredArgsConstructor;
@@ -64,7 +65,7 @@ public class NewsDraftController {
     public ApiResponse<?> submit(
             @AuthenticationPrincipal User principal,
             @PathVariable Long newsId
-    ) {
+    ) throws AppException {
         Long me = userService.getIdByEmail(principal.getUsername());
         return ApiResponse.success(draftService.submitDraftToRequest(me, newsId));
     }
@@ -73,7 +74,7 @@ public class NewsDraftController {
     public ApiResponse<NewsData> publish(
             @AuthenticationPrincipal User principal,
             @PathVariable Long newsId
-    ) {
+    ) throws AppException {
         Long me = userService.getIdByEmail(principal.getUsername());
         return ApiResponse.success(draftService.publishDraftByStaff(me, newsId));
     }

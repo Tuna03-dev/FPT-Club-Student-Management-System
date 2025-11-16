@@ -46,6 +46,7 @@ export interface ClubRequirementInfo {
   clubName: string;
   clubCode: string;
   status: string; // ReportStatus enum from backend (DRAFT, PENDING_CLUB, etc.) or null if no report exists
+  teamId?: number | null; // Team ID assigned to this requirement
   note?: string;
   report?: ReportInfo;
 }
@@ -58,6 +59,7 @@ export interface ReportInfo {
   createdAt: string;
   updatedAt: string;
   mustResubmit?: boolean;
+  createdBy?: UserInfo;
 }
 
 // Report Detail Response
