@@ -14,10 +14,14 @@ import org.springframework.data.domain.Sort;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.web.bind.annotation.*;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
 
 @RestController
 @RequestMapping("api/news/requests")
 @RequiredArgsConstructor
+@Slf4j
+
 public class NewsRequestQueryController {
 
     private final RequestNewsRepository requestRepo;
@@ -56,50 +60,128 @@ public class NewsRequestQueryController {
             @RequestParam(required = false) Long teamId,
             @RequestParam(required = false) Long createdByUserId
     ) {
+        long t0 = System.currentTimeMillis();
+
         Long me = userService.getIdByEmail(principal.getUsername());
+
         boolean isStaff = guard.isStaff(me);
 
-        var managedClubIds = (clubId != null && guard.isClubManager(me, clubId))
-                ? java.util.List.of(clubId) : java.util.List.<Long>of();
-        var leadTeamIds = (clubId != null)
-                ? guard.findLeadTeamIdsInClub(me, clubId)
-                : java.util.List.<Long>of();
+        boolean isClubManager = false;
+        java.util.List<Long> leadTeamIds = java.util.List.of();
+
+        if (!isStaff && clubId != null) {
+            isClubManager = guard.isClubManager(me, clubId);
+            leadTeamIds = guard.findLeadTeamIdsInClub(me, clubId);
+        }
+
+        long t1 = System.currentTimeMillis();
 
         int p = Math.max(1, page);
         int s = Math.max(1, size);
+
         var pageable = PageRequest.of(
                 p - 1, s,
                 Sort.by("requestDate").descending().and(Sort.by("id").descending())
         );
 
-        var pageRs = requestRepo.findVisibleRequests(
-                me,
-                isStaff,
-                !managedClubIds.isEmpty(), managedClubIds,
-                !leadTeamIds.isEmpty(), leadTeamIds,
-                pageable
+        // Parse status string -> enum (nếu sai thì bỏ filter)
+        RequestStatus statusFilter = null;
+        if (status != null && !status.isBlank()) {
+            try {
+                statusFilter = RequestStatus.valueOf(status.trim());
+            } catch (IllegalArgumentException e) {
+                statusFilter = null;
+            }
+        }
+
+        String kw = (keyword == null || keyword.isBlank())
+                ? null
+                : keyword.trim().toLowerCase();
+
+        // ===== CHỌN QUERY THEO 3 CẤP + LOG CHI TIẾT =====
+        Page<RequestNews> pageRs;
+
+        if (isStaff) {
+            log.warn(
+                    "[NEWS_REQUEST] STAFF query | me={} | status={} | clubId={} | teamId={} | createdBy={} | keyword={}",
+                    me, statusFilter, clubId, teamId, createdByUserId, kw
+            );
+
+            pageRs = requestRepo.searchForStaff(
+                    statusFilter,
+                    clubId,
+                    teamId,
+                    createdByUserId,
+                    kw,
+                    pageable
+            );
+
+        } else if (clubId != null && isClubManager) {
+            log.warn(
+                    "[NEWS_REQUEST] CLUB_MANAGER query | me={} | clubId={} | status={} | teamId={} | createdBy={} | keyword={}",
+                    me, clubId, statusFilter, teamId, createdByUserId, kw
+            );
+
+            pageRs = requestRepo.searchForClubManager(
+                    clubId,
+                    statusFilter,
+                    teamId,
+                    createdByUserId,
+                    kw,
+                    pageable
+            );
+
+        } else if (clubId != null && !leadTeamIds.isEmpty()) {
+            log.warn(
+                    "[NEWS_REQUEST] TEAM_LEAD query | me={} | clubId={} | teamIds={} | status={} | createdBy={} | keyword={}",
+                    me, clubId, leadTeamIds, statusFilter, createdByUserId, kw
+            );
+
+            pageRs = requestRepo.searchForTeamLead(
+                    clubId,
+                    leadTeamIds,
+                    statusFilter,
+                    createdByUserId,
+                    kw,
+                    pageable
+            );
+
+        } else {
+            log.warn(
+                    "[NEWS_REQUEST] CREATOR query (fallback) | me={} | clubId={} | status={} | teamId={} | keyword={}",
+                    me, clubId, statusFilter, teamId, kw
+            );
+
+            pageRs = requestRepo.searchForCreator(
+                    me,
+                    clubId,
+                    statusFilter,
+                    teamId,
+                    kw,
+                    pageable
+            );
+        }
+
+        long t2 = System.currentTimeMillis();
+
+        var mapped = pageRs.getContent().stream()
+                .map(mapper::toDto)
+                .toList();
+
+        long t3 = System.currentTimeMillis();
+
+        log.warn("""
+        ======== NEWS REQUEST TIMING ========
+        user+guard    = {} ms
+        repo+db       = {} ms
+        map dto       = {} ms
+        TOTAL handler = {} ms
+        =====================================""",
+                (t1 - t0),
+                (t2 - t1),
+                (t3 - t2),
+                (t3 - t0)
         );
-
-        var filtered = pageRs.getContent().stream().filter(r -> {
-            if (status != null && !status.isBlank()) {
-                try {
-                    if (!RequestStatus.valueOf(status.trim()).equals(r.getStatus())) return false;
-                } catch (IllegalArgumentException e) { return false; }
-            }
-            if (createdByUserId != null &&
-                    (r.getCreatedBy() == null || !createdByUserId.equals(r.getCreatedBy().getId()))) return false;
-            if (clubId != null && (r.getClub() == null || !clubId.equals(r.getClub().getId()))) return false;
-            if (teamId != null && (r.getTeam() == null || !teamId.equals(r.getTeam().getId()))) return false;
-            if (keyword != null && !keyword.isBlank()) {
-                String kw = keyword.trim().toLowerCase();
-                String t = r.getRequestTitle() == null ? "" : r.getRequestTitle().toLowerCase();
-                String d = r.getDescription() == null ? "" : r.getDescription().toLowerCase();
-                if (!t.contains(kw) && !d.contains(kw)) return false;
-            }
-            return true;
-        }).toList();
-
-        var mapped = filtered.stream().map(mapper::toDto).toList();
 
         var result = java.util.Map.of(
                 "page", p,
@@ -110,4 +192,7 @@ public class NewsRequestQueryController {
         );
         return ApiResponse.success(result);
     }
+
+
+
 }
