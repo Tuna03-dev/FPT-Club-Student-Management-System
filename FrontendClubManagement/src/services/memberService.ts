@@ -54,6 +54,24 @@ export interface MemberResponseDTO {
   history: MemberHistoryResponse[];
 }
 
+// Simple member response for dropdown/select purposes
+export interface SimpleMemberResponse {
+  userId: number;
+  studentCode: string;
+  fullName: string;
+  email: string;
+  avatarUrl: string;
+}
+
+// Simple member response for dropdown/select purposes
+export interface SimpleMemberResponse {
+  userId: number;
+  studentCode: string;
+  fullName: string;
+  email: string;
+  avatarUrl: string;
+}
+
 export interface GetMembersParams {
   status?: string; // ACTIVE | LEFT
   // backend may accept numeric id or semester code string
@@ -66,6 +84,13 @@ export interface GetMembersParams {
 }
 
 export const memberService = {
+  async getAllActiveMembers(
+    clubId: number
+  ): Promise<ApiResponse<SimpleMemberResponse[]>> {
+    const url = `/clubs/${clubId}/members/all-active`;
+    return axiosClient.get<SimpleMemberResponse[]>(url);
+  },
+
   async getMembers(
     clubId: number,
     params: GetMembersParams = {}
@@ -101,7 +126,12 @@ export const memberService = {
     const url = `/clubs/${clubId}/members/left?${query.toString()}`;
     return axiosClient.get<PageResponse<MemberResponseDTO>>(url);
   },
-  async changeRole(clubId: number, userId: number, roleId: number, currentUserId: number) {
+  async changeRole(
+    clubId: number,
+    userId: number,
+    roleId: number,
+    currentUserId: number
+  ) {
     const url = `/clubs/${clubId}/members/${userId}/role?currentUserId=${currentUserId}`;
     return axiosClient.put(url, { roleId });
   },

@@ -1,6 +1,7 @@
 package com.sep490.backendclubmanagement.controller.Admin;
 
 import com.sep490.backendclubmanagement.dto.ApiResponse;
+import com.sep490.backendclubmanagement.dto.request.CreateStaffRequest;
 import com.sep490.backendclubmanagement.dto.request.StaffActiveRequest;
 import com.sep490.backendclubmanagement.dto.request.StaffFilterRequest;
 import com.sep490.backendclubmanagement.dto.request.UpdateUserProfileRequest;
@@ -22,8 +23,6 @@ import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.util.List;
-
 @RestController
 @RequestMapping("/api/admin")
 @RequiredArgsConstructor
@@ -40,6 +39,15 @@ public class StaffManagementController {
             throw new ForbiddenException("Chỉ ADMIN mới có quyền truy cập");
         }
         return ApiResponse.success(staffManagementService.getAllStaffByFilter(request));
+    }
+
+    @PostMapping("/staff/create")
+    public ApiResponse<StaffSummaryResponse> createStaff(@RequestBody CreateStaffRequest request) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        if (!roleService.isAdmin(userId)) {
+            throw new ForbiddenException("Chỉ ADMIN mới có quyền truy cập");
+        }
+        return ApiResponse.success(staffManagementService.createStaff(request));
     }
 
     @GetMapping("/staff/{staffId}")

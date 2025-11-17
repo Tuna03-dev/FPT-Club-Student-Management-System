@@ -44,7 +44,7 @@ public class Notification extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "priority", nullable = false, length = 20)
     private NotificationPriority priority;
-
+    @Builder.Default
     @Column(name = "is_read", nullable = false)
     private Boolean isRead = false;
 
@@ -82,7 +82,7 @@ public class Notification extends BaseEntity {
     // Additional metadata stored as JSON
     @Column(name = "metadata", columnDefinition = "TEXT")
     private String metadata;
-
+    @Builder.Default
     @Column(name = "is_sent", nullable = false)
     private Boolean isSent = false; // Whether notification was sent via WebSocket
 

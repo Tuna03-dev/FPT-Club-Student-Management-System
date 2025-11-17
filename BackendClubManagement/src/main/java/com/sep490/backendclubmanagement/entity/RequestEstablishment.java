@@ -35,10 +35,34 @@ public class RequestEstablishment extends BaseEntity {
     @Column(name = "send_date")
     private LocalDateTime sendDate;
 
+    @Column(name = "expected_member_count")
+    private Integer expectedMemberCount;
+
+    @Column(name = "activity_objectives", columnDefinition = "TEXT")
+    private String activityObjectives; // Mục tiêu hoạt động
+
+    @Column(name = "expected_activities", columnDefinition = "TEXT")
+    private String expectedActivities; // Hoạt động dự kiến
+
+    @Column(name = "description", columnDefinition = "TEXT")
+    private String description; // Mô tả CLB
+
+    @Column(name = "confirmation_deadline")
+    private LocalDateTime confirmationDeadline;
+
+    @Column(name = "received_at")
+    private LocalDateTime receivedAt;
+
+    @Column(name = "confirmed_at")
+    private LocalDateTime confirmedAt;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "created_by", nullable = false)
     private User createdBy;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "assigned_staff_id")
+    private User assignedStaff;
 
     @OneToMany(mappedBy = "requestEstablishment", cascade = CascadeType.ALL)
     private Set<ClubProposal> clubProposals;
@@ -48,5 +72,8 @@ public class RequestEstablishment extends BaseEntity {
 
     @OneToOne(mappedBy = "requestEstablishment", cascade = CascadeType.ALL)
     private DefenseSchedule defenseSchedule;
+
+    @OneToOne(mappedBy = "requestEstablishment", cascade = CascadeType.ALL)
+    private ClubCreationFinalForm finalForm;
 }
 

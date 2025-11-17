@@ -8,17 +8,21 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { authService } from "@/services/authService";
 import { useTranslation } from "react-i18next";
-import { Menu, Search, Users, Settings, Bell, ShieldCheck } from "lucide-react";
+import { Menu, Search, Users, Settings, Bell, ShieldCheck, Building, Calendar } from "lucide-react";
 
 const topNav = [{ key: "dashboard", url: "/admin", label: "Admin" }];
 
 const managementItems = [
   { key: "staff", url: "/admin/staff", icon: Users, label: "Quản lý nhân viên" },
+  { key: "campus", url: "/admin/campus", icon: Building, label: "Quản lý cơ sở" },
+  { key: "semester", url: "/admin/semester", icon: Calendar, label: "Quản lý kỳ học" },
   { key: "system", url: "/admin/settings", icon: Settings, label: "Cấu hình hệ thống" },
 ];
 
 const colorByKey: Record<string, string> = {
   staff: "bg-gradient-to-br from-blue-500 to-blue-600",
+  campus: "bg-gradient-to-br from-emerald-500 to-emerald-600",
+  semester: "bg-gradient-to-br from-purple-500 to-purple-600",
   system: "bg-gradient-to-br from-slate-500 to-slate-600",
 };
 
