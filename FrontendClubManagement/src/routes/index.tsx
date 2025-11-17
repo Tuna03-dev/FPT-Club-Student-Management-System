@@ -6,6 +6,8 @@ import { ClubLayout } from "@/layouts/ClubLayout";
 import { StaffLayout } from "@/layouts/StaffLayout";
 import { AdminLayout } from "@/layouts/AdminLayout";
 import StaffList from "@/pages/admin/StaffList";
+import CampusManagement from "@/pages/admin/CampusManagement";
+import SemesterManagement from "@/pages/admin/SemesterManagement";
 
 import { Dashboard } from "@/pages/myclub/Dashboard";
 import MemberList from "@/pages/myclub/members/MemberList";
@@ -159,6 +161,9 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <Navigate to="staff" replace /> },
       { path: "staff", element: <StaffList /> },
+      { path: "campus", element: <CampusManagement /> },
+      { path: "semester", element: <SemesterManagement /> },
+      { path: "settings", element: <div className="p-6">Cấu hình hệ thống</div> },
       {
         path: "settings",
         element: <div className="p-6">Cấu hình hệ thống</div>,

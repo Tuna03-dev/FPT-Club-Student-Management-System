@@ -4,6 +4,7 @@ import com.sep490.backendclubmanagement.dto.response.CurrentTermResponse;
 import com.sep490.backendclubmanagement.dto.response.MemberHistoryResponse;
 import com.sep490.backendclubmanagement.dto.response.MemberResponse;
 import com.sep490.backendclubmanagement.dto.response.PageResponse;
+import com.sep490.backendclubmanagement.dto.response.SimpleMemberResponse;
 import com.sep490.backendclubmanagement.entity.*;
 import com.sep490.backendclubmanagement.exception.AppException;
 import com.sep490.backendclubmanagement.exception.ErrorCode;
@@ -581,5 +582,28 @@ public class MemberServiceImpl implements MemberService{
                 .currentTerm(currentTermResponse)
                 .history(history)
                 .build();
+    }
+
+    @Override
+    public List<SimpleMemberResponse> getAllActiveMembersForSelection(Long clubId) {
+        // Get all members that are currently ACTIVE (not LEFT)
+        List<ClubMemberShip> activeMembers = clubMemberShipRepository.findByClubIdAndStatus(
+                clubId,
+                ClubMemberShipStatus.ACTIVE
+        );
+
+        // Map to simple response with only basic info needed for selection
+        return activeMembers.stream()
+                .map(cms -> {
+                    User user = cms.getUser();
+                    return SimpleMemberResponse.builder()
+                            .userId(user.getId())
+                            .studentCode(user.getStudentCode())
+                            .fullName(user.getFullName())
+                            .email(user.getEmail())
+                            .avatarUrl(user.getAvatarUrl())
+                            .build();
+                })
+                .toList();
     }
 }

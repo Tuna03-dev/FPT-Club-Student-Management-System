@@ -7,7 +7,7 @@ import lombok.Data;
 @Builder
 public class PayOSConfigResponse {
     private Long clubId;
-    private String clientId;
+    private String clientId; // Masked value for security (e.g., "1234****5678")
     private boolean active;
     private boolean configured;
 }
