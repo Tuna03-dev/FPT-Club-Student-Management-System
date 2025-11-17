@@ -241,6 +241,19 @@ public class ClubCreationController {
     }
 
     /**
+     * Xem danh sách form cuối đã nộp (tất cả version)
+     * GET /api/club-creation/requests/{requestId}/final-forms
+     */
+    @GetMapping("/{requestId}/final-forms")
+    public ResponseEntity<ApiResponse<List<ClubCreationFinalFormResponse>>> getFinalForms(
+            @PathVariable Long requestId
+    ) throws AppException {
+        Long userId = SecurityUtils.getCurrentUserId();
+        List<ClubCreationFinalFormResponse> responses = requestEstablishmentService.getFinalFormsForStudent(requestId, userId);
+        return ResponseEntity.ok(ApiResponse.success(responses));
+    }
+
+    /**
      * Xem lịch sử workflow của yêu cầu
      * GET /api/club-creation/requests/{requestId}/history
      */

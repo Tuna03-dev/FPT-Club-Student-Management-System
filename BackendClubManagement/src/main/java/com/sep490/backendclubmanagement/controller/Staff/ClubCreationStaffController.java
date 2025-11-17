@@ -6,6 +6,7 @@ import com.sep490.backendclubmanagement.dto.request.CompleteDefenseRequest;
 import com.sep490.backendclubmanagement.dto.request.RejectContactRequest;
 import com.sep490.backendclubmanagement.dto.request.RejectDefenseScheduleRequest;
 import com.sep490.backendclubmanagement.dto.request.RejectProposalRequest;
+import com.sep490.backendclubmanagement.dto.response.ClubCreationFinalFormResponse;
 import com.sep490.backendclubmanagement.dto.response.ClubProposalResponse;
 import com.sep490.backendclubmanagement.dto.response.DefenseScheduleResponse;
 import com.sep490.backendclubmanagement.dto.response.RequestEstablishmentResponse;
@@ -22,6 +23,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/staff/club-creation/requests")
@@ -145,6 +148,54 @@ public class ClubCreationStaffController {
             throw new ForbiddenException("Chỉ STAFF mới có quyền truy cập");
         }
         RequestEstablishmentResponse response = requestEstablishmentService.requestProposal(requestId, staffId);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    /**
+     * Xem danh sách đề án của một request
+     * GET /api/staff/club-creation/requests/{requestId}/proposals
+     */
+    @GetMapping("/{requestId}/proposals")
+    public ResponseEntity<ApiResponse<List<ClubProposalResponse>>> getProposals(
+            @PathVariable Long requestId
+    ) throws AppException {
+        Long staffId = SecurityUtils.getCurrentUserId();
+        if (!roleService.isStaff(staffId)) {
+            throw new ForbiddenException("Chỉ STAFF mới có quyền truy cập");
+        }
+        List<ClubProposalResponse> proposals = requestEstablishmentService.getProposalsForStaff(requestId, staffId);
+        return ResponseEntity.ok(ApiResponse.success(proposals));
+    }
+
+    /**
+     * Xem danh sách form cuối đã nộp của một request (dành cho staff được giao)
+     * GET /api/staff/club-creation/requests/{requestId}/final-forms
+     */
+    @GetMapping("/{requestId}/final-forms")
+    public ResponseEntity<ApiResponse<List<ClubCreationFinalFormResponse>>> getFinalForms(
+            @PathVariable Long requestId
+    ) throws AppException {
+        Long staffId = SecurityUtils.getCurrentUserId();
+        if (!roleService.isStaff(staffId)) {
+            throw new ForbiddenException("Chỉ STAFF mới có quyền truy cập");
+        }
+        List<ClubCreationFinalFormResponse> responses = requestEstablishmentService.getFinalFormsForStaff(requestId, staffId);
+        return ResponseEntity.ok(ApiResponse.success(responses));
+    }
+
+    /**
+     * Duyệt form cuối và tự động tạo CLB
+     * POST /api/staff/club-creation/requests/{requestId}/final-forms/approve
+     */
+    @PostMapping("/{requestId}/final-forms/approve")
+    public ResponseEntity<ApiResponse<RequestEstablishmentResponse>> approveFinalForm(
+            @PathVariable Long requestId
+    ) throws AppException {
+        Long staffId = SecurityUtils.getCurrentUserId();
+        if (!roleService.isStaff(staffId)) {
+            throw new ForbiddenException("Chỉ STAFF mới có quyền truy cập");
+        }
+        RequestEstablishmentResponse response = requestEstablishmentService.approveFinalForm(requestId, staffId);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 

@@ -47,6 +47,21 @@ public class RequestEstablishment extends BaseEntity {
     @Column(name = "description", columnDefinition = "TEXT")
     private String description; // Mô tả CLB
 
+    @Column(name = "email", length = 100)
+    private String email; // Email liên hệ
+
+    @Column(name = "phone", length = 20)
+    private String phone; // Số điện thoại liên hệ
+
+    @Column(name = "facebook_link", length = 255)
+    private String facebookLink; // Link Facebook
+
+    @Column(name = "instagram_link", length = 255)
+    private String instagramLink; // Link Instagram
+
+    @Column(name = "tiktok_link", length = 255)
+    private String tiktokLink; // Link TikTok
+
     @Column(name = "confirmation_deadline")
     private LocalDateTime confirmationDeadline;
 
