@@ -208,8 +208,7 @@ UserService {
     }
     @Transactional(readOnly = true)
     public Long getIdByEmail(String email) {
-        return userRepository.findByEmailIgnoreCase(email) // dùng ignore-case cho chắc
-                .map(User::getId)
+        return userRepository.findIdByEmail(email)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found: " + email));
     }
 }
