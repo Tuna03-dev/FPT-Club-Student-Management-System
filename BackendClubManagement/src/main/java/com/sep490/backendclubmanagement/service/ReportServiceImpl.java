@@ -366,6 +366,9 @@ public class ReportServiceImpl implements ReportServiceInterface {
             throw new ForbiddenException("Báo cáo cho yêu cầu này đã tồn tại. Vui lòng chỉnh sửa báo cáo đã có.");
         }
 
+        // Check deadline before creating report (no existing report, so pass null)
+        validateDeadlineForAction(reportRequirement, null, "tạo báo cáo");
+
         // Determine status based on role and autoSubmit flag
         ReportStatus status;
         boolean shouldAutoSubmit = false;
@@ -478,6 +481,14 @@ public class ReportServiceImpl implements ReportServiceInterface {
             throw new ForbiddenException("Bạn không có quyền cập nhật báo cáo này. Chỉ người tạo mới được chỉnh sửa.");
         }
 
+        // Get report requirement and check deadline
+        if (report.getClubReportRequirement() != null && 
+            report.getClubReportRequirement().getSubmissionReportRequirement() != null) {
+            SubmissionReportRequirement reportRequirement = report.getClubReportRequirement()
+                    .getSubmissionReportRequirement();
+            validateDeadlineForAction(reportRequirement, report, "cập nhật báo cáo");
+        }
+
         // Get current semester
         Semester currentSemester = semesterRepository.findCurrentSemester()
                 .orElseThrow(() -> new NotFoundException("Current semester not found"));
@@ -569,6 +580,14 @@ public class ReportServiceImpl implements ReportServiceInterface {
                     "Chỉ chủ nhiệm câu lạc bộ (club president) hoặc cán bộ ban (team officer) là người tạo " +
                     "trong kỳ hiện tại và đang hoạt động mới có quyền nộp báo cáo."
             );
+        }
+
+        // Get report requirement and check deadline
+        if (report.getClubReportRequirement() != null && 
+            report.getClubReportRequirement().getSubmissionReportRequirement() != null) {
+            SubmissionReportRequirement reportRequirement = report.getClubReportRequirement()
+                    .getSubmissionReportRequirement();
+            validateDeadlineForAction(reportRequirement, report, "nộp báo cáo");
         }
 
         // Determine the appropriate status based on current status and user role
@@ -878,161 +897,6 @@ public class ReportServiceImpl implements ReportServiceInterface {
         }
 
         return reportMapper.toDetail(report);
-    }
-
-    /**
-     * Get all report requirements for a club (for club members)
-     */
-    @Override
-    public List<ReportRequirementResponse> getClubReportRequirements(Long clubId, Long userId) {
-        // Validate club exists
-        Club club = clubRepository.findById(clubId)
-                .orElseThrow(() -> new NotFoundException("Club not found with ID: " + clubId));
-
-        // Check if user is a member of this club - use existsByUserIdAndClubIdAndStatus
-        if (!clubMemberShipRepository.existsByUserIdAndClubIdAndStatus(userId, clubId, ClubMemberShipStatus.ACTIVE)) {
-            throw new ForbiddenException("You are not a member of this club");
-        }
-
-        // Get all club report requirements for this club
-        List<ClubReportRequirement> clubRequirements = clubReportRequirementRepository.findByClubId(clubId);
-
-        // Map to response
-        return clubRequirements.stream()
-                .map(crr -> {
-                    ReportRequirementResponse response = submissionReportRequirementMapper.toDto(crr.getSubmissionReportRequirement());
-                    
-                    // Get status from report if exists, otherwise null
-                    String statusStr = null;
-                    if (crr.getReport() != null && crr.getReport().getStatus() != null) {
-                        statusStr = crr.getReport().getStatus().name();
-                    }
-                    
-                    // Add the club requirement info for this specific club
-                    ReportRequirementResponse.ClubRequirementInfo clubRequirementInfo = ReportRequirementResponse.ClubRequirementInfo.builder()
-                            .id(crr.getId())
-                            .clubId(crr.getClub().getId())
-                            .clubName(crr.getClub().getClubName())
-                            .clubCode(crr.getClub().getClubCode())
-                            .status(statusStr)
-                            .teamId(crr.getTeamId())
-                            .build();
-                    
-                    response.setClubRequirements(List.of(clubRequirementInfo));
-                    return response;
-                })
-                .toList();
-    }
-
-    /**
-     * Get all report requirements for a club (for CLUB_OFFICER or TEAM_OFFICER)
-     */
-    @Override
-    public List<ReportRequirementResponse> getClubReportRequirementsForOfficer(Long clubId, Long userId) {
-        // Validate club exists
-        Club club = clubRepository.findById(clubId)
-                .orElseThrow(() -> new NotFoundException("Club not found with ID: " + clubId));
-
-        // Get current semester
-        Semester currentSemester = semesterRepository.findCurrentSemester()
-                .orElse(null);
-
-        // Check if user is CLUB_OFFICER or TEAM_OFFICER (from club_roles table) in current semester
-        boolean isClubOfficerOrTeamOfficer = false;
-        Long userTeamId = null; // Team ID of team officer
-
-        if (currentSemester != null) {
-            isClubOfficerOrTeamOfficer = roleMemberShipRepository.isClubOfficerOrTeamOfficerInCurrentSemester(
-                    userId, clubId, currentSemester.getId());
-            
-            // If user is team officer, get their team ID
-            if (isClubOfficerOrTeamOfficer) {
-                // Check if user is club president (not team officer)
-                boolean isClubOfficer = roleMemberShipRepository.isClubOfficerInCurrentSemester(
-                        userId, clubId, currentSemester.getId());
-                
-                if (!isClubOfficer) {
-                    // User is team officer, get their team ID
-                    userTeamId = roleMemberShipRepository.findTeamIdByUserIdAndClubIdAndSemesterId(
-                            userId, clubId, currentSemester.getId()).orElse(null);
-                }
-            }
-        }
-
-        if (!isClubOfficerOrTeamOfficer) {
-            throw new ForbiddenException(
-                    "Chỉ cán bộ câu lạc bộ (CLUB_OFFICER) hoặc cán bộ ban (TEAM_OFFICER) " +
-                    "trong kỳ hiện tại và đang hoạt động mới có quyền xem danh sách yêu cầu báo cáo."
-            );
-        }
-
-        // Get club report requirements - filter by teamId if user is team officer
-        List<ClubReportRequirement> clubRequirements;
-        if (userTeamId != null) {
-            // Team officer: only show requirements assigned to their team
-            clubRequirements = clubReportRequirementRepository.findByClubIdAndTeamId(clubId, userTeamId);
-        } else {
-            // Club officer: show all requirements
-            clubRequirements = clubReportRequirementRepository.findByClubId(clubId);
-        }
-
-        // Map to response
-        return clubRequirements.stream()
-                .map(crr -> {
-                    ReportRequirementResponse response = submissionReportRequirementMapper.toDto(crr.getSubmissionReportRequirement());
-                    
-                    // Find report for this club and requirement
-                    Optional<Report> reportOpt = reportRepository.findByClubIdAndReportRequirementId(
-                            clubId,
-                            crr.getSubmissionReportRequirement().getId()
-                    );
-                    
-                    // Build report info if exists
-                    ReportRequirementResponse.ReportInfo reportInfo = null;
-                    if (reportOpt.isPresent()) {
-                        Report report = reportOpt.get();
-                        ReportRequirementResponse.UserInfo createdByInfo = null;
-                        if (report.getCreatedBy() != null) {
-                            createdByInfo = ReportRequirementResponse.UserInfo.builder()
-                                    .id(report.getCreatedBy().getId())
-                                    .fullName(report.getCreatedBy().getFullName())
-                                    .email(report.getCreatedBy().getEmail())
-                                    .studentCode(report.getCreatedBy().getStudentCode())
-                                    .build();
-                        }
-                        reportInfo = ReportRequirementResponse.ReportInfo.builder()
-                                .id(report.getId())
-                                .reportTitle(report.getReportTitle())
-                                .status(report.getStatus() != null ? report.getStatus().name() : null)
-                                .submittedDate(report.getSubmittedDate())
-                                .createdAt(report.getCreatedAt())
-                                .updatedAt(report.getUpdatedAt())
-                                .mustResubmit(report.isMustResubmit())
-                                .createdBy(createdByInfo)
-                                .build();
-                    }
-                    
-                    // Get status from report if exists, otherwise null
-                    String statusStr = null;
-                    if (crr.getReport() != null && crr.getReport().getStatus() != null) {
-                        statusStr = crr.getReport().getStatus().name();
-                    }
-                    
-                    // Add the club requirement info for this specific club
-                    ReportRequirementResponse.ClubRequirementInfo clubRequirementInfo = ReportRequirementResponse.ClubRequirementInfo.builder()
-                            .id(crr.getId())
-                            .clubId(crr.getClub().getId())
-                            .clubName(crr.getClub().getClubName())
-                            .clubCode(crr.getClub().getClubCode())
-                            .status(statusStr)
-                            .teamId(crr.getTeamId())
-                            .report(reportInfo)
-                            .build();
-                    
-                    response.setClubRequirements(List.of(clubRequirementInfo));
-                    return response;
-                })
-                .toList();
     }
 
     /**
@@ -1358,6 +1222,14 @@ public class ReportServiceImpl implements ReportServiceInterface {
             );
         }
 
+        // Get report requirement and check deadline (only if not mustResubmit)
+        if (report.getClubReportRequirement() != null && 
+            report.getClubReportRequirement().getSubmissionReportRequirement() != null) {
+            SubmissionReportRequirement reportRequirement = report.getClubReportRequirement()
+                    .getSubmissionReportRequirement();
+            validateDeadlineForAction(reportRequirement, report, "đánh giá báo cáo");
+        }
+
         // Validate status and update report status accordingly
         ReportStatus newReportStatus;
         
@@ -1445,6 +1317,12 @@ public class ReportServiceImpl implements ReportServiceInterface {
                 .orElseThrow(() -> new NotFoundException(
                         "Team not found with ID: " + teamId + " in club: " + clubId));
 
+        // Get submission report requirement and check deadline
+        if (clubReportRequirement.getSubmissionReportRequirement() != null) {
+            SubmissionReportRequirement reportRequirement = clubReportRequirement.getSubmissionReportRequirement();
+            validateDeadlineForAction(reportRequirement, clubReportRequirement.getReport(), "gán phòng ban cho báo cáo");
+        }
+
         // Check if a report already exists for this requirement
         if (clubReportRequirement.getReport() != null) {
             throw new ForbiddenException(
@@ -1483,6 +1361,25 @@ public class ReportServiceImpl implements ReportServiceInterface {
 
         response.setClubRequirements(List.of(clubRequirementInfo));
         return response;
+    }
+
+    /**
+     * Helper method to check if a report requirement is past due date
+     * Returns true if the due date has passed and report is not in mustResubmit mode
+     */
+    private void validateDeadlineForAction(SubmissionReportRequirement reportRequirement, Report report, String action) {
+        // Skip deadline check if report exists and mustResubmit is true
+        if (report != null && report.isMustResubmit()) {
+            return;
+        }
+
+        LocalDate dueDate = reportRequirement.getDueDate();
+        if (dueDate != null && LocalDate.now().isAfter(dueDate)) {
+            throw new ForbiddenException(
+                    "Không thể " + action + " vì yêu cầu báo cáo đã quá hạn (" + dueDate + "). " +
+                    "Vui lòng liên hệ nhà trường để được hỗ trợ."
+            );
+        }
     }
 }
 

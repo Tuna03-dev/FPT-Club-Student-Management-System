@@ -58,7 +58,8 @@ public interface ReportRepository extends JpaRepository<Report, Long> {
     List<Report> findAllByReportRequirementId(@Param("requirementId") Long requirementId);
 
     @Query("SELECT r FROM Report r " +
-            "WHERE (:status IS NULL OR r.status = :status) " +
+            "WHERE r.status <> 'DRAFT' " +
+            "AND (:status IS NULL OR r.status = :status) " +
             "AND (:clubId IS NULL OR r.clubReportRequirement.club.id = :clubId) " +
             "AND (:semesterId IS NULL OR r.semester.id = :semesterId) " +
             "AND (:reportType IS NULL OR r.clubReportRequirement.submissionReportRequirement.reportType = :reportType) " +

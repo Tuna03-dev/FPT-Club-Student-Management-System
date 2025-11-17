@@ -165,30 +165,6 @@ public class ReportController {
     }
 
     /**
-     * Get all report requirements for a club (for club members)
-     */
-    @GetMapping("/club/{clubId}/requirements")
-    public ApiResponse<List<ReportRequirementResponse>> getClubReportRequirements(
-            @PathVariable Long clubId
-    ) {
-        Long userId = SecurityUtils.getCurrentUserId();
-        List<ReportRequirementResponse> data = reportService.getClubReportRequirements(clubId, userId);
-        return ApiResponse.success(data);
-    }
-
-    /**
-     * Get all report requirements for a club (for CLUB_OFFICER or TEAM_OFFICER)
-     */
-    @GetMapping("/club/{clubId}/requirements/officer")
-    public ApiResponse<List<ReportRequirementResponse>> getClubReportRequirementsForOfficer(
-            @PathVariable Long clubId
-    ) {
-        Long userId = SecurityUtils.getCurrentUserId();
-        List<ReportRequirementResponse> data = reportService.getClubReportRequirementsForOfficer(clubId, userId);
-        return ApiResponse.success(data);
-    }
-
-    /**
      * Get all report requirements for a club with filters and pagination (for CLUB_OFFICER or TEAM_OFFICER)
      */
     @PostMapping("/club/{clubId}/requirements/officer/filter")
