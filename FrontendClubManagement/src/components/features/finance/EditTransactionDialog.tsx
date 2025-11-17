@@ -19,7 +19,9 @@ import {
 } from "@/components/ui/select";
 import type { Fee } from "@/types/fee";
 import { toast } from "sonner";
+import { ImagePlus, X } from "lucide-react";
 import type { Transaction } from "./TransactionsTable";
+import { uploadImage } from "@/api/uploads";
 import type {
   CreateIncomeTransactionRequest,
   CreateOutcomeTransactionRequest,
@@ -59,6 +61,9 @@ export function EditTransactionDialog({
   const [memberSearch, setMemberSearch] = React.useState("");
   const [members, setMembers] = React.useState<SimpleMemberResponse[]>([]);
   const [loadingMembers, setLoadingMembers] = React.useState(false);
+  const [uploadingImage, setUploadingImage] = React.useState(false);
+  const [imagePreview, setImagePreview] = React.useState<string | null>(null);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   // Fetch members khi mở dialog cho Income transaction
   React.useEffect(() => {
@@ -90,6 +95,69 @@ export function EditTransactionDialog({
     Partial<CreateOutcomeTransactionRequest>
   >({});
 
+  // Handle image upload
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    const validTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+    if (!validTypes.includes(file.type)) {
+      toast.error("Chỉ chấp nhận file ảnh (JPG, PNG, WEBP)");
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    const maxSize = 5 * 1024 * 1024; // 5MB
+    if (file.size > maxSize) {
+      toast.error("Kích thước ảnh tối đa 5MB");
+      return;
+    }
+
+    // Show preview
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setImagePreview(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+
+    // Upload to server
+    setUploadingImage(true);
+    try {
+      const response = await uploadImage(file);
+      if (response.code === 200 && response.data) {
+        const imageUrl = response.data.url;
+        if (transaction?.type === "INCOME") {
+          setIncomeData({ ...incomeData, receiptUrl: imageUrl });
+        } else {
+          setOutcomeData({ ...outcomeData, receiptUrl: imageUrl });
+        }
+        toast.success("Đã tải ảnh lên thành công");
+      } else {
+        throw new Error(response.message || "Upload failed");
+      }
+    } catch (error) {
+      console.error("Image upload error:", error);
+      toast.error("Không thể tải ảnh lên. Vui lòng thử lại");
+      setImagePreview(null);
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  // Remove image
+  const handleRemoveImage = () => {
+    setImagePreview(null);
+    if (transaction?.type === "INCOME") {
+      setIncomeData({ ...incomeData, receiptUrl: "" });
+    } else {
+      setOutcomeData({ ...outcomeData, receiptUrl: "" });
+    }
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
   // Load dữ liệu transaction vào form khi mở dialog
   React.useEffect(() => {
     if (transaction) {
@@ -102,7 +170,9 @@ export function EditTransactionDialog({
           notes: transaction.notes,
           feeId: transaction.feeId,
           userId: transaction.userName ? undefined : undefined, // Cần userId từ transaction
+          receiptUrl: transaction.receiptUrl,
         });
+        setImagePreview(transaction.receiptUrl || null);
       } else {
         setOutcomeData({
           amount: transaction.amount,
@@ -113,6 +183,7 @@ export function EditTransactionDialog({
           notes: transaction.notes,
           receiptUrl: transaction.receiptUrl,
         });
+        setImagePreview(transaction.receiptUrl || null);
       }
     }
   }, [transaction]);
@@ -281,8 +352,12 @@ export function EditTransactionDialog({
                       <SelectValue placeholder="Chọn nguồn thu..." />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Đóng trực tiếp">Đóng trực tiếp</SelectItem>
-                      <SelectItem value="Chuyển khoản ngân hàng">Chuyển khoản ngân hàng</SelectItem>
+                      <SelectItem value="Đóng trực tiếp">
+                        Đóng trực tiếp
+                      </SelectItem>
+                      <SelectItem value="Chuyển khoản ngân hàng">
+                        Chuyển khoản ngân hàng
+                      </SelectItem>
                       <SelectItem value="PayOS">PayOS</SelectItem>
                       <SelectItem value="Khác">Khác</SelectItem>
                     </SelectContent>
@@ -423,6 +498,55 @@ export function EditTransactionDialog({
                       : "Chưa có khoản phí nào được kích hoạt"}
                   </p>
                 </div>
+
+                {/* Upload Image Receipt for Income */}
+                <div>
+                  <Label>Ảnh bằng chứng (khuyến nghị)</Label>
+                  <div className="space-y-2">
+                    {!imagePreview ? (
+                      <div className="flex items-center gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => fileInputRef.current?.click()}
+                          disabled={uploadingImage}
+                          className="w-full"
+                        >
+                          <ImagePlus className="h-4 w-4 mr-2" />
+                          {uploadingImage ? "Đang tải..." : "Tải ảnh lên"}
+                        </Button>
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept="image/jpeg,image/jpg,image/png,image/webp"
+                          onChange={handleImageUpload}
+                          className="hidden"
+                        />
+                      </div>
+                    ) : (
+                      <div className="relative w-full">
+                        <img
+                          src={imagePreview}
+                          alt="Receipt preview"
+                          className="w-full h-80 object-cover rounded-md border"
+                        />
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          size="icon"
+                          className="absolute top-2 right-2"
+                          onClick={handleRemoveImage}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    )}
+                    <p className="text-xs text-muted-foreground">
+                      Chụp ảnh biên lai, xác nhận chuyển khoản hoặc chứng từ thu
+                      tiền (JPG, PNG, WEBP, tối đa 5MB)
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -462,22 +586,54 @@ export function EditTransactionDialog({
                     />
                   </div>
                 </div>
+
+                {/* Upload Image Receipt for Outcome */}
                 <div>
-                  <Label>Đường dẫn biên lai/chứng từ</Label>
-                  <Input
-                    type="url"
-                    placeholder="https://example.com/receipt.pdf"
-                    value={outcomeData.receiptUrl}
-                    onChange={(e) =>
-                      setOutcomeData({
-                        ...outcomeData,
-                        receiptUrl: e.target.value,
-                      })
-                    }
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Link tới hóa đơn, biên lai hoặc chứng từ thanh toán
-                  </p>
+                  <Label>Ảnh bằng chứng (khuyến nghị)</Label>
+                  <div className="space-y-2">
+                    {!imagePreview ? (
+                      <div className="flex items-center gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => fileInputRef.current?.click()}
+                          disabled={uploadingImage}
+                          className="w-full"
+                        >
+                          <ImagePlus className="h-4 w-4 mr-2" />
+                          {uploadingImage ? "Đang tải..." : "Tải ảnh lên"}
+                        </Button>
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept="image/jpeg,image/jpg,image/png,image/webp"
+                          onChange={handleImageUpload}
+                          className="hidden"
+                        />
+                      </div>
+                    ) : (
+                      <div className="relative w-full">
+                        <img
+                          src={imagePreview}
+                          alt="Receipt preview"
+                          className="w-full h-80 object-cover rounded-md border"
+                        />
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          size="icon"
+                          className="absolute top-2 right-2"
+                          onClick={handleRemoveImage}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    )}
+                    <p className="text-xs text-muted-foreground">
+                      Chụp ảnh hóa đơn, biên lai hoặc chứng từ thanh toán (JPG,
+                      PNG, WEBP, tối đa 5MB)
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>

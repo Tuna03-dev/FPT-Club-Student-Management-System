@@ -7,14 +7,18 @@ import com.sep490.backendclubmanagement.dto.response.OutcomeTransactionResponse;
 import com.sep490.backendclubmanagement.dto.response.PageResponse;
 import com.sep490.backendclubmanagement.entity.TransactionStatus;
 import com.sep490.backendclubmanagement.exception.AppException;
+import com.sep490.backendclubmanagement.service.CloudinaryService;
+import com.sep490.backendclubmanagement.service.CloudinaryService.UploadResult;
 import com.sep490.backendclubmanagement.service.OutcomeTransactionService;
-import com.sep490.backendclubmanagement.service.OutcomeTransactionServiceImpl;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.util.Map;
 
 /**
  * Controller for managing Outcome Transactions
@@ -26,6 +30,7 @@ import org.springframework.web.bind.annotation.*;
 public class OutcomeTransactionController {
 
     private final OutcomeTransactionService outcomeTransactionServiceImpl;
+    private final CloudinaryService cloudinaryService;
 
     /**
      * Get all outcome transactions for a club
@@ -127,6 +132,48 @@ public class OutcomeTransactionController {
     ) throws AppException {
         outcomeTransactionServiceImpl.deleteOutcomeTransaction(transactionId);
         return ApiResponse.success();
+    }
+
+    /**
+     * Upload receipt image for outcome transaction
+     * POST /api/clubs/{clubId}/transactions/outcome/upload-receipt
+     *
+     * Uploads image to Cloudinary and returns the URL
+     * Frontend can then include this URL when creating/updating transaction
+     */
+    @PostMapping("/upload-receipt")
+    public ApiResponse<Map<String, String>> uploadReceiptImage(
+            @PathVariable Long clubId,
+            @RequestParam("file") MultipartFile file
+    ) {
+        try {
+            // Validate file
+            if (file.isEmpty()) {
+                return ApiResponse.error(400, "File không được để trống");
+            }
+
+            // Validate file type (only images)
+            String contentType = file.getContentType();
+            if (contentType == null || !contentType.startsWith("image/")) {
+                return ApiResponse.error(400, "Chỉ chấp nhận file ảnh (jpg, png, gif, etc.)");
+            }
+
+            // Validate file size (max 5MB)
+            if (file.getSize() > 5 * 1024 * 1024) {
+                return ApiResponse.error(400, "Kích thước file không được vượt quá 5MB");
+            }
+
+            // Upload to Cloudinary in club/transactions/outcome/receipts folder
+            UploadResult result = cloudinaryService.uploadImage(file, "club/transactions/outcome/receipts");
+
+            return ApiResponse.success(Map.of(
+                    "receiptUrl", result.url(),
+                    "publicId", result.publicId(),
+                    "message", "Upload ảnh bằng chứng thành công"
+            ));
+        } catch (Exception e) {
+            return ApiResponse.error(500, "Lỗi khi upload ảnh: " + e.getMessage());
+        }
     }
 }
 

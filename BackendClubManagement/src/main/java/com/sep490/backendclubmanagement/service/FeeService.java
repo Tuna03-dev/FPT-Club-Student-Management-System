@@ -432,8 +432,8 @@ public class FeeService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND, "Không tìm thấy người dùng"));
 
-        ClubWallet clubWallet = clubWalletRepository.findByClub_Id(fee.getClub().getId())
-                .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND, "Không tìm thấy ví câu lạc bộ"));
+        // Auto-create wallet if not exists (critical for payment processing)
+        ClubWallet clubWallet = clubWalletService.getOrCreateWalletForClub(fee.getClub().getId());
 
         String reference = String.valueOf(orderCode);
 

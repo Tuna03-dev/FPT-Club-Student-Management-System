@@ -88,7 +88,8 @@ export interface Transaction {
   // Outcome specific
   recipient?: string;
   purpose?: string;
-  receiptUrl?: string;
+  // Common for both
+  receiptUrl?: string; // URL ảnh bằng chứng cho cả Income và Outcome
   // Common
   notes?: string;
   createdBy?: string; // Tên người tạo giao dịch (cho giao dịch thủ công)
@@ -158,7 +159,7 @@ export function TransactionsTable({
         color: "bg-red-500/10 text-red-500",
       },
     } as const;
-    const variant = variants[status];
+    const variant = variants[status] || variants.COMPLETED;
     const Icon = variant.icon;
     return (
       <Badge className={variant.color}>

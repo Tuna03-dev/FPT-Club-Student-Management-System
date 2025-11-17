@@ -63,4 +63,12 @@ public class ApiResponse<T> {
                 .build();
     }
 
+    public static <T> ApiResponse<T> error(int code, String message) {
+        return ApiResponse.<T>builder()
+                .code(code)
+                .message(message)
+                .timestamp(Instant.now())
+                .build();
+    }
+
 }

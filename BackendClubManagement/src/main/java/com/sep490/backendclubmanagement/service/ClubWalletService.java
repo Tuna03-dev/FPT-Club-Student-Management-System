@@ -1,11 +1,13 @@
 package com.sep490.backendclubmanagement.service;
 
+import com.sep490.backendclubmanagement.entity.Club;
 import com.sep490.backendclubmanagement.entity.ClubWallet;
 import com.sep490.backendclubmanagement.entity.IncomeTransaction;
 import com.sep490.backendclubmanagement.entity.OutcomeTransaction;
 import com.sep490.backendclubmanagement.entity.TransactionStatus;
 import com.sep490.backendclubmanagement.exception.AppException;
 import com.sep490.backendclubmanagement.exception.ErrorCode;
+import com.sep490.backendclubmanagement.repository.ClubRepository;
 import com.sep490.backendclubmanagement.repository.ClubWalletRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -13,6 +15,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.List;
+import java.util.Optional;
 
 /**
  * Service to handle ClubWallet balance updates
@@ -24,6 +28,7 @@ import java.math.BigDecimal;
 public class ClubWalletService {
 
     private final ClubWalletRepository clubWalletRepository;
+    private final ClubRepository clubRepository;
 
     /**
      * Process income transaction and update wallet if status = SUCCESS
@@ -162,6 +167,98 @@ public class ClubWalletService {
         // Note: Actual recalculation is done by WalletBalanceConsistencyCheckJob
         // which runs daily at 2:00 AM using direct SQL queries for better performance
         // This method is kept for future manual trigger if needed
+    }
+
+    /**
+     * Ensure all clubs have wallets
+     * Creates wallets for clubs that don't have one
+     * Called on application startup and can be triggered manually
+     *
+     * @return number of wallets created
+     */
+    @Transactional
+    public int ensureAllClubsHaveWallets() {
+        log.info("🔍 Checking for clubs without wallets...");
+
+        List<Club> clubsWithoutWallet = clubRepository.findClubsWithoutWallet();
+
+        if (clubsWithoutWallet.isEmpty()) {
+            log.info("✅ All clubs have wallets. No action needed.");
+            return 0;
+        }
+
+        log.info("⚠️ Found {} club(s) without wallet. Creating wallets...", clubsWithoutWallet.size());
+
+        int createdCount = 0;
+        for (Club club : clubsWithoutWallet) {
+            try {
+                ClubWallet wallet = ClubWallet.builder()
+                        .club(club)
+                        .balance(BigDecimal.ZERO)
+                        .totalIncome(BigDecimal.ZERO)
+                        .totalOutcome(BigDecimal.ZERO)
+                        .currency("VND")
+                        .build();
+
+                clubWalletRepository.save(wallet);
+                log.info("✅ Created wallet for club: {} (ID: {})", club.getClubName(), club.getId());
+                createdCount++;
+            } catch (Exception e) {
+                log.error("❌ Failed to create wallet for club: {} (ID: {}). Error: {}",
+                        club.getClubName(), club.getId(), e.getMessage());
+            }
+        }
+
+        log.info("✅ Successfully created {} wallet(s)", createdCount);
+        return createdCount;
+    }
+
+    /**
+     * Get wallet for a club, create if not exists
+     * This is a safe method to always get a valid wallet
+     *
+     * @param clubId the club ID
+     * @return the club wallet (existing or newly created)
+     */
+    @Transactional
+    public ClubWallet getOrCreateWalletForClub(Long clubId) throws AppException {
+        // Try to find existing wallet
+        Optional<ClubWallet> existingWallet = clubWalletRepository.findByClub_Id(clubId);
+        if (existingWallet.isPresent()) {
+            return existingWallet.get();
+        }
+
+        // Wallet doesn't exist, create new one
+        log.info("Creating new wallet for club ID: {}", clubId);
+
+        Club club = clubRepository.findById(clubId)
+                .orElseThrow(() -> new AppException(ErrorCode.CLUB_NOT_FOUND));
+
+        ClubWallet wallet = ClubWallet.builder()
+                .club(club)
+                .balance(BigDecimal.ZERO)
+                .totalIncome(BigDecimal.ZERO)
+                .totalOutcome(BigDecimal.ZERO)
+                .currency("VND")
+                .build();
+
+        ClubWallet savedWallet = clubWalletRepository.save(wallet);
+        log.info("✅ Created wallet for club: {} (Wallet ID: {})", club.getClubName(), savedWallet.getId());
+
+        return savedWallet;
+    }
+
+    /**
+     * Get finance summary for a club
+     * Returns aggregated financial information for dashboard
+     *
+     * @param clubId the club ID
+     * @return finance summary with balance, income, expense, etc.
+     * @throws AppException if club or wallet not found
+     */
+    @Transactional(readOnly = true)
+    public ClubWallet getFinanceSummary(Long clubId) throws AppException {
+        return getOrCreateWalletForClub(clubId);
     }
 }
 

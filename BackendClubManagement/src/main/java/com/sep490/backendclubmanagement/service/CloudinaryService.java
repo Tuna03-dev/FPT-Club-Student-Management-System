@@ -39,6 +39,7 @@ public class CloudinaryService {
             throw new RuntimeException("Cloudinary upload fail: " + e.getMessage(), e);
         }
     }
+
     /**
      * Upload BẤT ĐỒNG BỘ: chạy trên thread pool 'uploadExecutor'
      * - Dùng cho upload song song nhiều ảnh trong PostService.

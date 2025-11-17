@@ -1,7 +1,10 @@
 package com.sep490.backendclubmanagement.scheduled;
 
+import com.sep490.backendclubmanagement.service.ClubWalletService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -12,6 +15,7 @@ import java.util.Map;
 
 /**
  * Scheduled job to check and fix ClubWallet balance inconsistencies
+ * Also ensures all clubs have wallets on startup
  * Runs daily at 2:00 AM as a safety net
  * With database triggers in place, inconsistencies should be rare or zero
  */
@@ -21,6 +25,34 @@ import java.util.Map;
 public class WalletBalanceConsistencyCheckJob {
 
     private final JdbcTemplate jdbcTemplate;
+    private final ClubWalletService clubWalletService;
+
+    /**
+     * Run once when application starts
+     * Ensures all clubs have wallets and checks balance consistency
+     */
+    @EventListener(ApplicationReadyEvent.class)
+    @Transactional
+    public void onApplicationReady() {
+        log.info("=== Application ready - Running wallet initialization check ===");
+
+        try {
+            // Step 1: Ensure all clubs have wallets
+            int walletsCreated = clubWalletService.ensureAllClubsHaveWallets();
+            if (walletsCreated > 0) {
+                log.info("✅ Created {} new wallet(s) on startup", walletsCreated);
+            }
+
+            // Step 2: Check wallet balance consistency
+            log.info("Running initial wallet balance consistency check...");
+            checkAndFixWalletBalance();
+
+        } catch (Exception e) {
+            log.error("❌ Error during wallet initialization on startup: {}", e.getMessage(), e);
+        }
+
+        log.info("=== Completed wallet initialization check ===");
+    }
 
     /**
      * Daily check and fix wallet balance inconsistencies
@@ -33,7 +65,14 @@ public class WalletBalanceConsistencyCheckJob {
         log.info("=== Starting daily wallet balance consistency check ===");
 
         try {
-            // Step 0: Get total wallet count first
+            // Step 0a: Ensure all clubs have wallets first
+            log.info("Checking for clubs without wallets...");
+            int walletsCreated = clubWalletService.ensureAllClubsHaveWallets();
+            if (walletsCreated > 0) {
+                log.info("✅ Created {} missing wallet(s) during scheduled check", walletsCreated);
+            }
+
+            // Step 0b: Get total wallet count
             int totalWallets = getTotalWalletCount();
             log.info("📊 Total wallets in system: {}", totalWallets);
 

@@ -38,8 +38,8 @@ public class OutcomeTransactionServiceImpl implements OutcomeTransactionService 
      * Get all outcome transactions for a club with pagination
      */
     public PageResponse<OutcomeTransactionResponse> getOutcomeTransactions(Long clubId, Pageable pageable) throws AppException {
-        ClubWallet clubWallet = clubWalletRepository.findByClub_Id(clubId)
-                .orElseThrow(() -> new AppException(ErrorCode.CLUB_WALLET_NOT_FOUND));
+        // Auto-create wallet if not exists
+        ClubWallet clubWallet = clubWalletService.getOrCreateWalletForClub(clubId);
 
         Page<OutcomeTransaction> page = outcomeTransactionRepository.findByClubWalletId(clubWallet.getId(), pageable);
 
@@ -63,8 +63,8 @@ public class OutcomeTransactionServiceImpl implements OutcomeTransactionService 
      */
     public PageResponse<OutcomeTransactionResponse> getOutcomeTransactionsByStatus(
             Long clubId, TransactionStatus status, Pageable pageable) throws AppException {
-        ClubWallet clubWallet = clubWalletRepository.findByClub_Id(clubId)
-                .orElseThrow(() -> new AppException(ErrorCode.CLUB_WALLET_NOT_FOUND));
+        // Auto-create wallet if not exists
+        ClubWallet clubWallet = clubWalletService.getOrCreateWalletForClub(clubId);
 
         Page<OutcomeTransaction> page = outcomeTransactionRepository.findByClubWalletIdAndStatus(
                 clubWallet.getId(), status, pageable);
@@ -101,8 +101,8 @@ public class OutcomeTransactionServiceImpl implements OutcomeTransactionService 
      */
     @Transactional
     public OutcomeTransactionResponse createOutcomeTransaction(Long clubId, CreateOutcomeTransactionRequest request) throws AppException {
-        ClubWallet clubWallet = clubWalletRepository.findByClub_Id(clubId)
-                .orElseThrow(() -> new AppException(ErrorCode.CLUB_WALLET_NOT_FOUND));
+        // Auto-create wallet if not exists
+        ClubWallet clubWallet = clubWalletService.getOrCreateWalletForClub(clubId);
 
         // Get current user
         Long currentUserId = userService.getCurrentUserId();

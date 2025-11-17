@@ -39,8 +39,8 @@ public class IncomeTransactionServiceImpl implements IncomeTransactionService {
      * Get all income transactions for a club with pagination
      */
     public PageResponse<IncomeTransactionResponse> getIncomeTransactions(Long clubId, Pageable pageable) throws AppException {
-        ClubWallet clubWallet = clubWalletRepository.findByClub_Id(clubId)
-                .orElseThrow(() -> new AppException(ErrorCode.CLUB_WALLET_NOT_FOUND));
+        // Auto-create wallet if not exists
+        ClubWallet clubWallet = clubWalletService.getOrCreateWalletForClub(clubId);
 
         Page<IncomeTransaction> page = incomeTransactionRepository.findByClubWalletId(clubWallet.getId(), pageable);
 
@@ -64,8 +64,8 @@ public class IncomeTransactionServiceImpl implements IncomeTransactionService {
      */
     public PageResponse<IncomeTransactionResponse> getIncomeTransactionsByStatus(
             Long clubId, TransactionStatus status, Pageable pageable) throws AppException {
-        ClubWallet clubWallet = clubWalletRepository.findByClub_Id(clubId)
-                .orElseThrow(() -> new AppException(ErrorCode.CLUB_WALLET_NOT_FOUND));
+        // Auto-create wallet if not exists
+        ClubWallet clubWallet = clubWalletService.getOrCreateWalletForClub(clubId);
 
         Page<IncomeTransaction> page = incomeTransactionRepository.findByClubWalletIdAndStatus(
                 clubWallet.getId(), status, pageable);
@@ -102,8 +102,8 @@ public class IncomeTransactionServiceImpl implements IncomeTransactionService {
      */
     @Transactional
     public IncomeTransactionResponse createIncomeTransaction(Long clubId, CreateIncomeTransactionRequest request) throws AppException {
-        ClubWallet clubWallet = clubWalletRepository.findByClub_Id(clubId)
-                .orElseThrow(() -> new AppException(ErrorCode.CLUB_WALLET_NOT_FOUND));
+        // Auto-create wallet if not exists
+        ClubWallet clubWallet = clubWalletService.getOrCreateWalletForClub(clubId);
 
         // Get current user
         Long currentUserId = userService.getCurrentUserId();
@@ -126,6 +126,7 @@ public class IncomeTransactionServiceImpl implements IncomeTransactionService {
                 .source(request.getSource())
                 .status(initialStatus)
                 .notes(request.getNotes())
+                .receiptUrl(request.getReceiptUrl())
                 .clubWallet(clubWallet)
                 .createdBy(createdBy);
 
@@ -175,6 +176,7 @@ public class IncomeTransactionServiceImpl implements IncomeTransactionService {
         transaction.setTransactionDate(request.getTransactionDate());
         transaction.setSource(request.getSource());
         transaction.setNotes(request.getNotes());
+        transaction.setReceiptUrl(request.getReceiptUrl());
 
         // Update fee if provided
         if (request.getFeeId() != null) {

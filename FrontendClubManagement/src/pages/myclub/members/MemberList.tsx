@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useParams } from "react-router-dom";
 import {
   Users,
   Search,
@@ -130,9 +130,10 @@ const getRoleColorByLevel = (roleLevel?: number): string => {
 
 const Members = () => {
   const [searchParams, setSearchParams] = useSearchParams();
+  const { clubId: clubIdParam } = useParams();
 
-  // Get club ID from context/route (TODO: replace with actual clubId from route/context)
-  const clubId = 1;
+  // Get club ID from route params
+  const clubId = Number(clubIdParam);
 
   // Check if user is officer from localStorage
   const isOfficer = useMemo(() => {
@@ -263,7 +264,7 @@ const Members = () => {
     };
 
     loadInitialData();
-  }, []); // Empty deps: run once on mount
+  }, [clubId]); // Run when clubId changes
 
   useEffect(() => {
     if (initialLoad) return;
