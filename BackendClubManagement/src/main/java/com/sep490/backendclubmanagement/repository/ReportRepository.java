@@ -58,32 +58,37 @@ public interface ReportRepository extends JpaRepository<Report, Long> {
     List<Report> findAllByReportRequirementId(@Param("requirementId") Long requirementId);
 
     @Query("SELECT r FROM Report r " +
-           "LEFT JOIN FETCH r.clubReportRequirement crr " +
-           "LEFT JOIN FETCH crr.club " +
-           "LEFT JOIN FETCH crr.submissionReportRequirement srr " +
-           "LEFT JOIN FETCH srr.createdBy " +
-           "LEFT JOIN FETCH r.semester " +
-           "LEFT JOIN FETCH r.createdBy " +
-           "WHERE r.clubReportRequirement.club.id = :clubId " +
-           "AND (:status IS NULL OR r.status = :status) " +
-           "ORDER BY r.createdAt DESC")
-    List<Report> findByClubIdAndStatus(@Param("clubId") Long clubId, 
-                                       @Param("status") ReportStatus status);
+            "WHERE r.status <> 'DRAFT' " +
+            "AND (:status IS NULL OR r.status = :status) " +
+            "AND (:clubId IS NULL OR r.clubReportRequirement.club.id = :clubId) " +
+            "AND (:semesterId IS NULL OR r.semester.id = :semesterId) " +
+            "AND (:reportType IS NULL OR r.clubReportRequirement.submissionReportRequirement.reportType = :reportType) " +
+            "AND (:keyword IS NULL OR LOWER(r.reportTitle) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
+            "OR LOWER(r.content) LIKE LOWER(CONCAT('%', :keyword, '%'))) " +
+            "ORDER BY r.submittedDate DESC, r.createdAt DESC")
+    Page<Report> findByClubIdWithFilter(@Param("status") ReportStatus status,
+                                        @Param("clubId") Long clubId,
+                                        @Param("semesterId") Long semesterId,
+                                        @Param("reportType") ReportType reportType,
+                                        @Param("keyword") String keyword,
+                                        Pageable pageable);
 
     @Query("SELECT r FROM Report r " +
-           "LEFT JOIN FETCH r.clubReportRequirement crr " +
-           "LEFT JOIN FETCH crr.club " +
-           "LEFT JOIN FETCH crr.submissionReportRequirement srr " +
-           "LEFT JOIN FETCH srr.createdBy " +
-           "LEFT JOIN FETCH r.semester " +
-           "LEFT JOIN FETCH r.createdBy " +
-           "WHERE r.clubReportRequirement.club.id = :clubId " +
-           "AND r.createdBy.id = :userId " +
-           "AND (:status IS NULL OR r.status = :status) " +
-           "ORDER BY r.createdAt DESC")
-    List<Report> findByClubIdAndUserIdAndStatus(@Param("clubId") Long clubId,
-                                                 @Param("userId") Long userId,
-                                                 @Param("status") ReportStatus status);
+            "WHERE (:status IS NULL OR r.status = :status) " +
+            "AND (:clubId IS NULL OR r.clubReportRequirement.club.id = :clubId) " +
+            "AND (:semesterId IS NULL OR r.semester.id = :semesterId) " +
+            "AND r.createdBy.id = :userId " +
+            "AND (:reportType IS NULL OR r.clubReportRequirement.submissionReportRequirement.reportType = :reportType) " +
+            "AND (:keyword IS NULL OR LOWER(r.reportTitle) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
+            "OR LOWER(r.content) LIKE LOWER(CONCAT('%', :keyword, '%'))) " +
+            "ORDER BY r.submittedDate DESC, r.createdAt DESC")
+    Page<Report> findByClubIdAndUserIdWithFilter(@Param("status") ReportStatus status,
+                                        @Param("clubId") Long clubId,
+                                        @Param("semesterId") Long semesterId,
+                                        @Param("reportType") ReportType reportType,
+                                        @Param("keyword") String keyword,
+                                        @Param("userId") Long userId,
+                                        Pageable pageable);
 
     /**
      * Find report by clubId and reportRequirementId
