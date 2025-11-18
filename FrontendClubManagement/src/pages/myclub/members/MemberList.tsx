@@ -12,6 +12,11 @@ import {
   UserX,
   UserCheck,
   UserCog,
+  Upload,
+  Download,
+  FileSpreadsheet,
+  AlertCircle,
+  CheckCircle2,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -167,6 +172,9 @@ const Members = () => {
   const [isAssignTeamOpen, setIsAssignTeamOpen] = useState(false);
   const [selectedTeam, setSelectedTeam] = useState<string>("");
   const [activeTab, setActiveTab] = useState<"current" | "left">("current");
+  const [isImportExcelOpen, setIsImportExcelOpen] = useState(false);
+  const [excelFile, setExcelFile] = useState<File | null>(null);
+  const [importing, setImporting] = useState(false);
 
   // Left members state
   const [leftMembersPage, setLeftMembersPage] = useState<MembersPage | null>(
@@ -516,9 +524,22 @@ const Members = () => {
               )}
             </div>
           </div>
-          <div className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-br from-primary/10 to-primary-glow/10 border border-primary/20">
-            <Award className="h-5 w-5 text-primary" />
-            <span className="text-sm font-medium text-primary">CLB FPT</span>
+          <div className="flex items-center gap-3">
+            {/* Import Excel Button - Only for officers */}
+            {isOfficer && (
+              <Button
+                onClick={() => setIsImportExcelOpen(true)}
+                className="gap-2 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white shadow-lg hover:shadow-xl transition-all duration-200"
+              >
+                <Upload className="h-4 w-4" />
+                <span className="hidden sm:inline">Import từ Excel</span>
+                <span className="sm:hidden">Import</span>
+              </Button>
+            )}
+            <div className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-br from-primary/10 to-primary-glow/10 border border-primary/20">
+              <Award className="h-5 w-5 text-primary" />
+              <span className="text-sm font-medium text-primary">CLB FPT</span>
+            </div>
           </div>
         </div>
 
@@ -1510,6 +1531,517 @@ const Members = () => {
                 Hủy
               </Button>
               <Button onClick={handleAssignTeam}>Lưu thay đổi</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Import Excel Dialog */}
+        <Dialog open={isImportExcelOpen} onOpenChange={setIsImportExcelOpen}>
+          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <FileSpreadsheet className="h-5 w-5 text-primary" />
+                Import thành viên từ Excel
+              </DialogTitle>
+              <DialogDescription>
+                Thêm hàng loạt thành viên vào CLB từ file Excel
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-6 py-4">
+              {/* Instructions */}
+              <div className="space-y-4">
+                <div className="flex items-start gap-3 p-4 rounded-lg bg-blue-500/10 border border-blue-500/30">
+                  <AlertCircle className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                  <div className="space-y-2 text-sm">
+                    <p className="font-semibold text-blue-700 dark:text-blue-400">
+                      Hướng dẫn sử dụng:
+                    </p>
+                    <ol className="list-decimal list-inside space-y-1 text-blue-600 dark:text-blue-300">
+                      <li>Tải file Excel mẫu bằng nút bên dưới</li>
+                      <li>
+                        Điền thông tin thành viên vào file theo định dạng mẫu
+                      </li>
+                      <li>Lưu file và tải lên hệ thống</li>
+                      <li>Hệ thống sẽ tự động kiểm tra và thêm thành viên</li>
+                    </ol>
+                  </div>
+                </div>
+
+                {/* Template Download */}
+                <div className="p-4 rounded-lg border border-muted bg-muted/30">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 rounded-lg bg-green-500/10">
+                        <FileSpreadsheet className="h-5 w-5 text-green-600" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-sm">File Excel mẫu</p>
+                        <p className="text-xs text-muted-foreground">
+                          Template_ThanhVien_CLB.xlsx
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-2"
+                      onClick={async () => {
+                        // Dynamically import xlsx library
+                        const XLSX = await import("xlsx");
+
+                        // Create workbook and worksheet
+                        const wb = XLSX.utils.book_new();
+
+                        // Create data array with headers and example row
+                        const data = [
+                          [
+                            "student_code",
+                            "full_name",
+                            "email",
+                            "phone",
+                            "semester_code",
+                            "role_code",
+                            "team_name",
+                            "is_active",
+                            "join_date",
+                          ],
+                          [
+                            "SE123456",
+                            "Nguyễn Văn A",
+                            "anvse123456@fpt.edu.vn",
+                            "0912345678",
+                            "SP25",
+                            "MEMBER",
+                            "Truyền thông",
+                            "true",
+                            "2025-01-15",
+                          ],
+                        ];
+
+                        // Convert to worksheet
+                        const ws = XLSX.utils.aoa_to_sheet(data);
+
+                        // Set column widths
+                        ws["!cols"] = [
+                          { wch: 15 }, // student_code
+                          { wch: 20 }, // full_name
+                          { wch: 30 }, // email
+                          { wch: 15 }, // phone
+                          { wch: 15 }, // semester_code
+                          { wch: 12 }, // role_code
+                          { wch: 20 }, // team_name
+                          { wch: 10 }, // is_active
+                          { wch: 12 }, // join_date
+                        ];
+
+                        // Add worksheet to workbook
+                        XLSX.utils.book_append_sheet(wb, ws, "Members");
+
+                        // Generate Excel file and download
+                        XLSX.writeFile(wb, "Template_ThanhVien_CLB.xlsx");
+                      }}
+                    >
+                      <Download className="h-4 w-4" />
+                      Tải xuống mẫu
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Format Guide */}
+                <div className="space-y-3">
+                  <p className="text-sm font-semibold">Định dạng file Excel:</p>
+                  <div className="rounded-lg border overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead className="bg-muted">
+                        <tr>
+                          <th className="px-3 py-2 text-left font-medium">
+                            Tên cột
+                          </th>
+                          <th className="px-3 py-2 text-left font-medium">
+                            Mô tả
+                          </th>
+                          <th className="px-3 py-2 text-left font-medium">
+                            Bắt buộc
+                          </th>
+                          <th className="px-3 py-2 text-left font-medium">
+                            Ví dụ
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y">
+                        <tr>
+                          <td className="px-3 py-2 font-mono text-xs">
+                            student_code
+                          </td>
+                          <td className="px-3 py-2">Mã sinh viên</td>
+                          <td className="px-3 py-2">
+                            <Badge variant="destructive" className="text-xs">
+                              Có
+                            </Badge>
+                          </td>
+                          <td className="px-3 py-2 text-muted-foreground">
+                            SE123456
+                          </td>
+                        </tr>
+                        <tr>
+                          <td className="px-3 py-2 font-mono text-xs">
+                            full_name
+                          </td>
+                          <td className="px-3 py-2">Họ và tên</td>
+                          <td className="px-3 py-2">
+                            <Badge variant="destructive" className="text-xs">
+                              Có
+                            </Badge>
+                          </td>
+                          <td className="px-3 py-2 text-muted-foreground">
+                            Nguyễn Văn A
+                          </td>
+                        </tr>
+                        <tr>
+                          <td className="px-3 py-2 font-mono text-xs">
+                            semester_code
+                          </td>
+                          <td className="px-3 py-2">Mã học kỳ</td>
+                          <td className="px-3 py-2">
+                            <Badge variant="destructive" className="text-xs">
+                              Có
+                            </Badge>
+                          </td>
+                          <td className="px-3 py-2 text-muted-foreground">
+                            SP25
+                          </td>
+                        </tr>
+                        <tr>
+                          <td className="px-3 py-2 font-mono text-xs">email</td>
+                          <td className="px-3 py-2">Email sinh viên</td>
+                          <td className="px-3 py-2">
+                            <Badge variant="destructive" className="text-xs">
+                              Có
+                            </Badge>
+                          </td>
+                          <td className="px-3 py-2 text-muted-foreground">
+                            anvse@fpt.edu.vn
+                          </td>
+                        </tr>
+                        <tr>
+                          <td className="px-3 py-2 font-mono text-xs">phone</td>
+                          <td className="px-3 py-2">Số điện thoại</td>
+                          <td className="px-3 py-2">
+                            <Badge variant="outline" className="text-xs">
+                              Không
+                            </Badge>
+                          </td>
+                          <td className="px-3 py-2 text-muted-foreground">
+                            0912345678
+                          </td>
+                        </tr>
+                        <tr>
+                          <td className="px-3 py-2 font-mono text-xs">
+                            role_code
+                          </td>
+                          <td className="px-3 py-2">Mã vai trò</td>
+                          <td className="px-3 py-2">
+                            <Badge variant="outline" className="text-xs">
+                              Không
+                            </Badge>
+                          </td>
+                          <td className="px-3 py-2 text-muted-foreground">
+                            MEMBER, LEADER
+                          </td>
+                        </tr>
+                        <tr>
+                          <td className="px-3 py-2 font-mono text-xs">
+                            team_name
+                          </td>
+                          <td className="px-3 py-2">Tên ban</td>
+                          <td className="px-3 py-2">
+                            <Badge variant="outline" className="text-xs">
+                              Không
+                            </Badge>
+                          </td>
+                          <td className="px-3 py-2 text-muted-foreground">
+                            Truyền thông
+                          </td>
+                        </tr>
+                        <tr>
+                          <td className="px-3 py-2 font-mono text-xs">
+                            is_active
+                          </td>
+                          <td className="px-3 py-2">Trạng thái</td>
+                          <td className="px-3 py-2">
+                            <Badge variant="outline" className="text-xs">
+                              Không
+                            </Badge>
+                          </td>
+                          <td className="px-3 py-2 text-muted-foreground">
+                            true/false
+                          </td>
+                        </tr>
+                        <tr>
+                          <td className="px-3 py-2 font-mono text-xs">
+                            join_date
+                          </td>
+                          <td className="px-3 py-2">Ngày tham gia</td>
+                          <td className="px-3 py-2">
+                            <Badge variant="outline" className="text-xs">
+                              Không
+                            </Badge>
+                          </td>
+                          <td className="px-3 py-2 text-muted-foreground">
+                            2025-01-15
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Important Notes */}
+                <div className="space-y-2 p-4 rounded-lg bg-amber-500/10 border border-amber-500/30">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
+                    <div className="space-y-1">
+                      <p className="text-sm font-semibold text-amber-700 dark:text-amber-400">
+                        Lưu ý quan trọng:
+                      </p>
+                      <ul className="text-xs text-amber-600 dark:text-amber-300 space-y-1 list-disc list-inside">
+                        <li>
+                          <strong>student_code</strong> và{" "}
+                          <strong>semester_code</strong> là bắt buộc
+                        </li>
+                        <li>
+                          Nếu mã sinh viên đã tồn tại, hệ thống sẽ cập nhật
+                          thông tin
+                        </li>
+                        <li>
+                          Một sinh viên có thể có nhiều dòng với các
+                          semester_code khác nhau
+                        </li>
+                        <li>
+                          semester_code phải tồn tại trong hệ thống (VD: SP25,
+                          SU25, FA25)
+                        </li>
+                        <li>
+                          role_code phải khớp với mã vai trò trong CLB (VD:
+                          MEMBER, LEADER)
+                        </li>
+                        <li>
+                          team_name phải khớp chính xác với tên ban đã tạo
+                        </li>
+                        <li>is_active mặc định là true nếu không chỉ định</li>
+                        <li>
+                          join_date mặc định là ngày hiện tại nếu không chỉ định
+                        </li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* File Upload */}
+              <div className="space-y-3">
+                <Label htmlFor="excel-file" className="text-base font-semibold">
+                  Chọn file Excel
+                </Label>
+                <div className="flex items-center gap-3">
+                  <Input
+                    id="excel-file"
+                    type="file"
+                    accept=".xlsx,.xls"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        if (file.size > 5 * 1024 * 1024) {
+                          toast.error("File không được vượt quá 5MB");
+                          e.target.value = "";
+                          return;
+                        }
+                        setExcelFile(file);
+                      }
+                    }}
+                    className="flex-1"
+                  />
+                  {excelFile && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setExcelFile(null);
+                        const input = document.getElementById(
+                          "excel-file"
+                        ) as HTMLInputElement;
+                        if (input) input.value = "";
+                      }}
+                    >
+                      Xóa
+                    </Button>
+                  )}
+                </div>
+                {excelFile && (
+                  <div className="flex items-center gap-2 p-3 rounded-lg bg-green-500/10 border border-green-500/30">
+                    <CheckCircle2 className="h-4 w-4 text-green-600" />
+                    <p className="text-sm text-green-600">
+                      Đã chọn:{" "}
+                      <span className="font-medium">{excelFile.name}</span>
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setIsImportExcelOpen(false);
+                  setExcelFile(null);
+                }}
+                disabled={importing}
+              >
+                Hủy
+              </Button>
+              <Button
+                onClick={async () => {
+                  if (!excelFile) {
+                    toast.error("Vui lòng chọn file Excel");
+                    return;
+                  }
+
+                  const currentUser = authService.getCurrentUser();
+                  if (!currentUser?.id) {
+                    toast.error("Không thể xác định người dùng hiện tại");
+                    return;
+                  }
+
+                  setImporting(true);
+                  try {
+                    const response = await memberService.importMembersFromExcel(
+                      Number(clubId),
+                      excelFile,
+                      currentUser.id
+                    );
+
+                    if (response.code !== 200 || !response.data) {
+                      throw new Error(response.message || "Import failed");
+                    }
+
+                    const result = response.data;
+
+                    // Format Vietnamese message
+                    const formatSummary = () => {
+                      const parts: string[] = [];
+
+                      if (result.createdUsers > 0) {
+                        parts.push(`${result.createdUsers} người dùng mới`);
+                      }
+                      if (result.updatedUsers > 0) {
+                        parts.push(
+                          `${result.updatedUsers} người dùng được cập nhật`
+                        );
+                      }
+                      if (result.createdMemberships > 0) {
+                        parts.push(
+                          `${result.createdMemberships} thành viên mới`
+                        );
+                      }
+                      if (result.updatedMemberships > 0) {
+                        parts.push(
+                          `${result.updatedMemberships} thành viên cập nhật`
+                        );
+                      }
+                      if (result.createdRoleMemberships > 0) {
+                        parts.push(
+                          `${result.createdRoleMemberships} lịch sử vai trò mới`
+                        );
+                      }
+                      if (result.updatedRoleMemberships > 0) {
+                        parts.push(
+                          `${result.updatedRoleMemberships} lịch sử vai trò cập nhật`
+                        );
+                      }
+
+                      return parts.length > 0
+                        ? parts.join(", ")
+                        : `Đã xử lý ${result.processedUsers} người dùng`;
+                    };
+
+                    // Show detailed results
+                    if (result.errors && result.errors.length > 0) {
+                      toast.warning(
+                        <div className="space-y-2">
+                          <p className="font-semibold">
+                            Import hoàn tất với một số lỗi
+                          </p>
+                          <p className="text-sm text-green-600 dark:text-green-400">
+                            ✓ Thành công: {formatSummary()}
+                          </p>
+                          <p className="text-sm text-amber-600 dark:text-amber-400">
+                            ⚠ Có {result.errors.length} lỗi:
+                          </p>
+                          <ul className="text-xs space-y-1 max-h-32 overflow-y-auto">
+                            {result.errors.slice(0, 5).map((err, idx) => (
+                              <li key={idx}>
+                                Dòng {err.row} ({err.studentCode} -{" "}
+                                {err.semesterCode}): {err.message}
+                              </li>
+                            ))}
+                            {result.errors.length > 5 && (
+                              <li>...và {result.errors.length - 5} lỗi khác</li>
+                            )}
+                          </ul>
+                        </div>,
+                        { duration: 10000 }
+                      );
+                    } else {
+                      toast.success(
+                        <div className="space-y-2">
+                          <p className="font-semibold">🎉 Import thành công!</p>
+                          <div className="text-sm space-y-1">
+                            <p>
+                              📊 Tổng số dòng:{" "}
+                              <strong>{result.totalRows}</strong>
+                            </p>
+                            <p>✓ {formatSummary()}</p>
+                          </div>
+                        </div>,
+                        { duration: 6000 }
+                      );
+                    }
+
+                    setIsImportExcelOpen(false);
+                    setExcelFile(null);
+                    loadMembers();
+                  } catch (error: unknown) {
+                    const errorMessage =
+                      error instanceof Error
+                        ? error.message
+                        : "Vui lòng kiểm tra lại file";
+                    toast.error(
+                      <div className="space-y-1">
+                        <p className="font-semibold">Import thất bại</p>
+                        <p className="text-sm">{errorMessage}</p>
+                      </div>
+                    );
+                  } finally {
+                    setImporting(false);
+                  }
+                }}
+                disabled={!excelFile || importing}
+                className="gap-2"
+              >
+                {importing ? (
+                  <>
+                    <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Đang import...
+                  </>
+                ) : (
+                  <>
+                    <Upload className="h-4 w-4" />
+                    Import thành viên
+                  </>
+                )}
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>

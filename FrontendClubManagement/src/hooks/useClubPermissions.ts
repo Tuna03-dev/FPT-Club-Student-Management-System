@@ -4,6 +4,7 @@ import { authService, type UserInfo } from "@/services/authService";
 export interface ClubPermissions {
   isClubOfficer: boolean;
   isTeamOfficer: boolean;
+  isClubTreasurer: boolean;
   isClubMember: boolean;
   hasPermission: boolean;
   loading: boolean;
@@ -62,6 +63,16 @@ export function useClubPermissions(
     return isOfficer;
   }, [clubRole]);
 
+  // Check if user has CLUB_TREASURE role in this club
+  const isClubTreasurer = useMemo(() => {
+    if (!clubRole) return false;
+
+    // Kiểm tra theo systemRole
+    const isTreasurer = clubRole.systemRole === "CLUB_TREASURE";
+
+    return isTreasurer;
+  }, [clubRole]);
+
   // User has permission if they have CLUB_OFFICER role in this club
 
   // User has permission if they have CLUB_PRESIDENT role in this club
@@ -70,6 +81,7 @@ export function useClubPermissions(
   return {
     isClubOfficer,
     isTeamOfficer,
+    isClubTreasurer,
     isClubMember,
     hasPermission,
     loading,

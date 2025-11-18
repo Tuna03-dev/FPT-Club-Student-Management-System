@@ -24,6 +24,8 @@ public interface SemesterRepository extends JpaRepository<Semester, Long> {
     boolean existsBySemesterName(String semesterName);
     boolean existsBySemesterNameAndIdNot(String semesterName, Long id);
 
+    Optional<Semester> findBySemesterCode(String semesterCode);
+
     @Query("SELECT s FROM Semester s WHERE NOW() BETWEEN s.startDate AND s.endDate")
     Optional<Semester> findCurrentSemester();
 
