@@ -29,6 +29,7 @@ export interface ClubRequest {
     | "documents_submitted"
     | "defense_scheduled"
     | "defense_completed"
+    | "final_form_submitted"
     | "approved"
     | "rejected"
     | "revision_required"
@@ -87,6 +88,12 @@ const STATUS_CONFIG = {
     variant: "default" as const,
     icon: CheckCircle2,
     color: "text-green-500",
+  },
+  final_form_submitted: {
+    label: "Đã nộp form cuối",
+    variant: "default" as const,
+    icon: FileText,
+    color: "text-green-600",
   },
   approved: {
     label: "Đã phê duyệt",
