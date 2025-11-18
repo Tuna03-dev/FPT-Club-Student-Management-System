@@ -621,28 +621,28 @@ export function TransactionsTable({
                     </TableCell>
                     <TableCell>{getStatusBadge(transaction.status)}</TableCell>
                     <TableCell>
-                      <div className="flex items-center justify-end gap-1">
+                      <div className="flex items-center justify-end gap-2">
                         {transaction.status === "PENDING" && (
                           <>
                             <Button
                               size="sm"
-                              variant="ghost"
+                              variant="default"
+                              className="bg-green-600 hover:bg-green-700 text-white"
                               onClick={() =>
                                 onApproveTransaction(transaction.id.toString())
                               }
-                              title="Duyệt giao dịch"
                             >
-                              <CheckCircle className="w-4 h-4 text-green-500" />
+                              Duyệt
                             </Button>
                             <Button
                               size="sm"
-                              variant="ghost"
+                              variant="outline"
+                              className="border-red-500 text-red-500 hover:bg-red-50"
                               onClick={() =>
                                 onRejectTransaction(transaction.id.toString())
                               }
-                              title="Hủy giao dịch"
                             >
-                              <XCircle className="w-4 h-4 text-red-500" />
+                              Từ chối
                             </Button>
                           </>
                         )}

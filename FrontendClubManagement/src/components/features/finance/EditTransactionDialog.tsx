@@ -215,28 +215,34 @@ export function EditTransactionDialog({
     setSubmitting(true);
     try {
       if (transaction.type === "INCOME") {
-        // Validate
+        // Validate income transaction
         if (
           !incomeData.amount ||
+          incomeData.amount <= 0 ||
           !incomeData.description ||
           !incomeData.transactionDate ||
           !incomeData.source
         ) {
-          toast.error("Vui lòng điền đầy đủ thông tin bắt buộc");
+          toast.error(
+            "Vui lòng điền đầy đủ thông tin bắt buộc (số tiền phải lớn hơn 0)"
+          );
           setSubmitting(false);
           return;
         }
         await onUpdateIncome(transaction.id, incomeData);
       } else {
-        // Validate
+        // Validate outcome transaction
         if (
           !outcomeData.amount ||
+          outcomeData.amount <= 0 ||
           !outcomeData.description ||
           !outcomeData.transactionDate ||
           !outcomeData.recipient ||
           !outcomeData.purpose
         ) {
-          toast.error("Vui lòng điền đầy đủ thông tin bắt buộc");
+          toast.error(
+            "Vui lòng điền đầy đủ thông tin bắt buộc (số tiền phải lớn hơn 0)"
+          );
           setSubmitting(false);
           return;
         }

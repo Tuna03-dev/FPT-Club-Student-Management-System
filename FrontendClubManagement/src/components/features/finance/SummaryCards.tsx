@@ -40,7 +40,7 @@ export function SummaryCards({
       <Card className="border-border shadow-sm">
         <CardHeader className="flex flex-row items-center justify-between pb-2">
           <CardTitle className="text-sm font-medium text-muted-foreground">
-            Tổng ngân sách
+            Số dư ví
           </CardTitle>
           <Wallet className="h-4 w-4 text-primary" />
         </CardHeader>

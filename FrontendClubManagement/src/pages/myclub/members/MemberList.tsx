@@ -194,9 +194,6 @@ const Members = () => {
         }
       });
 
-      // If caller didn't explicitly include semester in updates and there is a selectedTerm,
-      // ensure user interactions include the current selectedTerm in the URL so subsequent actions
-      // (like selecting role) keep the semester in the query string.
       if (!Object.prototype.hasOwnProperty.call(updates, "semester")) {
         if (!newParams.has("semester") && selectedTerm !== "") {
           newParams.set("semester", selectedTerm);
