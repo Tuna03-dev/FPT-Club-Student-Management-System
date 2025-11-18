@@ -14,6 +14,8 @@ import {
   clubCreationApi,
   type RequestEstablishmentResponse,
   type ClubCreationFinalFormResponse,
+  type ClubCreationStepResponse,
+  type WorkflowHistoryResponse,
 } from "@/api/clubCreation";
 import { Button } from "@/components/ui/button";
 import { Card} from "@/components/ui/card";
@@ -48,43 +50,57 @@ const mapStatusToFE = (status: string): ClubRequest["status"] => {
     DEFENSE_SCHEDULED: "defense_scheduled",
     DEFENSE_COMPLETED: "defense_completed",
     FEEDBACK_PROVIDED: "defense_completed",
-    FINAL_FORM_SUBMITTED: "defense_completed",
-    FINAL_FORM_REVIEWED: "defense_completed",
+    FINAL_FORM_SUBMITTED: "final_form_submitted",
+    FINAL_FORM_REVIEWED: "final_form_submitted",
     APPROVED: "approved",
     REJECTED: "rejected",
   };
   return statusMap[status] || "pending_review";
 };
 
-// Helper function to calculate current step from status
-const getCurrentStep = (status: string): number => {
-  const stepMap: Record<string, number> = {
-    DRAFT: 1,
-    SUBMITTED: 2,
-    CONTACT_CONFIRMATION_PENDING: 2,
-    CONTACT_CONFIRMED: 3,
-    CONTACT_REJECTED: 1,
-    PROPOSAL_REQUIRED: 3,
-    PROPOSAL_SUBMITTED: 4,
-    PROPOSAL_REJECTED: 3,
-    PROPOSAL_APPROVED: 5,
-    DEFENSE_SCHEDULE_PROPOSED: 6,
-    DEFENSE_SCHEDULE_APPROVED: 6,
-    DEFENSE_SCHEDULE_REJECTED: 5,
-    DEFENSE_SCHEDULED: 7,
-    DEFENSE_COMPLETED: 7,
-    FEEDBACK_PROVIDED: 8,
-    FINAL_FORM_SUBMITTED: 8,
-    FINAL_FORM_REVIEWED: 8,
-    APPROVED: 8,
-    REJECTED: 1,
+// Helper function to map status to step code
+const getStepCodeFromStatus = (status: string): string | null => {
+  const statusToStepCodeMap: Record<string, string> = {
+    SUBMITTED: "REQUEST_SUBMITTED",
+    CONTACT_CONFIRMATION_PENDING: "REQUEST_REVIEW",
+    CONTACT_CONFIRMED: "REQUEST_REVIEW",
+    PROPOSAL_REQUIRED: "PROPOSAL_REQUIRED", // Staff đã yêu cầu, đang chờ sinh viên nộp
+    PROPOSAL_SUBMITTED: "PROPOSAL_SUBMITTED",
+    PROPOSAL_APPROVED: "PROPOSAL_REVIEW", // Staff đã duyệt đề án
+    PROPOSAL_REJECTED: "PROPOSAL_REVIEW", // Đã trải qua bước staff duyệt (dù bị từ chối)
+    DEFENSE_SCHEDULE_PROPOSED: "PROPOSE_DEFENSE_TIME",
+    DEFENSE_SCHEDULE_APPROVED: "DEFENSE_SCHEDULE_CONFIRMED",
+    DEFENSE_SCHEDULE_REJECTED: "PROPOSE_DEFENSE_TIME", // Từ chối lịch bảo vệ vẫn thuộc bước lịch bảo vệ
+    DEFENSE_COMPLETED: "DEFENSE_COMPLETED",
+    FINAL_FORM_SUBMITTED: "FINAL_FORM",
+    APPROVED: "CLUB_CREATED",
   };
-  return stepMap[status] || 1;
+  return statusToStepCodeMap[status] || null;
+};
+
+// Helper function to calculate current step from status using steps from API
+const getCurrentStep = (status: string, steps: ClubCreationStepResponse[]): number => {
+  if (status === "DRAFT" || status === "REJECTED" || status === "CONTACT_REJECTED") {
+    return 1;
+  }
+  
+  const stepCode = getStepCodeFromStatus(status);
+  if (!stepCode) {
+    return 1;
+  }
+  
+  const step = steps.find((s) => s.code === stepCode);
+  if (!step) {
+    return 1;
+  }
+  
+  return step.orderIndex || 1;
 };
 
 // Convert BE response to FE ClubRequest
 const convertToClubRequest = (
-  response: RequestEstablishmentResponse
+  response: RequestEstablishmentResponse,
+  steps: ClubCreationStepResponse[]
 ): ClubRequest => {
   return {
     id: response.id.toString(),
@@ -92,8 +108,8 @@ const convertToClubRequest = (
     clubCode: response.clubCode,
     submittedDate: response.sendDate || response.createdAt,
     status: mapStatusToFE(response.status),
-    currentStep: getCurrentStep(response.status),
-    totalSteps: 8,
+    currentStep: getCurrentStep(response.status, steps),
+    totalSteps: steps.length,
     reviewer: response.assignedStaffFullName,
   };
 };
@@ -110,6 +126,12 @@ const CreateClubPage = () => {
   const [isDefenseScheduleDialogOpen, setIsDefenseScheduleDialogOpen] = useState(false);
   const [isFinalFormDialogOpen, setIsFinalFormDialogOpen] = useState(false);
   const [editingRequest, setEditingRequest] = useState<RequestEstablishmentResponse | null>(null);
+  const [workflowSteps, setWorkflowSteps] = useState<ClubCreationStepResponse[]>([]);
+  const [workflowHistory, setWorkflowHistory] = useState<WorkflowHistoryResponse[]>([]);
+  // Request detail data
+  const [requestDetail, setRequestDetail] = useState<RequestEstablishmentResponse | null>(null);
+  const [proposals, setProposals] = useState<import("@/api/clubCreation").ClubProposalResponse[]>([]);
+  const [defenseSchedule, setDefenseSchedule] = useState<import("@/api/clubCreation").DefenseScheduleResponse | null>(null);
 
   // Proposal form state
   const [proposalTitle, setProposalTitle] = useState("");
@@ -153,13 +175,26 @@ const CreateClubPage = () => {
     }
   };
 
+  // Load final forms when final form dialog is opened (for history in submit dialog)
   useEffect(() => {
     if (isFinalFormDialogOpen && selectedRequest) {
       loadFinalForms(parseInt(selectedRequest.id));
-    } else if (!isFinalFormDialogOpen) {
-      setFinalFormHistory([]);
     }
   }, [isFinalFormDialogOpen, selectedRequest]);
+
+  // Load workflow steps
+  const loadWorkflowSteps = async () => {
+    try {
+      const steps = await clubCreationApi.getClubCreationSteps();
+      setWorkflowSteps(steps);
+    } catch (error: any) {
+      toast.error("Không thể tải danh sách bước quy trình", {
+        description: error.message || "Đã xảy ra lỗi",
+      });
+      // Fallback to empty array
+      setWorkflowSteps([]);
+    }
+  };
 
   // Load requests
   const loadRequests = async () => {
@@ -167,7 +202,7 @@ const CreateClubPage = () => {
     try {
       const requests = await clubCreationApi.getMyRequests(0, 100);
       if (Array.isArray(requests)) {
-        setClubRequests(requests.map(convertToClubRequest));
+        setClubRequests(requests.map((req) => convertToClubRequest(req, workflowSteps)));
       } else {
         console.error("Invalid response format:", requests);
         toast.error("Dữ liệu trả về không đúng định dạng");
@@ -182,16 +217,68 @@ const CreateClubPage = () => {
   };
 
   useEffect(() => {
-    loadRequests();
+    loadWorkflowSteps();
   }, []);
+
+  useEffect(() => {
+    if (workflowSteps.length > 0) {
+      loadRequests();
+    }
+  }, [workflowSteps]);
+
+  // Load workflow history when dialog opens
+  const loadWorkflowHistory = async (requestId: number) => {
+    try {
+      const historyData = await clubCreationApi.getWorkflowHistory(requestId, 0, 100);
+      setWorkflowHistory(historyData.content || []);
+    } catch (error: any) {
+      console.error("Failed to load workflow history:", error);
+      setWorkflowHistory([]);
+    }
+  };
+
+  // Load request detail data when dialog opens
+  const loadRequestDetailData = async (requestId: number) => {
+    try {
+      const [detail, proposalsData, defenseScheduleData, finalFormsData] = await Promise.all([
+        clubCreationApi.getRequestDetail(requestId),
+        clubCreationApi.getProposals(requestId).catch(() => []),
+        clubCreationApi.getDefenseSchedule(requestId).catch(() => null),
+        clubCreationApi.getFinalForms(requestId).catch(() => []),
+      ]);
+      setRequestDetail(detail);
+      setProposals(Array.isArray(proposalsData) ? proposalsData : []);
+      setDefenseSchedule(defenseScheduleData);
+      setFinalFormHistory(Array.isArray(finalFormsData) ? finalFormsData : []);
+    } catch (error: any) {
+      console.error("Failed to load request detail data:", error);
+      setRequestDetail(null);
+      setProposals([]);
+      setDefenseSchedule(null);
+      setFinalFormHistory([]);
+    }
+  };
+
+  useEffect(() => {
+    if (isDialogOpen && selectedRequest) {
+      const requestId = parseInt(selectedRequest.id);
+      loadRequestDetailData(requestId);
+      loadWorkflowHistory(requestId);
+    } else if (!isDialogOpen) {
+      setRequestDetail(null);
+      setProposals([]);
+      setDefenseSchedule(null);
+      setWorkflowHistory([]);
+    }
+  }, [isDialogOpen, selectedRequest]);
 
   // Handle form submission (create request)
   const handleFormSubmit = async (formData: ClubRequestFormData) => {
     try {
       setIsLoading(true);
-      const response = await clubCreationApi.createRequest({
-        clubName: formData.clubName,
-        clubCode: formData.clubCode,
+      await clubCreationApi.createRequest({
+      clubName: formData.clubName,
+      clubCode: formData.clubCode,
         clubCategory: formData.category,
         description: formData.description,
         expectedMemberCount: formData.expectedMemberCount,
@@ -245,21 +332,6 @@ const CreateClubPage = () => {
       await loadRequests();
     } catch (error: any) {
       toast.error("Không thể xóa yêu cầu", {
-        description: error.message || "Đã xảy ra lỗi",
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Handle edit request
-  const handleEditRequest = async (requestId: number) => {
-    try {
-      setIsLoading(true);
-      const response = await clubCreationApi.getRequestDetail(requestId);
-      setEditingRequest(response);
-    } catch (error: any) {
-      toast.error("Không thể tải thông tin yêu cầu", {
         description: error.message || "Đã xảy ra lỗi",
       });
     } finally {
@@ -440,6 +512,7 @@ const CreateClubPage = () => {
       r.status === "documents_submitted" ||
       r.status === "defense_scheduled" ||
       r.status === "defense_completed" ||
+      r.status === "final_form_submitted" ||
       r.status === "revision_required"
   );
 
@@ -519,18 +592,13 @@ const CreateClubPage = () => {
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {pendingRequests.map((request) => {
-                  const requestDetail = async () => {
-                    const detail = await getRequestDetail(parseInt(request.id));
-                    return detail;
-                  };
-
                   return (
                     <Card key={request.id} className="hover:shadow-lg transition-shadow">
                       <div className="p-4 space-y-4">
-                        <ClubRequestCard
-                          request={request}
-                          onViewDetails={handleViewDetails}
-                        />
+                  <ClubRequestCard
+                    request={request}
+                    onViewDetails={handleViewDetails}
+                  />
                         <div className="flex gap-2">
                           {request.status === "draft" && (
                             <>
@@ -580,7 +648,8 @@ const CreateClubPage = () => {
                               Nộp đề án
                             </Button>
                           )}
-                          {request.status === "revision_required" && request.currentStep === 3 && (
+                          {/* Nộp lại đề án khi bị yêu cầu chỉnh sửa đề án (PROPOSAL_REJECTED - step PROPOSAL_REVIEW) */}
+                          {request.status === "revision_required" && request.currentStep === 5 && (
                             <Button
                               size="sm"
                               className="flex-1"
@@ -594,8 +663,13 @@ const CreateClubPage = () => {
                               Nộp lại đề án
                             </Button>
                           )}
-                          {(request.status === "documents_submitted" && request.currentStep === 5) ||
-                          (request.status === "revision_required" && request.currentStep === 5) ? (
+                          {/* Đề xuất / đề xuất lại lịch bảo vệ */}
+                          {(
+                            // Sau khi đề án đã được duyệt (PROPOSAL_APPROVED → documents_submitted, step PROPOSAL_REVIEW = 5)
+                            (request.status === "documents_submitted" && request.currentStep === 5) ||
+                            // Sau khi lịch bảo vệ bị từ chối (DEFENSE_SCHEDULE_REJECTED → revision_required, step >= 6)
+                            (request.status === "revision_required" && request.currentStep >= 6)
+                          ) ? (
                             <Button
                               size="sm"
                               className="flex-1"
@@ -606,7 +680,7 @@ const CreateClubPage = () => {
                               }}
                             >
                               <Calendar className="mr-2 h-4 w-4" />
-                              {request.status === "revision_required" 
+                              {request.status === "revision_required"
                                 ? "Đề xuất lại lịch bảo vệ"
                                 : "Đề xuất lịch bảo vệ"}
                             </Button>
@@ -625,11 +699,11 @@ const CreateClubPage = () => {
                             </Button>
                           )}
                         </div>
-                      </div>
+              </div>
                     </Card>
                   );
                 })}
-              </div>
+                </div>
             </>
           )}
         </TabsContent>
@@ -686,6 +760,12 @@ const CreateClubPage = () => {
         request={selectedRequest}
         open={isDialogOpen}
         onOpenChange={setIsDialogOpen}
+        workflowSteps={workflowSteps}
+        workflowHistory={workflowHistory}
+        requestDetail={requestDetail}
+        proposals={proposals}
+        defenseSchedule={defenseSchedule}
+        finalForms={finalFormHistory}
       />
 
       {/* Edit request dialog */}
@@ -1004,6 +1084,6 @@ const CreateClubPage = () => {
       </Dialog>
     </div>
   );
-};
+}
 
 export default CreateClubPage;

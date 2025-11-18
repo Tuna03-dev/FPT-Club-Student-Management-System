@@ -11,31 +11,18 @@ import com.sep490.backendclubmanagement.dto.request.SubmitFinalFormRequest;
 import com.sep490.backendclubmanagement.dto.request.SubmitProposalRequest;
 import com.sep490.backendclubmanagement.dto.request.UpdateRequestEstablishmentRequest;
 import com.sep490.backendclubmanagement.dto.response.ClubCreationFinalFormResponse;
+import com.sep490.backendclubmanagement.dto.response.ClubCreationStepResponse;
 import com.sep490.backendclubmanagement.dto.response.ClubProposalResponse;
 import com.sep490.backendclubmanagement.dto.response.DefenseScheduleResponse;
 import com.sep490.backendclubmanagement.dto.response.RequestEstablishmentResponse;
 import com.sep490.backendclubmanagement.dto.response.WorkflowHistoryResponse;
-import com.sep490.backendclubmanagement.entity.Club;
-import com.sep490.backendclubmanagement.entity.ClubCategory;
-import com.sep490.backendclubmanagement.entity.ClubCreationFinalForm;
-import com.sep490.backendclubmanagement.entity.ClubCreationWorkFlowHistory;
-import com.sep490.backendclubmanagement.entity.ClubMemberShip;
-import com.sep490.backendclubmanagement.entity.ClubMemberShipStatus;
-import com.sep490.backendclubmanagement.entity.ClubProposal;
-import com.sep490.backendclubmanagement.entity.ClubRole;
-import com.sep490.backendclubmanagement.entity.DefenseSchedule;
-import com.sep490.backendclubmanagement.entity.DefenseScheduleStatus;
-import com.sep490.backendclubmanagement.entity.RequestEstablishment;
-import com.sep490.backendclubmanagement.entity.RequestEstablishmentStatus;
-import com.sep490.backendclubmanagement.entity.RoleMemberShip;
-import com.sep490.backendclubmanagement.entity.Semester;
-import com.sep490.backendclubmanagement.entity.SystemRole;
-import com.sep490.backendclubmanagement.entity.User;
+import com.sep490.backendclubmanagement.entity.*;
 import com.sep490.backendclubmanagement.exception.AppException;
 import com.sep490.backendclubmanagement.exception.ErrorCode;
 import com.sep490.backendclubmanagement.repository.ClubCreationFinalFormRepository;
 import com.sep490.backendclubmanagement.repository.ClubCreationWorkFlowHistoryRepository;
 import com.sep490.backendclubmanagement.repository.ClubCategoryRepository;
+import com.sep490.backendclubmanagement.repository.ClubCreationStepRepository;
 import com.sep490.backendclubmanagement.repository.ClubMemberShipRepository;
 import com.sep490.backendclubmanagement.repository.ClubProposalRepository;
 import com.sep490.backendclubmanagement.repository.ClubRepository;
@@ -81,6 +68,7 @@ public class RequestEstablishmentService {
     private final RoleMemberShipRepository roleMemberShipRepository;
     private final SemesterRepository semesterRepository;
     private final ClubCategoryRepository clubCategoryRepository;
+    private final ClubCreationStepRepository clubCreationStepRepository;
 
     @Transactional
     public RequestEstablishmentResponse createRequest(Long userId, CreateRequestEstablishmentRequest request) throws AppException {
@@ -443,7 +431,8 @@ public class RequestEstablishmentService {
         requestEstablishmentRepository.flush();
 
         try {
-            workflowHistoryService.createWorkflowHistory(requestEstablishment.getId(), staffId, "PROPOSAL_REVIEW", "Staff đã yêu cầu sinh viên nộp đề án chi tiết");
+            // Tạo history với step code PROPOSAL_REQUIRED để đánh dấu staff đã yêu cầu nộp đề án
+            workflowHistoryService.createWorkflowHistory(requestEstablishment.getId(), staffId, "PROPOSAL_REQUIRED", "Staff đã yêu cầu sinh viên nộp đề án chi tiết");
         } catch (Exception e) {
             log.error("Failed to create workflow history, but continuing: {}", e.getMessage());
         }
@@ -468,8 +457,9 @@ public class RequestEstablishmentService {
         }
 
         // Check status: only PROPOSAL_REQUIRED or PROPOSAL_REJECTED can submit proposal
-        if (requestEstablishment.getStatus() != RequestEstablishmentStatus.PROPOSAL_REQUIRED &&
-            requestEstablishment.getStatus() != RequestEstablishmentStatus.PROPOSAL_REJECTED) {
+        RequestEstablishmentStatus previousStatus = requestEstablishment.getStatus();
+        if (previousStatus != RequestEstablishmentStatus.PROPOSAL_REQUIRED &&
+            previousStatus != RequestEstablishmentStatus.PROPOSAL_REJECTED) {
             throw new AppException(ErrorCode.INVALID_INPUT, "Chỉ có thể nộp đề án khi trạng thái là PROPOSAL_REQUIRED hoặc PROPOSAL_REJECTED");
         }
 
@@ -520,7 +510,21 @@ public class RequestEstablishmentService {
 
         // Create workflow history
         try {
-            workflowHistoryService.createWorkflowHistory(requestEstablishment.getId(), userId, "PROPOSAL_REVIEW", "Sinh viên đã nộp đề án chi tiết");
+            String comments = request.getComment();
+            if (comments == null || comments.trim().isEmpty()) {
+                // Phân biệt nộp mới vs nộp lại để hiển thị rõ hơn trên workflow
+                if (previousStatus == RequestEstablishmentStatus.PROPOSAL_REJECTED) {
+                    comments = "Sinh viên đã nộp lại đề án chi tiết";
+                } else {
+                    comments = "Sinh viên đã nộp đề án chi tiết";
+                }
+            }
+            workflowHistoryService.createWorkflowHistory(
+                    requestEstablishment.getId(),
+                    userId,
+                    "PROPOSAL_SUBMITTED",
+                    comments
+            );
         } catch (Exception e) {
             log.error("Failed to create workflow history, but continuing: {}", e.getMessage());
         }
@@ -807,7 +811,16 @@ public class RequestEstablishmentService {
 
         // Create workflow history
         try {
-            workflowHistoryService.createWorkflowHistory(requestEstablishment.getId(), userId, "PROPOSE_DEFENSE_TIME", "Sinh viên đã đề xuất lịch bảo vệ: " + request.getDefenseDate());
+            String comments = request.getNotes();
+            if (comments == null || comments.trim().isEmpty()) {
+                comments = "Sinh viên đã đề xuất lịch bảo vệ: " + request.getDefenseDate();
+            }
+            workflowHistoryService.createWorkflowHistory(
+                    requestEstablishment.getId(),
+                    userId,
+                    "PROPOSE_DEFENSE_TIME",
+                    comments
+            );
         } catch (Exception e) {
             log.error("Failed to create workflow history, but continuing: {}", e.getMessage());
         }
@@ -991,7 +1004,7 @@ public class RequestEstablishmentService {
 
         // Create workflow history
         try {
-            workflowHistoryService.createWorkflowHistory(requestEstablishment.getId(), staffId, "PROPOSE_DEFENSE_TIME", "Staff đã duyệt lịch bảo vệ: " + schedule.getDefenseDate());
+            workflowHistoryService.createWorkflowHistory(requestEstablishment.getId(), staffId, "DEFENSE_SCHEDULE_CONFIRMED", "Staff đã duyệt lịch bảo vệ: " + schedule.getDefenseDate());
         } catch (Exception e) {
             log.error("Failed to create workflow history, but continuing: {}", e.getMessage());
         }
@@ -1201,7 +1214,16 @@ public class RequestEstablishmentService {
 
         // Create workflow history
         try {
-            workflowHistoryService.createWorkflowHistory(requestEstablishment.getId(), userId, "FINAL_FORM", "Sinh viên đã nộp form cuối: " + request.getTitle());
+            String comments = request.getComment();
+            if (comments == null || comments.trim().isEmpty()) {
+                comments = "Sinh viên đã nộp form cuối: " + request.getTitle();
+            }
+            workflowHistoryService.createWorkflowHistory(
+                    requestEstablishment.getId(),
+                    userId,
+                    "FINAL_FORM",
+                    comments
+            );
         } catch (Exception e) {
             log.error("Failed to create workflow history, but continuing: {}", e.getMessage());
         }
@@ -1292,13 +1314,32 @@ public class RequestEstablishmentService {
 
         requestEstablishment.setStatus(RequestEstablishmentStatus.APPROVED);
         requestEstablishment = requestEstablishmentRepository.save(requestEstablishment);
+        
+        requestEstablishmentRepository.flush();
 
-        workflowHistoryService.createWorkflowHistory(
-                requestEstablishment.getId(),
-                staffId,
-                "CLUB_CREATED",
-                "Staff đã duyệt form cuối và thành lập CLB"
-        );
+        // Create workflow history: FINAL_FORM_APPROVED
+        try {
+            workflowHistoryService.createWorkflowHistory(
+                    requestEstablishment.getId(),
+                    staffId,
+                    "FINAL_FORM_APPROVED",
+                    "Staff đã duyệt form cuối"
+            );
+        } catch (Exception e) {
+            log.error("Failed to create workflow history for FINAL_FORM_APPROVED, but continuing: {}", e.getMessage());
+        }
+
+        // Create workflow history: CLUB_CREATED
+        try {
+            workflowHistoryService.createWorkflowHistory(
+                    requestEstablishment.getId(),
+                    staffId,
+                    "CLUB_CREATED",
+                    "Staff đã thành lập CLB"
+            );
+        } catch (Exception e) {
+            log.error("Failed to create workflow history for CLUB_CREATED, but continuing: {}", e.getMessage());
+        }
 
         log.info("Approved final form and created club {} for request {}", club.getId(), requestId);
         return mapToResponse(requestEstablishment);
@@ -1566,6 +1607,28 @@ public class RequestEstablishmentService {
         }
 
         return builder.build();
+    }
+
+    /**
+     * Lấy danh sách tất cả các bước trong quy trình tạo CLB (sắp xếp theo orderIndex)
+     */
+    @Transactional(readOnly = true)
+    public List<ClubCreationStepResponse> getAllSteps() {
+        List<ClubCreationStep> steps = clubCreationStepRepository.findByActiveTrueOrderByOrderIndexAsc();
+        return steps.stream()
+                .map(this::mapToStepResponse)
+                .toList();
+    }
+
+    private ClubCreationStepResponse mapToStepResponse(ClubCreationStep step) {
+        return ClubCreationStepResponse.builder()
+                .id(step.getId())
+                .code(step.getCode())
+                .name(step.getName())
+                .description(step.getDescription())
+                .orderIndex(step.getOrderIndex())
+                .active(step.getActive())
+                .build();
     }
 }
 

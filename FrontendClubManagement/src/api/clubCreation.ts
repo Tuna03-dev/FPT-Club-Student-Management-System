@@ -152,16 +152,39 @@ export interface ClubCategory {
   categoryName: string;
 }
 
-export interface WorkflowHistoryResponse {
+export interface ClubCreationStepResponse {
   id: number;
-  history: string;
-  actedAt: string;
-  stepCode: string;
-  stepName: string;
-  actedById: number;
-  actedByFullName: string;
-  actedByEmail: string;
+  code: string;
+  name: string;
+  description: string;
+  orderIndex: number;
+  active: boolean;
+}
+
+export interface WorkflowHistoryResponse {
+  // Basic identifiers
+  id: number;
   requestEstablishmentId: number;
+
+  // New fields from BE DTO
+  actionDate?: string; // Thời điểm hành động
+  comments?: string; // Nội dung comment/ghi chú
+  createdAt?: string;
+
+  // Step info
+  stepId?: number;
+  stepCode?: string;
+  stepName?: string;
+  stepDescription?: string;
+
+  // User info
+  actedById?: number;
+  actedByFullName?: string;
+  actedByEmail?: string;
+
+  // Legacy fields kept for backward compatibility (nếu BE còn trả về)
+  history?: string;
+  actedAt?: string;
 }
 
 // Staff APIs
@@ -192,6 +215,13 @@ export const clubCreationApi = {
   getClubCategories: async (): Promise<ClubCategory[]> => {
     const res = await axiosClient.get<ClubCategory[]>("/club-categories");
     if (res.code !== 200) throw new Error(res.message || "Không thể tải danh sách lĩnh vực");
+    return res.data ?? [];
+  },
+
+  // Get club creation steps
+  getClubCreationSteps: async (): Promise<ClubCreationStepResponse[]> => {
+    const res = await axiosClient.get<ClubCreationStepResponse[]>("/club-creation/requests/steps");
+    if (res.code !== 200) throw new Error(res.message || "Không thể tải danh sách bước quy trình");
     return res.data ?? [];
   },
 

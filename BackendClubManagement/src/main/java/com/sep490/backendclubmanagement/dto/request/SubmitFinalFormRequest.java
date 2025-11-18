@@ -14,5 +14,8 @@ public class SubmitFinalFormRequest {
     // fileUrl: URL của file đã upload trước đó (optional nếu có file)
     // Nếu không có fileUrl thì phải có file trong request
     private String fileUrl;
+
+    // Ghi chú/nhận xét của sinh viên khi nộp form cuối (optional)
+    private String comment;
 }
 

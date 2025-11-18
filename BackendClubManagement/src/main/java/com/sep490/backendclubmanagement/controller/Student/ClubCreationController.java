@@ -7,6 +7,7 @@ import com.sep490.backendclubmanagement.dto.request.SubmitFinalFormRequest;
 import com.sep490.backendclubmanagement.dto.request.SubmitProposalRequest;
 import com.sep490.backendclubmanagement.dto.request.UpdateRequestEstablishmentRequest;
 import com.sep490.backendclubmanagement.dto.response.ClubCreationFinalFormResponse;
+import com.sep490.backendclubmanagement.dto.response.ClubCreationStepResponse;
 import com.sep490.backendclubmanagement.dto.response.ClubProposalResponse;
 import com.sep490.backendclubmanagement.dto.response.DefenseScheduleResponse;
 import com.sep490.backendclubmanagement.dto.response.RequestEstablishmentResponse;
@@ -220,9 +221,9 @@ public class ClubCreationController {
     @PostMapping(value = "/{requestId}/final-form", consumes = {"multipart/form-data"})
     public ResponseEntity<ApiResponse<ClubCreationFinalFormResponse>> submitFinalForm(
             @PathVariable Long requestId,
-            @RequestPart("title") String title,
-            @RequestPart(value = "fileUrl", required = false) String fileUrl,
-            @RequestPart(value = "file", required = false) MultipartFile file
+            @RequestParam("title") String title,
+            @RequestParam(value = "fileUrl", required = false) String fileUrl,
+            @RequestParam(value = "file", required = false) MultipartFile file
     ) throws AppException {
         Long userId = SecurityUtils.getCurrentUserId();
         
@@ -267,6 +268,16 @@ public class ClubCreationController {
         requestEstablishmentService.getRequestDetail(requestId, userId);
         Page<WorkflowHistoryResponse> histories = requestEstablishmentService.getWorkflowHistory(requestId, pageable);
         return ResponseEntity.ok(ApiResponse.success(histories));
+    }
+
+    /**
+     * Lấy danh sách tất cả các bước trong quy trình tạo CLB
+     * GET /api/club-creation/requests/steps
+     */
+    @GetMapping("/steps")
+    public ResponseEntity<ApiResponse<List<ClubCreationStepResponse>>> getAllSteps() throws AppException {
+        List<ClubCreationStepResponse> steps = requestEstablishmentService.getAllSteps();
+        return ResponseEntity.ok(ApiResponse.success(steps));
     }
 }
 

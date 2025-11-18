@@ -42,10 +42,13 @@ import {
 import { toast } from "sonner";
 import {
   clubCreationStaffApi,
+  clubCreationApi,
   type RequestEstablishmentResponse,
   type ClubProposalResponse,
   type DefenseScheduleResponse,
   type ClubCreationFinalFormResponse,
+  type ClubCreationStepResponse,
+  type WorkflowHistoryResponse,
 } from "@/api/clubCreation";
 
 interface ClubCreationRequest {
@@ -71,63 +74,7 @@ interface ClubCreationRequest {
   rejectionReason?: string;
 }
 
-interface WorkflowStep {
-  id: number;
-  label: string;
-  description: string;
-  icon: React.ElementType;
-}
-
-const WORKFLOW_STEPS: WorkflowStep[] = [
-  {
-    id: 1,
-    label: "Nộp đơn",
-    description: "Gửi đơn đăng ký thành lập CLB",
-    icon: FileText,
-  },
-  {
-    id: 2,
-    label: "Xét duyệt đơn",
-    description: "Ban quản lý xem xét đơn đăng ký",
-    icon: Clock,
-  },
-  {
-    id: 3,
-    label: "Xác nhận liên hệ",
-    description: "Liên hệ với sinh viên để xác nhận",
-    icon: Users,
-  },
-  {
-    id: 4,
-    label: "Yêu cầu đề án",
-    description: "Yêu cầu sinh viên nộp đề án chi tiết",
-    icon: FileText,
-  },
-  {
-    id: 5,
-    label: "Xét duyệt đề án",
-    description: "Xem xét và phê duyệt đề án",
-    icon: CheckCircle2,
-  },
-  {
-    id: 6,
-    label: "Lên lịch bảo vệ",
-    description: "Xác nhận lịch bảo vệ đề án",
-    icon: Calendar,
-  },
-  {
-    id: 7,
-    label: "Bảo vệ đề án",
-    description: "Sinh viên trình bày kế hoạch trước hội đồng",
-    icon: Users,
-  },
-  {
-    id: 8,
-    label: "Hoàn tất",
-    description: "Nhận quyết định phê duyệt",
-    icon: CheckCircle2,
-  },
-];
+// WORKFLOW_STEPS đã được thay thế bằng dữ liệu động từ API (workflowSteps)
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
   SUBMITTED: {
@@ -192,31 +139,49 @@ const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
   },
 };
 
-// Helper function to calculate current step from status
-const getCurrentStep = (status: string): number => {
-  const stepMap: Record<string, number> = {
-    SUBMITTED: 2,
-    CONTACT_CONFIRMATION_PENDING: 3,
-    CONTACT_CONFIRMED: 4,
-    CONTACT_REJECTED: 2,
-    PROPOSAL_REQUIRED: 4,
-    PROPOSAL_SUBMITTED: 5,
-    PROPOSAL_REJECTED: 4,
-    PROPOSAL_APPROVED: 6,
-    DEFENSE_SCHEDULE_PROPOSED: 6,
-    DEFENSE_SCHEDULE_APPROVED: 6,
-    DEFENSE_SCHEDULE_REJECTED: 5,
-    DEFENSE_COMPLETED: 7,
-    FINAL_FORM_SUBMITTED: 8,
-    APPROVED: 8,
-    REJECTED: 1,
+// Helper function to map status to step code
+const getStepCodeFromStatus = (status: string): string | null => {
+  const statusToStepCodeMap: Record<string, string> = {
+    SUBMITTED: "REQUEST_SUBMITTED",
+    CONTACT_CONFIRMATION_PENDING: "REQUEST_REVIEW",
+    CONTACT_CONFIRMED: "REQUEST_REVIEW",
+    PROPOSAL_REQUIRED: "PROPOSAL_REQUIRED",
+    PROPOSAL_SUBMITTED: "PROPOSAL_SUBMITTED",
+    PROPOSAL_APPROVED: "PROPOSAL_REVIEW",
+    PROPOSAL_REJECTED: "PROPOSAL_REVIEW", // Đã trải qua bước staff duyệt (dù bị từ chối)
+    DEFENSE_SCHEDULE_PROPOSED: "PROPOSE_DEFENSE_TIME",
+    DEFENSE_SCHEDULE_APPROVED: "DEFENSE_SCHEDULE_CONFIRMED",
+    DEFENSE_SCHEDULE_REJECTED: "PROPOSE_DEFENSE_TIME", // Từ chối lịch bảo vệ vẫn thuộc bước lịch bảo vệ
+    DEFENSE_COMPLETED: "DEFENSE_COMPLETED",
+    FINAL_FORM_SUBMITTED: "FINAL_FORM",
+    APPROVED: "CLUB_CREATED",
   };
-  return stepMap[status] || 1;
+  return statusToStepCodeMap[status] || null;
+};
+
+// Helper function to calculate current step from status using steps from API
+const getCurrentStep = (status: string, steps: ClubCreationStepResponse[]): number => {
+  if (status === "REJECTED" || status === "CONTACT_REJECTED") {
+    return 1;
+  }
+  
+  const stepCode = getStepCodeFromStatus(status);
+  if (!stepCode) {
+    return 1;
+  }
+  
+  const step = steps.find((s) => s.code === stepCode);
+  if (!step) {
+    return 1;
+  }
+  
+  return step.orderIndex || 1;
 };
 
 // Convert BE response to FE ClubCreationRequest
 const convertToClubCreationRequest = (
-  response: RequestEstablishmentResponse
+  response: RequestEstablishmentResponse,
+  steps: ClubCreationStepResponse[]
 ): ClubCreationRequest => {
   return {
     id: response.id.toString(),
@@ -230,8 +195,8 @@ const convertToClubCreationRequest = (
     requestedBy: response.createdByFullName,
     requestedAt: response.sendDate || response.createdAt,
     status: response.status,
-    currentStep: getCurrentStep(response.status),
-    totalSteps: 8,
+    currentStep: getCurrentStep(response.status, steps),
+    totalSteps: steps.length,
     assignedStaff: response.assignedStaffFullName,
   };
 };
@@ -268,13 +233,29 @@ export default function ClubCreationManagement() {
   const [totalPages, setTotalPages] = useState(0);
   const [selectedProposal, setSelectedProposal] = useState<ClubProposalResponse | null>(null);
   const [isProposalDialogOpen, setIsProposalDialogOpen] = useState(false);
+  const [workflowSteps, setWorkflowSteps] = useState<ClubCreationStepResponse[]>([]);
+  const [workflowHistory, setWorkflowHistory] = useState<WorkflowHistoryResponse[]>([]);
+  const [isWorkflowDialogOpen, setIsWorkflowDialogOpen] = useState(false);
+
+  // Load workflow steps
+  const loadWorkflowSteps = async () => {
+    try {
+      const steps = await clubCreationApi.getClubCreationSteps();
+      setWorkflowSteps(steps);
+    } catch (error: any) {
+      toast.error("Không thể tải danh sách bước quy trình", {
+        description: error.message || "Đã xảy ra lỗi",
+      });
+      setWorkflowSteps([]);
+    }
+  };
 
   // Load pending requests
   const loadPendingRequests = async () => {
     setIsLoading(true);
     try {
       const response = await clubCreationStaffApi.getPendingRequests(page, 20);
-      setClubRequests(response.content.map(convertToClubCreationRequest));
+      setClubRequests(response.content.map((req) => convertToClubCreationRequest(req, workflowSteps)));
       setTotalPages(response.totalPages);
     } catch (error: any) {
       toast.error("Không thể tải danh sách yêu cầu", {
@@ -286,22 +267,45 @@ export default function ClubCreationManagement() {
   };
 
   useEffect(() => {
-    if (activeTab === "pending") {
+    loadWorkflowSteps();
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === "pending" && workflowSteps.length > 0) {
       loadPendingRequests();
     }
-  }, [activeTab, page]);
+  }, [activeTab, page, workflowSteps]);
+
+  // Load workflow history
+  const loadWorkflowHistory = async (requestId: number) => {
+    try {
+      const historyData = await clubCreationStaffApi.getWorkflowHistory(requestId, 0, 100);
+      setWorkflowHistory(historyData.content || []);
+    } catch (error: any) {
+      console.error("Failed to load workflow history:", error);
+      setWorkflowHistory([]);
+    }
+  };
 
   // Load request detail with proposals and defense schedule
   const loadRequestDetail = async (requestId: number) => {
     try {
       setIsFinalFormsLoading(true);
+      
+      // Đảm bảo workflowSteps đã được load
+      let steps = workflowSteps;
+      if (steps.length === 0) {
+        steps = await clubCreationApi.getClubCreationSteps();
+        setWorkflowSteps(steps);
+      }
+      
       const [detail, proposalsData, defenseScheduleData, finalFormsData] = await Promise.all([
         clubCreationStaffApi.getRequestDetail(requestId),
         clubCreationStaffApi.getSubmittedProposals(requestId).catch(() => []),
         clubCreationStaffApi.getDefenseSchedule(requestId).catch(() => null),
         clubCreationStaffApi.getFinalForms(requestId).catch(() => []),
       ]);
-      setSelectedRequest(convertToClubCreationRequest(detail));
+      setSelectedRequest(convertToClubCreationRequest(detail, steps));
       setProposals(Array.isArray(proposalsData) ? proposalsData : []);
       setDefenseSchedule(defenseScheduleData);
       setFinalForms(Array.isArray(finalFormsData) ? finalFormsData : []);
@@ -705,7 +709,7 @@ export default function ClubCreationManagement() {
                       Từ chối
                     </Button>
                   )}
-                  {(request.status === "SUBMITTED" ||
+                {(request.status === "SUBMITTED" ||
                     request.status === "CONTACT_CONFIRMATION_PENDING" ||
                     request.status === "CONTACT_CONFIRMED" ||
                     request.status === "PROPOSAL_SUBMITTED" ||
@@ -714,42 +718,46 @@ export default function ClubCreationManagement() {
                     <Button
                       className="flex-1 bg-green-600 hover:bg-green-700"
                       onClick={() => {
+                        const status = request.status as string;
                         const requestId = parseInt(request.id);
-                        if (request.status === "SUBMITTED") {
+                        if (status === "SUBMITTED") {
                           handleReceiveRequest(requestId);
-                        } else if (request.status === "CONTACT_CONFIRMATION_PENDING") {
+                        } else if (status === "CONTACT_CONFIRMATION_PENDING") {
                           handleConfirmContact(requestId);
-                        } else if (request.status === "CONTACT_CONFIRMED") {
+                        } else if (status === "CONTACT_CONFIRMED") {
                           handleRequestProposal(requestId);
-                        } else if (request.status === "PROPOSAL_SUBMITTED") {
+                        } else if (status === "PROPOSAL_SUBMITTED") {
                           handleApproveProposal(requestId);
-                        } else if (request.status === "DEFENSE_SCHEDULE_PROPOSED") {
+                        } else if (status === "DEFENSE_SCHEDULE_PROPOSED") {
                           handleApproveDefenseSchedule(requestId);
-                        } else if (request.status === "DEFENSE_SCHEDULE_APPROVED" || request.status === "DEFENSE_SCHEDULED") {
+                        } else if (status === "DEFENSE_SCHEDULE_APPROVED" || status === "DEFENSE_SCHEDULED") {
                           loadRequestDetail(requestId).then(() => {
                             setIsDetailDialogOpen(true);
                           });
-                        } else if (request.status === "FINAL_FORM_SUBMITTED") {
+                        } else if (status === "FINAL_FORM_SUBMITTED") {
                           handleApproveFinalForm(requestId);
                         }
                       }}
                     >
                       <CheckCircle2 className="mr-2 h-4 w-4" />
-                      {request.status === "SUBMITTED"
-                        ? "Nhận xử lý"
-                        : request.status === "CONTACT_CONFIRMATION_PENDING"
-                        ? "Xác nhận liên hệ"
-                        : request.status === "CONTACT_CONFIRMED"
-                        ? "Yêu cầu đề án"
-                        : request.status === "PROPOSAL_SUBMITTED"
-                        ? "Phê duyệt đề án"
-                        : request.status === "DEFENSE_SCHEDULE_PROPOSED"
-                        ? "Duyệt lịch bảo vệ"
-                        : request.status === "DEFENSE_SCHEDULE_APPROVED" || request.status === "DEFENSE_SCHEDULED"
-                        ? "Nhập kết quả bảo vệ"
-                        : request.status === "FINAL_FORM_SUBMITTED"
-                        ? "Duyệt form cuối"
-                        : "Duyệt"}
+                      {(() => {
+                        const status = request.status as string;
+                        return status === "SUBMITTED"
+                          ? "Nhận xử lý"
+                          : status === "CONTACT_CONFIRMATION_PENDING"
+                          ? "Xác nhận liên hệ"
+                          : status === "CONTACT_CONFIRMED"
+                          ? "Yêu cầu đề án"
+                          : status === "PROPOSAL_SUBMITTED"
+                          ? "Phê duyệt đề án"
+                          : status === "DEFENSE_SCHEDULE_PROPOSED"
+                          ? "Duyệt lịch bảo vệ"
+                          : status === "DEFENSE_SCHEDULE_APPROVED" || status === "DEFENSE_SCHEDULED"
+                          ? "Nhập kết quả bảo vệ"
+                          : status === "FINAL_FORM_SUBMITTED"
+                          ? "Duyệt form cuối"
+                          : "Duyệt";
+                      })()}
                     </Button>
                   )}
                 </div>
@@ -893,8 +901,16 @@ export default function ClubCreationManagement() {
               </DialogHeader>
 
               <div className="space-y-6">
-                {/* Progress Overview */}
-                <div className="space-y-3">
+                {/* Progress Overview - Clickable to view workflow */}
+                <div 
+                  className="space-y-3 cursor-pointer hover:bg-gray-50 p-3 rounded-lg transition-colors"
+                  onClick={async () => {
+                    if (selectedRequest) {
+                      await loadWorkflowHistory(parseInt(selectedRequest.id));
+                      setIsWorkflowDialogOpen(true);
+                    }
+                  }}
+                >
                   <div className="flex items-center justify-between">
                     <h3 className="font-semibold">Tiến độ xử lý</h3>
                     <Badge variant="outline">
@@ -910,6 +926,9 @@ export default function ClubCreationManagement() {
                     }
                     className="h-3"
                   />
+                  <p className="text-xs text-muted-foreground text-center">
+                    Nhấn để xem chi tiết quy trình
+                  </p>
                 </div>
 
                 <Separator />
@@ -1585,6 +1604,178 @@ export default function ClubCreationManagement() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Workflow Timeline Dialog */}
+      <Dialog open={isWorkflowDialogOpen} onOpenChange={setIsWorkflowDialogOpen}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-2xl">Quy trình xét duyệt</DialogTitle>
+            <DialogDescription>
+              {selectedRequest?.clubName} - Mã: {selectedRequest?.clubCode}
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedRequest && workflowSteps.length > 0 && (
+            <div className="space-y-4">
+              {/* Progress Overview */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-semibold">Tiến độ xử lý</h3>
+                  <Badge variant="outline">
+                    Bước {selectedRequest.currentStep}/{selectedRequest.totalSteps}
+                  </Badge>
+                </div>
+                <Progress
+                  value={(selectedRequest.currentStep / selectedRequest.totalSteps) * 100}
+                  className="h-3"
+                />
+                <p className="text-sm text-muted-foreground">
+                  Hoàn thành {Math.round((selectedRequest.currentStep / selectedRequest.totalSteps) * 100)}%
+                </p>
+              </div>
+
+              <Separator />
+
+              {/* Timeline */}
+              <div className="space-y-4">
+                <h3 className="font-semibold">Quy trình xét duyệt</h3>
+                {(() => {
+                  // Group history by step_code
+                  const completedStepCodes = new Set(
+                    workflowHistory.map((h) => h.stepCode).filter((code) => code)
+                  );
+
+                  const historyByStepCode = workflowHistory.reduce(
+                    (acc, h) => {
+                      if (!h.stepCode) return acc;
+                      if (!acc[h.stepCode]) {
+                        acc[h.stepCode] = [];
+                      }
+                      acc[h.stepCode].push(h);
+                      return acc;
+                    },
+                    {} as Record<string, WorkflowHistoryResponse[]>
+                  );
+
+                  // Convert steps to display format
+                  const steps = workflowSteps.map((step) => ({
+                    id: step.id,
+                    label: step.name,
+                    description: step.description || "",
+                    icon: getIconForStepCode(step.code),
+                    orderIndex: step.orderIndex,
+                    code: step.code,
+                  }));
+
+                  return (
+                    <div className="space-y-4">
+                      {steps.map((step) => {
+                        const hasHistory = step.code ? completedStepCodes.has(step.code) : false;
+                        const isCompleted = hasHistory || step.orderIndex < selectedRequest.currentStep;
+                        const isCurrent = step.orderIndex === selectedRequest.currentStep;
+                        const StepIcon = step.icon;
+                        const stepHistories = step.code ? historyByStepCode[step.code] || [] : [];
+
+                        return (
+                          <div key={step.id} className="flex items-start gap-4">
+                            <div className="flex flex-col items-center">
+                              <div
+                                className={`rounded-full p-2 ${
+                                  isCompleted
+                                    ? "bg-green-100 text-green-600"
+                                    : isCurrent
+                                    ? "bg-blue-100 text-blue-600"
+                                    : "bg-gray-100 text-gray-400"
+                                }`}
+                              >
+                                {isCompleted ? (
+                                  <CheckCircle2 className="h-5 w-5" />
+                                ) : isCurrent ? (
+                                  <StepIcon className="h-5 w-5" />
+                                ) : (
+                                  <Circle className="h-5 w-5" />
+                                )}
+                              </div>
+                              {step.orderIndex < steps.length && (
+                                <div
+                                  className={`w-0.5 h-12 ${
+                                    isCompleted ? "bg-green-200" : "bg-gray-200"
+                                  }`}
+                                />
+                              )}
+                            </div>
+                            <div className="flex-1 pb-8">
+                              <h4
+                                className={`font-medium ${
+                                  isCurrent ? "text-blue-600" : ""
+                                }`}
+                              >
+                                {step.label}
+                              </h4>
+                              <p className="text-sm text-muted-foreground">
+                                {step.description}
+                              </p>
+                              {stepHistories.length > 0 && (
+                                <div className="mt-2 space-y-1">
+                                  {stepHistories.map((history) => (
+                                    <p key={history.id} className="text-xs text-muted-foreground">
+                                      <span className="font-medium">
+                                        {history.actionDate
+                                          ? new Date(history.actionDate).toLocaleString("vi-VN")
+                                          : ""}
+                                      </span>
+                                      {history.comments && (
+                                        <>
+                                          {" — "}
+                                          {history.comments}
+                                        </>
+                                      )}
+                                    </p>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+          )}
+
+          {workflowSteps.length === 0 && (
+            <p className="text-sm text-muted-foreground text-center py-8">
+              Đang tải thông tin quy trình...
+            </p>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsWorkflowDialogOpen(false)}>
+              Đóng
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
+
+// Helper function to get icon for step code (same as ClubRequestDialog)
+const getIconForStepCode = (code: string): React.ElementType => {
+  const iconMap: Record<string, React.ElementType> = {
+    REQUEST_SUBMITTED: FileText,
+    REQUEST_REVIEW: Clock,
+    PROPOSAL_REQUIRED: FileText,
+    PROPOSAL_SUBMITTED: FileText,
+    PROPOSAL_REVIEW: FileText,
+    PROPOSE_DEFENSE_TIME: Calendar,
+    DEFENSE_SCHEDULE_CONFIRMED: Calendar,
+    DEFENSE_COMPLETED: Users,
+    FINAL_FORM: FileText,
+    FINAL_FORM_APPROVED: CheckCircle2,
+    CLUB_CREATED: CheckCircle2,
+  };
+  return iconMap[code] || FileText;
+};
