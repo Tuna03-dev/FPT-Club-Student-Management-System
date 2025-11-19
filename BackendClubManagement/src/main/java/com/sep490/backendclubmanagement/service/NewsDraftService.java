@@ -15,6 +15,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -139,21 +140,20 @@ public class NewsDraftService {
     // ========== LIST DRAFTS ==========
     @Transactional(readOnly = true)
     public Page<NewsData> listDrafts(Long me, Long clubId, int page, int size) {
-        List<News> myDrafts = newsRepo.findAll().stream()
-                .filter(n -> Boolean.TRUE.equals(n.getIsDraft()))
-                .filter(n -> n.getCreatedBy() != null && n.getCreatedBy().getId().equals(me))
-                .filter(n -> clubId == null || (n.getClub() != null && clubId.equals(n.getClub().getId())))
-                .sorted(Comparator.comparing(News::getUpdatedAt, Comparator.nullsLast(Comparator.naturalOrder()))
-                        .thenComparing(News::getId).reversed())
-                .toList();
-
         int p = Math.max(0, page);
         int s = Math.max(1, size);
-        int from = Math.min(p * s, myDrafts.size());
-        int to = Math.min(from + s, myDrafts.size());
-        List<NewsData> content = myDrafts.subList(from, to).stream().map(newsMapper::toDto).toList();
 
-        return new PageImpl<>(content, PageRequest.of(p, s), myDrafts.size());
+        // sort giống logic cũ: updatedAt DESC, id DESC
+        var sort = Sort.by(Sort.Direction.DESC, "updatedAt")
+                .and(Sort.by(Sort.Direction.DESC, "id"));
+
+        var pageable = PageRequest.of(p, s, sort);
+
+        // để DB lọc + phân trang
+        Page<News> draftsPage = newsRepo.findDraftsVisibleToUser(me, clubId, pageable);
+
+        // map sang DTO, NHƯNG KHÔNG N+1 vì đã EntityGraph(createdBy, club)
+        return draftsPage.map(newsMapper::toDto);
     }
 
     // ========== SUBMIT DRAFT -> REQUEST ==========

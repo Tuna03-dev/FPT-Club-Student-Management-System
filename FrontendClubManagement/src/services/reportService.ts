@@ -12,6 +12,9 @@ import type {
 import type { ClubDto } from "@/service/EventService";
 import type { ReportDetailResponse } from "@/types/dto/reportRequirement.dto";
 
+// Re-export types for convenience
+export type { ReportFilterRequest };
+
 /**
  * Create a new report requirement
  * @param request - Report requirement data
@@ -23,13 +26,13 @@ export async function createReportRequirement(
 ): Promise<ReportRequirementResponse> {
   // Always use FormData since backend endpoint requires multipart/form-data
   const formData = new FormData();
-  
+
   // Create a Blob for the JSON request with correct content-type
   const requestBlob = new Blob([JSON.stringify(request)], {
     type: "application/json",
   });
   formData.append("request", requestBlob, "request.json");
-  
+
   // Only append file if provided (file is optional)
   if (file) {
     formData.append("file", file);
@@ -70,9 +73,7 @@ export async function getEventsWithoutReportRequirement(): Promise<
  * Get all clubs (reuse from EventService)
  */
 export async function getAllClubsForReport(): Promise<ClubDto[]> {
-  const response = await axiosClient.get<ClubDto[]>(
-    "/events/get-all-club"
-  );
+  const response = await axiosClient.get<ClubDto[]>("/events/get-all-club");
   if (!response.data) {
     throw new Error("Failed to get clubs");
   }
@@ -85,10 +86,9 @@ export async function getAllClubsForReport(): Promise<ClubDto[]> {
 export async function getAllReportRequirements(
   request: ReportRequirementFilterRequest
 ): Promise<PageResponse<ReportRequirementResponse>> {
-  const response = await axiosClient.post<PageResponse<ReportRequirementResponse>>(
-    "/reports/staff/requirements/filter",
-    request
-  );
+  const response = await axiosClient.post<
+    PageResponse<ReportRequirementResponse>
+  >("/reports/staff/requirements/filter", request);
   if (!response.data) {
     throw new Error("Failed to get report requirements");
   }
@@ -125,36 +125,6 @@ export async function getClubReportByRequirement(
 }
 
 /**
- * Get all report requirements for a club (for club members)
- */
-export async function getClubReportRequirements(
-  clubId: number
-): Promise<ReportRequirementResponse[]> {
-  const response = await axiosClient.get<ReportRequirementResponse[]>(
-    `/reports/club/${clubId}/requirements`
-  );
-  if (!response.data) {
-    throw new Error("Failed to get club report requirements");
-  }
-  return response.data;
-}
-
-/**
- * Get all report requirements for a club (for CLUB_OFFICER or TEAM_OFFICER)
- */
-export async function getClubReportRequirementsForOfficer(
-  clubId: number
-): Promise<ReportRequirementResponse[]> {
-  const response = await axiosClient.get<ReportRequirementResponse[]>(
-    `/reports/club/${clubId}/requirements/officer`
-  );
-  if (!response.data) {
-    throw new Error("Failed to get club report requirements for officer");
-  }
-  return response.data;
-}
-
-/**
  * Club Report Requirement Filter Request
  */
 export interface ClubReportRequirementFilterRequest {
@@ -174,12 +144,13 @@ export async function getClubReportRequirementsForOfficerWithFilters(
   clubId: number,
   request: ClubReportRequirementFilterRequest
 ): Promise<PageResponse<ReportRequirementResponse>> {
-  const response = await axiosClient.post<PageResponse<ReportRequirementResponse>>(
-    `/reports/club/${clubId}/requirements/officer/filter`,
-    request
-  );
+  const response = await axiosClient.post<
+    PageResponse<ReportRequirementResponse>
+  >(`/reports/club/${clubId}/requirements/officer/filter`, request);
   if (!response.data) {
-    throw new Error("Failed to get club report requirements for officer with filters");
+    throw new Error(
+      "Failed to get club report requirements for officer with filters"
+    );
   }
   return response.data;
 }
@@ -219,7 +190,7 @@ export async function createReport(
   if (file) {
     // Upload with file using FormData
     const formData = new FormData();
-    
+
     // Create a Blob for the JSON request with correct content-type
     const requestBlob = new Blob([JSON.stringify(request)], {
       type: "application/json",
@@ -283,13 +254,13 @@ export async function updateReport(
 ): Promise<ReportDetailResponse> {
   // Always use FormData since backend endpoint requires multipart/form-data
   const formData = new FormData();
-  
+
   // Create a Blob for the JSON request with correct content-type
   const requestBlob = new Blob([JSON.stringify(request)], {
     type: "application/json",
   });
   formData.append("request", requestBlob, "request.json");
-  
+
   // Only append file if provided (file is optional)
   if (file) {
     formData.append("file", file);
@@ -335,9 +306,7 @@ export async function submitReport(
  * Delete a draft report (only creator can delete their own draft)
  */
 export async function deleteReport(reportId: number): Promise<void> {
-  const response = await axiosClient.delete<void>(
-    `/reports/club/${reportId}`
-  );
+  const response = await axiosClient.delete<void>(`/reports/club/${reportId}`);
   if (response.code !== 200) {
     throw new Error(response.message || "Failed to delete report");
   }
@@ -420,12 +389,14 @@ export async function getReportDetail(
 
 /**
  * Get all reports for a club (club president can see all, team officer can see their own)
+ * Now supports filtering and pagination via POST request
  */
 export async function getClubReports(
-  clubId: number
-): Promise<ReportListItemResponse[]> {
-  const response = await axiosClient.get<ReportListItemResponse[]>(
-    `/reports/club/${clubId}`
+  request: ReportFilterRequest
+): Promise<PageResponse<ReportListItemResponse>> {
+  const response = await axiosClient.post<PageResponse<ReportListItemResponse>>(
+    `/reports/club/${request.clubId}`,
+    request
   );
   if (!response.data) {
     throw new Error("Failed to get club reports");
@@ -435,12 +406,14 @@ export async function getClubReports(
 
 /**
  * Get my reports for a club (all reports created by current user)
+ * Now supports filtering and pagination via POST request
  */
 export async function getMyReports(
-  clubId: number
-): Promise<ReportListItemResponse[]> {
-  const response = await axiosClient.get<ReportListItemResponse[]>(
-    `/reports/club/${clubId}/my-reports`
+  request: ReportFilterRequest
+): Promise<PageResponse<ReportListItemResponse>> {
+  const response = await axiosClient.post<PageResponse<ReportListItemResponse>>(
+    `/reports/club/${request.clubId}/my-reports`,
+    request
   );
   if (!response.data) {
     throw new Error("Failed to get my reports");
@@ -485,4 +458,3 @@ export async function assignTeamToReportRequirement(
   }
   return response.data;
 }
-
