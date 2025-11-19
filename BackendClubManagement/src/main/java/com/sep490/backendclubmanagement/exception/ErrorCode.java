@@ -32,7 +32,12 @@ public enum ErrorCode {
     TRANSACTION_ALREADY_PROCESSED(HttpStatus.BAD_REQUEST, 5003, "Giao dịch đã được xử lý"),
     TRANSACTION_CANNOT_BE_DELETED(HttpStatus.BAD_REQUEST, 5004, "Giao dịch không thể xóa"),
     INSUFFICIENT_WALLET_BALANCE(HttpStatus.BAD_REQUEST, 5005, "Số dư ví không đủ"),
-    FEE_NOT_FOUND(HttpStatus.NOT_FOUND, 5006, "Không tìm thấy khoản phí");
+    FEE_NOT_FOUND(HttpStatus.NOT_FOUND, 5006, "Không tìm thấy khoản phí"),
+
+    // Club Category related errors
+    CLUB_CATEGORY_NOT_FOUND(HttpStatus.NOT_FOUND, 6000, "Không tìm thấy thể loại câu lạc bộ"),
+    CLUB_CATEGORY_ALREADY_EXISTS(HttpStatus.BAD_REQUEST, 6001, "Tên thể loại câu lạc bộ đã tồn tại"),
+    CLUB_CATEGORY_IN_USE(HttpStatus.BAD_REQUEST, 6002, "Không thể xóa thể loại này vì đang có câu lạc bộ sử dụng");
 
     private final HttpStatus httpStatus;
     private final int code;
