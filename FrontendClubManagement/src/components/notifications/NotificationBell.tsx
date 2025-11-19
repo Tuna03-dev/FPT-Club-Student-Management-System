@@ -100,8 +100,7 @@ export const NotificationBell: React.FC = () => {
   }, [isConnected, open, loadLatest, refreshUnreadCount, subscribeToUserQueue]);
 
   /* ===== Filter ===== */
-  const filteredItems =
-    tab === "all" ? items : items.filter((n) => !n.read);
+  const filteredItems = tab === "all" ? items : items.filter((n) => !n.read);
 
   /* ===== Click item ===== */
   const handleItemClick = async (n: NotificationItem) => {
@@ -116,7 +115,24 @@ export const NotificationBell: React.FC = () => {
     } catch {}
 
     if (n.actionUrl) {
-      navigate(`/myclub/${clubId}${n.actionUrl}`);
+      // Parse actionUrl: /posts/{postId}/comments/{commentId}
+      const match = n.actionUrl.match(/\/posts\/(\d+)(?:\/comments\/(\d+))?/);
+
+      if (match) {
+        const postId = match[1];
+        const commentId = match[2];
+
+        // Navigate to dashboard with state to scroll to post
+        navigate(`/myclub/${clubId}`, {
+          state: {
+            scrollToPostId: postId,
+            highlightCommentId: commentId,
+          },
+        });
+      } else {
+        // Fallback to original behavior for other URLs
+        navigate(`/myclub/${clubId}${n.actionUrl}`);
+      }
       setOpen(false);
     }
   };
@@ -203,9 +219,7 @@ export const NotificationBell: React.FC = () => {
                 key={n.id}
                 onClick={() => handleItemClick(n)}
                 className={`w-full text-left px-4 py-3 flex gap-3 transition-all duration-150 hover:bg-gray-100 ${
-                  !n.read
-                    ? "bg-blue-50 border-l-4 border-blue-400"
-                    : "bg-white"
+                  !n.read ? "bg-blue-50 border-l-4 border-blue-400" : "bg-white"
                 } animate-fade-in`}
               >
                 <div
@@ -221,9 +235,7 @@ export const NotificationBell: React.FC = () => {
                 </div>
 
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">
-                    {n.title}
-                  </p>
+                  <p className="text-sm font-medium truncate">{n.title}</p>
                   <p className="text-xs text-gray-600 line-clamp-2">
                     {n.message}
                   </p>
