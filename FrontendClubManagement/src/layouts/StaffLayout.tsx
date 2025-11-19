@@ -10,6 +10,7 @@ import {
   Users,
   Home,
   Building2,
+  UserSquare2,
 } from "lucide-react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useState } from "react";
@@ -63,6 +64,12 @@ const managementItems = [
     label: "Bài viết chờ duyệt",
   },
   {
+    key: "manage_club",
+    url: "/clubs",
+    icon: UserSquare2,
+    label: "Quản lí CLB",
+  },
+  {
     key: "manage_members",
     url: "/members",
     icon: Users,
@@ -89,7 +96,8 @@ const managementColors: Record<string, string> = {
   pending_posts: "bg-gradient-to-br from-yellow-500 to-yellow-600",
   manage_members: "bg-gradient-to-br from-blue-500 to-blue-600",
   manage_reports: "bg-gradient-to-br from-pink-500 to-pink-600",
-  staff_notifications: "bg-gradient-to-br from-purple-500 to-purple-600", 
+  staff_notifications: "bg-gradient-to-br from-purple-500 to-purple-600",
+  manage_club: "bg-gradient-to-br from-red-500 to-red-600",
 };
 
 export const StaffLayout = () => {

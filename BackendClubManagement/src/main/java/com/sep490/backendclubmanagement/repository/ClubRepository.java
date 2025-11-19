@@ -1,7 +1,9 @@
 package com.sep490.backendclubmanagement.repository;
 
+import com.sep490.backendclubmanagement.dto.request.ClubFilterRequest;
 import com.sep490.backendclubmanagement.dto.response.FeaturedClubDTO;
 import com.sep490.backendclubmanagement.entity.Club;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -91,4 +93,22 @@ public interface ClubRepository extends JpaRepository<Club, Long> {
             "LEFT JOIN FETCH c.recruitments " +
             "WHERE c.clubCode = :clubCode")
     Optional<Club> findByClubCodeWithDetails(@Param("clubCode") String clubCode);
+
+    // 🔹 Filter clubs for staff management with search and pagination
+    @Query(value = """
+            SELECT DISTINCT c.*
+            FROM clubs c
+            LEFT JOIN campuses ca ON c.campus_id = ca.id
+            LEFT JOIN club_categories cc ON c.club_category_id = cc.id
+            WHERE 1=1
+              AND (:#{#req.keyword} IS NULL 
+                   OR LOWER(c.club_name) LIKE LOWER(CONCAT('%', :#{#req.keyword}, '%'))
+                   OR LOWER(c.club_code) LIKE LOWER(CONCAT('%', :#{#req.keyword}, '%')))
+              AND (:#{#req.campusId} IS NULL OR c.campus_id = :#{#req.campusId})
+              AND (:#{#req.categoryId} IS NULL OR c.club_category_id = :#{#req.categoryId})
+              AND (:#{#req.status} IS NULL OR c.status = :#{#req.status})
+            """,
+            nativeQuery = true,
+            countProjection = "c.id")
+    Page<Club> getAllClubsByFilter(@Param("req") ClubFilterRequest req, Pageable pageable);
 }

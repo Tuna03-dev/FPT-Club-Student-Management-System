@@ -1,6 +1,7 @@
 package com.sep490.backendclubmanagement.mapper;
 
 import com.sep490.backendclubmanagement.dto.response.ClubDetailData;
+import com.sep490.backendclubmanagement.dto.response.ClubManagementResponse;
 import com.sep490.backendclubmanagement.dto.response.ClubPresidentData;
 import com.sep490.backendclubmanagement.entity.*;
 import org.mapstruct.Mapper;
@@ -25,6 +26,15 @@ public interface ClubMapper {
     @Mapping(source = "user.email", target = "email")
     @Mapping(source = "user.avatarUrl", target = "avatarUrl")
     ClubPresidentData toPresidentData(ClubMemberShip membership);
+
+    @Mapping(source = "campus.campusName", target = "campusName")
+    @Mapping(source = "campus.id", target = "campusId")
+    @Mapping(source = "clubCategory.categoryName", target = "categoryName")
+    @Mapping(source = "clubCategory.id", target = "categoryId")
+    @Mapping(target = "totalMembers", ignore = true)
+    @Mapping(target = "totalEvents", ignore = true)
+    @Mapping(target = "totalPosts", ignore = true)
+    ClubManagementResponse toClubManagementResponse(Club club);
 
     // Note: Statistics (totalMembers, totalEvents, totalPosts, isRecruiting) and president
     // are set in ClubService using dedicated count queries to avoid Cartesian product issues
