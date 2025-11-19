@@ -47,6 +47,7 @@ public class FeeService {
     private final WebSocketService webSocketService;
     private final RoleMemberShipRepository roleMemberShipRepository;
     private final ClubMemberShipRepository clubMemberShipRepository;
+    private final ClubWalletService clubWalletService;
 
     @Value("${app.frontend.url:http://localhost:5173}")
     private String frontendUrl;
@@ -431,8 +432,8 @@ public class FeeService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND, "Không tìm thấy người dùng"));
 
-        ClubWallet clubWallet = clubWalletRepository.findByClub_Id(fee.getClub().getId())
-                .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND, "Không tìm thấy ví câu lạc bộ"));
+        // Auto-create wallet if not exists (critical for payment processing)
+        ClubWallet clubWallet = clubWalletService.getOrCreateWalletForClub(fee.getClub().getId());
 
         String reference = String.valueOf(orderCode);
 
@@ -504,17 +505,16 @@ public class FeeService {
         // Set bidirectional reference để maintain consistency
         transaction.setPayOSPayment(payosPayment);
         payosPayment.setIncomeTransaction(transaction);
-
-        incomeTransactionRepository.save(transaction); // Cascade không cần thiết nữa, nhưng OK nếu có
+        IncomeTransaction savedTransaction = incomeTransactionRepository.save(transaction);
 
         //         Cập nhật Fee progress (THÊM ĐÂY - Track % đóng)
         //        fee.setPaidMembers(fee.getPaidMembers() != null ? fee.getPaidMembers() + 1 : 1);
         //        feeRepository.save(fee);
 
-        // 7️⃣ Cập nhật ví CLB
-        clubWallet.setBalance(clubWallet.getBalance().add(fee.getAmount()));
-        clubWallet.setTotalIncome(clubWallet.getTotalIncome().add(fee.getAmount()));
-        clubWalletRepository.save(clubWallet);
+        // 7️⃣ Ví CLB được cập nhật qua ClubWalletService
+        // (TiDB doesn't support triggers - handle in application)
+        clubWalletService.processIncomeTransaction(savedTransaction, null);
+        log.info("ClubWallet updated for fee payment: feeId={}, amount={}", fee.getId(), fee.getAmount());
 
         // 8️⃣ Tự động active member nếu là phí MEMBERSHIP và có semester
         if (fee.getFeeType() == FeeType.MEMBERSHIP && fee.getSemester() != null) {

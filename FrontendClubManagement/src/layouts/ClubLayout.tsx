@@ -7,7 +7,6 @@ import {
   Menu,
   Shield,
   FileText,
-  Clock,
   Briefcase,
   DollarSign,
   Wallet,
@@ -123,13 +122,6 @@ const managementItems: ManagementItem[] = [
     url: "/finance",
     icon: DollarSign,
     label: "Quản lý tài chính",
-    requiredRole: "CLUB_OFFICER",
-  },
-  {
-    key: "pending_requests",
-    url: "/pending-requests",
-    icon: Clock,
-    label: "Yêu cầu chờ duyệt",
     requiredRole: "CLUB_OFFICER",
   },
 ];

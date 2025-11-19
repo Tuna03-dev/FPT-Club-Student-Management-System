@@ -75,7 +75,7 @@ export const useWebSocket = (
   options: UseWebSocketOptions = {}
 ): UseWebSocketReturn => {
   const {
-    url = "http://localhost:8080/ws",
+    url = import.meta.env.VITE_WEBSOCKET_URL || "http://localhost:8080/ws",
     reconnectDelay = 5000,
     heartbeatIncoming = 10000,
     heartbeatOutgoing = 10000,

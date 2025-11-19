@@ -3,7 +3,6 @@ import { useParams } from "react-router-dom";
 import { useDebounce } from "@/hooks/useDebounce";
 import { Button } from "@/components/ui/button";
 import {
-  getClubReportRequirementsForOfficer,
   getClubReportRequirementsForOfficerWithFilters,
   getClubReportByRequirementForOfficer,
   createReport,
@@ -20,6 +19,7 @@ import {
   type SubmitReportRequest,
   type ReviewReportByClubRequest,
   type ClubReportRequirementFilterRequest,
+  type ReportFilterRequest,
 } from "@/services/reportService";
 import {
   mapBackendToFrontendReportType,
@@ -62,9 +62,11 @@ import {
   ExternalLink,
   Upload,
   X,
-  Edit,
-  Trash2,
   UserPlus,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
 } from "lucide-react";
 import {
   Pagination,
@@ -334,7 +336,7 @@ export function ClubReportManagement() {
   };
 
   const [activeTab, setActiveTab] = useState<
-    "requests" | "submissions" | "approval"
+    "requests" | "my_reports" | "club_reports"
   >("requests");
   const [selectedRequest, setSelectedRequest] = useState<ReportRequest | null>(
     null
@@ -346,12 +348,24 @@ export function ClubReportManagement() {
     string | null
   >(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [semesterFilter, setSemesterFilter] = useState<string>("all");
-  const [statusFilter, setStatusFilter] = useState<ReportStatusFilter | "all">(
-    "all"
-  );
+  // Separate filters: requests tab has its own filters; my_reports and club_reports share a reports filter
+  const [semesterFilterRequests, setSemesterFilterRequests] =
+    useState<string>("all");
+  const [statusFilterRequests, setStatusFilterRequests] = useState<
+    ReportStatusFilter | "all"
+  >("all");
+
+  const [semesterFilterReports, setSemesterFilterReports] =
+    useState<string>("all");
+  const [statusFilterReports, setStatusFilterReports] = useState<
+    ReportStatusFilter | "all"
+  >("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize] = useState(9); // 3 columns x 3 rows = 9 items per page
+  const [currentPageMyReports, setCurrentPageMyReports] = useState(1);
+  const [totalPagesMyReports, setTotalPagesMyReports] = useState(1);
+  const [currentPageClubReports, setCurrentPageClubReports] = useState(1);
+  const [totalPagesClubReports, setTotalPagesClubReports] = useState(1);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [showSubmitDialog, setShowSubmitDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
@@ -427,15 +441,18 @@ export function ClubReportManagement() {
         setLoading(true);
         setError(null);
 
-        // Build filter request
+        // Build filter request (requests tab uses its own filters)
         const filterRequest: ClubReportRequirementFilterRequest = {
           page: currentPage,
           size: pageSize,
           sort: ["createdAt,desc"],
           keyword: debouncedSearchQuery || undefined,
-          status: statusFilter !== "all" ? statusFilter : undefined,
+          status:
+            statusFilterRequests !== "all" ? statusFilterRequests : undefined,
           semesterId:
-            semesterFilter !== "all" ? Number(semesterFilter) : undefined,
+            semesterFilterRequests !== "all"
+              ? Number(semesterFilterRequests)
+              : undefined,
           // Backend will automatically filter by teamId for team officers
           // For club officers, teamId can be passed explicitly if needed
         };
@@ -476,37 +493,49 @@ export function ClubReportManagement() {
     currentPage,
     pageSize,
     debouncedSearchQuery,
-    statusFilter,
-    semesterFilter,
+    statusFilterRequests,
+    semesterFilterRequests,
   ]);
 
   // Fetch my reports when submissions tab is active
   useEffect(() => {
     const fetchMyReports = async () => {
-      if (!clubId || activeTab !== "submissions") return;
+      if (!clubId || activeTab !== "my_reports") return;
 
       try {
         setLoadingMyReports(true);
-        // Try to get my reports, fallback to filtering club reports if API doesn't exist
-        try {
-          const reports = await getMyReports(clubId);
-          setMyReports(reports);
-        } catch (err) {
-          // If API doesn't exist, get all club reports and filter by current user
-          const allReports = await getClubReports(clubId);
-          const currentUser = authService.getCurrentUser();
-          if (currentUser?.id) {
-            const filtered = allReports.filter(
-              (report) => report.createdBy?.id === currentUser.id
-            );
-            setMyReports(filtered);
-          } else {
-            setMyReports([]);
-          }
-        }
+        setError(null);
+
+        // Build filter request
+        const filterRequest: ReportFilterRequest = {
+          clubId: clubId,
+          page: currentPageMyReports,
+          size: pageSize,
+          sort: ["createdAt,desc"],
+          keyword: debouncedSearchQuery || undefined,
+          status:
+            statusFilterReports !== "all" &&
+            statusFilterReports !== "OVERDUE" &&
+            statusFilterReports !== "UNSUBMITTED"
+              ? statusFilterReports
+              : undefined,
+          semesterId:
+            semesterFilterReports !== "all"
+              ? Number(semesterFilterReports)
+              : undefined,
+        };
+
+        const response = await getMyReports(filterRequest);
+        setMyReports(response.content);
+        setTotalPagesMyReports(response.totalPages);
       } catch (err) {
         console.error("Error fetching my reports:", err);
-        toast.error("Không thể tải danh sách báo cáo của tôi");
+        const errorMessage =
+          err instanceof Error
+            ? err.message
+            : "Không thể tải danh sách báo cáo của tôi";
+        setError(errorMessage);
+        toast.error(errorMessage);
         setMyReports([]);
       } finally {
         setLoadingMyReports(false);
@@ -514,20 +543,55 @@ export function ClubReportManagement() {
     };
 
     fetchMyReports();
-  }, [clubId, activeTab]);
+  }, [
+    clubId,
+    activeTab,
+    currentPageMyReports,
+    pageSize,
+    debouncedSearchQuery,
+    statusFilterReports,
+    semesterFilterReports,
+  ]);
 
   // Fetch all club reports when approval tab is active (only for club officers)
   useEffect(() => {
     const fetchAllClubReports = async () => {
-      if (!clubId || activeTab !== "approval" || !isClubOfficer) return;
+      if (!clubId || activeTab !== "club_reports" || !isClubOfficer) return;
 
       try {
         setLoadingAllClubReports(true);
-        const reports = await getClubReports(clubId);
-        setAllClubReports(reports);
+        setError(null);
+
+        // Build filter request
+        const filterRequest: ReportFilterRequest = {
+          clubId: clubId,
+          page: currentPageClubReports,
+          size: pageSize,
+          sort: ["createdAt,desc"],
+          keyword: debouncedSearchQuery || undefined,
+          status:
+            statusFilterReports !== "all" &&
+            statusFilterReports !== "OVERDUE" &&
+            statusFilterReports !== "UNSUBMITTED"
+              ? statusFilterReports
+              : undefined,
+          semesterId:
+            semesterFilterReports !== "all"
+              ? Number(semesterFilterReports)
+              : undefined,
+        };
+
+        const response = await getClubReports(filterRequest);
+        setAllClubReports(response.content);
+        setTotalPagesClubReports(response.totalPages);
       } catch (err) {
         console.error("Error fetching all club reports:", err);
-        toast.error("Không thể tải danh sách báo cáo của câu lạc bộ");
+        const errorMessage =
+          err instanceof Error
+            ? err.message
+            : "Không thể tải danh sách báo cáo của câu lạc bộ";
+        setError(errorMessage);
+        toast.error(errorMessage);
         setAllClubReports([]);
       } finally {
         setLoadingAllClubReports(false);
@@ -535,44 +599,75 @@ export function ClubReportManagement() {
     };
 
     fetchAllClubReports();
-  }, [clubId, activeTab, isClubOfficer]);
+  }, [
+    clubId,
+    activeTab,
+    isClubOfficer,
+    currentPageClubReports,
+    pageSize,
+    debouncedSearchQuery,
+    statusFilterReports,
+    semesterFilterReports,
+  ]);
 
   // Helper function to refresh all tabs data after actions
   const refreshAllTabsData = async () => {
     if (!clubId) return;
 
     try {
-      // Always refresh requests tab
+      // Always refresh requests tab (use paginated API to match backend)
       // Note: Backend already filters by teamId for team officers
-      const requirements = await getClubReportRequirementsForOfficer(clubId);
-      const mappedRequests: ReportRequest[] = requirements.map((req) =>
-        mapRequirementToReportRequest(req)
+      const requestsFilter: ClubReportRequirementFilterRequest = {
+        page: currentPage,
+        size: pageSize,
+        sort: ["createdAt,desc"],
+        keyword: debouncedSearchQuery || undefined,
+        status:
+          statusFilterRequests !== "all" ? statusFilterRequests : undefined,
+        semesterId:
+          semesterFilterRequests !== "all"
+            ? Number(semesterFilterRequests)
+            : undefined,
+      };
+
+      const requestsResponse =
+        await getClubReportRequirementsForOfficerWithFilters(
+          clubId,
+          requestsFilter
+        );
+
+      const mappedRequests: ReportRequest[] = requestsResponse.content.map(
+        (req) => mapRequirementToReportRequest(req)
       );
 
       setReportRequests(mappedRequests);
+      setTotalPages(requestsResponse.totalPages);
+      setTotalElements(requestsResponse.totalElements);
+      setHasNext(requestsResponse.hasNext);
+      setHasPrevious(requestsResponse.hasPrevious);
 
       // Always refresh submissions tab (my reports)
-      try {
-        const reports = await getMyReports(clubId);
-        setMyReports(reports);
-      } catch (err) {
-        // If API doesn't exist, get all club reports and filter by current user
-        const allReports = await getClubReports(clubId);
-        const currentUser = authService.getCurrentUser();
-        if (currentUser?.id) {
-          const filtered = allReports.filter(
-            (report) => report.createdBy?.id === currentUser.id
-          );
-          setMyReports(filtered);
-        } else {
-          setMyReports([]);
-        }
-      }
+      const myReportsFilter: ReportFilterRequest = {
+        clubId: clubId,
+        page: currentPageMyReports,
+        size: pageSize,
+        sort: ["createdAt,desc"],
+      };
+      const myReportsResponse = await getMyReports(myReportsFilter);
+      setMyReports(myReportsResponse.content);
+      setTotalPagesMyReports(myReportsResponse.totalPages);
 
       // Always refresh approval tab (all club reports) if user is club president
       if (isClubOfficer) {
-        const reports = await getClubReports(clubId);
-        setAllClubReports(reports);
+        const clubReportsFilter: ReportFilterRequest = {
+          clubId: clubId,
+          page: currentPageClubReports,
+          size: pageSize,
+          sort: ["createdAt,desc"],
+        };
+        const clubReportsResponse = await getClubReports(clubReportsFilter);
+        setAllClubReports(clubReportsResponse.content);
+        setTotalPagesClubReports(clubReportsResponse.totalPages);
       }
     } catch (err) {
       console.error("Error refreshing tabs data:", err);
@@ -601,76 +696,19 @@ export function ClubReportManagement() {
   useEffect(() => {
     if (activeTab === "requests") {
       setCurrentPage(1);
+    } else if (activeTab === "my_reports") {
+      setCurrentPageMyReports(1);
+    } else if (activeTab === "club_reports") {
+      setCurrentPageClubReports(1);
     }
-  }, [debouncedSearchQuery, semesterFilter, statusFilter, activeTab]);
-
-  // Filter my reports
-  const filteredMyReports = useMemo(() => {
-    return myReports.filter((report) => {
-      const matchesSearch =
-        report.reportTitle.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (report.content?.toLowerCase().includes(searchQuery.toLowerCase()) ??
-          false);
-
-      // Filter by semester
-      if (semesterFilter !== "all") {
-        if (
-          !report.semester ||
-          report.semester.id.toString() !== semesterFilter
-        ) {
-          return false;
-        }
-      }
-
-      // Filter by status
-      if (statusFilter !== "all") {
-        // OVERDUE and UNSUBMITTED don't apply to reports tab (reports are already submitted)
-        if (statusFilter === "OVERDUE" || statusFilter === "UNSUBMITTED") {
-          return false;
-        }
-        const reportStatus = report.status?.toUpperCase();
-        if (reportStatus !== statusFilter) {
-          return false;
-        }
-      }
-
-      return matchesSearch;
-    });
-  }, [myReports, searchQuery, statusFilter, semesterFilter]);
-
-  // Filter all club reports
-  const filteredAllClubReports = useMemo(() => {
-    return allClubReports.filter((report) => {
-      const matchesSearch =
-        report.reportTitle.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (report.content?.toLowerCase().includes(searchQuery.toLowerCase()) ??
-          false);
-
-      // Filter by semester
-      if (semesterFilter !== "all") {
-        if (
-          !report.semester ||
-          report.semester.id.toString() !== semesterFilter
-        ) {
-          return false;
-        }
-      }
-
-      // Filter by status
-      if (statusFilter !== "all") {
-        // OVERDUE and UNSUBMITTED don't apply to reports tab (reports are already submitted)
-        if (statusFilter === "OVERDUE" || statusFilter === "UNSUBMITTED") {
-          return false;
-        }
-        const reportStatus = report.status?.toUpperCase();
-        if (reportStatus !== statusFilter) {
-          return false;
-        }
-      }
-
-      return matchesSearch;
-    });
-  }, [allClubReports, searchQuery, statusFilter, semesterFilter]);
+  }, [
+    debouncedSearchQuery,
+    semesterFilterRequests,
+    statusFilterRequests,
+    semesterFilterReports,
+    statusFilterReports,
+    activeTab,
+  ]);
 
   const isDeadlinePassed = (deadline: string) =>
     new Date(deadline) < new Date();
@@ -708,20 +746,10 @@ export function ClubReportManagement() {
     try {
       setAssigningTeam(true);
 
-      // Find the actual club requirement ID from the API response
-      // We need to get it from the original requirement data
-      const requirement = await getClubReportRequirementsForOfficer(clubId);
-      const clubRequirement = requirement.find(
-        (r) => r.id.toString() === selectedRequirementForAssign.request_id
-      )?.clubRequirements?.[0];
-
-      if (!clubRequirement) {
-        toast.error("Không tìm thấy yêu cầu báo cáo");
-        return;
-      }
-
       await assignTeamToReportRequirement(clubId, {
-        clubReportRequirementId: clubRequirement.id,
+        clubReportRequirementId: Number(
+          selectedRequirementForAssign.request_id
+        ),
         teamId: selectedTeamId,
       });
 
@@ -859,12 +887,12 @@ export function ClubReportManagement() {
                 Yêu cầu nộp
               </Button>
               <Button
-                variant={activeTab === "submissions" ? "default" : "outline"}
-                onClick={() => setActiveTab("submissions")}
+                variant={activeTab === "my_reports" ? "default" : "outline"}
+                onClick={() => setActiveTab("my_reports")}
                 className={`
                   transition-all duration-300 ease-in-out w-full md:w-auto md:flex-none
                   ${
-                    activeTab === "submissions"
+                    activeTab === "my_reports"
                       ? "bg-primary text-primary-foreground shadow-md md:scale-105 border-primary ring-2 ring-primary/30"
                       : "border-primary/30"
                   }
@@ -875,12 +903,12 @@ export function ClubReportManagement() {
               </Button>
               {isClubOfficer && (
                 <Button
-                  variant={activeTab === "approval" ? "default" : "outline"}
-                  onClick={() => setActiveTab("approval")}
+                  variant={activeTab === "club_reports" ? "default" : "outline"}
+                  onClick={() => setActiveTab("club_reports")}
                   className={`
                     transition-all duration-300 ease-in-out w-full md:w-auto md:flex-none
                     ${
-                      activeTab === "approval"
+                      activeTab === "club_reports"
                         ? "bg-primary text-primary-foreground shadow-md md:scale-105 border-primary ring-2 ring-primary/30"
                         : "border-primary/30"
                     }
@@ -910,8 +938,8 @@ export function ClubReportManagement() {
                 />
               </div>
               <Select
-                value={semesterFilter}
-                onValueChange={(value) => setSemesterFilter(value)}
+                value={semesterFilterRequests}
+                onValueChange={(value) => setSemesterFilterRequests(value)}
               >
                 <SelectTrigger className="w-full sm:w-[180px]">
                   <SelectValue placeholder="Chọn kỳ" />
@@ -929,9 +957,9 @@ export function ClubReportManagement() {
                 </SelectContent>
               </Select>
               <Select
-                value={statusFilter}
+                value={statusFilterRequests}
                 onValueChange={(value) =>
-                  setStatusFilter(value as ReportStatusFilter | "all")
+                  setStatusFilterRequests(value as ReportStatusFilter | "all")
                 }
               >
                 <SelectTrigger className="w-full sm:w-[180px]">
@@ -1079,7 +1107,9 @@ export function ClubReportManagement() {
                               </strong>
                             </span>
                             {isDeadlineExp && (
-                              <AlertCircle className="h-4 w-4 text-red-500 ml-auto" />
+                              <Badge className="bg-red-100 text-red-700 border border-red-300 font-semibold ml-auto">
+                                Quá hạn
+                              </Badge>
                             )}
                           </div>
 
@@ -1123,14 +1153,6 @@ export function ClubReportManagement() {
                               ))}
                             </ul>
                           </div>
-
-                          {/* Hiển thị thông báo quá hạn cho tất cả các yêu cầu đã quá hạn */}
-                          {isDeadlineExp && (
-                            <div className="p-3 bg-red-50 border border-red-200 rounded text-sm text-red-800">
-                              <AlertCircle className="h-4 w-4 inline mr-2" />
-                              Đã quá hạn nộp báo cáo
-                            </div>
-                          )}
 
                           {/* Báo cáo đang chờ phê duyệt từ CLB */}
                           {(request.status === "PENDING_CLUB" ||
@@ -1573,7 +1595,7 @@ export function ClubReportManagement() {
           </div>
         )}
 
-        {activeTab === "submissions" && (
+        {activeTab === "my_reports" && (
           <div className="space-y-6">
             {/* Search and Filters */}
             <div className="flex flex-col sm:flex-row gap-4">
@@ -1587,8 +1609,8 @@ export function ClubReportManagement() {
                 />
               </div>
               <Select
-                value={semesterFilter}
-                onValueChange={(value) => setSemesterFilter(value)}
+                value={semesterFilterReports}
+                onValueChange={(value) => setSemesterFilterReports(value)}
               >
                 <SelectTrigger className="w-full sm:w-[180px]">
                   <SelectValue placeholder="Chọn kỳ" />
@@ -1606,9 +1628,9 @@ export function ClubReportManagement() {
                 </SelectContent>
               </Select>
               <Select
-                value={statusFilter}
+                value={statusFilterReports}
                 onValueChange={(value) =>
-                  setStatusFilter(value as ReportStatusFilter | "all")
+                  setStatusFilterReports(value as ReportStatusFilter | "all")
                 }
               >
                 <SelectTrigger className="w-full sm:w-[180px]">
@@ -1616,11 +1638,13 @@ export function ClubReportManagement() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Tất cả trạng thái</SelectItem>
-                  {reportStatusFilterOptions.map((status) => (
-                    <SelectItem key={status} value={status}>
-                      {reportStatusFilterLabels[status]}
-                    </SelectItem>
-                  ))}
+                  {reportStatusFilterOptions
+                    .filter((s) => s !== "OVERDUE" && s !== "UNSUBMITTED")
+                    .map((status) => (
+                      <SelectItem key={status} value={status}>
+                        {reportStatusFilterLabels[status]}
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
             </div>
@@ -1667,178 +1691,203 @@ export function ClubReportManagement() {
                   </TableBody>
                 </Table>
               </div>
-            ) : filteredMyReports.length === 0 ? (
+            ) : myReports.length === 0 ? (
               <div className="text-center py-12">
                 <FileText className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
                 <p className="text-muted-foreground">Không có báo cáo nào</p>
               </div>
             ) : (
-              <div className="rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-[250px]">Tiêu đề</TableHead>
-                      <TableHead className="w-[150px]">Ngày tạo</TableHead>
-                      <TableHead className="w-[150px]">Ngày nộp</TableHead>
-                      <TableHead className="w-[200px]">Người tạo</TableHead>
-                      <TableHead className="w-[120px]">Trạng thái</TableHead>
-                      <TableHead className="text-right">Thao tác</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredMyReports.map((report) => (
-                      <TableRow key={report.id}>
-                        <TableCell className="font-medium">
-                          <span
-                            className="truncate block max-w-[250px]"
-                            title={report.reportTitle}
-                          >
-                            {report.reportTitle}
-                          </span>
-                        </TableCell>
+              <>
+                <div className="rounded-md border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-[250px]">Tiêu đề</TableHead>
+                        <TableHead className="w-[150px]">Ngày tạo</TableHead>
+                        <TableHead className="w-[150px]">Ngày nộp</TableHead>
+                        <TableHead className="w-[200px]">Người tạo</TableHead>
+                        <TableHead className="w-[120px]">Trạng thái</TableHead>
+                        <TableHead className="text-right">Thao tác</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {myReports.map((report) => (
+                        <TableRow key={report.id}>
+                          <TableCell className="font-medium">
+                            <span
+                              className="truncate block max-w-[250px]"
+                              title={report.reportTitle}
+                            >
+                              {report.reportTitle}
+                            </span>
+                          </TableCell>
 
-                        <TableCell>
-                          <span className="text-sm text-muted-foreground">
-                            {new Date(report.createdAt).toLocaleDateString(
-                              "vi-VN"
-                            )}
-                          </span>
-                        </TableCell>
-                        <TableCell>
-                          <span className="text-sm text-muted-foreground">
-                            {report.submittedDate
-                              ? new Date(
-                                  report.submittedDate
-                                ).toLocaleDateString("vi-VN")
-                              : "—"}
-                          </span>
-                        </TableCell>
-                        <TableCell>
-                          <span className="text-sm text-muted-foreground">
-                            {report.createdBy?.fullName || "—"}
-                          </span>
-                        </TableCell>
-                        <TableCell>
-                          <Badge
-                            className={
-                              requirementStatusColors[report.status] ||
-                              "bg-gray-100 text-gray-700"
-                            }
-                          >
-                            {requirementStatusLabels[report.status] ||
-                              report.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="">
-                          <div className="flex justify-end gap-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={async () => {
-                                try {
-                                  setLoadingReportDetailId(
-                                    report.id.toString()
-                                  );
-                                  const reportDetail =
-                                    await getClubReportDetail(
-                                      report.id,
-                                      clubId!
-                                    );
-                                  setSelectedReportDetail(reportDetail);
-                                  setShowDetailModal(true);
-                                } catch (error) {
-                                  console.error(
-                                    "Error fetching report detail:",
-                                    error
-                                  );
-                                  toast.error("Không thể tải chi tiết báo cáo");
-                                } finally {
-                                  setLoadingReportDetailId(null);
-                                }
-                              }}
-                              disabled={
-                                loadingReportDetailId === report.id.toString()
+                          <TableCell>
+                            <span className="text-sm text-muted-foreground">
+                              {new Date(report.createdAt).toLocaleDateString(
+                                "vi-VN"
+                              )}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <span className="text-sm text-muted-foreground">
+                              {report.submittedDate
+                                ? new Date(
+                                    report.submittedDate
+                                  ).toLocaleDateString("vi-VN")
+                                : "—"}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <span className="text-sm text-muted-foreground">
+                              {report.createdBy?.fullName || "—"}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              className={
+                                requirementStatusColors[report.status] ||
+                                "bg-gray-100 text-gray-700"
                               }
                             >
-                              <Eye className="h-4 w-4 mr-1" />
-                              Xem
-                            </Button>
-                            {report.status === "DRAFT" && (
-                              <>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={async () => {
-                                    try {
-                                      const reportDetail =
-                                        await getClubReportDetail(
-                                          report.id,
-                                          clubId!
-                                        );
-                                      setSelectedReportDetail(reportDetail);
-                                      setDraftTitle(reportDetail.reportTitle);
-                                      setDraftContent(
-                                        reportDetail.content || ""
+                              {requirementStatusLabels[report.status] ||
+                                report.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="">
+                            <div className="flex justify-end gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={async () => {
+                                  try {
+                                    setLoadingReportDetailId(
+                                      report.id.toString()
+                                    );
+                                    const reportDetail =
+                                      await getClubReportDetail(
+                                        report.id,
+                                        clubId!
                                       );
-                                      setDraftFileUrl(
-                                        reportDetail.fileUrl || ""
-                                      );
-                                      setEditingReportId(report.id);
-                                      setShowEditDialog(true);
-                                    } catch (error) {
-                                      toast.error(
-                                        "Không thể tải thông tin báo cáo"
-                                      );
-                                    }
-                                  }}
-                                >
-                                  <Edit className="h-4 w-4 mr-1" />
-                                  Sửa
-                                </Button>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={async () => {
-                                    if (
-                                      confirm(
-                                        "Bạn có chắc chắn muốn xóa báo cáo này?"
-                                      )
-                                    ) {
-                                      try {
-                                        setDeletingReport(true);
-                                        await deleteReport(report.id);
-                                        toast.success("Xóa báo cáo thành công");
-                                        // Refresh list
-                                        const reports = await getMyReports(
-                                          clubId!
-                                        );
-                                        setMyReports(reports);
-                                      } catch (error) {
-                                        toast.error("Không thể xóa báo cáo");
-                                      } finally {
-                                        setDeletingReport(false);
-                                      }
-                                    }
-                                  }}
-                                  disabled={deletingReport}
-                                >
-                                  <Trash2 className="h-4 w-4 mr-1" />
-                                  Xóa
-                                </Button>
-                              </>
-                            )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+                                    setSelectedReportDetail(reportDetail);
+                                    setShowDetailModal(true);
+                                  } catch (error) {
+                                    console.error(
+                                      "Error fetching report detail:",
+                                      error
+                                    );
+                                    toast.error(
+                                      "Không thể tải chi tiết báo cáo"
+                                    );
+                                  } finally {
+                                    setLoadingReportDetailId(null);
+                                  }
+                                }}
+                                disabled={
+                                  loadingReportDetailId === report.id.toString()
+                                }
+                              >
+                                <Eye className="h-4 w-4 mr-1" />
+                                Xem
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+
+                {/* Pagination */}
+                {totalPagesMyReports > 1 && (
+                  <div className="mt-8 flex justify-center">
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPageMyReports(1)}
+                        disabled={currentPageMyReports === 1}
+                      >
+                        <ChevronsLeft className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          setCurrentPageMyReports((prev) =>
+                            Math.max(1, prev - 1)
+                          )
+                        }
+                        disabled={currentPageMyReports === 1}
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </Button>
+                      <div className="flex items-center gap-1">
+                        {Array.from(
+                          { length: Math.min(5, totalPagesMyReports) },
+                          (_, i) => {
+                            let pageNum;
+                            if (totalPagesMyReports <= 5) {
+                              pageNum = i + 1;
+                            } else if (currentPageMyReports <= 3) {
+                              pageNum = i + 1;
+                            } else if (
+                              currentPageMyReports >=
+                              totalPagesMyReports - 2
+                            ) {
+                              pageNum = totalPagesMyReports - 4 + i;
+                            } else {
+                              pageNum = currentPageMyReports - 2 + i;
+                            }
+                            return (
+                              <Button
+                                key={pageNum}
+                                variant={
+                                  currentPageMyReports === pageNum
+                                    ? "default"
+                                    : "outline"
+                                }
+                                size="sm"
+                                onClick={() => setCurrentPageMyReports(pageNum)}
+                                className="w-10"
+                              >
+                                {pageNum}
+                              </Button>
+                            );
+                          }
+                        )}
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          setCurrentPageMyReports((prev) =>
+                            Math.min(totalPagesMyReports, prev + 1)
+                          )
+                        }
+                        disabled={currentPageMyReports === totalPagesMyReports}
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          setCurrentPageMyReports(totalPagesMyReports)
+                        }
+                        disabled={currentPageMyReports === totalPagesMyReports}
+                      >
+                        <ChevronsRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}
 
-        {activeTab === "approval" && (
+        {activeTab === "club_reports" && (
           <div className="space-y-6">
             {/* Search and Filters */}
             <div className="flex flex-col sm:flex-row gap-4">
@@ -1852,8 +1901,8 @@ export function ClubReportManagement() {
                 />
               </div>
               <Select
-                value={semesterFilter}
-                onValueChange={(value) => setSemesterFilter(value)}
+                value={semesterFilterReports}
+                onValueChange={(value) => setSemesterFilterReports(value)}
               >
                 <SelectTrigger className="w-full sm:w-[180px]">
                   <SelectValue placeholder="Chọn kỳ" />
@@ -1871,9 +1920,9 @@ export function ClubReportManagement() {
                 </SelectContent>
               </Select>
               <Select
-                value={statusFilter}
+                value={statusFilterReports}
                 onValueChange={(value) =>
-                  setStatusFilter(value as ReportStatusFilter | "all")
+                  setStatusFilterReports(value as ReportStatusFilter | "all")
                 }
               >
                 <SelectTrigger className="w-full sm:w-[180px]">
@@ -1881,11 +1930,16 @@ export function ClubReportManagement() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Tất cả trạng thái</SelectItem>
-                  {reportStatusFilterOptions.map((status) => (
-                    <SelectItem key={status} value={status}>
-                      {reportStatusFilterLabels[status]}
-                    </SelectItem>
-                  ))}
+                  {reportStatusFilterOptions
+                    .filter(
+                      (s) =>
+                        s !== "OVERDUE" && s !== "UNSUBMITTED" && s !== "DRAFT"
+                    )
+                    .map((status) => (
+                      <SelectItem key={status} value={status}>
+                        {reportStatusFilterLabels[status]}
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
             </div>
@@ -1932,111 +1986,206 @@ export function ClubReportManagement() {
                   </TableBody>
                 </Table>
               </div>
-            ) : filteredAllClubReports.length === 0 ? (
+            ) : allClubReports.length === 0 ? (
               <div className="text-center py-12">
                 <FileText className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
                 <p className="text-muted-foreground">Không có báo cáo nào</p>
               </div>
             ) : (
-              <div className="rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-[250px]">Tiêu đề</TableHead>
-                      <TableHead className="w-[150px]">Ngày tạo</TableHead>
-                      <TableHead className="w-[150px]">Ngày nộp</TableHead>
-                      <TableHead className="w-[200px]">Người tạo</TableHead>
+              <>
+                <div className="rounded-md border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-[250px]">Tiêu đề</TableHead>
+                        <TableHead className="w-[150px]">Ngày tạo</TableHead>
+                        <TableHead className="w-[150px]">Ngày nộp</TableHead>
+                        <TableHead className="w-[200px]">Người tạo</TableHead>
 
-                      <TableHead className="w-[120px]">Trạng thái</TableHead>
-                      <TableHead className="text-right">Thao tác</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredAllClubReports.map((report) => (
-                      <TableRow key={report.id}>
-                        <TableCell className="font-medium">
-                          <span
-                            className="truncate block max-w-[250px]"
-                            title={report.reportTitle}
-                          >
-                            {report.reportTitle}
-                          </span>
-                        </TableCell>
+                        <TableHead className="w-[120px]">Trạng thái</TableHead>
+                        <TableHead className="text-right">Thao tác</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {allClubReports.map((report) => (
+                        <TableRow key={report.id}>
+                          <TableCell className="font-medium">
+                            <span
+                              className="truncate block max-w-[250px]"
+                              title={report.reportTitle}
+                            >
+                              {report.reportTitle}
+                            </span>
+                          </TableCell>
 
-                        <TableCell>
-                          <span className="text-sm text-muted-foreground">
-                            {new Date(report.createdAt).toLocaleDateString(
-                              "vi-VN"
-                            )}
-                          </span>
-                        </TableCell>
-                        <TableCell>
-                          <span className="text-sm text-muted-foreground">
-                            {report.submittedDate
-                              ? new Date(
-                                  report.submittedDate
-                                ).toLocaleDateString("vi-VN")
-                              : "—"}
-                          </span>
-                        </TableCell>
+                          <TableCell>
+                            <span className="text-sm text-muted-foreground">
+                              {new Date(report.createdAt).toLocaleDateString(
+                                "vi-VN"
+                              )}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <span className="text-sm text-muted-foreground">
+                              {report.submittedDate
+                                ? new Date(
+                                    report.submittedDate
+                                  ).toLocaleDateString("vi-VN")
+                                : "—"}
+                            </span>
+                          </TableCell>
 
-                        <TableCell>
-                          <span className="text-sm text-muted-foreground">
-                            {report.createdBy?.fullName || "—"}
-                          </span>
-                        </TableCell>
-                        <TableCell>
-                          <Badge
-                            className={
-                              requirementStatusColors[report.status] ||
-                              "bg-gray-100 text-gray-700"
-                            }
-                          >
-                            {requirementStatusLabels[report.status] ||
-                              report.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={async () => {
-                                try {
-                                  setLoadingReportDetailId(
-                                    report.id.toString()
-                                  );
-                                  const reportDetail =
-                                    await getClubReportDetail(
-                                      report.id,
-                                      clubId!
-                                    );
-                                  setSelectedReportDetail(reportDetail);
-                                  setShowDetailModal(true);
-                                } catch (error) {
-                                  console.error(
-                                    "Error fetching report detail:",
-                                    error
-                                  );
-                                  toast.error("Không thể tải chi tiết báo cáo");
-                                } finally {
-                                  setLoadingReportDetailId(null);
-                                }
-                              }}
-                              disabled={
-                                loadingReportDetailId === report.id.toString()
+                          <TableCell>
+                            <span className="text-sm text-muted-foreground">
+                              {report.createdBy?.fullName || "—"}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              className={
+                                requirementStatusColors[report.status] ||
+                                "bg-gray-100 text-gray-700"
                               }
                             >
-                              <Eye className="h-4 w-4 mr-1" />
-                              Xem
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+                              {requirementStatusLabels[report.status] ||
+                                report.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={async () => {
+                                  try {
+                                    setLoadingReportDetailId(
+                                      report.id.toString()
+                                    );
+                                    const reportDetail =
+                                      await getClubReportDetail(
+                                        report.id,
+                                        clubId!
+                                      );
+                                    setSelectedReportDetail(reportDetail);
+                                    setShowDetailModal(true);
+                                  } catch (error) {
+                                    console.error(
+                                      "Error fetching report detail:",
+                                      error
+                                    );
+                                    toast.error(
+                                      "Không thể tải chi tiết báo cáo"
+                                    );
+                                  } finally {
+                                    setLoadingReportDetailId(null);
+                                  }
+                                }}
+                                disabled={
+                                  loadingReportDetailId === report.id.toString()
+                                }
+                              >
+                                <Eye className="h-4 w-4 mr-1" />
+                                Xem
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+
+                {/* Pagination */}
+                {totalPagesClubReports > 1 && (
+                  <div className="mt-8 flex justify-center">
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPageClubReports(1)}
+                        disabled={currentPageClubReports === 1}
+                      >
+                        <ChevronsLeft className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          setCurrentPageClubReports((prev) =>
+                            Math.max(1, prev - 1)
+                          )
+                        }
+                        disabled={currentPageClubReports === 1}
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </Button>
+                      <div className="flex items-center gap-1">
+                        {Array.from(
+                          { length: Math.min(5, totalPagesClubReports) },
+                          (_, i) => {
+                            let pageNum;
+                            if (totalPagesClubReports <= 5) {
+                              pageNum = i + 1;
+                            } else if (currentPageClubReports <= 3) {
+                              pageNum = i + 1;
+                            } else if (
+                              currentPageClubReports >=
+                              totalPagesClubReports - 2
+                            ) {
+                              pageNum = totalPagesClubReports - 4 + i;
+                            } else {
+                              pageNum = currentPageClubReports - 2 + i;
+                            }
+                            return (
+                              <Button
+                                key={pageNum}
+                                variant={
+                                  currentPageClubReports === pageNum
+                                    ? "default"
+                                    : "outline"
+                                }
+                                size="sm"
+                                onClick={() =>
+                                  setCurrentPageClubReports(pageNum)
+                                }
+                                className="w-10"
+                              >
+                                {pageNum}
+                              </Button>
+                            );
+                          }
+                        )}
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          setCurrentPageClubReports((prev) =>
+                            Math.min(totalPagesClubReports, prev + 1)
+                          )
+                        }
+                        disabled={
+                          currentPageClubReports === totalPagesClubReports
+                        }
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          setCurrentPageClubReports(totalPagesClubReports)
+                        }
+                        disabled={
+                          currentPageClubReports === totalPagesClubReports
+                        }
+                      >
+                        <ChevronsRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}
@@ -2626,129 +2775,6 @@ export function ClubReportManagement() {
                   isSameClub;
 
                 if (shouldShowForPresident) {
-                  // Nếu là creator, hiển thị nút Chỉnh sửa và Xóa thay vì Từ chối
-                  // if (isCreator) {
-                  //   return (
-                  //     <div className="flex gap-2 justify-end pt-4 border-t">
-                  //       <Button
-                  //         onClick={async () => {
-                  //           if (!selectedReportDetail.id) {
-                  //             toast.error("Không tìm thấy thông tin báo cáo");
-                  //             return;
-                  //           }
-
-                  //           try {
-                  //             setApprovingReport(true);
-                  //             const reviewRequest: ReviewReportByClubRequest = {
-                  //               reportId: selectedReportDetail.id,
-                  //               status: "APPROVED_CLUB",
-                  //             };
-
-                  //             await reviewReportByClub(reviewRequest);
-                  //             toast.success(
-                  //               "Báo cáo đã được chấp nhận và nộp lên trường"
-                  //             );
-                  //             setShowDetailModal(false);
-                  //             setSelectedReportDetail(null);
-
-                  //             // Refresh all tabs data to update status
-                  //             await refreshAllTabsData();
-                  //           } catch (err) {
-                  //             console.error("Error approving report:", err);
-                  //             const errorMessage =
-                  //               err instanceof Error
-                  //                 ? err.message
-                  //                 : "Không thể duyệt báo cáo";
-                  //             toast.error(errorMessage);
-                  //           } finally {
-                  //             setApprovingReport(false);
-                  //           }
-                  //         }}
-                  //         className="bg-green-600 hover:bg-green-700 text-white"
-                  //         disabled={approvingReport}
-                  //       >
-                  //         <CheckCircle className="h-4 w-4 mr-2" />
-                  //         {approvingReport
-                  //           ? "Đang xử lý..."
-                  //           : selectedReportDetail.mustResubmit
-                  //           ? "Nộp lại lên trường"
-                  //           : "Chấp nhận và nộp lên trường"}
-                  //       </Button>
-                  //       <Button
-                  //         variant="outline"
-                  //         onClick={() => {
-                  //           // Set up edit dialog
-                  //           setDraftTitle(selectedReportDetail.reportTitle);
-                  //           setDraftContent(selectedReportDetail.content || "");
-                  //           setDraftFileUrl(selectedReportDetail.fileUrl || "");
-                  //           setDraftFile(null);
-                  //           setEditingReportId(selectedReportDetail.id);
-                  //           setIsResubmitMode(false);
-                  //           // Find the request for this report
-                  //           const requirementId =
-                  //             selectedReportDetail.reportRequirement?.id;
-                  //           if (requirementId) {
-                  //             const request = reportRequests.find(
-                  //               (r) => r.request_id === requirementId.toString()
-                  //             );
-                  //             if (request) {
-                  //               setSelectedRequest(request);
-                  //             }
-                  //           }
-                  //           setShowDetailModal(false);
-                  //           setShowEditDialog(true);
-                  //         }}
-                  //         className="bg-blue-600 hover:bg-blue-700 text-white"
-                  //         disabled={approvingReport}
-                  //       >
-                  //         <FileText className="h-4 w-4 mr-2" />
-                  //         Chỉnh sửa
-                  //       </Button>
-                  //       <Button
-                  //         variant="outline"
-                  //         onClick={async () => {
-                  //           if (
-                  //             !confirm(
-                  //               "Bạn có chắc chắn muốn xóa báo cáo này? Hành động này không thể hoàn tác."
-                  //             )
-                  //           ) {
-                  //             return;
-                  //           }
-                  //           try {
-                  //             if (!selectedReportDetail.id) {
-                  //               toast.error("Không tìm thấy thông tin báo cáo");
-                  //               return;
-                  //             }
-                  //             setDeletingReport(true);
-                  //             await deleteReport(selectedReportDetail.id);
-                  //             toast.success("Báo cáo đã được xóa thành công");
-                  //             setShowDetailModal(false);
-                  //             setSelectedReportDetail(null);
-
-                  //             // Refresh all tabs data to update status
-                  //             await refreshAllTabsData();
-                  //           } catch (err) {
-                  //             console.error("Error deleting report:", err);
-                  //             const errorMessage =
-                  //               err instanceof Error
-                  //                 ? err.message
-                  //                 : "Không thể xóa báo cáo";
-                  //             toast.error(errorMessage);
-                  //           } finally {
-                  //             setDeletingReport(false);
-                  //           }
-                  //         }}
-                  //         className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                  //         disabled={approvingReport || deletingReport}
-                  //       >
-                  //         <XCircle className="h-4 w-4 mr-2" />
-                  //         {deletingReport ? "Đang xóa..." : "Xóa"}
-                  //       </Button>
-                  //     </div>
-                  //   );
-                  // }
-
-                  // Nếu không phải creator, hiển thị nút Từ chối như cũ
                   return (
                     <div className="flex flex-col sm:flex-row gap-2 sm:justify-end pt-4 border-t">
                       <Button

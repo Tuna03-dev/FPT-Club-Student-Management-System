@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useParams } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -25,10 +25,14 @@ import {
 import { formatDistanceToNow } from "date-fns";
 import { vi } from "date-fns/locale";
 import { useTeams } from "@/hooks/useTeams";
+import { useClubPermissions } from "@/hooks/useClubPermissions";
 
 export default function PendingPosts() {
   const { clubId } = useParams<{ clubId: string }>();
-  const [activeTab, setActiveTab] = useState<string>("club-wide");
+  const numericClubId = clubId ? Number(clubId) : undefined;
+  const { isClubOfficer, isTeamOfficer, isClubTreasurer } =
+    useClubPermissions(numericClubId);
+  const [activeTab, setActiveTab] = useState<string>("");
   const [posts, setPosts] = useState<PostWithRelationsData[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -44,9 +48,44 @@ export default function PendingPosts() {
   const observerTarget = useRef<HTMLDivElement>(null);
 
   // Load teams
-  const { data: teams, loading: teamsLoading } = useTeams(
-    clubId ? Number(clubId) : undefined
-  );
+  const { data: teams, loading: teamsLoading } = useTeams(numericClubId);
+
+  // Filter teams based on role
+  const visibleTeams = useMemo(() => {
+    if (!teams) return [];
+
+    // Club officer sees all teams
+    if (isClubOfficer) return teams;
+
+    // Team officer/treasurer only sees their team
+    // For now, we'll show all teams but load logic will be restricted
+    // In a real implementation, you'd filter teams by userTeamIds
+    return teams;
+  }, [teams, isClubOfficer]);
+
+  // Set initial tab based on role
+  useEffect(() => {
+    if (!activeTab && !teamsLoading) {
+      if (isClubOfficer) {
+        setActiveTab("club-wide");
+      } else if (
+        (isTeamOfficer || isClubTreasurer) &&
+        visibleTeams.length > 0
+      ) {
+        // Team officer or treasurer starts with their first team
+        setActiveTab(String(visibleTeams[0].teamId));
+      } else {
+        setActiveTab("club-wide");
+      }
+    }
+  }, [
+    isClubOfficer,
+    isTeamOfficer,
+    isClubTreasurer,
+    visibleTeams,
+    teamsLoading,
+    activeTab,
+  ]);
 
   // Load pending posts based on active tab
   const loadPendingPosts = useCallback(
@@ -270,13 +309,16 @@ export default function PendingPosts() {
               }}
             >
               <TabsList className="inline-flex w-auto h-auto p-1 gap-1">
-                <TabsTrigger
-                  value="club-wide"
-                  className="text-xs sm:text-sm whitespace-nowrap px-3 sm:px-4 flex-shrink-0"
-                >
-                  <Clock className="h-3 w-3 sm:h-4 sm:w-4 mr-1.5" />
-                  Toàn bộ câu lạc bộ
-                </TabsTrigger>
+                {/* Club officer can see club-wide tab */}
+                {isClubOfficer && (
+                  <TabsTrigger
+                    value="club-wide"
+                    className="text-xs sm:text-sm whitespace-nowrap px-3 sm:px-4 flex-shrink-0"
+                  >
+                    <Clock className="h-3 w-3 sm:h-4 sm:w-4 mr-1.5" />
+                    Toàn bộ câu lạc bộ
+                  </TabsTrigger>
+                )}
                 {teamsLoading
                   ? // Loading skeletons for teams
                     [...Array(3)].map((_, idx) => (
@@ -287,9 +329,9 @@ export default function PendingPosts() {
                         <Skeleton className="h-4 w-16 sm:w-20" />
                       </div>
                     ))
-                  : teams &&
-                    teams.length > 0 &&
-                    teams.map((team) => (
+                  : visibleTeams &&
+                    visibleTeams.length > 0 &&
+                    visibleTeams.map((team) => (
                       <TabsTrigger
                         key={team.teamId}
                         value={String(team.teamId)}

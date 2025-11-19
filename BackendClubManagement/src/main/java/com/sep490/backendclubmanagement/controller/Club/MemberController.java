@@ -5,6 +5,7 @@ import com.sep490.backendclubmanagement.dto.request.RemoveMemberRequest;
 import com.sep490.backendclubmanagement.dto.request.UpdateMemberRoleRequest;
 import com.sep490.backendclubmanagement.dto.request.UpdateMemberStatusRequest;
 import com.sep490.backendclubmanagement.dto.request.UpdateMemberTeamRequest;
+import com.sep490.backendclubmanagement.dto.response.ImportMembersResponse;
 import com.sep490.backendclubmanagement.dto.response.MemberResponse;
 import com.sep490.backendclubmanagement.dto.response.PageResponse;
 import com.sep490.backendclubmanagement.dto.response.SimpleMemberResponse;
@@ -15,6 +16,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -119,5 +121,19 @@ public class MemberController {
             @RequestBody(required = false) RemoveMemberRequest request) {
         memberService.removeMemberFromClub(clubId, userId, request != null ? request.getReason() : null);
         return ApiResponse.success("Member removed successfully");
+    }
+
+    // Import members from Excel with history across all semesters
+    @PostMapping("/{clubId}/members/import")
+    public ApiResponse<ImportMembersResponse> importMembersFromExcel(
+            @PathVariable Long clubId,
+            @RequestParam("file") MultipartFile file,
+            @RequestParam Long currentUserId) {
+        try {
+            ImportMembersResponse result = memberService.importMembersFromExcel(clubId, file, currentUserId);
+            return ApiResponse.success(result);
+        } catch (Exception e) {
+            return ApiResponse.error(400, "Import failed: " + e.getMessage());
+        }
     }
 }

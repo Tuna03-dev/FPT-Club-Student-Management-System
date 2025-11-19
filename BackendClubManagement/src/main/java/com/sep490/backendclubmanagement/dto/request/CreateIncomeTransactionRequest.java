@@ -31,6 +31,9 @@ public class CreateIncomeTransactionRequest {
     @Size(max = 2000, message = "Ghi chú không được vượt quá 2000 ký tự")
     private String notes;
 
+    @Size(max = 500, message = "URL biên lai không được vượt quá 500 ký tự")
+    private String receiptUrl;
+
     private Long feeId; // Optional: link to a Fee if this income is from fee payment
 
     private Long userId; // Optional: user who made the payment
