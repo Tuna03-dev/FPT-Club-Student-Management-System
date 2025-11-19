@@ -64,6 +64,9 @@ public interface RoleMemberShipRepository extends JpaRepository<RoleMemberShip, 
 
     List<RoleMemberShip> findByClubMemberShipIdAndSemesterId(Long clubMemberShipId, Long semesterId);
 
+    Optional<RoleMemberShip> findByClubMemberShipAndSemester(com.sep490.backendclubmanagement.entity.ClubMemberShip clubMemberShip,
+                                                               com.sep490.backendclubmanagement.entity.Semester semester);
+
     List<RoleMemberShip> findByClubMemberShipIdAndSemesterIdAndIsActive(Long clubMemberShipId, Long semesterId, Boolean isActive);
 
     // Query với fetch join để load team, clubRole và systemRole cùng lúc, tránh lazy loading issues

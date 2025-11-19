@@ -1,11 +1,13 @@
 package com.sep490.backendclubmanagement.service;
 
+import com.sep490.backendclubmanagement.dto.response.ImportMembersResponse;
 import com.sep490.backendclubmanagement.dto.response.MemberResponse;
 import com.sep490.backendclubmanagement.dto.response.PageResponse;
 import com.sep490.backendclubmanagement.dto.response.SimpleMemberResponse;
 import com.sep490.backendclubmanagement.entity.ClubMemberShipStatus;
 import com.sep490.backendclubmanagement.exception.AppException;
 import org.springframework.data.domain.Pageable;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -39,4 +41,6 @@ public interface MemberService {
     void updateMemberActiveStatus(Long clubId, Long userId, boolean isActive, Long semesterId);
 
     void removeMemberFromClub(Long clubId, Long userId, String reason);
+
+    ImportMembersResponse importMembersFromExcel(Long clubId, MultipartFile file, Long currentUserId) throws Exception;
 }

@@ -48,6 +48,10 @@ public interface ClubRepository extends JpaRepository<Club, Long> {
     @Query("SELECT COUNT(DISTINCT cm.id) FROM ClubMemberShip cm WHERE cm.club.id = :clubId")
     Long countMembersByClubId(@Param("clubId") Long clubId);
 
+    // 🔹 Find clubs without wallet
+    @Query("SELECT c FROM Club c WHERE c.clubWallet IS NULL AND c.deletedAt IS NULL")
+    List<Club> findClubsWithoutWallet();
+
     // 🔹 Count total events for a club
     @Query("SELECT COUNT(e.id) FROM Event e WHERE e.club.id = :clubId")
     Long countEventsByClubId(@Param("clubId") Long clubId);

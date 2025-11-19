@@ -20,6 +20,7 @@ public class IncomeTransactionResponse {
     private String source;
     private TransactionStatus status;
     private String notes;
+    private String receiptUrl;
 
     // Related entities info
     private Long feeId;

@@ -41,6 +41,9 @@ public class IncomeTransaction extends BaseEntity {
     @Column(name = "notes", columnDefinition = "TEXT")
     private String notes;
 
+    @Column(name = "receipt_url", length = 500)
+    private String receiptUrl;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "club_wallet_id", nullable = false)
     private ClubWallet clubWallet;
