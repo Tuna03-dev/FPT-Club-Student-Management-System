@@ -8,7 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
-import { FileText, Users, Edit2, Plus, Search, Clock } from "lucide-react";
+import { FileText, Users, Edit2, Plus, Search, Clock, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import TeamNewsDrafts from "@/pages/news/TeamNewsDrafts";
@@ -19,6 +19,18 @@ import {
   postService,
   type PostWithRelationsData,
 } from "@/services/postService";
+
+import { updateTeam, deleteTeam } from "@/api/teams";
+import type { UpdateTeamPayload } from "@/types/team";
+
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 /* ===== helpers ===== */
 type RoleTone = "leader" | "deputy" | "member" | "other";
@@ -121,6 +133,27 @@ export default function TeamDetailPage() {
   const memberFlag = !!data?.member;
   const canViewPosts = isClubOfficer || memberFlag;
 
+  // Local team info override (để update UI sau khi sửa)
+  const [localTeamInfo, setLocalTeamInfo] = useState<{
+    teamName: string;
+    description: string;
+    linkGroupChat?: string | null;
+  } | null>(null);
+
+  useEffect(() => {
+    if (data && !localTeamInfo) {
+      setLocalTeamInfo({
+        teamName: data.teamName ?? "",
+        description: data.description ?? "",
+        linkGroupChat: (data as any).linkGroupChat ?? null, // nếu DTO có
+      });
+    }
+  }, [data, localTeamInfo]);
+
+  const teamName = localTeamInfo?.teamName ?? data?.teamName ?? "";
+  const teamDesc = localTeamInfo?.description ?? data?.description ?? "";
+  const teamLink = localTeamInfo?.linkGroupChat ?? (data as any)?.linkGroupChat ?? "";
+
   // Posts state
   const [posts, setPosts] = useState<PostWithRelationsData[]>([]);
   const [postsLoading, setPostsLoading] = useState(true);
@@ -140,7 +173,7 @@ export default function TeamDetailPage() {
         setPostsError(null);
 
         const response = await postService.getTeamPosts(cId, tId, {
-          page: page,
+          page,
           size: 10,
           sort: "createdAt,desc",
         });
@@ -153,13 +186,13 @@ export default function TeamDetailPage() {
         } else {
           const message = response.message || "Không thể tải bài viết";
           setPostsError(message);
-          toast.error(message);
+          toast.error(message, { duration: 2500 });
         }
       } catch (err) {
         console.error("Error loading team posts:", err);
         const message = "Có lỗi khi tải bài viết";
         setPostsError(message);
-        toast.error(message);
+        toast.error(message, { duration: 2500 });
       } finally {
         setPostsLoading(false);
         loadingRef.current = false;
@@ -286,16 +319,9 @@ export default function TeamDetailPage() {
     }
   }, [canViewPosts, activeTab]);
 
-  // ❌ ĐỪNG return sớm trước các hooks khác
-  // Thay vì return, hiển thị loading/error trong JSX bên dưới
-
-  const teamName = data?.teamName ?? "";
-  const teamDesc = data?.description ?? "";
-
-  // Wrap rawMembers in useMemo to prevent dependency issues
+  // wrap rawMembers
   const rawMembers = useMemo(() => data?.members ?? [], [data?.members]);
 
-  // Các useMemo luôn được gọi (kể cả loading/error) để giữ thứ tự hooks ổn định
   const members = useMemo(
     () =>
       rawMembers.map((m) => ({
@@ -334,6 +360,150 @@ export default function TeamDetailPage() {
 
   const hasMore = currentPage < totalPages - 1;
 
+  /* ========= EDIT / DELETE STATE ========= */
+  const [editOpen, setEditOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+
+  const [editName, setEditName] = useState("");
+  const [editDesc, setEditDesc] = useState("");
+  const [editLink, setEditLink] = useState("");
+  const [editErrors, setEditErrors] = useState<{
+    name?: string;
+    desc?: string;
+    link?: string;
+    general?: string;
+  }>({});
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  // Khi mở modal sửa, sync giá trị hiện tại
+  useEffect(() => {
+    if (editOpen) {
+      setEditName(teamName || "");
+      setEditDesc(teamDesc || "");
+      setEditLink(teamLink || "");
+      setEditErrors({});
+    }
+  }, [editOpen, teamName, teamDesc, teamLink]);
+
+  // Validate "tên phòng ban có nghĩa" (client)
+  function validateMeaningfulTeamNameClient(trimmedName: string): string | undefined {
+    if (trimmedName.length < 3) {
+      return "Tên phòng ban phải có ít nhất 3 ký tự.";
+    }
+
+    const hasLetter = /[\p{L}]/u.test(trimmedName);
+    if (!hasLetter) {
+      return "Tên phòng ban phải chứa ít nhất một chữ cái.";
+    }
+
+    const allDigits = /^\d+$/.test(trimmedName);
+    if (allDigits) {
+      return "Tên phòng ban không được chỉ gồm chữ số.";
+    }
+
+    const compact = trimmedName.replace(/\s+/g, "");
+    if (compact.length >= 3 && new Set(compact).size === 1) {
+      return "Tên phòng ban không hợp lệ. Vui lòng nhập tên có nghĩa hơn.";
+    }
+
+    let specialCount = 0;
+    for (const ch of trimmedName) {
+      if (!/[0-9\p{L}\s]/u.test(ch)) {
+        specialCount++;
+      }
+    }
+    if (specialCount > 3) {
+      return "Tên phòng ban có quá nhiều ký tự đặc biệt. Vui lòng đặt tên dễ đọc hơn.";
+    }
+
+    return undefined;
+  }
+
+  function validateEditForm() {
+    const trimmedName = editName.trim();
+    const trimmedDesc = editDesc.trim();
+    const trimmedLink = editLink.trim();
+
+    const nextErrors: typeof editErrors = {};
+
+    if (!trimmedName) {
+      nextErrors.name = "Vui lòng nhập tên phòng ban.";
+    } else {
+      const nameError = validateMeaningfulTeamNameClient(trimmedName);
+      if (nameError) nextErrors.name = nameError;
+    }
+
+    if (!trimmedDesc) {
+      nextErrors.desc = "Vui lòng nhập mô tả phòng ban.";
+    } else if (trimmedDesc.length < 10) {
+      nextErrors.desc = "Mô tả cần ít nhất 10 ký tự để mô tả rõ hơn.";
+    }
+
+    if (trimmedLink) {
+      try {
+        new URL(trimmedLink);
+      } catch {
+        nextErrors.link =
+          "Link nhóm chat không hợp lệ. Vui lòng nhập dạng https://...";
+      }
+    }
+
+    setEditErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
+  }
+
+  async function handleSaveEdit() {
+    if (!validateEditForm()) return;
+
+    const payload: UpdateTeamPayload = {
+      teamName: editName.trim(),
+      description: editDesc.trim(),
+      linkGroupChat: editLink.trim() || undefined,
+    };
+
+    try {
+      setSavingEdit(true);
+      const updated = await updateTeam(tId, payload);
+
+      setLocalTeamInfo({
+        teamName: updated.teamName,
+        description: updated.description ?? "",
+        linkGroupChat: updated.linkGroupChat ?? "",
+      });
+
+      setEditOpen(false);
+      toast.success("Cập nhật phòng ban thành công.", { duration: 2500 });
+    } catch (err: any) {
+      const msg =
+        err?.message || "Không thể cập nhật phòng ban. Vui lòng thử lại.";
+
+      if (msg.toLowerCase().includes("tên ban")) {
+        setEditErrors((prev) => ({ ...prev, name: msg, general: undefined }));
+      } else {
+        setEditErrors((prev) => ({ ...prev, general: msg }));
+      }
+    } finally {
+      setSavingEdit(false);
+    }
+  }
+
+  async function handleConfirmDelete() {
+    try {
+      setDeleting(true);
+      await deleteTeam(tId);
+      setDeleteOpen(false);
+      toast.success("Đã xóa phòng ban khỏi CLB.", { duration: 2500 });
+      nav(`/myclub/${cId}`);
+    } catch (err: any) {
+      const msg =
+        err?.message || "Không thể xóa phòng ban. Vui lòng thử lại.";
+      toast.error(msg, { duration: 2500 });
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-background">
       {/* LOADING / ERROR / PARAMS INVALID */}
@@ -359,11 +529,19 @@ export default function TeamDetailPage() {
                     <h1 className="text-3xl font-bold mb-1">
                       {teamName || "—"}
                     </h1>
-                    <p className="text-sm opacity-90">{teamDesc || "—"}</p>
+                    <p className="text-sm opacity-90">
+                      {teamDesc || "—"}
+                      {teamLink ? (
+                        <span className="block text-xs mt-1 opacity-80">
+                          Link nhóm: {teamLink}
+                        </span>
+                      ) : null}
+                    </p>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-3">
+                  {/* Tạo news: trưởng ban */}
                   {isLead && (
                     <Button
                       className="bg-white text-primary hover:bg-white/90"
@@ -375,11 +553,25 @@ export default function TeamDetailPage() {
                       Tạo news
                     </Button>
                   )}
-                  {isLead && (
-                    <Button className="bg-white/20 hover:bg-white/30 text-white">
-                      <Edit2 className="w-4 h-4 mr-2" />
-                      Chỉnh sửa
-                    </Button>
+                  {/* Sửa / Xóa: quyền chủ nhiệm/phó chủ nhiệm CLB */}
+                  {isClubOfficer && (
+                    <>
+                      <Button
+                        className="bg-white/20 hover:bg-white/30 text-white"
+                        onClick={() => setEditOpen(true)}
+                      >
+                        <Edit2 className="w-4 h-4 mr-2" />
+                        Sửa phòng ban
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        className="bg-red-600 hover:bg-red-700 text-white"
+                        onClick={() => setDeleteOpen(true)}
+                      >
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        Xóa phòng ban
+                      </Button>
+                    </>
                   )}
                 </div>
               </div>
@@ -391,21 +583,18 @@ export default function TeamDetailPage() {
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
               <div className="flex gap-8">
                 {[
-                  // Posts: CLUB_OFFICER hoặc thành viên team
                   {
                     id: "posts",
                     label: "Bài đăng",
                     icon: FileText,
                     show: canViewPosts,
                   },
-                  // Members luôn hiển thị để mọi thành viên CLB xem
                   {
                     id: "members",
                     label: "Thành viên",
                     icon: Users,
                     show: true,
                   },
-                  // Drafts/Requests: chỉ leader
                   {
                     id: "drafts",
                     label: "Bản Nháp tin tức",
@@ -444,7 +633,6 @@ export default function TeamDetailPage() {
 
           {/* BODY */}
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            {/* Access Denied Message for Posts */}
             {activeTab === "posts" && !canViewPosts && (
               <Card className="p-6 border-yellow-500/20 bg-yellow-500/5">
                 <CardContent>
@@ -469,7 +657,6 @@ export default function TeamDetailPage() {
 
             {activeTab === "posts" && canViewPosts && (
               <div className="max-w-3xl mx-auto">
-                {/* Create Post */}
                 <div className="mb-4">
                   <CreatePost
                     onPostCreated={refreshPosts}
@@ -478,7 +665,6 @@ export default function TeamDetailPage() {
                   />
                 </div>
 
-                {/* Loading State - First Load */}
                 {postsLoading && posts.length === 0 && (
                   <div className="space-y-4">
                     {Array.from({ length: 3 }).map((_, index) => (
@@ -500,7 +686,6 @@ export default function TeamDetailPage() {
                   </div>
                 )}
 
-                {/* Error State */}
                 {postsError && posts.length === 0 && (
                   <Card className="p-6 border-destructive/20">
                     <CardContent>
@@ -519,7 +704,6 @@ export default function TeamDetailPage() {
                   </Card>
                 )}
 
-                {/* Posts Feed */}
                 {posts.length > 0 && (
                   <div className="space-y-4">
                     {posts.map((post) => (
@@ -533,7 +717,6 @@ export default function TeamDetailPage() {
                   </div>
                 )}
 
-                {/* Empty State */}
                 {!postsLoading && posts.length === 0 && !postsError && (
                   <Card className="p-6">
                     <CardContent>
@@ -552,7 +735,6 @@ export default function TeamDetailPage() {
                   </Card>
                 )}
 
-                {/* Infinite Scroll Sentinel */}
                 {hasMore && (
                   <div ref={sentinelRef} className="py-8 text-center">
                     {postsLoading && (
@@ -563,7 +745,6 @@ export default function TeamDetailPage() {
                   </div>
                 )}
 
-                {/* No More Posts */}
                 {!postsLoading && !hasMore && posts.length > 0 && (
                   <div className="flex justify-center py-4">
                     <div className="text-muted-foreground text-sm">
@@ -615,6 +796,123 @@ export default function TeamDetailPage() {
             {activeTab === "drafts" && <TeamNewsDrafts />}
             {activeTab === "requests" && <TeamNewsRequests />}
           </div>
+
+          {/* ========== EDIT DIALOG ========== */}
+          <Dialog open={editOpen} onOpenChange={setEditOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Sửa thông tin phòng ban</DialogTitle>
+                <DialogDescription>
+                  Chỉ Chủ nhiệm/Phó chủ nhiệm CLB được phép chỉnh sửa thông tin
+                  phòng ban. Các thay đổi sẽ được thông báo đến thành viên.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 mt-2">
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">
+                    Tên phòng ban <span className="text-red-500">*</span>
+                  </label>
+                  <Input
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    placeholder="Ví dụ: Ban Truyền thông"
+                    className={editErrors.name ? "border-red-500" : ""}
+                  />
+                  {editErrors.name && (
+                    <p className="text-xs text-red-500 mt-1">
+                      {editErrors.name}
+                    </p>
+                  )}
+                </div>
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">
+                    Mô tả <span className="text-red-500">*</span>
+                  </label>
+                  <textarea
+                    value={editDesc}
+                    onChange={(e) => setEditDesc(e.target.value)}
+                    rows={3}
+                    className={`w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary ${
+                      editErrors.desc ? "border-red-500" : ""
+                    }`}
+                    placeholder="Mô tả chức năng và trách nhiệm của phòng ban..."
+                  />
+                  {editErrors.desc && (
+                    <p className="text-xs text-red-500 mt-1">
+                      {editErrors.desc}
+                    </p>
+                  )}
+                </div>
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">
+                    Link nhóm chat{" "}
+                    <span className="text-xs text-muted-foreground">
+                      (có thể để trống)
+                    </span>
+                  </label>
+                  <Input
+                    value={editLink}
+                    onChange={(e) => setEditLink(e.target.value)}
+                    placeholder="https://zalo.me/..., https://chat.whatsapp.com/..."
+                    className={editErrors.link ? "border-red-500" : ""}
+                  />
+                  {editErrors.link && (
+                    <p className="text-xs text-red-500 mt-1">
+                      {editErrors.link}
+                    </p>
+                  )}
+                </div>
+
+                {editErrors.general && (
+                  <div className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-md px-3 py-2">
+                    {editErrors.general}
+                  </div>
+                )}
+              </div>
+              <DialogFooter className="mt-4">
+                <Button
+                  variant="outline"
+                  onClick={() => setEditOpen(false)}
+                  disabled={savingEdit}
+                >
+                  Hủy
+                </Button>
+                <Button onClick={handleSaveEdit} disabled={savingEdit}>
+                  {savingEdit ? "Đang lưu..." : "Lưu thay đổi"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          {/* ========== DELETE CONFIRM DIALOG ========== */}
+          <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Bạn chắc chắn muốn xóa phòng ban này?</DialogTitle>
+                <DialogDescription>
+                  Phòng ban <strong>{teamName}</strong> sẽ bị xóa khỏi CLB. Tất
+                  cả thành viên trong ban sẽ nhận được thông báo rằng phòng ban
+                  đã bị xóa. Hành động này không thể hoàn tác.
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => setDeleteOpen(false)}
+                  disabled={deleting}
+                >
+                  Hủy
+                </Button>
+                <Button
+                  onClick={handleConfirmDelete}
+                  disabled={deleting}
+                  className="bg-red-600 hover:bg-red-700 text-white"
+                >
+                  {deleting ? "Đang xóa..." : "Xóa phòng ban"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </>
       )}
     </div>
