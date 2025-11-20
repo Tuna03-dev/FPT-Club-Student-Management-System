@@ -149,6 +149,19 @@ public interface ClubMemberShipRepository extends JpaRepository<ClubMemberShip, 
             @Param("isActive") Boolean isActive
     );
 
+    // Get all members by club and status
+    @Query("""
+        SELECT cms FROM ClubMemberShip cms
+        JOIN FETCH cms.user u
+        WHERE cms.club.id = :clubId
+          AND cms.status = :status
+        ORDER BY u.fullName ASC
+        """)
+    List<ClubMemberShip> findByClubIdAndStatus(
+            @Param("clubId") Long clubId,
+            @Param("status") ClubMemberShipStatus status
+    );
+
     @Query("""
        select distinct rm.team.id
        from RoleMemberShip rm
@@ -166,6 +179,19 @@ public interface ClubMemberShipRepository extends JpaRepository<ClubMemberShip, 
             @Param("clubId") Long clubId,
             @Param("status") ClubMemberShipStatus status
     );
+    @Query("""
+    select distinct cm.user.id
+    from ClubMemberShip cm
+      join cm.roleMemberships rm
+      join rm.clubRole cr
+    where cm.club.id = :clubId
+      and cm.status = 'ACTIVE'
+      and rm.isActive = true
+      and rm.semester.id = :semesterId
+      and cr.roleCode in ('CLUB_PRESIDENT', 'CLUB_VICE_PRESIDENT')
+""")
+    List<Long> findManagerUserIdsByClubAndSemester(Long clubId, Long semesterId);
+
 }
 
 

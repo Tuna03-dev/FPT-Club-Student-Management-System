@@ -4,6 +4,7 @@ import com.sep490.backendclubmanagement.dto.ApiResponse;
 import com.sep490.backendclubmanagement.dto.request.CreateDraftRequest;
 import com.sep490.backendclubmanagement.dto.request.UpdateDraftRequest;
 import com.sep490.backendclubmanagement.dto.response.NewsData;
+import com.sep490.backendclubmanagement.exception.AppException;
 import com.sep490.backendclubmanagement.service.NewsDraftService;
 import com.sep490.backendclubmanagement.service.UserService;
 import lombok.RequiredArgsConstructor;
@@ -11,9 +12,12 @@ import org.springframework.data.domain.Page;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.web.bind.annotation.*;
+import lombok.extern.slf4j.Slf4j;
 
 @RestController
 @RequiredArgsConstructor
+@Slf4j
+
 @RequestMapping("/api/news/drafts")
 public class NewsDraftController {
 
@@ -56,15 +60,35 @@ public class NewsDraftController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size
     ) {
+        long t0 = System.currentTimeMillis();
+
         Long me = userService.getIdByEmail(principal.getUsername());
-        return ApiResponse.success(draftService.listDrafts(me, clubId, page, size));
+
+        long t1 = System.currentTimeMillis();
+
+        Page<NewsData> rs = draftService.listDrafts(me, clubId, page, size);
+
+        long t2 = System.currentTimeMillis();
+
+        log.warn("\n=========== NEWS DRAFT TIMING ===========\n" +
+                        "getUser = {} ms\n" +
+                        "listDrafts() = {} ms\n" +
+                        "TOTAL = {} ms\n" +
+                        "===========================================",
+                (t1 - t0),
+                (t2 - t1),
+                (t2 - t0)
+        );
+
+        return ApiResponse.success(rs);
     }
+
 
     @PostMapping("/{newsId}/submit")
     public ApiResponse<?> submit(
             @AuthenticationPrincipal User principal,
             @PathVariable Long newsId
-    ) {
+    ) throws AppException {
         Long me = userService.getIdByEmail(principal.getUsername());
         return ApiResponse.success(draftService.submitDraftToRequest(me, newsId));
     }
@@ -73,7 +97,7 @@ public class NewsDraftController {
     public ApiResponse<NewsData> publish(
             @AuthenticationPrincipal User principal,
             @PathVariable Long newsId
-    ) {
+    ) throws AppException {
         Long me = userService.getIdByEmail(principal.getUsername());
         return ApiResponse.success(draftService.publishDraftByStaff(me, newsId));
     }

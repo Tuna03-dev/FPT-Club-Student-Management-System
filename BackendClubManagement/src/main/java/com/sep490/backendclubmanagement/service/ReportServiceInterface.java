@@ -10,6 +10,8 @@ import com.sep490.backendclubmanagement.dto.response.PageResponse;
 import com.sep490.backendclubmanagement.dto.response.ReportDetailResponse;
 import com.sep490.backendclubmanagement.dto.response.ReportListItemResponse;
 import com.sep490.backendclubmanagement.dto.response.ReportRequirementResponse;
+import jakarta.validation.Valid;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
@@ -107,15 +109,15 @@ public interface ReportServiceInterface {
      * @param userId Current user ID
      * @return List of report list item responses
      */
-    List<ReportListItemResponse> getClubReports(Long clubId, Long userId);
+    PageResponse<ReportListItemResponse> getClubReports(ReportFilterRequest request, Long userId);
 
     /**
      * Get my draft reports for a club
-     * @param clubId Club ID
+     * @param request Filter request containing status, clubId, semesterId, reportType, keyword, and pagination
      * @param userId Current user ID
      * @return List of draft report list item responses
      */
-    List<ReportListItemResponse> getMyDraftReports(Long clubId, Long userId);
+    PageResponse<ReportListItemResponse> getMyReports(ReportFilterRequest request, Long userId);
 
     /**
      * Get all report requirements with filters and pagination (for staff only)
@@ -145,21 +147,19 @@ public interface ReportServiceInterface {
      */
     ReportDetailResponse getClubReportByRequirement(Long requirementId, Long clubId, Long userId);
 
-    /**
-     * Get all report requirements for a club (for club members)
-     * @param clubId Club ID
-     * @param userId Current user ID
-     * @return List of report requirement responses assigned to the club
-     */
-    List<ReportRequirementResponse> getClubReportRequirements(Long clubId, Long userId);
 
     /**
-     * Get all report requirements for a club (for CLUB_OFFICER or TEAM_OFFICER)
+     * Get all report requirements for a club with filters and pagination (for CLUB_OFFICER or TEAM_OFFICER)
+     * @param request Filter request containing status, semesterId, keyword, and pagination
      * @param clubId Club ID
      * @param userId Current user ID
-     * @return List of report requirement responses assigned to the club
+     * @return Page response containing list of report requirement responses assigned to the club
      */
-    List<ReportRequirementResponse> getClubReportRequirementsForOfficer(Long clubId, Long userId);
+    PageResponse<ReportRequirementResponse> getClubReportRequirementsForOfficerWithFilters(
+            com.sep490.backendclubmanagement.dto.request.ClubReportRequirementFilterRequest request,
+            Long clubId,
+            Long userId
+    );
 
     /**
      * Get report of a specific club for a specific report requirement (for CLUB_OFFICER or TEAM_OFFICER)
@@ -195,5 +195,15 @@ public interface ReportServiceInterface {
      * @return Report detail response
      */
     ReportDetailResponse getClubReportDetail(Long reportId, Long clubId, Long userId);
+
+    /**
+     * Assign a team to a report requirement (for CLUB_OFFICER only)
+     * @param clubReportRequirementId Club Report Requirement ID
+     * @param teamId Team ID to assign
+     * @param clubId Club ID
+     * @param userId Current user ID
+     * @return Updated report requirement response
+     */
+    ReportRequirementResponse assignTeamToReportRequirement(Long clubReportRequirementId, Long teamId, Long clubId, Long userId);
 }
 

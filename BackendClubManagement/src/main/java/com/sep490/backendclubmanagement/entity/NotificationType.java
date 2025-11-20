@@ -12,6 +12,7 @@ public enum NotificationType {
     POST_PENDING_APPROVAL,
     POST_LIKED,
     POST_COMMENTED,
+    POST_REPLIED,
 
     // News related
     NEWS_PUBLISHED,

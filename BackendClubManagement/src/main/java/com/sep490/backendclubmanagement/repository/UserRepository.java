@@ -33,6 +33,10 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     List<User> findBySystemRole_RoleNameIgnoreCase(String roleName);
 
+    boolean existsByStudentCodeIgnoreCase(String studentCode);
+
+    Optional<User> findByStudentCode(String studentCode);
+
     @Query(value = """
             SELECT u.*
             FROM users u

@@ -1,24 +1,28 @@
 package com.sep490.backendclubmanagement.service;
 
 import com.sep490.backendclubmanagement.dto.response.CurrentTermResponse;
+import com.sep490.backendclubmanagement.dto.response.ImportMemberError;
+import com.sep490.backendclubmanagement.dto.response.ImportMembersResponse;
 import com.sep490.backendclubmanagement.dto.response.MemberHistoryResponse;
 import com.sep490.backendclubmanagement.dto.response.MemberResponse;
 import com.sep490.backendclubmanagement.dto.response.PageResponse;
+import com.sep490.backendclubmanagement.dto.response.SimpleMemberResponse;
 import com.sep490.backendclubmanagement.entity.*;
 import com.sep490.backendclubmanagement.exception.AppException;
 import com.sep490.backendclubmanagement.exception.ErrorCode;
-import com.sep490.backendclubmanagement.repository.ClubRoleRepository;
-import com.sep490.backendclubmanagement.repository.RoleMemberShipRepository;
-import com.sep490.backendclubmanagement.repository.ClubMemberShipRepository;
-import com.sep490.backendclubmanagement.repository.SemesterRepository;
+import com.sep490.backendclubmanagement.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.io.InputStream;
+import java.time.LocalDate;
+import java.util.*;
 
 
 @Service
@@ -31,6 +35,9 @@ public class MemberServiceImpl implements MemberService{
     private final RoleMemberShipRepository roleMemberShipRepository;
     private final ClubRoleRepository clubRoleRepository;
     private final UserService userService;
+    private final UserRepository userRepository;
+    private final ClubRepository clubRepository;
+    private final TeamRepository teamRepository;
 
 
     @Override
@@ -581,5 +588,256 @@ public class MemberServiceImpl implements MemberService{
                 .currentTerm(currentTermResponse)
                 .history(history)
                 .build();
+    }
+
+    @Override
+    public List<SimpleMemberResponse> getAllActiveMembersForSelection(Long clubId) {
+        // Get all members that are currently ACTIVE (not LEFT)
+        List<ClubMemberShip> activeMembers = clubMemberShipRepository.findByClubIdAndStatus(
+                clubId,
+                ClubMemberShipStatus.ACTIVE
+        );
+
+        // Map to simple response with only basic info needed for selection
+        return activeMembers.stream()
+                .map(cms -> {
+                    User user = cms.getUser();
+                    return SimpleMemberResponse.builder()
+                            .userId(user.getId())
+                            .studentCode(user.getStudentCode())
+                            .fullName(user.getFullName())
+                            .email(user.getEmail())
+                            .avatarUrl(user.getAvatarUrl())
+                            .build();
+                })
+                .toList();
+    }
+
+    @Override
+    @Transactional
+    public ImportMembersResponse importMembersFromExcel(Long clubId, MultipartFile file, Long currentUserId) throws Exception {
+        Club club = clubRepository.findById(clubId)
+                .orElseThrow(() -> new AppException(ErrorCode.CLUB_NOT_FOUND));
+
+        int totalRows = 0;
+        int processedUsers = 0;
+        int processedHistories = 0;
+        int createdUsers = 0;
+        int updatedUsers = 0;
+        int createdMemberships = 0;
+        int updatedMemberships = 0;
+        int createdRoleMemberships = 0;
+        int updatedRoleMemberships = 0;
+        List<ImportMemberError> errors = new ArrayList<>();
+
+        try (InputStream is = file.getInputStream(); Workbook wb = new XSSFWorkbook(is)) {
+            Sheet sheet = wb.getSheetAt(0);
+            if (sheet.getPhysicalNumberOfRows() < 2) {
+                throw new AppException(ErrorCode.INVALID_INPUT);
+            }
+
+            // Map headers
+            Row header = sheet.getRow(0);
+            Map<String, Integer> colIndex = new HashMap<>();
+            for (Cell c : header) {
+                String key = c.getStringCellValue().trim().toLowerCase();
+                colIndex.put(key, c.getColumnIndex());
+            }
+
+            // Required headers
+            String[] required = {"student_code", "full_name", "semester_code"};
+            for (String r : required) {
+                if (!colIndex.containsKey(r)) {
+                    throw new AppException(ErrorCode.INVALID_INPUT);
+                }
+            }
+
+            // Track processed users
+            Set<String> processedUserCodes = new HashSet<>();
+
+            int lastRow = sheet.getLastRowNum();
+            for (int r = 1; r <= lastRow; r++) {
+                Row row = sheet.getRow(r);
+                if (row == null) continue;
+                totalRows++;
+
+                try {
+                    String studentCode = readCell(row, colIndex.get("student_code"));
+                    String fullName = readCell(row, colIndex.get("full_name"));
+                    String semesterCode = readCell(row, colIndex.get("semester_code"));
+                    String email = colIndex.containsKey("email") ? readCell(row, colIndex.get("email")) : null;
+                    String phone = colIndex.containsKey("phone") ? readCell(row, colIndex.get("phone")) : null;
+                    String roleCode = colIndex.containsKey("role_code") ? readCell(row, colIndex.get("role_code")) : null;
+                    String teamName = colIndex.containsKey("team_name") ? readCell(row, colIndex.get("team_name")) : null;
+                    String isActiveStr = colIndex.containsKey("is_active") ? readCell(row, colIndex.get("is_active")) : "true";
+                    String joinDateStr = colIndex.containsKey("join_date") ? readCell(row, colIndex.get("join_date")) : null;
+
+                    if (studentCode == null || studentCode.isEmpty()) {
+                        throw new IllegalArgumentException("student_code is empty");
+                    }
+                    if (semesterCode == null || semesterCode.isEmpty()) {
+                        throw new IllegalArgumentException("semester_code is empty");
+                    }
+
+                    // Find or create user
+                    User user = userRepository.findByStudentCode(studentCode).orElse(null);
+                    boolean userCreated = false;
+                    if (user == null) {
+                        user = User.builder()
+                                .studentCode(studentCode)
+                                .fullName(fullName)
+                                .email(email)
+                                .phoneNumber(phone)
+                                .isActive(true)
+                                .build();
+                        user = userRepository.save(user);
+                        userCreated = true;
+                        createdUsers++;
+                    } else {
+                        // Update user info
+                        boolean changed = false;
+                        if (fullName != null && !fullName.isEmpty() && !fullName.equals(user.getFullName())) {
+                            user.setFullName(fullName);
+                            changed = true;
+                        }
+                        if (email != null && !email.isEmpty() && !email.equals(user.getEmail())) {
+                            user.setEmail(email);
+                            changed = true;
+                        }
+                        if (phone != null && !phone.isEmpty() && !phone.equals(user.getPhoneNumber())) {
+                            user.setPhoneNumber(phone);
+                            changed = true;
+                        }
+                        if (changed) {
+                            userRepository.save(user);
+                            updatedUsers++;
+                        }
+                    }
+
+                    if (!processedUserCodes.contains(studentCode)) {
+                        processedUsers++;
+                        processedUserCodes.add(studentCode);
+                    }
+
+                    // Find semester
+                    Semester semester = semesterRepository.findBySemesterCode(semesterCode)
+                            .orElseThrow(() -> new IllegalArgumentException("Semester not found: " + semesterCode));
+
+                    // Find or create ClubMemberShip
+                    ClubMemberShip membership = clubMemberShipRepository.findByClubIdAndUserId(clubId, user.getId());
+                    boolean membershipCreated = false;
+                    if (membership == null) {
+                        LocalDate joinDate = joinDateStr != null ? parseDate(joinDateStr) : LocalDate.now();
+                        membership = ClubMemberShip.builder()
+                                .user(user)
+                                .club(club)
+                                .joinDate(joinDate)
+                                .status(ClubMemberShipStatus.ACTIVE)
+                                .build();
+                        membership = clubMemberShipRepository.save(membership);
+                        membershipCreated = true;
+                        createdMemberships++;
+                    } else {
+                        // Update if needed
+                        if (membership.getStatus() != ClubMemberShipStatus.ACTIVE) {
+                            membership.setStatus(ClubMemberShipStatus.ACTIVE);
+                            membership.setEndDate(null);
+                            clubMemberShipRepository.save(membership);
+                            updatedMemberships++;
+                        }
+                    }
+
+                    // Find or create RoleMemberShip
+                    Optional<RoleMemberShip> rmOpt = roleMemberShipRepository.findByClubMemberShipAndSemester(membership, semester);
+                    RoleMemberShip roleMemberShip = rmOpt.orElse(new RoleMemberShip());
+                    boolean rmCreated = !rmOpt.isPresent();
+
+                    roleMemberShip.setClubMemberShip(membership);
+                    roleMemberShip.setSemester(semester);
+
+                    // Set role
+                    if (roleCode != null && !roleCode.isEmpty()) {
+                        ClubRole clubRole = clubRoleRepository.findByClubIdAndRoleCode(clubId, roleCode)
+                                .orElse(null);
+                        roleMemberShip.setClubRole(clubRole);
+                    }
+
+                    // Set team
+                    if (teamName != null && !teamName.isEmpty()) {
+                        Team team = teamRepository.findByClubIdAndTeamName(clubId, teamName)
+                                .orElse(null);
+                        roleMemberShip.setTeam(team);
+                    }
+
+                    // Set active status
+                    boolean isActive = "true".equalsIgnoreCase(isActiveStr) || "1".equals(isActiveStr);
+                    roleMemberShip.setIsActive(isActive);
+
+                    roleMemberShipRepository.save(roleMemberShip);
+                    if (rmCreated) {
+                        createdRoleMemberships++;
+                    } else {
+                        updatedRoleMemberships++;
+                    }
+
+                    processedHistories++;
+
+                } catch (Exception exRow) {
+                    errors.add(ImportMemberError.builder()
+                            .row(r + 1)
+                            .studentCode(readCell(row, colIndex.get("student_code")))
+                            .semesterCode(readCell(row, colIndex.get("semester_code")))
+                            .message(exRow.getMessage())
+                            .build());
+                }
+            }
+        }
+
+        String summary = String.format(
+                "Processed %d users (%d created, %d updated), %d memberships (%d created, %d updated), %d role histories (%d created, %d updated)",
+                processedUsers, createdUsers, updatedUsers,
+                createdMemberships + updatedMemberships, createdMemberships, updatedMemberships,
+                createdRoleMemberships + updatedRoleMemberships, createdRoleMemberships, updatedRoleMemberships
+        );
+
+        return ImportMembersResponse.builder()
+                .totalRows(totalRows)
+                .processedUsers(processedUsers)
+                .processedHistories(processedHistories)
+                .createdUsers(createdUsers)
+                .updatedUsers(updatedUsers)
+                .createdMemberships(createdMemberships)
+                .updatedMemberships(updatedMemberships)
+                .createdRoleMemberships(createdRoleMemberships)
+                .updatedRoleMemberships(updatedRoleMemberships)
+                .errors(errors)
+                .summary(summary)
+                .build();
+    }
+
+    private String readCell(Row row, Integer idx) {
+        if (idx == null) return null;
+        Cell c = row.getCell(idx);
+        if (c == null) return null;
+        if (c.getCellType() == CellType.STRING) return c.getStringCellValue().trim();
+        if (c.getCellType() == CellType.NUMERIC) {
+            if (DateUtil.isCellDateFormatted(c)) {
+                return c.getLocalDateTimeCellValue().toLocalDate().toString();
+            }
+            double d = c.getNumericCellValue();
+            long l = (long) d;
+            if (l == d) return String.valueOf(l);
+            return String.valueOf(d);
+        }
+        if (c.getCellType() == CellType.BOOLEAN) return String.valueOf(c.getBooleanCellValue());
+        return null;
+    }
+
+    private LocalDate parseDate(String dateStr) {
+        try {
+            return LocalDate.parse(dateStr);
+        } catch (Exception e) {
+            return LocalDate.now();
+        }
     }
 }

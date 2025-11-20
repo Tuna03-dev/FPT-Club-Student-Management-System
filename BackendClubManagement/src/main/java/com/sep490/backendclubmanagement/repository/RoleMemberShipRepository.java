@@ -64,6 +64,9 @@ public interface RoleMemberShipRepository extends JpaRepository<RoleMemberShip, 
 
     List<RoleMemberShip> findByClubMemberShipIdAndSemesterId(Long clubMemberShipId, Long semesterId);
 
+    Optional<RoleMemberShip> findByClubMemberShipAndSemester(com.sep490.backendclubmanagement.entity.ClubMemberShip clubMemberShip,
+                                                               com.sep490.backendclubmanagement.entity.Semester semester);
+
     List<RoleMemberShip> findByClubMemberShipIdAndSemesterIdAndIsActive(Long clubMemberShipId, Long semesterId, Boolean isActive);
 
     // Query với fetch join để load team, clubRole và systemRole cùng lúc, tránh lazy loading issues
@@ -513,23 +516,50 @@ WHERE cm.club.id = :clubId
 
 
     /**
-     * Kiểm tra user có phải CLUB_PRESIDENT trong kỳ hiện tại và đang active không
+     * Kiểm tra user có phải CLUB_OFFICER trong kỳ hiện tại và đang active không
      */
     @Query("""
         SELECT CASE WHEN COUNT(rm) > 0 THEN true ELSE false END
         FROM RoleMemberShip rm
         JOIN rm.clubMemberShip cm
         JOIN rm.clubRole cr
+        LEFT JOIN cr.systemRole sr
         WHERE cm.user.id = :userId
           AND cm.club.id = :clubId
-          AND cm.status = 'ACTIVE'
           AND rm.semester.id = :semesterId
           AND COALESCE(rm.isActive, TRUE) = TRUE
-          AND UPPER(TRIM(cr.roleCode)) = 'CLUB_PRESIDENT'
+          AND cr IS NOT NULL
+          AND (
+              UPPER(TRIM(cr.roleCode)) ='TEAM_OFFICER'
+              OR (sr IS NOT NULL AND UPPER(TRIM(sr.roleName)) = 'TEAM_OFFICER')
+          )
     """)
-    boolean isClubPresidentInCurrentSemester(@Param("userId") Long userId,
+    boolean isTeamOfficerInCurrentSemester(@Param("userId") Long userId,
                                              @Param("clubId") Long clubId,
                                              @Param("semesterId") Long semesterId);
+
+    /**
+     * Kiểm tra user có phải TEAM_OFFICER trong kỳ hiện tại và đang active không
+     */
+    @Query("""
+        SELECT CASE WHEN COUNT(rm) > 0 THEN true ELSE false END
+        FROM RoleMemberShip rm
+        JOIN rm.clubMemberShip cm
+        JOIN rm.clubRole cr
+        LEFT JOIN cr.systemRole sr
+        WHERE cm.user.id = :userId
+          AND cm.club.id = :clubId
+          AND rm.semester.id = :semesterId
+          AND COALESCE(rm.isActive, TRUE) = TRUE
+          AND cr IS NOT NULL
+          AND (
+              UPPER(TRIM(cr.roleCode)) ='CLUB_OFFICER'
+              OR (sr IS NOT NULL AND UPPER(TRIM(sr.roleName)) = 'CLUB_OFFICER')
+          )
+    """)
+    boolean isClubOfficerInCurrentSemester(@Param("userId") Long userId,
+                                           @Param("clubId") Long clubId,
+                                           @Param("semesterId") Long semesterId);
 
     /**
      * Kiểm tra user có club role là CLUB_OFFICER hoặc TEAM_OFFICER trong kỳ hiện tại và đang active không
@@ -554,6 +584,34 @@ WHERE cm.club.id = :clubId
     boolean isClubOfficerOrTeamOfficerInCurrentSemester(@Param("userId") Long userId,
                                            @Param("clubId") Long clubId,
                                            @Param("semesterId") Long semesterId);
+    
+    /**
+     * Find team ID of a team officer in a club for a specific semester
+     * Returns the team ID if user is a team officer (not club officer) in the current semester
+     */
+    @Query("""
+        SELECT rm.team.id
+        FROM RoleMemberShip rm
+        JOIN rm.clubMemberShip cm
+        JOIN rm.clubRole cr
+        LEFT JOIN cr.systemRole sr
+        WHERE cm.user.id = :userId
+          AND cm.club.id = :clubId
+          AND rm.semester.id = :semesterId
+          AND COALESCE(rm.isActive, TRUE) = TRUE
+          AND rm.team IS NOT NULL
+          AND cr IS NOT NULL
+          AND (
+              (UPPER(TRIM(cr.roleCode)) = 'TEAM_OFFICER' AND sr IS NULL)
+              OR (sr IS NOT NULL AND UPPER(TRIM(sr.roleName)) = 'TEAM_OFFICER')
+          )
+        ORDER BY rm.id DESC
+    """)
+    Optional<Long> findTeamIdByUserIdAndClubIdAndSemesterId(
+            @Param("userId") Long userId,
+            @Param("clubId") Long clubId,
+            @Param("semesterId") Long semesterId
+    );
     @Query("""
         SELECT CASE WHEN COUNT(rm) > 0 THEN true ELSE false END
         FROM RoleMemberShip rm

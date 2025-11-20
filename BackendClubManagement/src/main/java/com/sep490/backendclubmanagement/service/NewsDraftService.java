@@ -4,6 +4,7 @@ import com.sep490.backendclubmanagement.dto.request.CreateDraftRequest;
 import com.sep490.backendclubmanagement.dto.request.UpdateDraftRequest;
 import com.sep490.backendclubmanagement.dto.response.NewsData;
 import com.sep490.backendclubmanagement.entity.*;
+import com.sep490.backendclubmanagement.exception.AppException;
 import com.sep490.backendclubmanagement.mapper.NewsMapper;
 import com.sep490.backendclubmanagement.repository.ClubRepository;
 import com.sep490.backendclubmanagement.repository.NewsRepository;
@@ -14,6 +15,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,7 +33,8 @@ public class NewsDraftService {
     private final ClubRepository clubRepo;
     private final RoleGuard guard;
     private final NewsMapper newsMapper;
-    private final WebSocketService webSocketService; // ✅ thêm realtime service
+    private final WebSocketService webSocketService;       // realtime cũ
+    private final NotificationService notificationService; // notification DB
 
     // ========== CREATE DRAFT ==========
     @Transactional
@@ -137,26 +140,25 @@ public class NewsDraftService {
     // ========== LIST DRAFTS ==========
     @Transactional(readOnly = true)
     public Page<NewsData> listDrafts(Long me, Long clubId, int page, int size) {
-        List<News> myDrafts = newsRepo.findAll().stream()
-                .filter(n -> Boolean.TRUE.equals(n.getIsDraft()))
-                .filter(n -> n.getCreatedBy() != null && n.getCreatedBy().getId().equals(me))
-                .filter(n -> clubId == null || (n.getClub() != null && clubId.equals(n.getClub().getId())))
-                .sorted(Comparator.comparing(News::getUpdatedAt, Comparator.nullsLast(Comparator.naturalOrder()))
-                        .thenComparing(News::getId).reversed())
-                .toList();
-
         int p = Math.max(0, page);
         int s = Math.max(1, size);
-        int from = Math.min(p * s, myDrafts.size());
-        int to = Math.min(from + s, myDrafts.size());
-        List<NewsData> content = myDrafts.subList(from, to).stream().map(newsMapper::toDto).toList();
 
-        return new PageImpl<>(content, PageRequest.of(p, s), myDrafts.size());
+        // sort giống logic cũ: updatedAt DESC, id DESC
+        var sort = Sort.by(Sort.Direction.DESC, "updatedAt")
+                .and(Sort.by(Sort.Direction.DESC, "id"));
+
+        var pageable = PageRequest.of(p, s, sort);
+
+        // để DB lọc + phân trang
+        Page<News> draftsPage = newsRepo.findDraftsVisibleToUser(me, clubId, pageable);
+
+        // map sang DTO, NHƯNG KHÔNG N+1 vì đã EntityGraph(createdBy, club)
+        return draftsPage.map(newsMapper::toDto);
     }
 
     // ========== SUBMIT DRAFT -> REQUEST ==========
     @Transactional
-    public Map<String, Object> submitDraftToRequest(Long me, Long newsId) {
+    public Map<String, Object> submitDraftToRequest(Long me, Long newsId) throws AppException {
         News draft = newsRepo.findById(newsId).orElseThrow();
         if (!Boolean.TRUE.equals(draft.getIsDraft())) {
             throw new IllegalStateException("Bản ghi không phải nháp.");
@@ -207,7 +209,7 @@ public class NewsDraftService {
         requestRepo.save(req);
         newsRepo.delete(draft);
 
-        // ✅ Realtime broadcast
+        // Realtime broadcast cũ
         Map<String, Object> payload = Map.of(
                 "requestId", req.getId(),
                 "clubId", clubId,
@@ -220,12 +222,60 @@ public class NewsDraftService {
             webSocketService.broadcastToSystemRole("STAFF", "NEWS_REQUEST", "CREATED", payload);
         }
 
+        // Notification DB: trưởng ban submit -> gửi Chủ nhiệm/Phó (PENDING_CLUB)
+        if (startStatus == RequestStatus.PENDING_CLUB && clubId != null) {
+            String actionUrl = "/news/requests/" + req.getId();
+            String title = "Yêu cầu tin tức mới từ ban trong CLB";
+            String message = actor.getFullName() + " đã gửi yêu cầu tin tức cần duyệt trong CLB.";
+
+            var managerIds = notificationService.getClubManagers(clubId);
+            notificationService.sendToUsers(
+                    managerIds,
+                    me,
+                    title,
+                    message,
+                    NotificationType.NEWS_PENDING_APPROVAL,
+                    NotificationPriority.NORMAL,
+                    actionUrl,
+                    clubId,
+                    null,
+                    team != null ? team.getId() : null,
+                    req.getId()
+            );
+        }
+
+        // Notification DB: Chủ nhiệm/Phó submit nháp -> PENDING_UNIVERSITY -> gửi Staff
+        if (startStatus == RequestStatus.PENDING_UNIVERSITY && clubId != null && !guard.isStaff(me)) {
+            String staffTitle = "Yêu cầu tin tức mới từ CLB " + draft.getClub().getClubName();
+            String staffMessage = "CLB " + draft.getClub().getClubName()
+                    + " đã gửi yêu cầu tin tức \"" + req.getRequestTitle() + "\" cần duyệt.";
+
+            String staffActionUrl = "/staff/news/" + req.getId();
+
+            List<User> staffUsers = userRepo.findBySystemRole_RoleNameIgnoreCase("STAFF");
+            List<Long> staffIds = staffUsers.stream().map(User::getId).toList();
+
+            notificationService.sendToUsers(
+                    staffIds,
+                    me,
+                    staffTitle,
+                    staffMessage,
+                    NotificationType.NEWS_PENDING_APPROVAL,
+                    NotificationPriority.NORMAL,
+                    staffActionUrl,
+                    clubId,
+                    null,
+                    team != null ? team.getId() : null,
+                    req.getId()
+            );
+        }
+
         return payload;
     }
 
     // ========== STAFF PUBLISH DRAFT ==========
     @Transactional
-    public NewsData publishDraftByStaff(Long me, Long newsId) {
+    public NewsData publishDraftByStaff(Long me, Long newsId) throws AppException {
         if (!guard.isStaff(me)) {
             throw new SecurityException("Chỉ Staff được publish trực tiếp.");
         }
@@ -238,8 +288,54 @@ public class NewsDraftService {
         draft.setIsDraft(false);
         newsRepo.save(draft);
 
-        // ✅ Realtime broadcast
+        // Realtime broadcast cũ
         webSocketService.broadcastSystemWide("NEWS", "PUBLISHED", newsMapper.toDto(draft));
+
+        // Notification DB: gửi cho người tạo + (nếu có) chủ nhiệm CLB
+        String actionUrl = "/news/" + draft.getId();
+        String title = "Tin tức đã được đăng";
+        String message = "Bài viết \"" + draft.getTitle() + "\" đã được staff đăng.";
+
+        Long creatorId = draft.getCreatedBy() != null ? draft.getCreatedBy().getId() : null;
+        Long clubId = draft.getClub() != null ? draft.getClub().getId() : null;
+
+        if (creatorId != null) {
+            try {
+                notificationService.sendToUser(
+                        creatorId,
+                        me,
+                        title,
+                        message,
+                        NotificationType.NEWS_PUBLISHED,
+                        NotificationPriority.HIGH,
+                        actionUrl,
+                        clubId,
+                        draft.getId(),
+                        null,
+                        null,
+                        null
+                );
+            } catch (AppException e) {
+                // Không gửi được notif cho creator thì bỏ qua
+            }
+        }
+
+        if (clubId != null) {
+            var managerIds = notificationService.getClubManagers(clubId);
+            notificationService.sendToUsers(
+                    managerIds,
+                    me,
+                    title,
+                    message,
+                    NotificationType.NEWS_PUBLISHED,
+                    NotificationPriority.NORMAL,
+                    actionUrl,
+                    clubId,
+                    draft.getId(),
+                    null,
+                    null
+            );
+        }
 
         return newsMapper.toDto(draft);
     }

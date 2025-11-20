@@ -96,4 +96,16 @@ public interface NewsRepository extends JpaRepository<News, Long> {
             where n.id = :id and n.deleted = true
            """)
     int restore(@Param("id") Long id);
+    @EntityGraph(attributePaths = {"createdBy", "club"})
+    @Query("""
+        SELECT n
+        FROM News n
+        WHERE n.isDraft = true
+          AND n.createdBy.id = :authorId
+          AND (:clubId IS NULL OR n.club.id = :clubId)
+        ORDER BY n.updatedAt DESC, n.id DESC
+    """)
+    Page<News> findDraftsVisibleToUser(@Param("authorId") Long authorId,
+                                       @Param("clubId") Long clubId,
+                                       Pageable pageable);
 }

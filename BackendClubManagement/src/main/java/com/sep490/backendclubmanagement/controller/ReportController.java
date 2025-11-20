@@ -2,6 +2,8 @@ package com.sep490.backendclubmanagement.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sep490.backendclubmanagement.dto.ApiResponse;
+import com.sep490.backendclubmanagement.dto.request.AssignTeamToReportRequirementRequest;
+import com.sep490.backendclubmanagement.dto.request.ClubReportRequirementFilterRequest;
 import com.sep490.backendclubmanagement.dto.request.CreateReportRequirementRequest;
 import com.sep490.backendclubmanagement.dto.request.CreateReportRequest;
 import com.sep490.backendclubmanagement.dto.request.ReportFilterRequest;
@@ -141,48 +143,38 @@ public class ReportController {
     /**
      * Get all reports for a club (club president can see all, team officer can see their own)
      */
-    @GetMapping("/club/{clubId}")
-    public ApiResponse<List<ReportListItemResponse>> getClubReports(
-            @PathVariable Long clubId
+    @PostMapping("/club/{clubId}")
+    public ApiResponse<PageResponse<ReportListItemResponse>> getClubReports(
+            @RequestBody @Valid ReportFilterRequest request
     ) {
         Long userId = SecurityUtils.getCurrentUserId();
-        List<ReportListItemResponse> data = reportService.getClubReports(clubId, userId);
+        PageResponse<ReportListItemResponse> data = reportService.getClubReports(request, userId);
         return ApiResponse.success(data);
     }
 
     /**
-     * Get my draft reports for a club
+     * Get my reports for a club
      */
-    @GetMapping("/club/{clubId}/drafts")
-    public ApiResponse<List<ReportListItemResponse>> getMyDraftReports(
-            @PathVariable Long clubId
+    @PostMapping("/club/{clubId}/my-reports")
+    public ApiResponse<PageResponse<ReportListItemResponse>> getMyReports(
+            @RequestBody @Valid ReportFilterRequest request
     ) {
         Long userId = SecurityUtils.getCurrentUserId();
-        List<ReportListItemResponse> data = reportService.getMyDraftReports(clubId, userId);
+        PageResponse<ReportListItemResponse> data = reportService.getMyReports(request, userId);
         return ApiResponse.success(data);
     }
 
     /**
-     * Get all report requirements for a club (for club members)
+     * Get all report requirements for a club with filters and pagination (for CLUB_OFFICER or TEAM_OFFICER)
      */
-    @GetMapping("/club/{clubId}/requirements")
-    public ApiResponse<List<ReportRequirementResponse>> getClubReportRequirements(
-            @PathVariable Long clubId
+    @PostMapping("/club/{clubId}/requirements/officer/filter")
+    public ApiResponse<PageResponse<ReportRequirementResponse>> getClubReportRequirementsForOfficerWithFilters(
+            @PathVariable Long clubId,
+            @RequestBody @Valid ClubReportRequirementFilterRequest request
     ) {
         Long userId = SecurityUtils.getCurrentUserId();
-        List<ReportRequirementResponse> data = reportService.getClubReportRequirements(clubId, userId);
-        return ApiResponse.success(data);
-    }
-
-    /**
-     * Get all report requirements for a club (for CLUB_OFFICER or TEAM_OFFICER)
-     */
-    @GetMapping("/club/{clubId}/requirements/officer")
-    public ApiResponse<List<ReportRequirementResponse>> getClubReportRequirementsForOfficer(
-            @PathVariable Long clubId
-    ) {
-        Long userId = SecurityUtils.getCurrentUserId();
-        List<ReportRequirementResponse> data = reportService.getClubReportRequirementsForOfficer(clubId, userId);
+        PageResponse<ReportRequirementResponse> data = reportService.getClubReportRequirementsForOfficerWithFilters(
+                request, clubId, userId);
         return ApiResponse.success(data);
     }
 
@@ -260,6 +252,24 @@ public class ReportController {
     ) {
         Long userId = SecurityUtils.getCurrentUserId();
         ReportDetailResponse data = reportService.reviewReportByClub(request, userId);
+        return ApiResponse.success(data);
+    }
+
+    /**
+     * Assign a team to a report requirement (for CLUB_OFFICER only)
+     */
+    @PostMapping("/club/{clubId}/requirements/assign-team")
+    public ApiResponse<ReportRequirementResponse> assignTeamToReportRequirement(
+            @PathVariable Long clubId,
+            @RequestBody @Valid AssignTeamToReportRequirementRequest request
+    ) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        ReportRequirementResponse data = reportService.assignTeamToReportRequirement(
+                request.getClubReportRequirementId(),
+                request.getTeamId(),
+                clubId,
+                userId
+        );
         return ApiResponse.success(data);
     }
 }

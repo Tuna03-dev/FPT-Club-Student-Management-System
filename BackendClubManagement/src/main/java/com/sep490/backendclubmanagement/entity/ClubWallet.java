@@ -1,5 +1,6 @@
 package com.sep490.backendclubmanagement.entity;
 
+import com.sep490.backendclubmanagement.config.EncryptedStringConverter;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -39,13 +40,16 @@ public class ClubWallet extends BaseEntity {
     @Builder.Default
     private String currency = "VND";
 
-    @Column(name = "payOs_client_id", length = 100)
+    @Convert(converter = EncryptedStringConverter.class)
+    @Column(name = "payOs_client_id", length = 500)
     private String payOsClientId;
 
-    @Column(name = "payOs_api_key", length = 100)
+    @Convert(converter = EncryptedStringConverter.class)
+    @Column(name = "payOs_api_key", length = 500)
     private String payOsApiKey;
 
-    @Column(name = "payOs_checksum_key", length = 100)
+    @Convert(converter = EncryptedStringConverter.class)
+    @Column(name = "payOs_checksum_key", length = 500)
     private String payOsChecksumKey;
 
     @Column(name = "payOs_status", length = 100)

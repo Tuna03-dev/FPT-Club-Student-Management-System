@@ -21,7 +21,8 @@ import java.util.Optional;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class UserService {
+public class
+UserService {
 
     private final UserRepository userRepository;
     private final SystemRoleRepository systemRoleRepository;
@@ -207,8 +208,7 @@ public class UserService {
     }
     @Transactional(readOnly = true)
     public Long getIdByEmail(String email) {
-        return userRepository.findByEmailIgnoreCase(email) // dùng ignore-case cho chắc
-                .map(User::getId)
+        return userRepository.findIdByEmail(email)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found: " + email));
     }
 }
