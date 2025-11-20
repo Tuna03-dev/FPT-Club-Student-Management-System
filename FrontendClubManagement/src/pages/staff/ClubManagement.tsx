@@ -41,7 +41,6 @@ import {
   CheckCircle,
   AlertCircle,
   XCircle,
-  Shield,
   Mail,
   Phone,
 } from "lucide-react";
@@ -53,6 +52,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Skeleton } from "@/components/ui/skeleton";
 import type {
   ClubManagementResponse,
   CreateClubRequest,
@@ -85,6 +85,7 @@ export function StaffClubsManagement() {
   const [selectedClub, setSelectedClub] =
     useState<ClubManagementResponse | null>(null);
   const [showEditDialog, setShowEditDialog] = useState(false);
+  const [showViewDialog, setShowViewDialog] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showActivateConfirm, setShowActivateConfirm] = useState(false);
   const [editingClub, setEditingClub] = useState<ClubManagementResponse | null>(
@@ -100,7 +101,7 @@ export function StaffClubsManagement() {
     null
   );
   const [newCategoryName, setNewCategoryName] = useState("");
-  const [, setCategoriesLoading] = useState(false);
+  const [categoriesLoading, setCategoriesLoading] = useState(false);
   const [showCreateCategoryConfirm, setShowCreateCategoryConfirm] =
     useState(false);
   const [showUpdateCategoryConfirm, setShowUpdateCategoryConfirm] =
@@ -158,10 +159,10 @@ export function StaffClubsManagement() {
 
   const [categories, setCategories] = useState<ClubCategory[]>([]);
 
-  // Fetch clubs from API
-  const fetchClubs = async () => {
+  // Fetch clubs from API. If `silent` is true, do not toggle the global loading flag
+  const fetchClubs = async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const response = await getStaffClubs({
         keyword: searchTerm,
         campusId: selectedCampus,
@@ -179,7 +180,7 @@ export function StaffClubsManagement() {
       console.error("Error fetching clubs:", error);
       toast.error(error.message || "Không thể tải danh sách câu lạc bộ");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -340,7 +341,6 @@ export function StaffClubsManagement() {
     }
 
     try {
-      setLoading(true);
       await createStaffClub(newClubData);
       toast.success("Tạo câu lạc bộ thành công");
       setNewClubData({
@@ -353,7 +353,8 @@ export function StaffClubsManagement() {
         presidentEmail: "",
       });
       setShowCreateClubDialog(false);
-      // After creating a club, refresh the list so the new club appears.
+      setShowViewDialog(false);
+      // After creating a club, refresh the list so the new club appears without showing global loader.
       setPage(1);
       try {
         await fetchClubs();
@@ -368,8 +369,6 @@ export function StaffClubsManagement() {
         error?.message ||
         "Không thể tạo câu lạc bộ";
       toast.error(errorMessage);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -466,7 +465,6 @@ export function StaffClubsManagement() {
     if (!editingClub) return;
 
     try {
-      setLoading(true);
       const updateData: UpdateClubRequest = {
         clubName: editingClub.clubName,
         clubCode: editingClub.clubCode,
@@ -480,7 +478,8 @@ export function StaffClubsManagement() {
       setEditingClub(null);
       setShowEditDialog(false);
       setSelectedClub(null);
-      await fetchClubs(); // Refresh list
+      setShowViewDialog(false);
+      await fetchClubs(); // Refresh list (show skeleton)
     } catch (error: any) {
       console.error("Error updating club:", error);
       // Extract error message from various possible error structures
@@ -489,19 +488,17 @@ export function StaffClubsManagement() {
         error?.message ||
         "Không thể cập nhật câu lạc bộ";
       toast.error(errorMessage);
-    } finally {
-      setLoading(false);
     }
   };
 
   const handleDeactivateClub = async (clubId: number) => {
     try {
-      setLoading(true);
       await deActiveStaffClub(clubId);
       toast.success("Đã chuyển câu lạc bộ sang trạng thái không hoạt động");
       setShowDeleteConfirm(false);
       setSelectedClub(null);
-      await fetchClubs(); // Refresh list
+      setShowViewDialog(false);
+      await fetchClubs(); // Refresh list (show skeleton)
     } catch (error: any) {
       console.error("Error deactivating club:", error);
       // Extract error message from various possible error structures
@@ -510,19 +507,17 @@ export function StaffClubsManagement() {
         error?.message ||
         "Không thể thay đổi trạng thái câu lạc bộ";
       toast.error(errorMessage);
-    } finally {
-      setLoading(false);
     }
   };
 
   const handleActivateClub = async (clubId: number) => {
     try {
-      setLoading(true);
       await activateStaffClub(clubId);
       toast.success("Đã chuyển câu lạc bộ sang trạng thái hoạt động");
       setShowActivateConfirm(false);
       setSelectedClub(null);
-      await fetchClubs(); // Refresh list
+      setShowViewDialog(false);
+      await fetchClubs(); // Refresh list (show skeleton)
     } catch (error: any) {
       console.error("Error activating club:", error);
       const errorMessage =
@@ -530,8 +525,6 @@ export function StaffClubsManagement() {
         error?.message ||
         "Không thể thay đổi trạng thái câu lạc bộ";
       toast.error(errorMessage);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -540,7 +533,6 @@ export function StaffClubsManagement() {
       <div className="max-w-7xl mx-auto">
         <div className="mb-8">
           <div className="flex items-center gap-2 mb-2">
-            <Shield className="h-8 w-8 text-primary" />
             <h1 className="text-3xl font-bold text-foreground">
               Quản lý Câu Lạc Bộ
             </h1>
@@ -607,27 +599,6 @@ export function StaffClubsManagement() {
                     className="pl-10"
                   />
                 </div>
-                {/* <Select
-                  value={selectedCampus?.toString() || "all"}
-                  onValueChange={(value) => {
-                    setSelectedCampus(
-                      value === "all" ? undefined : Number(value)
-                    );
-                    setPage(1);
-                  }}
-                >
-                  <SelectTrigger className="w-[200px]">
-                    <SelectValue placeholder="Chọn campus" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Tất cả campus</SelectItem>
-                    {campuses.map((campus) => (
-                      <SelectItem key={campus.id} value={campus.id.toString()}>
-                        {campus.campusName}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select> */}
                 <Select
                   value={selectedCategory?.toString() || "all"}
                   onValueChange={(value) => {
@@ -706,36 +677,6 @@ export function StaffClubsManagement() {
                       </div>
 
                       <div className="grid grid-cols-2 gap-4">
-                        {/* <div>
-                          <Label htmlFor="new-campus">Campus *</Label>
-                          <Select
-                            value={
-                              newClubData.campusId > 0
-                                ? newClubData.campusId.toString()
-                                : ""
-                            }
-                            onValueChange={(value) =>
-                              setNewClubData({
-                                ...newClubData,
-                                campusId: Number(value),
-                              })
-                            }
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Chọn campus" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {campuses.map((campus) => (
-                                <SelectItem
-                                  key={campus.id}
-                                  value={campus.id.toString()}
-                                >
-                                  {campus.campusName}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div> */}
                         <div className="space-y-2">
                           <Label htmlFor="new-code">Mã câu lạc bộ *</Label>
                           <Input
@@ -830,30 +771,6 @@ export function StaffClubsManagement() {
                           </p>
                         )}
                       </div>
-
-                      {/* <div>
-                        <Label htmlFor="new-status">Trạng thái</Label>
-                        <Select
-                          value={newClubData.status}
-                          onValueChange={(value) =>
-                            setNewClubData({ ...newClubData, status: value })
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="FORMING">
-                              Đang thành lập
-                            </SelectItem>
-                            <SelectItem value="ACTIVE">Hoạt động</SelectItem>
-                            <SelectItem value="INACTIVE">
-                              Không hoạt động
-                            </SelectItem>
-                            <SelectItem value="SUSPENDED">Tạm dừng</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div> */}
 
                       <div className="flex gap-2">
                         <Button
@@ -1034,8 +951,46 @@ export function StaffClubsManagement() {
               </CardHeader>
               <CardContent>
                 {loading ? (
-                  <div className="text-center py-8">
-                    <p className="text-muted-foreground">Đang tải dữ liệu...</p>
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Tên câu lạc bộ</TableHead>
+                          <TableHead>Mã CLB</TableHead>
+                          {/* <TableHead>Campus</TableHead> */}
+                          <TableHead>Thể loại</TableHead>
+                          <TableHead>Thành viên</TableHead>
+                          <TableHead>Trạng thái</TableHead>
+                          <TableHead className="text-right">
+                            Hành động
+                          </TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {Array.from({ length: pageSize }).map((_, index) => (
+                          <TableRow key={`skeleton-${index}`}>
+                            <TableCell>
+                              <Skeleton className="h-5 w-48" />
+                            </TableCell>
+                            <TableCell>
+                              <Skeleton className="h-5 w-24" />
+                            </TableCell>
+                            <TableCell>
+                              <Skeleton className="h-5 w-32" />
+                            </TableCell>
+                            <TableCell>
+                              <Skeleton className="h-5 w-20" />
+                            </TableCell>
+                            <TableCell>
+                              <Skeleton className="h-5 w-24" />
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Skeleton className="h-8 w-8 rounded-md ml-auto" />
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
                   </div>
                 ) : (
                   <>
@@ -1083,12 +1038,26 @@ export function StaffClubsManagement() {
                                 </TableCell>
                                 <TableCell className="text-right">
                                   <div className="flex gap-1 justify-end">
-                                    <Dialog>
+                                    <Dialog
+                                      open={
+                                        showViewDialog &&
+                                        selectedClub?.id === club.id
+                                      }
+                                      onOpenChange={(open) => {
+                                        if (!open) {
+                                          setShowViewDialog(false);
+                                          setSelectedClub(null);
+                                        }
+                                      }}
+                                    >
                                       <DialogTrigger asChild>
                                         <Button
                                           variant="outline"
                                           size="sm"
-                                          onClick={() => setSelectedClub(club)}
+                                          onClick={() => {
+                                            setSelectedClub(club);
+                                            setShowViewDialog(true);
+                                          }}
                                         >
                                           <Eye className="h-4 w-4" />
                                         </Button>
@@ -1292,8 +1261,7 @@ export function StaffClubsManagement() {
                                                   }
                                                   className="flex-1"
                                                 >
-                                                  <Trash2 className="h-4 w-4 mr-2" />
-                                                  dừng hoạt động
+                                                  Dừng hoạt động
                                                 </Button>
                                               )}
                                             </div>
@@ -1502,7 +1470,21 @@ export function StaffClubsManagement() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {categories.length > 0 ? (
+                      {categoriesLoading ? (
+                        Array.from({ length: categoryPageSize }).map((_, i) => (
+                          <TableRow key={`cat-skel-${i}`}>
+                            <TableCell>
+                              <Skeleton className="h-5 w-48" />
+                            </TableCell>
+                            <TableCell>
+                              <Skeleton className="h-5 w-20" />
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Skeleton className="h-8 w-8 rounded-md ml-auto" />
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      ) : categories.length > 0 ? (
                         categories.map((category) => {
                           return (
                             <TableRow key={category.id}>
@@ -1841,7 +1823,7 @@ export function StaffClubsManagement() {
           </DialogHeader>
           {editingClub && (
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
                 <div className="space-y-2">
                   <Label htmlFor="edit-name">Tên câu lạc bộ</Label>
                   <Input
@@ -1855,6 +1837,9 @@ export function StaffClubsManagement() {
                     }
                   />
                 </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="new-code">Mã câu lạc bộ *</Label>
                   <Input
@@ -1869,28 +1854,33 @@ export function StaffClubsManagement() {
                     placeholder="VD: CLB_IT"
                   />
                 </div>
-                {/* <div>
-                  <Label htmlFor="edit-status">Trạng thái</Label>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-category">Thể loại *</Label>
                   <Select
-                    value={editingClub.status}
+                    value={
+                      editingClub.categoryId && editingClub.categoryId > 0
+                        ? editingClub.categoryId.toString()
+                        : ""
+                    }
                     onValueChange={(value) =>
                       setEditingClub({
                         ...editingClub,
-                        status: value,
+                        categoryId: Number(value),
                       })
                     }
                   >
-                    <SelectTrigger>
-                      <SelectValue />
+                    <SelectTrigger className="w-[200px]">
+                      <SelectValue placeholder="Chọn thể loại" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="forming">Đang thành lập</SelectItem>
-                      <SelectItem value="active">Hoạt động</SelectItem>
-                      <SelectItem value="inactive">Không hoạt động</SelectItem>
-                      <SelectItem value="suspended">Tạm dừng</SelectItem>
+                      {clubCategories.map((cat) => (
+                        <SelectItem key={cat.id} value={cat.id.toString()}>
+                          {cat.categoryName}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
-                </div> */}
+                </div>
               </div>
 
               <div className="space-y-2">
@@ -1907,29 +1897,6 @@ export function StaffClubsManagement() {
                   rows={3}
                 />
               </div>
-
-              {/* <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="edit-email">Email</Label>
-                  <Input
-                    id="edit-email"
-                    value={editingClub.email}
-                    onChange={(e) =>
-                      setEditingClub({ ...editingClub, email: e.target.value })
-                    }
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="edit-phone">Số điện thoại</Label>
-                  <Input
-                    id="edit-phone"
-                    value={editingClub.phone}
-                    onChange={(e) =>
-                      setEditingClub({ ...editingClub, phone: e.target.value })
-                    }
-                  />
-                </div>
-              </div> */}
 
               <div className="flex gap-2">
                 <Button

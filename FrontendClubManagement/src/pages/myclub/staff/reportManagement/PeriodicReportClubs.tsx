@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -30,6 +30,7 @@ import {
 } from "@/services/reportService";
 import type { ReportRequirementResponse } from "@/types/dto/reportRequirement.dto";
 import { toast } from "sonner";
+import { Skeleton } from "@/components/ui/skeleton";
 
 type ReportStatus =
   | "draft"
@@ -116,6 +117,7 @@ interface ClubWithReport extends Club {
 export function PeriodicReportClubs() {
   const { reportId } = useParams<{ reportId: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedReport, setSelectedReport] = useState<Report | null>(null);
   const [selectedClub, setSelectedClub] = useState<Club | null>(null);
@@ -349,23 +351,7 @@ export function PeriodicReportClubs() {
     }
   };
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-background p-4 md:p-8">
-        <div className="max-w-6xl mx-auto space-y-6">
-          <Card>
-            <CardContent className="p-8 text-center text-muted-foreground">
-              Đang tải...
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    );
-  }
-
-  if (!periodicReport) {
-    return null;
-  }
+  // Do not early-return while loading so we can show skeletons in-place
 
   return (
     <div className="min-h-screen bg-background p-4 md:p-8">
@@ -373,135 +359,182 @@ export function PeriodicReportClubs() {
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div className="flex items-center gap-4">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => navigate("/staff/report")}
-              className="gap-2"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Quay lại
-            </Button>
             <div>
-              <h1 className="text-3xl font-bold">{periodicReport.title}</h1>
+              <h1 className="text-3xl font-bold">{periodicReport?.title}</h1>
               <p className="text-muted-foreground mt-1">
                 Danh sách câu lạc bộ và trạng thái nộp báo cáo
               </p>
             </div>
           </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              const fromTab = (location.state as any)?.fromTab ?? "periodic";
+              navigate("/staff/reports", { state: { tab: fromTab } });
+            }}
+            className="gap-2"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Quay lại
+          </Button>
         </div>
 
         {/* Report Requirement Info Card */}
-        <Card>
-          <CardContent className="p-4">
-            <div className="space-y-3">
-              {/* Info Grid - Compact layout */}
-              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-                {/* Created By */}
-                <div>
-                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-0.5">
-                    <User className="h-3 w-3" />
-                    <span>Người tạo</span>
+        {periodicReport ? (
+          <Card>
+            <CardContent className="p-4">
+              <div className="space-y-3">
+                {/* Info Grid - Compact layout */}
+                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                  {/* Created By */}
+                  <div>
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-0.5">
+                      <User className="h-3 w-3" />
+                      <span>Người tạo</span>
+                    </div>
+                    <p className="text-sm font-medium text-foreground">
+                      {periodicReport.createdBy?.fullName || "N/A"}
+                    </p>
                   </div>
-                  <p className="text-sm font-medium text-foreground">
-                    {periodicReport.createdBy?.fullName || "N/A"}
-                  </p>
+
+                  {/* Created Date */}
+                  <div>
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-0.5">
+                      <Calendar className="h-3 w-3" />
+                      <span>Ngày tạo</span>
+                    </div>
+                    <p className="text-sm font-medium text-foreground">
+                      {formatDate(periodicReport.createdAt)}
+                    </p>
+                  </div>
+
+                  {/* Due Date */}
+                  <div>
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-0.5">
+                      <Calendar className="h-3 w-3" />
+                      <span>Hạn chót</span>
+                    </div>
+                    <p className="text-sm font-medium text-foreground">
+                      {formatDate(periodicReport.dueDate)}
+                    </p>
+                  </div>
+
+                  {/* Report Type */}
+                  <div>
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-0.5">
+                      <FileText className="h-3 w-3" />
+                      <span>Loại báo cáo</span>
+                    </div>
+                    <p className="text-sm font-medium text-foreground">
+                      {getReportTypeLabel(periodicReport.reportType)}
+                    </p>
+                  </div>
+
+                  {/* Club Count - Integrated into grid */}
+                  <div className="col-span-2 md:col-span-2 lg:col-span-2">
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-0.5">
+                      <Users className="h-3 w-3" />
+                      <span>Số CLB cần nộp</span>
+                    </div>
+                    <p className="text-sm font-medium text-foreground">
+                      {clubsWithReports.length} câu lạc bộ
+                    </p>
+                  </div>
                 </div>
 
-                {/* Created Date */}
-                <div>
-                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-0.5">
-                    <Calendar className="h-3 w-3" />
-                    <span>Ngày tạo</span>
-                  </div>
-                  <p className="text-sm font-medium text-foreground">
-                    {formatDate(periodicReport.createdAt)}
-                  </p>
-                </div>
+                {/* File Attachment and Description - Compact inline layout */}
+                {(periodicReport.templateUrl || periodicReport.description) && (
+                  <div className="flex flex-col sm:flex-row gap-3 pt-2 border-t">
+                    {/* File Attachment - If available */}
+                    {periodicReport.templateUrl && (
+                      <div className="flex-1">
+                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1.5">
+                          <Download className="h-3 w-3" />
+                          <span>File đính kèm</span>
+                        </div>
+                        <div className="flex items-center gap-2 p-2 bg-secondary/50 rounded-md">
+                          <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-medium text-foreground truncate">
+                              {periodicReport.templateUrl.split("/").pop() ||
+                                "Template file"}
+                            </p>
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() =>
+                              window.open(periodicReport.templateUrl, "_blank")
+                            }
+                            className="flex-shrink-0 h-7 px-2"
+                          >
+                            <Download className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      </div>
+                    )}
 
-                {/* Due Date */}
-                <div>
-                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-0.5">
-                    <Calendar className="h-3 w-3" />
-                    <span>Hạn chót</span>
+                    {/* Description - Compact */}
+                    {periodicReport.description && (
+                      <div className="flex-1">
+                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1.5">
+                          <FileText className="h-3 w-3" />
+                          <span>Mô tả</span>
+                        </div>
+                        <p className="text-xs text-foreground bg-secondary/50 p-2 rounded-md line-clamp-2">
+                          {periodicReport.description}
+                        </p>
+                      </div>
+                    )}
                   </div>
-                  <p className="text-sm font-medium text-foreground">
-                    {formatDate(periodicReport.dueDate)}
-                  </p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card>
+            <CardContent className="p-4">
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                  <div>
+                    <Skeleton className="h-3 w-24" />
+                    <div className="mt-2">
+                      <Skeleton className="h-5 w-40" />
+                    </div>
+                  </div>
+                  <div>
+                    <Skeleton className="h-3 w-20" />
+                    <div className="mt-2">
+                      <Skeleton className="h-5 w-28" />
+                    </div>
+                  </div>
+                  <div>
+                    <Skeleton className="h-3 w-20" />
+                    <div className="mt-2">
+                      <Skeleton className="h-5 w-28" />
+                    </div>
+                  </div>
+                  <div>
+                    <Skeleton className="h-3 w-20" />
+                    <div className="mt-2">
+                      <Skeleton className="h-5 w-32" />
+                    </div>
+                  </div>
+                  <div className="col-span-2 md:col-span-2 lg:col-span-2">
+                    <Skeleton className="h-3 w-28" />
+                    <div className="mt-2">
+                      <Skeleton className="h-5 w-36" />
+                    </div>
+                  </div>
                 </div>
-
-                {/* Report Type */}
-                <div>
-                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-0.5">
-                    <FileText className="h-3 w-3" />
-                    <span>Loại báo cáo</span>
-                  </div>
-                  <p className="text-sm font-medium text-foreground">
-                    {getReportTypeLabel(periodicReport.reportType)}
-                  </p>
-                </div>
-
-                {/* Club Count - Integrated into grid */}
-                <div className="col-span-2 md:col-span-2 lg:col-span-2">
-                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-0.5">
-                    <Users className="h-3 w-3" />
-                    <span>Số CLB cần nộp</span>
-                  </div>
-                  <p className="text-sm font-medium text-foreground">
-                    {clubsWithReports.length} câu lạc bộ
-                  </p>
+                <div className="pt-2 border-t">
+                  <Skeleton className="h-4 w-full" />
                 </div>
               </div>
-
-              {/* File Attachment and Description - Compact inline layout */}
-              {(periodicReport.templateUrl || periodicReport.description) && (
-                <div className="flex flex-col sm:flex-row gap-3 pt-2 border-t">
-                  {/* File Attachment - If available */}
-                  {periodicReport.templateUrl && (
-                    <div className="flex-1">
-                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1.5">
-                        <Download className="h-3 w-3" />
-                        <span>File đính kèm</span>
-                      </div>
-                      <div className="flex items-center gap-2 p-2 bg-secondary/50 rounded-md">
-                        <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-medium text-foreground truncate">
-                            {periodicReport.templateUrl.split("/").pop() ||
-                              "Template file"}
-                          </p>
-                        </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() =>
-                            window.open(periodicReport.templateUrl, "_blank")
-                          }
-                          className="flex-shrink-0 h-7 px-2"
-                        >
-                          <Download className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Description - Compact */}
-                  {periodicReport.description && (
-                    <div className="flex-1">
-                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1.5">
-                        <FileText className="h-3 w-3" />
-                        <span>Mô tả</span>
-                      </div>
-                      <p className="text-xs text-foreground bg-secondary/50 p-2 rounded-md line-clamp-2">
-                        {periodicReport.description}
-                      </p>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Search */}
         <div className="flex items-center bg-secondary rounded-lg px-4 py-2">
@@ -520,7 +553,46 @@ export function PeriodicReportClubs() {
             Hiển thị {filteredClubs.length} câu lạc bộ
           </p>
 
-          {filteredClubs.length > 0 ? (
+          {isLoading ? (
+            <Card>
+              <Table>
+                <TableHeader className="bg-muted/50">
+                  <TableRow className="border-b-2 border-border hover:bg-muted/50">
+                    <TableHead className="w-[250px] font-semibold text-foreground">
+                      Tên câu lạc bộ
+                    </TableHead>
+                    <TableHead className="w-[150px] font-semibold text-foreground">
+                      Mã CLB
+                    </TableHead>
+                    <TableHead className="w-[180px] font-semibold text-foreground">
+                      Trạng thái
+                    </TableHead>
+                    <TableHead className="w-[120px] text-center font-semibold text-foreground">
+                      Hành động
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {Array.from({ length: 10 }).map((_, i) => (
+                    <TableRow key={`club-skel-${i}`}>
+                      <TableCell>
+                        <Skeleton className="h-4 w-48" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-4 w-28" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-4 w-24" />
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Skeleton className="h-8 w-8 rounded-md ml-auto" />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </Card>
+          ) : filteredClubs.length > 0 ? (
             <Card>
               <Table>
                 <TableHeader className="bg-muted/50">

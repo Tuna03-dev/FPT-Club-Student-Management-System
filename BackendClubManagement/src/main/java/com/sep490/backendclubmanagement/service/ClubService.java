@@ -148,16 +148,6 @@ public class ClubService implements ClubServiceInterface {
                 .map(club -> {
                     ClubManagementResponse response = clubMapper.toClubManagementResponse(club);
                     response.setTotalMembers(clubRepository.countMembersByClubId(club.getId()));
-                    response.setTotalEvents(clubRepository.countEventsByClubId(club.getId()));
-                    response.setTotalPosts(clubRepository.countNewsByClubId(club.getId()));
-
-                    // Populate presidents information
-                    List<ClubPresidentData> presidents = clubRepository.findPresidentsByClubId(club.getId())
-                            .stream()
-                            .map(clubMapper::toPresidentData)
-                            .collect(Collectors.toList());
-                    response.setPresidents(presidents);
-
                     return response;
                 })
                 .collect(Collectors.toList());
@@ -396,8 +386,6 @@ public class ClubService implements ClubServiceInterface {
 
         ClubManagementResponse response = clubMapper.toClubManagementResponse(updatedClub);
         response.setTotalMembers(clubRepository.countMembersByClubId(updatedClub.getId()));
-        response.setTotalEvents(clubRepository.countEventsByClubId(updatedClub.getId()));
-        response.setTotalPosts(clubRepository.countNewsByClubId(updatedClub.getId()));
         return response;
     }
 

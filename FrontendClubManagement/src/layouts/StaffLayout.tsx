@@ -67,7 +67,7 @@ const managementItems = [
     key: "manage_club",
     url: "/clubs",
     icon: UserSquare2,
-    label: "Quản lí CLB",
+    label: "Quản lý CLB",
   },
   {
     key: "manage_members",
