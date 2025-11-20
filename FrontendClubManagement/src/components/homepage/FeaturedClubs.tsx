@@ -16,7 +16,7 @@ const FeaturedClubs: React.FC<Props> = ({ clubs }) => {
           <a key={club.id} href={`/clubs/${club.id}`} className="group text-center">
             <div className="bg-white rounded-xl p-6 aspect-square flex items-center justify-center group-hover:shadow-lg group-hover:-translate-y-1 transition-all">
               <img
-                src={club.logoUrl || "/placeholder.svg"}
+                src={club.logoUrl || "/default-fallback-image.png"}
                 alt={club.clubName}
                 className="max-h-20 object-contain"
               />

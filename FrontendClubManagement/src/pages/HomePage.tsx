@@ -73,12 +73,19 @@ async function searchHomepageApi(keyword: string): Promise<SearchResultItem[]> {
   const q = keyword.trim();
   if (!q) return [];
 
-  const newsReq: NewsFilterRequest = { keyword: q, page: 0, size: 5 };
-  const eventReq: EventFilterRequest = { keyword: q, page: 0, size: 5 };
+  // ✅ page = 1 để khớp với backend
+  const newsReq: NewsFilterRequest = { keyword: q, page: 1, size: 5 };
+  const eventReq: EventFilterRequest = { keyword: q, page: 1, size: 5 };
 
   const [newsResp, eventResp, clubResp] = await Promise.all([
-    getAllNewsByFilter(newsReq).catch(() => ({ data: [], total: 0, count: 0 })),
-    getAllEventsByFilter(eventReq).catch(() => ({ data: [], total: 0, count: 0 })),
+    getAllNewsByFilter(newsReq).catch((err) => {
+      console.error("NEWS FILTER ERROR:", err.response?.data || err);
+      return { data: [], total: 0, count: 0 };
+    }),
+    getAllEventsByFilter(eventReq).catch((err) => {
+      console.error("EVENT FILTER ERROR:", err.response?.data || err);
+      return { data: [], total: 0, count: 0 };
+    }),
     getPublicClubs({ q, page: 0, size: 5 }).catch(() => {
       const empty: PageResp<ClubCard> = {
         content: [],
@@ -180,7 +187,9 @@ const HomePage: React.FC = () => {
       setData(homepageData);
     } catch (err) {
       console.error(err);
-      setError("Không thể tải dữ liệu trang chủ. Có thể hệ thống đang bảo trì.");
+      setError(
+        "Không thể tải dữ liệu trang chủ. Có thể hệ thống đang bảo trì."
+      );
       setData(null);
     } finally {
       setLoading(false);
@@ -288,7 +297,7 @@ const HomePage: React.FC = () => {
         className="text-white py-20 md:py-32 bg-cover bg-center relative"
         style={{
           backgroundImage:
-            "linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.5)), url('https://images.unsplash.com/photo-1523240795612-9a054b0db644?q=80&w=2070')",
+            "linear-gradient(rgba(0,0,0,0.55), rgba(0,0,0,0.7)), url('https://images.unsplash.com/photo-1523240795612-9a054b0db644?q=80&w=2070')",
         }}
       >
         <div className="max-w-4xl mx-auto px-4 text-center">
@@ -304,7 +313,8 @@ const HomePage: React.FC = () => {
 
           {/* SEARCH BOX + DROPDOWN */}
           <div className="mt-8 max-w-2xl mx-auto relative">
-            <div className="relative flex items-center">
+            {/* card nền mờ để search + gợi ý không bị chìm */}
+            <div className="relative flex items-center mx-auto w-full">
               <input
                 type="text"
                 value={searchTerm}
@@ -313,15 +323,59 @@ const HomePage: React.FC = () => {
                 onBlur={() => setTimeout(() => setIsFocused(false), 150)}
                 onKeyDown={handleKeyDown}
                 placeholder="Tìm kiếm câu lạc bộ, sự kiện, tin tức..."
-                className="w-full pl-5 pr-36 py-3 rounded-full border-2 border-transparent focus:border-[#ff6b35] focus:outline-none text-gray-800 placeholder-gray-500 text-base shadow-sm"
+                className="
+        w-full pl-5 pr-36 py-3 rounded-full
+        bg-white text-gray-800 placeholder-gray-500
+        shadow-lg shadow-black/20
+        border border-white/40
+        focus:outline-none focus:ring-2 focus:ring-[#ff6b35]
+      "
               />
+
               <button
                 type="button"
-                className="absolute right-2 bg-[#ff6b35] text-white px-6 py-2 rounded-full hover:bg-[#e55a2b] transition-colors flex items-center gap-2 font-semibold"
+                onClick={() => {
+                  if (searchTerm.trim()) {
+                    setIsFocused(true);
+                    performSearch(searchTerm);
+                  }
+                }}
+                className="
+        absolute right-2 px-6 py-2 rounded-full font-semibold
+        bg-[#ff6b35] text-white
+        hover:bg-[#e55a2b] transition-colors
+        shadow-md
+        flex items-center gap-2
+      "
               >
                 <Search className="w-5 h-5" />
-                <span>Tìm kiếm</span>
+                Tìm kiếm
               </button>
+            </div>
+
+            {/* TAG GỢI Ý — tách riêng, nhẹ nhàng */}
+            <div className="mt-4 flex flex-wrap justify-center gap-2 text-sm">
+              <span className="font-semibold text-white/80 mr-2">Gợi ý:</span>
+
+              {["Tình nguyện", "Lập trình", "Âm nhạc", "Workshop"].map(
+                (tag) => (
+                  <button
+                    key={tag}
+                    onClick={() => {
+                      setSearchTerm(tag);
+                      setIsFocused(true);
+                      performSearch(tag);
+                    }}
+                    className="
+            bg-white/25 text-white backdrop-blur
+            px-3 py-1 rounded-full hover:bg-white/35
+            transition shadow
+          "
+                  >
+                    {tag}
+                  </button>
+                )
+              )}
             </div>
 
             {/* GOOGLE-LIKE DROPDOWN */}
@@ -402,10 +456,7 @@ const HomePage: React.FC = () => {
                                     </div>
                                     <div>
                                       <div className="text-sm font-medium text-gray-900 line-clamp-1">
-                                        {highlightMatch(
-                                          item.title,
-                                          searchTerm
-                                        )}
+                                        {highlightMatch(item.title, searchTerm)}
                                       </div>
                                       {item.subtitle && (
                                         <div className="text-xs text-gray-500 mt-0.5 line-clamp-1">
@@ -426,8 +477,8 @@ const HomePage: React.FC = () => {
                     {/* hint dưới cùng */}
                     <div className="px-4 py-2 border-t border-slate-100 text-[11px] text-slate-400 flex items-center justify-between">
                       <span>
-                        Dùng <span className="font-semibold">↑ ↓ Enter</span>{" "}
-                        để chọn kết quả.
+                        Dùng <span className="font-semibold">↑ ↓ Enter</span> để
+                        chọn kết quả.
                       </span>
                       <span className="hidden sm:inline">
                         Nhấn <span className="font-semibold">Esc</span> để đóng.
@@ -437,23 +488,6 @@ const HomePage: React.FC = () => {
                 )}
               </div>
             )}
-
-            {/* TAG GỢI Ý */}
-            <div className="mt-4 flex flex-wrap justify-center gap-2 text-sm">
-              <span className="font-semibold mr-2">Gợi ý:</span>
-              {["Tình nguyện", "Lập trình", "Âm nhạc", "Sự kiện tháng 10"].map(
-                (tag) => (
-                  <button
-                    key={tag}
-                    type="button"
-                    onClick={() => setSearchTerm(tag)}
-                    className="bg-white/20 hover:bg-white/30 px-3 py-1 rounded-full transition-colors"
-                  >
-                    {tag}
-                  </button>
-                )
-              )}
-            </div>
           </div>
         </div>
       </section>
@@ -481,7 +515,9 @@ const HomePage: React.FC = () => {
           <div className="flex items-center justify-center py-16">
             <div className="text-center">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#ff6b35] mx-auto" />
-              <p className="mt-4 text-gray-600">Đang tải dữ liệu trang chủ...</p>
+              <p className="mt-4 text-gray-600">
+                Đang tải dữ liệu trang chủ...
+              </p>
             </div>
           </div>
         )}
