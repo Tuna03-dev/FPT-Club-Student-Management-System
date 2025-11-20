@@ -2,9 +2,8 @@ package com.sep490.backendclubmanagement.dto.response;
 
 import lombok.*;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
-
+import java.util.List;
 @Getter
 @Setter
 @NoArgsConstructor
@@ -42,9 +41,9 @@ public class ClubDetailData {
     // Recruitment info
     private Boolean isRecruiting; // Câu lạc bộ đang mở đợt tuyển
     
-    // President info
-    private ClubPresidentData president;
-    
+    // Presidents info (can have multiple presidents)
+    private List<ClubPresidentData> presidents;
+
     // Timestamps
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

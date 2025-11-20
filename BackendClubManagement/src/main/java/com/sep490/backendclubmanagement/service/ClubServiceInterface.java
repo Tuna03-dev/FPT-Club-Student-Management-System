@@ -67,12 +67,20 @@ public interface ClubServiceInterface {
     ClubManagementResponse updateClub(Long clubId, UpdateClubRequest request, Long staffId) throws AppException;
 
     /**
-     * Delete club (Staff only)
+     * Deactivate club (change status to UNACTIVE) (Staff only)
      * @param clubId Club ID
      * @param staffId Staff user ID for permission check
      * @throws AppException if club not found
      */
-    void deleteClub(Long clubId, Long staffId) throws AppException;
+    void deactivateClub(Long clubId, Long staffId) throws AppException;
+
+    /**
+     * Activate club (change status to ACTIVE) (Staff only)
+     * @param clubId Club ID
+     * @param staffId Staff user ID for permission check
+     * @throws AppException if club not found
+     */
+    void activateClub(Long clubId, Long staffId) throws AppException;
 
     /**
      * Get club for management detail (Staff only)

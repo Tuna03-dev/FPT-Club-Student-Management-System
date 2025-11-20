@@ -87,17 +87,32 @@ public class ClubManagementStaffController {
     }
 
     /**
-     * Delete club
-     * DELETE /api/staff/clubs/{clubId}
+     * Change club status to UNACTIVE
+     * PATCH /api/staff/clubs/{clubId}/deactivate
      * @param clubId Club ID
      * @return Success message
      */
-    @DeleteMapping("/{clubId}")
-    public ResponseEntity<ApiResponse<Void>> deleteClub(
+    @PatchMapping("/{clubId}/deactivate")
+    public ResponseEntity<ApiResponse<Void>> deactivateClub(
             @PathVariable Long clubId
     ) throws AppException {
         Long userId = SecurityUtils.getCurrentUserId();
-        clubService.deleteClub(clubId, userId);
+        clubService.deactivateClub(clubId, userId);
+        return ResponseEntity.ok(ApiResponse.success());
+    }
+
+    /**
+     * Change club status to ACTIVE
+     * PATCH /api/staff/clubs/{clubId}/activate
+     * @param clubId Club ID
+     * @return Success message
+     */
+    @PatchMapping("/{clubId}/activate")
+    public ResponseEntity<ApiResponse<Void>> activateClub(
+            @PathVariable Long clubId
+    ) throws AppException {
+        Long userId = SecurityUtils.getCurrentUserId();
+        clubService.activateClub(clubId, userId);
         return ResponseEntity.ok(ApiResponse.success());
     }
 }

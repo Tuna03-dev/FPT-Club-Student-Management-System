@@ -3,6 +3,7 @@ package com.sep490.backendclubmanagement.repository;
 import com.sep490.backendclubmanagement.dto.request.ClubFilterRequest;
 import com.sep490.backendclubmanagement.dto.response.FeaturedClubDTO;
 import com.sep490.backendclubmanagement.entity.Club;
+import com.sep490.backendclubmanagement.entity.ClubMemberShip;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -28,6 +29,7 @@ public interface ClubRepository extends JpaRepository<Club, Long> {
     """)
     List<FeaturedClubDTO> findFeaturedClubs();
     Optional<Club> findByClubCode(String clubCode);
+    Optional<Club> findByClubName(String clubName);
 
     // 🔹 Reset toàn bộ CLB về không nổi bật
     @Modifying
@@ -95,20 +97,35 @@ public interface ClubRepository extends JpaRepository<Club, Long> {
     Optional<Club> findByClubCodeWithDetails(@Param("clubCode") String clubCode);
 
     // 🔹 Filter clubs for staff management with search and pagination
-    @Query(value = """
-            SELECT DISTINCT c.*
-            FROM clubs c
-            LEFT JOIN campuses ca ON c.campus_id = ca.id
-            LEFT JOIN club_categories cc ON c.club_category_id = cc.id
-            WHERE 1=1
-              AND (:#{#req.keyword} IS NULL 
-                   OR LOWER(c.club_name) LIKE LOWER(CONCAT('%', :#{#req.keyword}, '%'))
-                   OR LOWER(c.club_code) LIKE LOWER(CONCAT('%', :#{#req.keyword}, '%')))
-              AND (:#{#req.campusId} IS NULL OR c.campus_id = :#{#req.campusId})
-              AND (:#{#req.categoryId} IS NULL OR c.club_category_id = :#{#req.categoryId})
-              AND (:#{#req.status} IS NULL OR c.status = :#{#req.status})
-            """,
-            nativeQuery = true,
-            countProjection = "c.id")
-    Page<Club> getAllClubsByFilter(@Param("req") ClubFilterRequest req, Pageable pageable);
+    @Query("SELECT c FROM Club c " +
+            "LEFT JOIN c.campus ca " +
+            "LEFT JOIN c.clubCategory cc " +
+            "WHERE (:keyword IS NULL OR LOWER(c.clubName) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
+            "OR LOWER(c.clubCode) LIKE LOWER(CONCAT('%', :keyword, '%'))) " +
+            "AND (:campusId IS NULL OR ca.id = :campusId) " +
+            "AND (:categoryId IS NULL OR cc.id = :categoryId) " +
+            "AND (:status IS NULL OR c.status = :status)")
+    Page<Club> getAllClubsByFilter(
+            @Param("keyword") String keyword,
+            @Param("campusId") Long campusId,
+            @Param("categoryId") Long categoryId,
+            @Param("status") String status,
+            Pageable pageable
+    );
+
+
+    // 🔹 Get all presidents for a club (current semester, CLUB_PRESIDENT role)
+    @Query("""
+        SELECT cm
+        FROM ClubMemberShip cm
+        JOIN FETCH cm.user u
+        JOIN cm.roleMemberships rm
+        JOIN rm.clubRole cr
+        JOIN rm.semester s
+        WHERE cm.club.id = :clubId
+          AND cr.roleCode = 'CLUB_PRESIDENT'
+          AND rm.isActive = true
+          AND s.isCurrent = true
+        """)
+    List<ClubMemberShip> findPresidentsByClubId(@Param("clubId") Long clubId);
 }

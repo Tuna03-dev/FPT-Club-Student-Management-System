@@ -44,7 +44,6 @@ import {
   Shield,
   Mail,
   Phone,
-  MapPin,
 } from "lucide-react";
 import {
   Table,
@@ -54,25 +53,22 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-
-interface Club {
-  id: string;
-  name: string;
-  description: string;
-  category: string;
-  president: string;
-  presidentEmail: string;
-  presidentPhone: string;
-  memberCount: number;
-  foundedYear: number;
-  status: "forming" | "active" | "inactive" | "suspended";
-  logo: string;
-  email: string;
-  phone: string;
-  address: string;
-  createdAt: string;
-  lastActivityAt: string;
-}
+import type {
+  ClubManagementResponse,
+  CreateClubRequest,
+  UpdateClubRequest,
+  // Campus,
+  ClubCategory as ClubCategoryType,
+} from "@/types/staffClub";
+import {
+  getStaffClubs,
+  createStaffClub,
+  updateStaffClub,
+  // getAllCampuses,
+  getAllClubCategories,
+  deActiveStaffClub,
+  activateStaffClub,
+} from "@/api/staffClubs";
 
 interface ClubCategory {
   id: string;
@@ -83,11 +79,20 @@ interface ClubCategory {
 export function StaffClubsManagement() {
   const [activeTab, setActiveTab] = useState("all-clubs");
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedClub, setSelectedClub] = useState<Club | null>(null);
+  // Local input for live search with debounce; `searchTerm` is the effective value used for requests
+  const [searchInput, setSearchInput] = useState("");
+  const mainSearchDebounceRef = useRef<number | null>(null);
+  const [selectedClub, setSelectedClub] =
+    useState<ClubManagementResponse | null>(null);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [editingClub, setEditingClub] = useState<Club | null>(null);
+  const [showActivateConfirm, setShowActivateConfirm] = useState(false);
+  const [editingClub, setEditingClub] = useState<ClubManagementResponse | null>(
+    null
+  );
   const [showCreateClubDialog, setShowCreateClubDialog] = useState(false);
+  const [showCreateClubConfirm, setShowCreateClubConfirm] = useState(false);
+  const [showUpdateClubConfirm, setShowUpdateClubConfirm] = useState(false);
   const [showCreateCategoryDialog, setShowCreateCategoryDialog] =
     useState(false);
   const [showEditCategoryDialog, setShowEditCategoryDialog] = useState(false);
@@ -113,98 +118,117 @@ export function StaffClubsManagement() {
   const [categoryPageSize] = useState(10);
   const [categoryTotalPages, setCategoryTotalPages] = useState(0);
   const [categoryTotalElements, setCategoryTotalElements] = useState(0);
-  const [newClubData, setNewClubData] = useState({
-    name: "",
+
+  // Staff Club Management States
+  const [clubs, setClubs] = useState<ClubManagementResponse[]>([]);
+  const [loading, setLoading] = useState(false);
+  // Use 1-indexed `page` in the UI (default page 1). We'll convert to 0-index when calling backend.
+  const [page, setPage] = useState(1);
+  const [pageSize] = useState(10);
+  const [totalPages, setTotalPages] = useState(0);
+  const [totalElements, setTotalElements] = useState(0);
+  const [selectedCampus] = useState<number | undefined>();
+  const [selectedCategory, setSelectedCategory] = useState<
+    number | undefined
+  >();
+  const [selectedStatus, setSelectedStatus] = useState<string | undefined>();
+  // Hidden semester filter (temporarily removed from UI). Default semester = 1
+  const [semester] = useState<number>(1);
+  // const [campuses] = useState<Campus[]>([]);
+  const [clubCategories, setClubCategories] = useState<ClubCategoryType[]>([]);
+
+  const [newClubData, setNewClubData] = useState<CreateClubRequest>({
+    clubName: "",
+    clubCode: "",
     description: "",
-    category: "",
-    president: "",
+    status: "ACTIVE",
+    campusId: 1,
+    categoryId: 0,
     presidentEmail: "",
-    presidentPhone: "",
-    email: "",
-    phone: "",
-    address: "",
-    foundedYear: new Date().getFullYear(),
   });
 
-  // Mock data
-  const [clubs, setClubs] = useState<Club[]>([
-    {
-      id: "1",
-      name: "CLB Lập trình",
-      description:
-        "Câu lạc bộ dành cho những sinh viên đam mê lập trình và công nghệ",
-      category: "Công nghệ",
-      president: "Nguyễn Văn A",
-      presidentEmail: "a.nguyen@fpt.edu.vn",
-      presidentPhone: "0901234567",
-      memberCount: 85,
-      foundedYear: 2020,
-      status: "active",
-      logo: "/club-logo.jpg",
-      email: "programming.club@fpt.edu.vn",
-      phone: "0243123456",
-      address: "Phòng 301, Tầng 3, Toà A",
-      createdAt: "2024-01-15",
-      lastActivityAt: "2024-01-18",
-    },
-    {
-      id: "2",
-      name: "CLB Thiết kế",
-      description:
-        "Câu lạc bộ dành cho những sinh viên yêu thích thiết kế đồ họa và UI/UX",
-      category: "Nghệ thuật",
-      president: "Trần Thị B",
-      presidentEmail: "b.tran@fpt.edu.vn",
-      presidentPhone: "0912345678",
-      memberCount: 45,
-      foundedYear: 2021,
-      status: "active",
-      logo: "/club-logo.jpg",
-      email: "design.club@fpt.edu.vn",
-      phone: "0243123457",
-      address: "Phòng 302, Tầng 3, Toà A",
-      createdAt: "2024-01-16",
-      lastActivityAt: "2024-01-17",
-    },
-    {
-      id: "3",
-      name: "CLB Kinh doanh",
-      description: "Câu lạc bộ phát triển kỹ năng kinh doanh và tài chính",
-      category: "Kinh doanh",
-      president: "Lê Văn C",
-      presidentEmail: "c.le@fpt.edu.vn",
-      presidentPhone: "0923456789",
-      memberCount: 32,
-      foundedYear: 2022,
-      status: "active",
-      logo: "/club-logo.jpg",
-      email: "business.club@fpt.edu.vn",
-      phone: "0243123458",
-      address: "Phòng 303, Tầng 3, Toà A",
-      createdAt: "2024-01-17",
-      lastActivityAt: "2024-01-10",
-    },
-    {
-      id: "4",
-      name: "CLB AI & Machine Learning",
-      description: "Câu lạc bộ nghiên cứu trí tuệ nhân tạo và machine learning",
-      category: "Công nghệ",
-      president: "Phạm Minh D",
-      presidentEmail: "d.pham@fpt.edu.vn",
-      presidentPhone: "0934567890",
-      memberCount: 28,
-      foundedYear: 2023,
-      status: "forming",
-      logo: "/club-logo.jpg",
-      email: "ai.club@fpt.edu.vn",
-      phone: "0243123459",
-      address: "Phòng 304, Tầng 3, Toà A",
-      createdAt: "2024-01-18",
-      lastActivityAt: "2024-01-18",
-    },
-  ]);
+  // Validation state for create dialog
+  const [newClubEmailError, setNewClubEmailError] = useState<string | null>(
+    null
+  );
+
+  const isValidEmail = (email: string) => {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  };
 
   const [categories, setCategories] = useState<ClubCategory[]>([]);
+
+  // Fetch clubs from API
+  const fetchClubs = async () => {
+    try {
+      setLoading(true);
+      const response = await getStaffClubs({
+        keyword: searchTerm,
+        campusId: selectedCampus,
+        categoryId: selectedCategory,
+        semester: semester,
+        status: selectedStatus,
+        page: page,
+        size: pageSize,
+      });
+
+      setClubs(response.content);
+      setTotalPages(response.totalPages);
+      setTotalElements(response.totalElements);
+    } catch (error: any) {
+      console.error("Error fetching clubs:", error);
+      toast.error(error.message || "Không thể tải danh sách câu lạc bộ");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch campuses on mount. Club categories are loaded lazily when user opens Create dialog.
+  // useEffect(() => {
+  //   const fetchInitialData = async () => {
+  //     try {
+  //       const campusesData = await getAllCampuses();
+  //       setCampuses(campusesData);
+  //     } catch (error: any) {
+  //       console.error("Error fetching initial data:", error);
+  //       toast.error("Không thể tải dữ liệu khởi tạo");
+  //     }
+  //   };
+  //   fetchInitialData();
+  // }, []);
+
+  // Lazy-load club categories only when needed (e.g., when opening the Create dialog)
+  const loadClubCategories = async () => {
+    try {
+      if (clubCategories && clubCategories.length > 0) return; // already loaded
+      const categoriesData = await getAllClubCategories();
+      setClubCategories(categoriesData);
+    } catch (err) {
+      console.error("Error loading club categories:", err);
+      toast.error("Không thể tải thể loại câu lạc bộ");
+    }
+  };
+
+  // Ensure categories are available for the search filter dropdown.
+  // Load once on mount so the category select in the filter has values.
+  useEffect(() => {
+    void loadClubCategories();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Fetch clubs when filters change
+  useEffect(() => {
+    if (activeTab === "all-clubs") {
+      fetchClubs();
+    }
+  }, [
+    activeTab,
+    page,
+    searchTerm,
+    selectedCampus,
+    selectedCategory,
+    selectedStatus,
+  ]);
 
   // Function to fetch categories from API
   const fetchCategories = async (search?: string, page?: number) => {
@@ -268,71 +292,85 @@ export function StaffClubsManagement() {
     setCategoryPage(newPage);
   };
 
-  const getStatusBadge = (status: Club["status"]) => {
-    const configs: Record<
-      Club["status"],
-      { color: string; label: string; icon: any }
-    > = {
-      active: {
-        color: "bg-green-100 text-green-800",
-        label: "Hoạt động",
-        icon: CheckCircle,
-      },
-      forming: {
-        color: "bg-yellow-100 text-yellow-800",
-        label: "Đang thành lập",
-        icon: AlertCircle,
-      },
-      inactive: {
-        color: "bg-gray-100 text-gray-800",
-        label: "Không hoạt động",
-        icon: AlertCircle,
-      },
-      suspended: {
-        color: "bg-red-100 text-red-800",
-        label: "Tạm dừng",
-        icon: XCircle,
-      },
-    };
-    const config = configs[status];
+  const getStatusBadge = (status: string) => {
+    const statusUpper = status?.toUpperCase();
+    const configs: Record<string, { color: string; label: string; icon: any }> =
+      {
+        ACTIVE: {
+          color: "bg-green-100 text-green-800",
+          label: "Hoạt động",
+          icon: CheckCircle,
+        },
+        FORMING: {
+          color: "bg-yellow-100 text-yellow-800",
+          label: "Đang thành lập",
+          icon: AlertCircle,
+        },
+        UNACTIVE: {
+          color: "bg-gray-100 text-gray-800",
+          label: "Không hoạt động",
+          icon: AlertCircle,
+        },
+        SUSPENDED: {
+          color: "bg-red-100 text-red-800",
+          label: "Tạm dừng",
+          icon: XCircle,
+        },
+      };
+    const config = configs[statusUpper] || configs.UNACTIVE;
     return <Badge className={config.color}>{config.label}</Badge>;
   };
 
-  const handleCreateClub = () => {
-    if (!newClubData.name || !newClubData.category || !newClubData.president)
+  const handleCreateClub = async () => {
+    if (
+      !newClubData.clubName ||
+      !newClubData.clubCode ||
+      !newClubData.categoryId ||
+      !newClubData.campusId ||
+      !newClubData.presidentEmail
+    ) {
+      toast.error("Vui lòng điền đầy đủ thông tin bắt buộc");
       return;
-    const newClub: Club = {
-      id: Math.random().toString(),
-      name: newClubData.name,
-      description: newClubData.description,
-      category: newClubData.category,
-      president: newClubData.president,
-      presidentEmail: newClubData.presidentEmail,
-      presidentPhone: newClubData.presidentPhone,
-      memberCount: 1,
-      foundedYear: newClubData.foundedYear,
-      status: "forming",
-      logo: "/club-logo.jpg",
-      email: newClubData.email,
-      phone: newClubData.phone,
-      address: newClubData.address,
-      createdAt: new Date().toISOString().split("T")[0],
-      lastActivityAt: new Date().toISOString().split("T")[0],
-    };
-    setClubs([...clubs, newClub]);
-    setNewClubData({
-      name: "",
-      description: "",
-      category: "",
-      president: "",
-      presidentEmail: "",
-      presidentPhone: "",
-      email: "",
-      phone: "",
-      address: "",
-      foundedYear: new Date().getFullYear(),
-    });
-    setShowCreateClubDialog(false);
+    }
+
+    // Client-side email format validation
+    if (!isValidEmail(newClubData.presidentEmail)) {
+      setNewClubEmailError("Email không hợp lệ");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      await createStaffClub(newClubData);
+      toast.success("Tạo câu lạc bộ thành công");
+      setNewClubData({
+        clubName: "",
+        clubCode: "",
+        description: "",
+        status: "ACTIVE",
+        campusId: 1,
+        categoryId: 0,
+        presidentEmail: "",
+      });
+      setShowCreateClubDialog(false);
+      // After creating a club, refresh the list so the new club appears.
+      setPage(1);
+      try {
+        await fetchClubs();
+      } catch (err) {
+        console.error("Error refreshing clubs after create:", err);
+      }
+    } catch (error: any) {
+      console.error("Error creating club:", error);
+      // Extract error message from various possible error structures
+      const errorMessage =
+        error?.response?.data?.message ||
+        error?.message ||
+        "Không thể tạo câu lạc bộ";
+      toast.error(errorMessage);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleCreateCategory = async () => {
@@ -424,26 +462,78 @@ export function StaffClubsManagement() {
     }
   };
 
-  const handleUpdateClub = () => {
+  const handleUpdateClub = async () => {
     if (!editingClub) return;
-    setClubs(clubs.map((c) => (c.id === editingClub.id ? editingClub : c)));
-    setEditingClub(null);
-    setShowEditDialog(false);
-    setSelectedClub(null);
+
+    try {
+      setLoading(true);
+      const updateData: UpdateClubRequest = {
+        clubName: editingClub.clubName,
+        clubCode: editingClub.clubCode,
+        description: editingClub.description,
+        status: editingClub.status,
+        campusId: editingClub.campusId,
+        categoryId: editingClub.categoryId,
+      };
+      await updateStaffClub(editingClub.id, updateData);
+      toast.success("Cập nhật câu lạc bộ thành công");
+      setEditingClub(null);
+      setShowEditDialog(false);
+      setSelectedClub(null);
+      await fetchClubs(); // Refresh list
+    } catch (error: any) {
+      console.error("Error updating club:", error);
+      // Extract error message from various possible error structures
+      const errorMessage =
+        error?.response?.data?.message ||
+        error?.message ||
+        "Không thể cập nhật câu lạc bộ";
+      toast.error(errorMessage);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleDeleteClub = (clubId: string) => {
-    setClubs(clubs.filter((c) => c.id !== clubId));
-    setShowDeleteConfirm(false);
-    setSelectedClub(null);
+  const handleDeactivateClub = async (clubId: number) => {
+    try {
+      setLoading(true);
+      await deActiveStaffClub(clubId);
+      toast.success("Đã chuyển câu lạc bộ sang trạng thái không hoạt động");
+      setShowDeleteConfirm(false);
+      setSelectedClub(null);
+      await fetchClubs(); // Refresh list
+    } catch (error: any) {
+      console.error("Error deactivating club:", error);
+      // Extract error message from various possible error structures
+      const errorMessage =
+        error?.response?.data?.message ||
+        error?.message ||
+        "Không thể thay đổi trạng thái câu lạc bộ";
+      toast.error(errorMessage);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const filteredClubs = clubs.filter(
-    (c) =>
-      c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      c.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      c.president.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const handleActivateClub = async (clubId: number) => {
+    try {
+      setLoading(true);
+      await activateStaffClub(clubId);
+      toast.success("Đã chuyển câu lạc bộ sang trạng thái hoạt động");
+      setShowActivateConfirm(false);
+      setSelectedClub(null);
+      await fetchClubs(); // Refresh list
+    } catch (error: any) {
+      console.error("Error activating club:", error);
+      const errorMessage =
+        error?.response?.data?.message ||
+        error?.message ||
+        "Không thể thay đổi trạng thái câu lạc bộ";
+      toast.error(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background p-6">
@@ -472,485 +562,799 @@ export function StaffClubsManagement() {
 
           {/* All Clubs Tab */}
           <TabsContent value="all-clubs" className="space-y-4">
-            <div className="flex gap-4 mb-4">
-              <div className="flex-1 relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-                <Input
-                  placeholder="Tìm câu lạc bộ theo tên, lĩnh vực hoặc chủ tịch..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-              <Dialog
-                open={showCreateClubDialog}
-                onOpenChange={setShowCreateClubDialog}
-              >
-                <DialogTrigger asChild>
-                  <Button className="gap-2">
-                    <Plus className="h-4 w-4" />
-                    Tạo câu lạc bộ mới
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="max-w-2xl">
-                  <DialogHeader>
-                    <DialogTitle>Tạo câu lạc bộ mới</DialogTitle>
-                    <DialogDescription>
-                      Nhập thông tin để tạo câu lạc bộ mới
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <Label htmlFor="new-name">Tên câu lạc bộ *</Label>
-                        <Input
-                          id="new-name"
-                          value={newClubData.name}
+            <div className="space-y-4 mb-4">
+              <div className="flex gap-4">
+                <div className="flex-1 relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                  <Input
+                    placeholder="Tìm câu lạc bộ theo tên hoặc mã..."
+                    value={searchInput}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setSearchInput(v);
+                      // debounce updating the effective searchTerm
+                      if (mainSearchDebounceRef.current) {
+                        window.clearTimeout(mainSearchDebounceRef.current);
+                      }
+                      mainSearchDebounceRef.current = window.setTimeout(() => {
+                        setSearchTerm(v);
+                        setPage(1);
+                        mainSearchDebounceRef.current = null;
+                      }, 300);
+                    }}
+                    onBlur={() => {
+                      // apply immediately on blur
+                      if (mainSearchDebounceRef.current) {
+                        window.clearTimeout(mainSearchDebounceRef.current);
+                        mainSearchDebounceRef.current = null;
+                      }
+                      setSearchTerm(searchInput);
+                      setPage(1);
+                    }}
+                    onKeyDown={(e) => {
+                      if (
+                        (e as React.KeyboardEvent<HTMLInputElement>).key ===
+                        "Enter"
+                      ) {
+                        if (mainSearchDebounceRef.current) {
+                          window.clearTimeout(mainSearchDebounceRef.current);
+                          mainSearchDebounceRef.current = null;
+                        }
+                        setSearchTerm(searchInput);
+                        setPage(1);
+                      }
+                    }}
+                    className="pl-10"
+                  />
+                </div>
+                {/* <Select
+                  value={selectedCampus?.toString() || "all"}
+                  onValueChange={(value) => {
+                    setSelectedCampus(
+                      value === "all" ? undefined : Number(value)
+                    );
+                    setPage(1);
+                  }}
+                >
+                  <SelectTrigger className="w-[200px]">
+                    <SelectValue placeholder="Chọn campus" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tất cả campus</SelectItem>
+                    {campuses.map((campus) => (
+                      <SelectItem key={campus.id} value={campus.id.toString()}>
+                        {campus.campusName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select> */}
+                <Select
+                  value={selectedCategory?.toString() || "all"}
+                  onValueChange={(value) => {
+                    setSelectedCategory(
+                      value === "all" ? undefined : Number(value)
+                    );
+                    setPage(1);
+                  }}
+                >
+                  <SelectTrigger className="w-[200px]">
+                    <SelectValue placeholder="Chọn thể loại" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tất cả thể loại</SelectItem>
+                    {clubCategories.map((cat) => (
+                      <SelectItem key={cat.id} value={cat.id.toString()}>
+                        {cat.categoryName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select
+                  value={selectedStatus || "all"}
+                  onValueChange={(value) => {
+                    setSelectedStatus(value === "all" ? undefined : value);
+                    setPage(1);
+                  }}
+                >
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Trạng thái" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tất cả</SelectItem>
+                    <SelectItem value="ACTIVE">Hoạt động</SelectItem>
+                    <SelectItem value="UNACTIVE">Không hoạt động</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Dialog
+                  open={showCreateClubDialog}
+                  onOpenChange={(open) => {
+                    setShowCreateClubDialog(open);
+                    if (open) {
+                      void loadClubCategories();
+                    }
+                  }}
+                >
+                  <DialogTrigger asChild>
+                    <Button className="gap-2">
+                      <Plus className="h-4 w-4" />
+                      Tạo câu lạc bộ mới
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-2xl">
+                    <DialogHeader>
+                      <DialogTitle>Tạo câu lạc bộ mới</DialogTitle>
+                      <DialogDescription>
+                        Nhập thông tin để tạo câu lạc bộ mới
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="new-name">Tên câu lạc bộ *</Label>
+                          <Input
+                            id="new-name"
+                            value={newClubData.clubName}
+                            onChange={(e) =>
+                              setNewClubData({
+                                ...newClubData,
+                                clubName: e.target.value,
+                              })
+                            }
+                            placeholder="VD: CLB Lập trình"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        {/* <div>
+                          <Label htmlFor="new-campus">Campus *</Label>
+                          <Select
+                            value={
+                              newClubData.campusId > 0
+                                ? newClubData.campusId.toString()
+                                : ""
+                            }
+                            onValueChange={(value) =>
+                              setNewClubData({
+                                ...newClubData,
+                                campusId: Number(value),
+                              })
+                            }
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Chọn campus" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {campuses.map((campus) => (
+                                <SelectItem
+                                  key={campus.id}
+                                  value={campus.id.toString()}
+                                >
+                                  {campus.campusName}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div> */}
+                        <div className="space-y-2">
+                          <Label htmlFor="new-code">Mã câu lạc bộ *</Label>
+                          <Input
+                            id="new-code"
+                            value={newClubData.clubCode}
+                            onChange={(e) =>
+                              setNewClubData({
+                                ...newClubData,
+                                clubCode: e.target.value,
+                              })
+                            }
+                            placeholder="VD: CLB_IT"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="new-category">Thể loại *</Label>
+                          <Select
+                            value={
+                              newClubData.categoryId > 0
+                                ? newClubData.categoryId.toString()
+                                : ""
+                            }
+                            onValueChange={(value) =>
+                              setNewClubData({
+                                ...newClubData,
+                                categoryId: Number(value),
+                              })
+                            }
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Chọn thể loại" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {clubCategories.map((cat) => (
+                                <SelectItem
+                                  key={cat.id}
+                                  value={cat.id.toString()}
+                                >
+                                  {cat.categoryName}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="new-description">Mô tả</Label>
+                        <Textarea
+                          id="new-description"
+                          value={newClubData.description}
                           onChange={(e) =>
                             setNewClubData({
                               ...newClubData,
-                              name: e.target.value,
+                              description: e.target.value,
                             })
                           }
-                          placeholder="VD: CLB Lập trình"
+                          placeholder="Mô tả về câu lạc bộ"
+                          rows={3}
                         />
                       </div>
-                      <div>
-                        <Label htmlFor="new-category">Thể loại *</Label>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="new-president-email">
+                          Email chủ tịch *
+                        </Label>
+                        <Input
+                          id="new-president-email"
+                          value={newClubData.presidentEmail}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setNewClubData({
+                              ...newClubData,
+                              presidentEmail: val,
+                            });
+                            // live-validate email format
+                            if (val && !isValidEmail(val)) {
+                              setNewClubEmailError("Email không hợp lệ");
+                            } else {
+                              setNewClubEmailError(null);
+                            }
+                          }}
+                          type="email"
+                          placeholder="president@fpt.edu.vn"
+                        />
+                        <p className="text-sm text-muted-foreground">
+                          Hãy điền email có tồn tại trong hệ thống FAP
+                        </p>
+                        {newClubEmailError && (
+                          <p className="text-sm text-red-600 mt-1">
+                            {newClubEmailError}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* <div>
+                        <Label htmlFor="new-status">Trạng thái</Label>
                         <Select
-                          value={newClubData.category}
+                          value={newClubData.status}
                           onValueChange={(value) =>
-                            setNewClubData({ ...newClubData, category: value })
+                            setNewClubData({ ...newClubData, status: value })
                           }
                         >
                           <SelectTrigger>
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            {categories.map((cat) => (
-                              <SelectItem key={cat.id} value={cat.name}>
-                                {cat.name}
-                              </SelectItem>
-                            ))}
+                            <SelectItem value="FORMING">
+                              Đang thành lập
+                            </SelectItem>
+                            <SelectItem value="ACTIVE">Hoạt động</SelectItem>
+                            <SelectItem value="INACTIVE">
+                              Không hoạt động
+                            </SelectItem>
+                            <SelectItem value="SUSPENDED">Tạm dừng</SelectItem>
                           </SelectContent>
                         </Select>
+                      </div> */}
+
+                      <div className="flex gap-2">
+                        <Button
+                          onClick={() => setShowCreateClubConfirm(true)}
+                          className="flex-1"
+                          disabled={loading}
+                        >
+                          Tạo câu lạc bộ
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={() => setShowCreateClubDialog(false)}
+                          className="flex-1"
+                        >
+                          Hủy
+                        </Button>
                       </div>
                     </div>
+                  </DialogContent>
+                </Dialog>
 
-                    <div>
-                      <Label htmlFor="new-description">Mô tả</Label>
-                      <Textarea
-                        id="new-description"
-                        value={newClubData.description}
-                        onChange={(e) =>
-                          setNewClubData({
-                            ...newClubData,
-                            description: e.target.value,
-                          })
-                        }
-                        placeholder="Mô tả về câu lạc bộ"
-                        rows={3}
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <Label htmlFor="new-president">Chủ tịch *</Label>
-                        <Input
-                          id="new-president"
-                          value={newClubData.president}
-                          onChange={(e) =>
-                            setNewClubData({
-                              ...newClubData,
-                              president: e.target.value,
-                            })
-                          }
-                          placeholder="Tên chủ tịch"
-                        />
+                {/* Deactivate club confirmation dialog */}
+                <Dialog
+                  open={showDeleteConfirm}
+                  onOpenChange={setShowDeleteConfirm}
+                >
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>
+                        Xác nhận dừng hoạt động câu lạc bộ
+                      </DialogTitle>
+                      <DialogDescription>
+                        Bạn có chắc muốn chuyển câu lạc bộ "
+                        {selectedClub?.clubName}" sang trạng thái không hoạt
+                        động?
+                      </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                      <div className="flex gap-2 w-full">
+                        <Button
+                          className="flex-1"
+                          onClick={() => {
+                            if (selectedClub)
+                              void handleDeactivateClub(selectedClub.id);
+                          }}
+                        >
+                          Dừng hoạt động
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="flex-1"
+                          onClick={() => setShowDeleteConfirm(false)}
+                        >
+                          Hủy
+                        </Button>
                       </div>
-                      <div>
-                        <Label htmlFor="new-founded">Năm thành lập</Label>
-                        <Input
-                          id="new-founded"
-                          type="number"
-                          value={newClubData.foundedYear}
-                          onChange={(e) =>
-                            setNewClubData({
-                              ...newClubData,
-                              foundedYear: parseInt(e.target.value),
-                            })
-                          }
-                        />
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+                {/* Activate club confirmation dialog */}
+                <Dialog
+                  open={showActivateConfirm}
+                  onOpenChange={setShowActivateConfirm}
+                >
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>
+                        Chuyển câu lạc bộ sang hoạt động
+                      </DialogTitle>
+                      <DialogDescription>
+                        Bạn có chắc muốn chuyển câu lạc bộ "
+                        {selectedClub?.clubName}" sang trạng thái hoạt động?
+                      </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                      <div className="flex gap-2 w-full">
+                        <Button
+                          className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+                          onClick={() => {
+                            if (selectedClub)
+                              void handleActivateClub(selectedClub.id);
+                          }}
+                          disabled={loading}
+                        >
+                          Chuyển sang hoạt động
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="flex-1"
+                          onClick={() => setShowActivateConfirm(false)}
+                        >
+                          Hủy
+                        </Button>
                       </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <Label htmlFor="new-president-email">
-                          Email chủ tịch
-                        </Label>
-                        <Input
-                          id="new-president-email"
-                          value={newClubData.presidentEmail}
-                          onChange={(e) =>
-                            setNewClubData({
-                              ...newClubData,
-                              presidentEmail: e.target.value,
-                            })
-                          }
-                          type="email"
-                          placeholder="email@fpt.edu.vn"
-                        />
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+                {/* Activate club confirmation dialog */}
+                <Dialog
+                  open={showActivateConfirm}
+                  onOpenChange={setShowActivateConfirm}
+                >
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>
+                        Chuyển câu lạc bộ sang hoạt động
+                      </DialogTitle>
+                      <DialogDescription>
+                        Bạn có chắc muốn chuyển câu lạc bộ "
+                        {selectedClub?.clubName}" sang trạng thái hoạt động?
+                      </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                      <div className="flex gap-2 w-full">
+                        <Button
+                          className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+                          onClick={() => {
+                            if (selectedClub)
+                              void handleActivateClub(selectedClub.id);
+                          }}
+                          disabled={loading}
+                        >
+                          Chuyển sang hoạt động
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="flex-1"
+                          onClick={() => setShowActivateConfirm(false)}
+                        >
+                          Hủy
+                        </Button>
                       </div>
-                      <div>
-                        <Label htmlFor="new-president-phone">
-                          Điện thoại chủ tịch
-                        </Label>
-                        <Input
-                          id="new-president-phone"
-                          value={newClubData.presidentPhone}
-                          onChange={(e) =>
-                            setNewClubData({
-                              ...newClubData,
-                              presidentPhone: e.target.value,
-                            })
-                          }
-                          placeholder="0901234567"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <Label htmlFor="new-email">Email câu lạc bộ</Label>
-                        <Input
-                          id="new-email"
-                          value={newClubData.email}
-                          onChange={(e) =>
-                            setNewClubData({
-                              ...newClubData,
-                              email: e.target.value,
-                            })
-                          }
-                          type="email"
-                          placeholder="club@fpt.edu.vn"
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="new-phone">Điện thoại câu lạc bộ</Label>
-                        <Input
-                          id="new-phone"
-                          value={newClubData.phone}
-                          onChange={(e) =>
-                            setNewClubData({
-                              ...newClubData,
-                              phone: e.target.value,
-                            })
-                          }
-                          placeholder="0243123456"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <Label htmlFor="new-address">Địa chỉ</Label>
-                      <Input
-                        id="new-address"
-                        value={newClubData.address}
-                        onChange={(e) =>
-                          setNewClubData({
-                            ...newClubData,
-                            address: e.target.value,
-                          })
-                        }
-                        placeholder="Phòng 301, Tầng 3, Toà A"
-                      />
-                    </div>
-
-                    <div className="flex gap-2">
-                      <Button onClick={handleCreateClub} className="flex-1">
-                        Tạo câu lạc bộ
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+                {/* Update confirmation dialog */}
+                <Dialog
+                  open={showUpdateClubConfirm}
+                  onOpenChange={setShowUpdateClubConfirm}
+                >
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Xác nhận cập nhật câu lạc bộ</DialogTitle>
+                      <DialogDescription>
+                        Bạn có chắc muốn lưu thay đổi cho câu lạc bộ "
+                        {editingClub?.clubName}"?
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="flex gap-2 w-full mt-4">
+                      <Button
+                        className="flex-1"
+                        onClick={async () => {
+                          setShowUpdateClubConfirm(false);
+                          await handleUpdateClub();
+                        }}
+                      >
+                        Xác nhận
                       </Button>
                       <Button
                         variant="outline"
-                        onClick={() => setShowCreateClubDialog(false)}
                         className="flex-1"
+                        onClick={() => setShowUpdateClubConfirm(false)}
                       >
                         Hủy
                       </Button>
                     </div>
-                  </div>
-                </DialogContent>
-              </Dialog>
+                  </DialogContent>
+                </Dialog>
+              </div>
             </div>
 
             <Card>
               <CardHeader>
                 <CardTitle>Danh sách câu lạc bộ</CardTitle>
                 <CardDescription>
-                  Tất cả câu lạc bộ tại trường ({filteredClubs.length})
+                  Tất cả câu lạc bộ tại trường ({totalElements})
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Tên câu lạc bộ</TableHead>
-                        <TableHead>Thể loại</TableHead>
-                        <TableHead>Chủ tịch</TableHead>
-                        <TableHead>Thành viên</TableHead>
-                        <TableHead>Trạng thái</TableHead>
-                        <TableHead>Năm thành lập</TableHead>
-                        <TableHead className="text-right">Hành động</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredClubs.length > 0 ? (
-                        filteredClubs.map((club) => (
-                          <TableRow key={club.id}>
-                            <TableCell className="font-medium">
-                              {club.name}
-                            </TableCell>
-                            <TableCell>
-                              <Badge variant="outline">{club.category}</Badge>
-                            </TableCell>
-                            <TableCell>{club.president}</TableCell>
-                            <TableCell>
-                              <span className="flex items-center gap-1">
-                                <Users className="h-3 w-3" />
-                                {club.memberCount}
-                              </span>
-                            </TableCell>
-                            <TableCell>{getStatusBadge(club.status)}</TableCell>
-                            <TableCell>{club.foundedYear}</TableCell>
-                            <TableCell className="text-right">
-                              <div className="flex gap-1 justify-end">
-                                <Dialog>
-                                  <DialogTrigger asChild>
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={() => setSelectedClub(club)}
-                                    >
-                                      <Eye className="h-4 w-4" />
-                                    </Button>
-                                  </DialogTrigger>
-                                  <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
-                                    <DialogHeader>
-                                      <DialogTitle>
-                                        {selectedClub?.name}
-                                      </DialogTitle>
-                                      <DialogDescription>
-                                        {selectedClub?.description}
-                                      </DialogDescription>
-                                    </DialogHeader>
-                                    {selectedClub && (
-                                      <div className="space-y-6">
-                                        <div className="flex gap-4 items-start">
-                                          <Avatar className="h-16 w-16">
-                                            <AvatarImage
-                                              src={
-                                                selectedClub.logo ||
-                                                "/placeholder.svg"
-                                              }
-                                            />
-                                            <AvatarFallback>
-                                              {selectedClub.name.charAt(0)}
-                                            </AvatarFallback>
-                                          </Avatar>
-                                          <div className="flex-1">
-                                            <h3 className="font-semibold text-lg">
-                                              {selectedClub.name}
-                                            </h3>
-                                            <div className="flex gap-2 mt-2">
-                                              {getStatusBadge(
-                                                selectedClub.status
-                                              )}
-                                              <Badge variant="outline">
-                                                {selectedClub.category}
-                                              </Badge>
-                                            </div>
-                                          </div>
-                                        </div>
-
-                                        <Separator />
-
-                                        <div className="grid grid-cols-2 gap-4">
-                                          <div>
-                                            <h4 className="font-medium mb-2 text-sm">
-                                              Thông tin chung
-                                            </h4>
-                                            <div className="space-y-2 text-sm">
-                                              <div>
-                                                <span className="text-muted-foreground">
-                                                  Thành lập:
-                                                </span>{" "}
-                                                {selectedClub.foundedYear}
-                                              </div>
-                                              <div>
-                                                <span className="text-muted-foreground">
-                                                  Thành viên:
-                                                </span>{" "}
-                                                {selectedClub.memberCount}
-                                              </div>
-                                              <div>
-                                                <span className="text-muted-foreground">
-                                                  Ngày tạo:
-                                                </span>{" "}
-                                                {selectedClub.createdAt}
-                                              </div>
-                                              <div>
-                                                <span className="text-muted-foreground">
-                                                  Hoạt động gần đây:
-                                                </span>{" "}
-                                                {selectedClub.lastActivityAt}
+                {loading ? (
+                  <div className="text-center py-8">
+                    <p className="text-muted-foreground">Đang tải dữ liệu...</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Tên câu lạc bộ</TableHead>
+                            <TableHead>Mã CLB</TableHead>
+                            {/* <TableHead>Campus</TableHead> */}
+                            <TableHead>Thể loại</TableHead>
+                            <TableHead>Thành viên</TableHead>
+                            <TableHead>Trạng thái</TableHead>
+                            <TableHead className="text-right">
+                              Hành động
+                            </TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {clubs.length > 0 ? (
+                            clubs.map((club) => (
+                              <TableRow key={club.id}>
+                                <TableCell className="font-medium">
+                                  {club.clubName}
+                                </TableCell>
+                                <TableCell>
+                                  <Badge variant="outline">
+                                    {club.clubCode}
+                                  </Badge>
+                                </TableCell>
+                                {/* <TableCell>{club.campusName}</TableCell> */}
+                                <TableCell>
+                                  <Badge variant="outline">
+                                    {club.categoryName}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell>
+                                  <span className="flex items-center gap-1">
+                                    <Users className="h-3 w-3" />
+                                    {club.totalMembers}
+                                  </span>
+                                </TableCell>
+                                <TableCell>
+                                  {getStatusBadge(club.status)}
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  <div className="flex gap-1 justify-end">
+                                    <Dialog>
+                                      <DialogTrigger asChild>
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={() => setSelectedClub(club)}
+                                        >
+                                          <Eye className="h-4 w-4" />
+                                        </Button>
+                                      </DialogTrigger>
+                                      <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+                                        <DialogHeader>
+                                          <DialogTitle>
+                                            {selectedClub?.clubName}
+                                          </DialogTitle>
+                                          <DialogDescription>
+                                            {selectedClub?.description}
+                                          </DialogDescription>
+                                        </DialogHeader>
+                                        {selectedClub && (
+                                          <div className="space-y-6">
+                                            <div className="flex gap-4 items-start">
+                                              <Avatar className="h-16 w-16">
+                                                <AvatarImage
+                                                  src={
+                                                    selectedClub.logoUrl ||
+                                                    "/placeholder.svg"
+                                                  }
+                                                />
+                                                <AvatarFallback>
+                                                  {selectedClub.clubName.charAt(
+                                                    0
+                                                  )}
+                                                </AvatarFallback>
+                                              </Avatar>
+                                              <div className="flex-1">
+                                                <h3 className="font-semibold text-lg">
+                                                  {selectedClub.clubName}
+                                                </h3>
+                                                <div className="flex gap-2 mt-2">
+                                                  {getStatusBadge(
+                                                    selectedClub.status
+                                                  )}
+                                                  <Badge variant="outline">
+                                                    {selectedClub.categoryName}
+                                                  </Badge>
+                                                </div>
                                               </div>
                                             </div>
-                                          </div>
 
-                                          <div>
-                                            <h4 className="font-medium mb-2 text-sm">
-                                              Liên hệ
-                                            </h4>
-                                            <div className="space-y-2 text-sm">
-                                              <div className="flex items-center gap-2">
-                                                <Mail className="h-3 w-3 text-muted-foreground" />
-                                                <a
-                                                  href={`mailto:${selectedClub.email}`}
-                                                  className="text-primary hover:underline"
-                                                >
-                                                  {selectedClub.email}
-                                                </a>
+                                            <Separator />
+
+                                            <div className="grid grid-cols-2 gap-4">
+                                              <div>
+                                                <h4 className="font-medium mb-2 text-sm">
+                                                  Thông tin chung
+                                                </h4>
+                                                <div className="space-y-2 text-sm">
+                                                  <div>
+                                                    <span className="text-muted-foreground">
+                                                      Campus:
+                                                    </span>{" "}
+                                                    {selectedClub.campusName}
+                                                  </div>
+                                                  <div>
+                                                    <span className="text-muted-foreground">
+                                                      Thành viên:
+                                                    </span>{" "}
+                                                    {selectedClub.totalMembers}
+                                                  </div>
+                                                  <div>
+                                                    <span className="text-muted-foreground">
+                                                      Sự kiện:
+                                                    </span>{" "}
+                                                    {selectedClub.totalEvents}
+                                                  </div>
+                                                  <div>
+                                                    <span className="text-muted-foreground">
+                                                      Bài viết:
+                                                    </span>{" "}
+                                                    {selectedClub.totalPosts}
+                                                  </div>
+                                                </div>
                                               </div>
-                                              <div className="flex items-center gap-2">
-                                                <Phone className="h-3 w-3 text-muted-foreground" />
-                                                <a
-                                                  href={`tel:${selectedClub.phone}`}
-                                                  className="text-primary hover:underline"
-                                                >
-                                                  {selectedClub.phone}
-                                                </a>
-                                              </div>
-                                              <div className="flex items-center gap-2">
-                                                <MapPin className="h-3 w-3 text-muted-foreground" />
-                                                <span>
-                                                  {selectedClub.address}
-                                                </span>
+
+                                              <div>
+                                                <h4 className="font-medium mb-2 text-sm">
+                                                  Liên hệ
+                                                </h4>
+                                                <div className="space-y-2 text-sm">
+                                                  {selectedClub.email && (
+                                                    <div className="flex items-center gap-2">
+                                                      <Mail className="h-3 w-3 text-muted-foreground" />
+                                                      <a
+                                                        href={`mailto:${selectedClub.email}`}
+                                                        className="text-primary hover:underline"
+                                                      >
+                                                        {selectedClub.email}
+                                                      </a>
+                                                    </div>
+                                                  )}
+                                                  {selectedClub.phone && (
+                                                    <div className="flex items-center gap-2">
+                                                      <Phone className="h-3 w-3 text-muted-foreground" />
+                                                      <a
+                                                        href={`tel:${selectedClub.phone}`}
+                                                        className="text-primary hover:underline"
+                                                      >
+                                                        {selectedClub.phone}
+                                                      </a>
+                                                    </div>
+                                                  )}
+                                                </div>
                                               </div>
                                             </div>
-                                          </div>
-                                        </div>
 
-                                        <Separator />
+                                            <Separator />
 
-                                        <div>
-                                          <h4 className="font-medium mb-3 text-sm">
-                                            Thông tin chủ tịch
-                                          </h4>
-                                          <div className="p-3 bg-muted rounded-lg space-y-2 text-sm">
                                             <div>
-                                              <span className="text-muted-foreground">
-                                                Tên:
-                                              </span>{" "}
-                                              {selectedClub.president}
+                                              <h4 className="font-medium mb-3 text-sm">
+                                                Chủ nhiệm câu lạc bộ
+                                              </h4>
+                                              {selectedClub.presidents &&
+                                              selectedClub.presidents.length >
+                                                0 ? (
+                                                <div className="space-y-3">
+                                                  {selectedClub.presidents.map(
+                                                    (president, index) => (
+                                                      <div
+                                                        key={index}
+                                                        className="p-3 bg-muted rounded-lg space-y-2 text-sm"
+                                                      >
+                                                        <div className="flex items-center gap-2">
+                                                          {president.avatarUrl && (
+                                                            <Avatar className="h-8 w-8">
+                                                              <AvatarImage
+                                                                src={
+                                                                  president.avatarUrl
+                                                                }
+                                                              />
+                                                              <AvatarFallback>
+                                                                {president.fullName.charAt(
+                                                                  0
+                                                                )}
+                                                              </AvatarFallback>
+                                                            </Avatar>
+                                                          )}
+                                                          <div>
+                                                            <div className="font-medium">
+                                                              {
+                                                                president.fullName
+                                                              }
+                                                            </div>
+                                                            <div className="flex items-center gap-2 text-muted-foreground">
+                                                              <Mail className="h-3 w-3" />
+                                                              <a
+                                                                href={`mailto:${president.email}`}
+                                                                className="text-primary hover:underline"
+                                                              >
+                                                                {
+                                                                  president.email
+                                                                }
+                                                              </a>
+                                                            </div>
+                                                          </div>
+                                                        </div>
+                                                      </div>
+                                                    )
+                                                  )}
+                                                </div>
+                                              ) : (
+                                                <div className="p-3 bg-muted rounded-lg text-sm text-muted-foreground">
+                                                  Chưa có thông tin chủ nhiệm
+                                                </div>
+                                              )}
                                             </div>
-                                            <div className="flex items-center gap-2">
-                                              <Mail className="h-3 w-3 text-muted-foreground" />
-                                              <a
-                                                href={`mailto:${selectedClub.presidentEmail}`}
-                                                className="text-primary hover:underline"
-                                              >
-                                                {selectedClub.presidentEmail}
-                                              </a>
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                              <Phone className="h-3 w-3 text-muted-foreground" />
-                                              <a
-                                                href={`tel:${selectedClub.presidentPhone}`}
-                                                className="text-primary hover:underline"
-                                              >
-                                                {selectedClub.presidentPhone}
-                                              </a>
-                                            </div>
-                                          </div>
-                                        </div>
 
-                                        <Separator />
+                                            <Separator />
 
-                                        <div className="flex gap-2">
-                                          <Button
-                                            onClick={() => {
-                                              setEditingClub(selectedClub);
-                                              setShowEditDialog(true);
-                                            }}
-                                            className="flex-1"
-                                          >
-                                            <Edit className="h-4 w-4 mr-2" />
-                                            Chỉnh sửa
-                                          </Button>
-                                          <Button
-                                            variant="destructive"
-                                            onClick={() =>
-                                              setShowDeleteConfirm(true)
-                                            }
-                                            className="flex-1"
-                                          >
-                                            <Trash2 className="h-4 w-4 mr-2" />
-                                            Xóa
-                                          </Button>
-                                        </div>
-
-                                        {showDeleteConfirm && (
-                                          <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-                                            <p className="font-medium text-red-800 mb-3">
-                                              Xác nhận xóa câu lạc bộ?
-                                            </p>
                                             <div className="flex gap-2">
                                               <Button
-                                                variant="destructive"
-                                                onClick={() =>
-                                                  handleDeleteClub(
-                                                    selectedClub.id
-                                                  )
-                                                }
+                                                onClick={() => {
+                                                  setEditingClub(selectedClub);
+                                                  setShowEditDialog(true);
+                                                }}
                                                 className="flex-1"
                                               >
-                                                Xóa
+                                                <Edit className="h-4 w-4 mr-2" />
+                                                Chỉnh sửa
                                               </Button>
-                                              <Button
-                                                variant="outline"
-                                                onClick={() =>
-                                                  setShowDeleteConfirm(false)
-                                                }
-                                                className="flex-1"
-                                              >
-                                                Hủy
-                                              </Button>
+                                              {selectedClub.status ===
+                                              "UNACTIVE" ? (
+                                                <Button
+                                                  onClick={() =>
+                                                    setShowActivateConfirm(true)
+                                                  }
+                                                  className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+                                                >
+                                                  <CheckCircle className="h-4 w-4 mr-2" />
+                                                  Chuyển sang hoạt động
+                                                </Button>
+                                              ) : (
+                                                <Button
+                                                  variant="destructive"
+                                                  onClick={() =>
+                                                    setShowDeleteConfirm(true)
+                                                  }
+                                                  className="flex-1"
+                                                >
+                                                  <Trash2 className="h-4 w-4 mr-2" />
+                                                  dừng hoạt động
+                                                </Button>
+                                              )}
                                             </div>
                                           </div>
                                         )}
-                                      </div>
-                                    )}
-                                  </DialogContent>
-                                </Dialog>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ))
-                      ) : (
-                        <TableRow>
-                          <TableCell
-                            colSpan={7}
-                            className="text-center py-8 text-muted-foreground"
+                                      </DialogContent>
+                                    </Dialog>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            ))
+                          ) : (
+                            <TableRow>
+                              <TableCell
+                                colSpan={7}
+                                className="text-center py-8 text-muted-foreground"
+                              >
+                                Không tìm thấy câu lạc bộ
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
+                    {totalPages > 1 && (
+                      <div className="flex items-center justify-between px-2 py-4">
+                        <div className="text-sm text-muted-foreground">
+                          Hiển thị{" "}
+                          {clubs.length > 0 ? (page - 1) * pageSize + 1 : 0} -{" "}
+                          {Math.min(page * pageSize, totalElements)} trong tổng
+                          số {totalElements} câu lạc bộ
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setPage((p) => Math.max(1, p - 1))}
+                            disabled={page === 1}
                           >
-                            Không tìm thấy câu lạc bộ
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </TableBody>
-                  </Table>
-                </div>
+                            Trước
+                          </Button>
+                          <div className="flex items-center gap-1">
+                            <span className="text-sm">
+                              Trang {page} / {totalPages}
+                            </span>
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() =>
+                              setPage((p) => Math.min(totalPages, p + 1))
+                            }
+                            disabled={page >= totalPages}
+                          >
+                            Sau
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -1014,7 +1418,7 @@ export function StaffClubsManagement() {
                     </DialogDescription>
                   </DialogHeader>
                   <div className="space-y-4">
-                    <div>
+                    <div className="space-y-2">
                       <Label htmlFor="category-name">Tên thể loại</Label>
                       <Input
                         id="category-name"
@@ -1041,6 +1445,43 @@ export function StaffClubsManagement() {
                   </div>
                 </DialogContent>
               </Dialog>
+              {/* Activate club confirmation dialog */}
+              <Dialog
+                open={showActivateConfirm}
+                onOpenChange={setShowActivateConfirm}
+              >
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Chuyển câu lạc bộ sang hoạt động</DialogTitle>
+                    <DialogDescription>
+                      Bạn có chắc muốn chuyển câu lạc bộ "
+                      {selectedClub?.clubName}" sang trạng thái hoạt động?
+                    </DialogDescription>
+                  </DialogHeader>
+                  <DialogFooter>
+                    <div className="flex gap-2 w-full">
+                      <Button
+                        className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+                        onClick={() => {
+                          if (selectedClub)
+                            void handleActivateClub(selectedClub.id);
+                        }}
+                        disabled={loading}
+                      >
+                        Chuyển sang hoạt động
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="flex-1"
+                        onClick={() => setShowActivateConfirm(false)}
+                      >
+                        Hủy
+                      </Button>
+                    </div>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+              {/* Create confirmation dialog (moved to global dialogs) */}
             </div>
 
             <Card>
@@ -1111,7 +1552,7 @@ export function StaffClubsManagement() {
                                       </DialogHeader>
                                       {editingCategory && (
                                         <div className="space-y-4">
-                                          <div>
+                                          <div className="space-y-2">
                                             <Label htmlFor="edit-category-name">
                                               Tên thể loại
                                             </Label>
@@ -1289,6 +1730,41 @@ export function StaffClubsManagement() {
         </DialogContent>
       </Dialog>
 
+      {/* Create Club Confirmation Dialog - global so it shows regardless of active tab */}
+      <Dialog
+        open={showCreateClubConfirm}
+        onOpenChange={setShowCreateClubConfirm}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Xác nhận tạo câu lạc bộ</DialogTitle>
+            <DialogDescription>
+              Bạn có chắc muốn tạo câu lạc bộ "{newClubData.clubName}"?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <div className="flex gap-2 w-full mt-4">
+              <Button
+                className="flex-1"
+                onClick={async () => {
+                  setShowCreateClubConfirm(false);
+                  await handleCreateClub();
+                }}
+              >
+                Xác nhận
+              </Button>
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => setShowCreateClubConfirm(false)}
+              >
+                Hủy
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog
         open={showUpdateCategoryConfirm}
         onOpenChange={setShowUpdateCategoryConfirm}
@@ -1366,24 +1842,41 @@ export function StaffClubsManagement() {
           {editingClub && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
-                <div>
+                <div className="space-y-2">
                   <Label htmlFor="edit-name">Tên câu lạc bộ</Label>
                   <Input
                     id="edit-name"
-                    value={editingClub.name}
+                    value={editingClub.clubName}
                     onChange={(e) =>
-                      setEditingClub({ ...editingClub, name: e.target.value })
+                      setEditingClub({
+                        ...editingClub,
+                        clubName: e.target.value,
+                      })
                     }
                   />
                 </div>
-                <div>
+                <div className="space-y-2">
+                  <Label htmlFor="new-code">Mã câu lạc bộ *</Label>
+                  <Input
+                    id="new-code"
+                    value={editingClub.clubCode}
+                    onChange={(e) =>
+                      setEditingClub({
+                        ...editingClub,
+                        clubCode: e.target.value,
+                      })
+                    }
+                    placeholder="VD: CLB_IT"
+                  />
+                </div>
+                {/* <div>
                   <Label htmlFor="edit-status">Trạng thái</Label>
                   <Select
                     value={editingClub.status}
                     onValueChange={(value) =>
                       setEditingClub({
                         ...editingClub,
-                        status: value as Club["status"],
+                        status: value,
                       })
                     }
                   >
@@ -1397,10 +1890,10 @@ export function StaffClubsManagement() {
                       <SelectItem value="suspended">Tạm dừng</SelectItem>
                     </SelectContent>
                   </Select>
-                </div>
+                </div> */}
               </div>
 
-              <div>
+              <div className="space-y-2">
                 <Label htmlFor="edit-description">Mô tả</Label>
                 <Textarea
                   id="edit-description"
@@ -1415,7 +1908,7 @@ export function StaffClubsManagement() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              {/* <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="edit-email">Email</Label>
                   <Input
@@ -1436,10 +1929,13 @@ export function StaffClubsManagement() {
                     }
                   />
                 </div>
-              </div>
+              </div> */}
 
               <div className="flex gap-2">
-                <Button onClick={handleUpdateClub} className="flex-1">
+                <Button
+                  onClick={() => setShowUpdateClubConfirm(true)}
+                  className="flex-1"
+                >
                   Lưu thay đổi
                 </Button>
                 <Button

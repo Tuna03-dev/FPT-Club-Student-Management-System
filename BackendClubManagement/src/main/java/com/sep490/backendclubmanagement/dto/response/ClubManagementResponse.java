@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
 @Builder
@@ -32,6 +33,7 @@ public class ClubManagementResponse {
     private Long totalMembers;
     private Long totalEvents;
     private Long totalPosts;
+    private List<ClubPresidentData> presidents;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

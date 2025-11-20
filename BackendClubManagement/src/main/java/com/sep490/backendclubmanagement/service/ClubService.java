@@ -38,6 +38,7 @@ public class ClubService implements ClubServiceInterface {
     private final SemesterRepository semesterRepository;
     private final ClubMemberShipRepository clubMemberShipRepository;
     private final RoleMemberShipRepository roleMemberShipRepository;
+    private final SystemRoleRepository systemRoleRepository;
     private final RoleService roleService;
 
     @Override
@@ -54,10 +55,10 @@ public class ClubService implements ClubServiceInterface {
         result.setTotalPosts(clubRepository.countNewsByClubId(clubId));
         result.setIsRecruiting(clubRepository.hasActiveRecruitment(clubId));
         
-        // Find president manually and set to result
-        ClubPresidentData president = findClubPresidentManually(club);
-        result.setPresident(president);
-        
+        // Find all presidents manually and set to result
+        List<ClubPresidentData> presidents = findClubPresidentsManually(club);
+        result.setPresidents(presidents);
+
         return result;
     }
 
@@ -75,19 +76,21 @@ public class ClubService implements ClubServiceInterface {
         result.setTotalPosts(clubRepository.countNewsByClubId(club.getId()));
         result.setIsRecruiting(clubRepository.hasActiveRecruitment(club.getId()));
         
-        // Find president manually and set to result
-        ClubPresidentData president = findClubPresidentManually(club);
-        result.setPresident(president);
-        
+        // Find all presidents manually and set to result
+        List<ClubPresidentData> presidents = findClubPresidentsManually(club);
+        result.setPresidents(presidents);
+
         return result;
     }
     
     /**
-     * Find club president for current semester
+     * Find all club presidents for current semester
      */
-    private ClubPresidentData findClubPresidentManually(Club club) {
+    private List<ClubPresidentData> findClubPresidentsManually(Club club) {
+        List<ClubPresidentData> presidents = new java.util.ArrayList<>();
+
         if (club.getClubMemberships() == null) {
-            return null;
+            return presidents;
         }
 
         for (ClubMemberShip membership : club.getClubMemberships()) {
@@ -104,17 +107,17 @@ public class ClubService implements ClubServiceInterface {
                     
                     User user = membership.getUser();
                     if (user != null) {
-                        return ClubPresidentData.builder()
+                        presidents.add(ClubPresidentData.builder()
                                 .fullName(user.getFullName())
                                 .email(user.getEmail())
                                 .avatarUrl(user.getAvatarUrl())
-                                .build();
+                                .build());
                     }
                 }
             }
         }
 
-        return null;
+        return presidents;
     }
 
     @Override
@@ -132,7 +135,14 @@ public class ClubService implements ClubServiceInterface {
             throw new AppException(ErrorCode.FORBIDDEN);
         }
 
-        Page<Club> page = clubRepository.getAllClubsByFilter(request, request.getPageable("id,desc"));
+        Page<Club> page = clubRepository.getAllClubsByFilter(
+                request.getKeyword(),
+                request.getCampusId(),
+                request.getCategoryId(),
+                request.getStatus(),
+                request.getPageable("id,desc")
+        );
+
 
         List<ClubManagementResponse> content = page.getContent().stream()
                 .map(club -> {
@@ -140,6 +150,14 @@ public class ClubService implements ClubServiceInterface {
                     response.setTotalMembers(clubRepository.countMembersByClubId(club.getId()));
                     response.setTotalEvents(clubRepository.countEventsByClubId(club.getId()));
                     response.setTotalPosts(clubRepository.countNewsByClubId(club.getId()));
+
+                    // Populate presidents information
+                    List<ClubPresidentData> presidents = clubRepository.findPresidentsByClubId(club.getId())
+                            .stream()
+                            .map(clubMapper::toPresidentData)
+                            .collect(Collectors.toList());
+                    response.setPresidents(presidents);
+
                     return response;
                 })
                 .collect(Collectors.toList());
@@ -168,6 +186,11 @@ public class ClubService implements ClubServiceInterface {
             throw new AppException(ErrorCode.CLUB_CODE_EXISTED);
         }
 
+        // Validate club name uniqueness
+        if (clubRepository.findByClubName(request.getClubName()).isPresent()) {
+            throw new AppException(ErrorCode.CLUB_NAME_EXISTED);
+        }
+
         // Validate campus
         Campus campus = campusRepository.findById(request.getCampusId())
                 .orElseThrow(() -> new AppException(ErrorCode.CAMPUS_NOT_FOUND));
@@ -189,14 +212,6 @@ public class ClubService implements ClubServiceInterface {
                 .clubName(request.getClubName())
                 .clubCode(request.getClubCode())
                 .description(request.getDescription())
-                .logoUrl(request.getLogoUrl())
-                .bannerUrl(request.getBannerUrl())
-                .email(request.getEmail())
-                .phone(request.getPhone())
-                .fbUrl(request.getFbUrl())
-                .igUrl(request.getIgUrl())
-                .ttUrl(request.getTtUrl())
-                .ytUrl(request.getYtUrl())
                 .status(request.getStatus() != null ? request.getStatus() : "ACTIVE")
                 .campus(campus)
                 .clubCategory(category)
@@ -249,6 +264,7 @@ public class ClubService implements ClubServiceInterface {
                         .roleCode("CLUB_PRESIDENT")
                         .roleLevel(1)
                         .description("Người đứng đầu câu lạc bộ, quản lý toàn bộ hoạt động.")
+                        .systemRole(systemRoleRepository.findByRoleName("CLUB_OFFICER").orElse(null))
                         .build(),
                 ClubRole.builder()
                         .club(club)
@@ -256,6 +272,7 @@ public class ClubService implements ClubServiceInterface {
                         .roleCode("CLUB_VICE_PRESIDENT")
                         .roleLevel(2)
                         .description("Phó Chủ nhiệm - trợ giúp Chủ nhiệm.")
+                        .systemRole(systemRoleRepository.findByRoleName("CLUB_OFFICER").orElse(null))
                         .build(),
                 ClubRole.builder()
                         .club(club)
@@ -263,6 +280,7 @@ public class ClubService implements ClubServiceInterface {
                         .roleCode("CLUB_TEAM_HEAD")
                         .roleLevel(3)
                         .description("Trưởng ban - phụ trách 1 ban chuyên môn.")
+                        .systemRole(systemRoleRepository.findByRoleName("TEAM_OFFICER").orElse(null))
                         .build(),
                 ClubRole.builder()
                         .club(club)
@@ -270,6 +288,7 @@ public class ClubService implements ClubServiceInterface {
                         .roleCode("CLUB_TEAM_DEPUTY")
                         .roleLevel(4)
                         .description("Phó ban - trợ giúp Trưởng ban.")
+                        .systemRole(systemRoleRepository.findByRoleName("TEAM_OFFICER").orElse(null))
                         .build(),
                 ClubRole.builder()
                         .club(club)
@@ -277,6 +296,7 @@ public class ClubService implements ClubServiceInterface {
                         .roleCode("CLUB_TREASURER")
                         .roleLevel(3)
                         .description("Người quản lý tài chính của CLB.")
+                        .systemRole(systemRoleRepository.findByRoleName("CLUB_TREASURER").orElse(null))
                         .build(),
                 ClubRole.builder()
                         .club(club)
@@ -284,6 +304,7 @@ public class ClubService implements ClubServiceInterface {
                         .roleCode("CLUB_MEMBER")
                         .roleLevel(6)
                         .description("Thành viên chung của CLB.")
+                        .systemRole(systemRoleRepository.findByRoleName("MEMBER").orElse(null))
                         .build()
         );
 
@@ -344,6 +365,14 @@ public class ClubService implements ClubServiceInterface {
             club.setClubCode(request.getClubCode());
         }
 
+        // Update club name if provided and different
+        if (request.getClubName() != null && !request.getClubName().equals(club.getClubName())) {
+            if (clubRepository.findByClubName(request.getClubName()).isPresent()) {
+                throw new AppException(ErrorCode.CLUB_NAME_EXISTED);
+            }
+            club.setClubName(request.getClubName());
+        }
+
         // Update campus if provided
         if (request.getCampusId() != null) {
             Campus campus = campusRepository.findById(request.getCampusId())
@@ -359,16 +388,7 @@ public class ClubService implements ClubServiceInterface {
         }
 
         // Update other fields
-        if (request.getClubName() != null) club.setClubName(request.getClubName());
         if (request.getDescription() != null) club.setDescription(request.getDescription());
-        if (request.getLogoUrl() != null) club.setLogoUrl(request.getLogoUrl());
-        if (request.getBannerUrl() != null) club.setBannerUrl(request.getBannerUrl());
-        if (request.getEmail() != null) club.setEmail(request.getEmail());
-        if (request.getPhone() != null) club.setPhone(request.getPhone());
-        if (request.getFbUrl() != null) club.setFbUrl(request.getFbUrl());
-        if (request.getIgUrl() != null) club.setIgUrl(request.getIgUrl());
-        if (request.getTtUrl() != null) club.setTtUrl(request.getTtUrl());
-        if (request.getYtUrl() != null) club.setYtUrl(request.getYtUrl());
         if (request.getStatus() != null) club.setStatus(request.getStatus());
 
         Club updatedClub = clubRepository.save(club);
@@ -383,7 +403,7 @@ public class ClubService implements ClubServiceInterface {
 
     @Override
     @Transactional
-    public void deleteClub(Long clubId, Long staffId) throws AppException {
+    public void deactivateClub(Long clubId, Long staffId) throws AppException {
         // Kiểm tra quyền STAFF
         if (!roleService.isStaff(staffId)) {
             throw new AppException(ErrorCode.FORBIDDEN);
@@ -392,8 +412,25 @@ public class ClubService implements ClubServiceInterface {
         Club club = clubRepository.findById(clubId)
                 .orElseThrow(() -> new AppException(ErrorCode.CLUB_NOT_FOUND));
 
-        clubRepository.delete(club);
-        log.info("Deleted club with ID: {}", clubId);
+        club.setStatus("UNACTIVE");
+        clubRepository.save(club);
+        log.info("Deactivated club with ID: {}", clubId);
+    }
+
+    @Override
+    @Transactional
+    public void activateClub(Long clubId, Long staffId) throws AppException {
+        // Kiểm tra quyền STAFF
+        if (!roleService.isStaff(staffId)) {
+            throw new AppException(ErrorCode.FORBIDDEN);
+        }
+
+        Club club = clubRepository.findById(clubId)
+                .orElseThrow(() -> new AppException(ErrorCode.CLUB_NOT_FOUND));
+
+        club.setStatus("ACTIVE");
+        clubRepository.save(club);
+        log.info("Activated club with ID: {}", clubId);
     }
 
     @Override

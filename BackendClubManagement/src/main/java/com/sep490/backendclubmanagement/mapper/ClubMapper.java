@@ -19,7 +19,7 @@ public interface ClubMapper {
     @Mapping(target = "totalEvents", ignore = true)
     @Mapping(target = "totalPosts", ignore = true)
     @Mapping(target = "isRecruiting", ignore = true)
-    @Mapping(target = "president", ignore = true)
+    @Mapping(target = "presidents", ignore = true)
     ClubDetailData toClubDetailData(Club club);
 
     @Mapping(source = "user.fullName", target = "fullName")
@@ -34,9 +34,10 @@ public interface ClubMapper {
     @Mapping(target = "totalMembers", ignore = true)
     @Mapping(target = "totalEvents", ignore = true)
     @Mapping(target = "totalPosts", ignore = true)
+    @Mapping(target = "presidents", ignore = true)
     ClubManagementResponse toClubManagementResponse(Club club);
 
-    // Note: Statistics (totalMembers, totalEvents, totalPosts, isRecruiting) and president
-    // are set in ClubService using dedicated count queries to avoid Cartesian product issues
+    // Note: Statistics (totalMembers, totalEvents, totalPosts) and presidents list
+    // are set in ClubService using dedicated queries to avoid Cartesian product issues
 }
 

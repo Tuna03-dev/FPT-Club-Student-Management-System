@@ -16,22 +16,6 @@ public class CreateClubRequest {
 
     private String description;
 
-    private String logoUrl;
-
-    private String bannerUrl;
-
-    private String email;
-
-    private String phone;
-
-    private String fbUrl;
-
-    private String igUrl;
-
-    private String ttUrl;
-
-    private String ytUrl;
-
     private String status;
 
     @NotNull(message = "Campus không được để trống")
