@@ -98,17 +98,88 @@ public class PostService {
         Page<Post> page = postRepository.findPendingTeamPosts(clubId, teamId, PostStatus.PENDING, pageable);
         return page.map(this::toDetailsDTO);
     }
-    // search
-    public Page<PostWithRelationsData> searchPosts(
-            Long clubId, Long teamId, Boolean clubWide, String keyword, Pageable pageable
+    public Page<PostWithRelationsData> searchPostsForUser(
+            Long userId,
+            String keyword,
+            Pageable pageable
     ) {
-        String q = (keyword == null) ? "" : keyword.trim();
+
+        String q = keyword == null ? "" : keyword.trim();
         if (q.isEmpty()) {
-            // Không có keyword thì trả về rỗng (hoặc bạn có thể quyết định trả tất cả)
             return Page.empty(pageable);
         }
-        Page<Post> page = postRepository.searchPosts(clubId, teamId, clubWide, "PUBLISHED", q, pageable);
-        return page.map(this::toDetailsDTO);
+
+        // 1) Lấy tất cả CLB user đang active kỳ hiện tại
+        List<ClubMemberShip> myClubs = clubMemberShipRepository.findByUserIdWithRoles(
+                userId, ClubMemberShipStatus.ACTIVE, null, true
+        );
+
+        if (myClubs.isEmpty()) {
+            return Page.empty(pageable);
+        }
+
+        List<Post> collected = new ArrayList<>();
+
+        // 2) Lặp qua từng CLB user tham gia
+        for (ClubMemberShip cms : myClubs) {
+            Long clubId = cms.getClub().getId();
+
+            boolean isAdmin = clubRoleService.isClubLeaderOrVice(userId, clubId);
+
+            if (isAdmin) {
+                // 2.1 Chủ nhiệm/phó → search toàn bộ CLB
+                collected.addAll(
+                        postRepository.searchAdminScope(
+                                clubId,
+                                PostStatus.PUBLISHED,
+                                q
+                        )
+                );
+            } else {
+                // 2.2 Member/Lead → search theo quyền hạn
+
+                // (a) Club-wide của CLB này
+                collected.addAll(
+                        postRepository.searchClubWideOnly(
+                                clubId,
+                                PostStatus.PUBLISHED,
+                                q
+                        )
+                );
+
+                // (b) Team của user trong CLB này
+                List<Long> myTeams = clubMemberShipRepository.findTeamIdsByUserAndClubAndStatus(
+                        userId, clubId, ClubMemberShipStatus.ACTIVE
+                );
+
+                if (myTeams != null && !myTeams.isEmpty()) {
+                    collected.addAll(
+                            postRepository.searchTeamScope(
+                                    clubId,
+                                    myTeams,
+                                    PostStatus.PUBLISHED,
+                                    q
+                            )
+                    );
+                }
+            }
+        }
+
+        // 3) Loại trùng bài
+        List<Post> distinct = collected.stream()
+                .distinct()
+                .sorted(Comparator.comparing(Post::getCreatedAt).reversed())
+                .toList();
+
+        // 4) Tạo Page thủ công
+        int start = (int) pageable.getOffset();
+        int end = Math.min(start + pageable.getPageSize(), distinct.size());
+        List<PostWithRelationsData> dtoPage = distinct.subList(start, end)
+                .stream()
+                .map(this::toDetailsDTO)
+                .toList();
+
+        return new PageImpl<>(dtoPage, pageable, distinct.size());
     }
 
     @Transactional

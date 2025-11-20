@@ -91,21 +91,17 @@ public class PostController {
         return ApiResponse.success(data);
     }
 
-    // 3) Search post theo từ khóa trong title/content (dùng để share theo chủ đề)
-    // GET /posts/search?q=keyword&clubId=1&teamId=2&clubWide=true&page=0&size=10&sort=createdAt,desc
-    // /posts/search?q=nhạc&clubId=2
     @GetMapping("/search")
     public ApiResponse<Page<PostWithRelationsData>> searchPosts(
             @RequestParam String q,
-            @RequestParam(required = false) Long clubId,
-            @RequestParam(required = false) Long teamId,
-            @RequestParam(required = false) Boolean clubWide,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(defaultValue = "createdAt,desc") String sort
-    ) {
+    )throws Exception {
         Pageable pageable = PageRequest.of(page, size, parseSort(sort));
-        Page<PostWithRelationsData> data = postService.searchPosts(clubId, teamId, clubWide, q, pageable);
+        Long userId = userService.getCurrentUserId();
+
+        Page<PostWithRelationsData> data = postService.searchPostsForUser(userId, q, pageable);
         return ApiResponse.success(data);
     }
     // GET /api/posts/{clubId}/feed?page=0&size=10&sort=createdAt,desc
