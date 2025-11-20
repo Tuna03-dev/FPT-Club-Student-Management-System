@@ -9,12 +9,14 @@ import com.sep490.backendclubmanagement.dto.response.PageResponse;
 import com.sep490.backendclubmanagement.dto.response.PayOSCreatePaymentResponse;
 import com.sep490.backendclubmanagement.exception.AppException;
 import com.sep490.backendclubmanagement.exception.ErrorCode;
+import com.sep490.backendclubmanagement.security.SecurityConfig;
 import com.sep490.backendclubmanagement.service.FeeService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Arrays;
@@ -27,6 +29,7 @@ public class FeeController {
     private final FeeService feeService;
 
     @GetMapping
+    @PreAuthorize(SecurityConfig.AUTHORITY_ALL_ROLES)
     public ApiResponse<PageResponse<FeeDetailResponse>> getFees(
             @PathVariable Long clubId,
             @RequestParam(defaultValue = "0") int page,
@@ -41,12 +44,14 @@ public class FeeController {
     }
 
     @GetMapping("/drafts")
+    @PreAuthorize(SecurityConfig.AUTHORITY_ALL_ROLES)
     public ApiResponse<List<FeeDetailResponse>> getDraftFees(@PathVariable Long clubId) {
         List<FeeDetailResponse> responses = feeService.getDraftFeesByClubId(clubId);
         return ApiResponse.success(responses);
     }
 
     @GetMapping("/check-title")
+    @PreAuthorize(SecurityConfig.AUTHORITY_ALL_ROLES)
     public ApiResponse<Boolean> checkFeeTitleExists(
             @PathVariable Long clubId,
             @RequestParam String title,
@@ -62,6 +67,7 @@ public class FeeController {
     }
 
     @PostMapping
+    @PreAuthorize(SecurityConfig.AUTHORITY_ALL_ROLES)
     public ApiResponse<FeeDetailResponse> createFee(
             @PathVariable Long clubId,
             @Valid @RequestBody CreateFeeRequest request) {
@@ -74,6 +80,7 @@ public class FeeController {
     }
 
     @PutMapping("/{feeId}")
+    @PreAuthorize(SecurityConfig.AUTHORITY_ALL_ROLES)
     public ApiResponse<FeeDetailResponse> updateFee(
             @PathVariable Long clubId,
             @PathVariable Long feeId,
@@ -87,6 +94,7 @@ public class FeeController {
     }
 
     @DeleteMapping("/{feeId}")
+    @PreAuthorize(SecurityConfig.AUTHORITY_ALL_ROLES)
     public ApiResponse<Void> deleteFee(
             @PathVariable Long clubId,
             @PathVariable Long feeId) {
@@ -102,6 +110,7 @@ public class FeeController {
 
 
     @PostMapping("/{feeId}/generate-payment")
+    @PreAuthorize(SecurityConfig.AUTHORITY_ALL_ROLES)
     public ApiResponse<PayOSCreatePaymentResponse> generatePaymentQR(
             @PathVariable Long clubId,
             @PathVariable Long feeId,
@@ -119,6 +128,7 @@ public class FeeController {
     }
 
     @PatchMapping("/{feeId}/publish")
+    @PreAuthorize(SecurityConfig.AUTHORITY_ALL_ROLES)
     public ApiResponse<FeeDetailResponse> publishFee(
             @PathVariable Long clubId,
             @PathVariable Long feeId
@@ -132,6 +142,7 @@ public class FeeController {
     }
 
     @GetMapping("/unpaid")
+    @PreAuthorize(SecurityConfig.AUTHORITY_ALL_ROLES)
     public ApiResponse<List<FeeDetailResponse>> getUnpaidFees(
             @PathVariable Long clubId,
             @RequestParam Long userId
@@ -141,6 +152,7 @@ public class FeeController {
     }
 
     @GetMapping("/paid")
+    @PreAuthorize(SecurityConfig.AUTHORITY_ALL_ROLES)
     public ApiResponse<PageResponse<FeeDetailResponse>> getPaidFees(
             @PathVariable Long clubId,
             @RequestParam Long userId,
