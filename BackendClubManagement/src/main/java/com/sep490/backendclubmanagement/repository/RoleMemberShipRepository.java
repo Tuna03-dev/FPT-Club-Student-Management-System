@@ -643,6 +643,7 @@ WHERE cm.club.id = :clubId
           AND cr.roleCode IN ('CLUB_PRESIDENT','CLUB_VICE_PRESIDENT')
     """)
     boolean isUserClubOfficer(@Param("userId") Long userId, @Param("clubId") Long clubId);
+    List<RoleMemberShip> findByTeamIdAndIsActiveTrue(Long teamId);
 }
 
 

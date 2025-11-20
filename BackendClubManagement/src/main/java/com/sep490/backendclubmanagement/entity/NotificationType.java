@@ -68,6 +68,9 @@ public enum NotificationType {
     // Others
     MENTION,
     FOLLOW,
-    GENERAL
+    GENERAL,
+
+
+    TEAM_ASSIGNMENT
 }
 
