@@ -48,6 +48,7 @@ public class FeeService {
     private final RoleMemberShipRepository roleMemberShipRepository;
     private final ClubMemberShipRepository clubMemberShipRepository;
     private final ClubWalletService clubWalletService;
+    private final NotificationService notificationService;
 
     @Value("${app.frontend.url:http://localhost:5173}")
     private String frontendUrl;
@@ -231,6 +232,41 @@ public class FeeService {
                 .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND, "Fee not found"));
         fee.setIsDraft(false);
         feeRepository.save(fee);
+
+        // 🔔 Gửi notification cho tất cả active members trong club
+        try {
+            List<Long> activeMemberIds = roleMemberShipRepository.findActiveMemberUserIdsByClubId(fee.getClub().getId());
+
+            if (!activeMemberIds.isEmpty()) {
+                String title = "Khoản phí mới: " + fee.getTitle();
+                String message = String.format("Số tiền: %s VND%s",
+                    fee.getAmount().toString(),
+                    fee.getDueDate() != null ? " - Hạn: " + fee.getDueDate().toString() : "");
+                String actionUrl = "/clubs/" + fee.getClub().getId() + "/fees/" + fee.getId();
+
+                notificationService.sendToUsers(
+                        activeMemberIds,
+                        null, // actor (system)
+                        title,
+                        message,
+                        NotificationType.FEE_PUBLISHED,
+                        NotificationPriority.HIGH,
+                        actionUrl,
+                        fee.getClub().getId(),
+                        null, // relatedNewsId
+                        null, // relatedTeamId
+                        null  // relatedRequestId
+                );
+
+                log.info("[Fee] Notification sent to {} members: fee published {}", activeMemberIds.size(), fee.getId());
+            } else {
+                log.warn("[Fee] No active members found to notify for club {}", fee.getClub().getId());
+            }
+        } catch (Exception e) {
+            log.error("[Fee] Failed to send publish notification: {}", e.getMessage(), e);
+            // Don't throw - notification failure shouldn't break fee publishing
+        }
+
         return feeMapper.toFeeDetailResponse(fee);
     }
 
@@ -524,6 +560,7 @@ public class FeeService {
         log.info("[PayOS] Giao dịch thành công | user={} | fee={} | amount={} | orderCode={}",
                 user.getFullName(), fee.getTitle(), fee.getAmount(), orderCode);
 
+        // 🔔 Gửi WebSocket notification (real-time)
         PaymentWebSocketPayload payload = PaymentWebSocketPayload.builder()
                 .userId(user.getId())
                 .feeId(fee.getId())
@@ -535,6 +572,33 @@ public class FeeService {
                 .build();
 
         webSocketService.sendPaymentSuccess(user.getEmail(), payload);
+
+        // 🔔 Gửi persistent notification
+        try {
+            String title = "Thanh toán thành công";
+            String message = "Khoản phí: " + fee.getTitle() + " - Số tiền: " + fee.getAmount().toString() + " VND";
+            String actionUrl = "/clubs/" + fee.getClub().getId() + "/fees/" + fee.getId();
+
+            notificationService.sendToUser(
+                    user.getId(),
+                    null, // actor (system)
+                    title,
+                    message,
+                    NotificationType.PAYMENT_SUCCESS,
+                    NotificationPriority.HIGH,
+                    actionUrl,
+                    fee.getClub().getId(),
+                    null, // relatedNewsId
+                    null, // relatedTeamId
+                    null, // relatedRequestId
+                    null  // relatedEventId
+            );
+
+            log.info("[PayOS] Notification sent to user {}: payment success for fee {}", user.getId(), fee.getId());
+        } catch (Exception e) {
+            log.error("[PayOS] Failed to send payment notification: {}", e.getMessage(), e);
+            // Don't throw - notification failure shouldn't break payment processing
+        }
     }
 
     private LocalDateTime parseDateTime(String dateTimeStr) {
