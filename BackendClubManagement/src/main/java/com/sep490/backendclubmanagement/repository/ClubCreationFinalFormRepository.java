@@ -10,7 +10,9 @@ import java.util.Optional;
 @Repository
 public interface ClubCreationFinalFormRepository extends JpaRepository<ClubCreationFinalForm, Long> {
     Optional<ClubCreationFinalForm> findByRequestEstablishmentId(Long requestEstablishmentId);
-    
+
     List<ClubCreationFinalForm> findAllByRequestEstablishmentIdOrderByCreatedAtDesc(Long requestEstablishmentId);
+
+    Optional<ClubCreationFinalForm> findFirstByRequestEstablishmentIdOrderByCreatedAtDesc(Long requestEstablishmentId);
 }
 

@@ -21,6 +21,11 @@ public class RequestEstablishmentResponse {
     private String activityObjectives;
     private String expectedActivities;
     private String description;
+    private String email; // Email liên hệ
+    private String phone; // Số điện thoại liên hệ
+    private String facebookLink; // Link Facebook
+    private String instagramLink; // Link Instagram
+    private String tiktokLink; // Link TikTok
     private LocalDateTime confirmationDeadline;
     private LocalDateTime receivedAt;
     private LocalDateTime confirmedAt;

@@ -21,6 +21,9 @@ public class DefenseSchedule extends BaseEntity {
     @Column(name = "defense_date", nullable = false)
     private LocalDateTime defenseDate;
 
+    @Column(name = "defense_end_date")
+    private LocalDateTime defenseEndDate;
+
     @Column(name = "location", length = 500)
     private String location;
 
