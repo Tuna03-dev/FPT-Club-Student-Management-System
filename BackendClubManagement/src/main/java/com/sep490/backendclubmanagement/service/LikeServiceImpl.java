@@ -5,6 +5,8 @@ import com.sep490.backendclubmanagement.dto.websocket.LikeWebSocketPayload;
 import com.sep490.backendclubmanagement.dto.websocket.WebSocketMessageAction;
 import com.sep490.backendclubmanagement.dto.websocket.WebSocketMessageType;
 import com.sep490.backendclubmanagement.entity.Like;
+import com.sep490.backendclubmanagement.entity.NotificationPriority;
+import com.sep490.backendclubmanagement.entity.NotificationType;
 import com.sep490.backendclubmanagement.entity.Post;
 import com.sep490.backendclubmanagement.entity.User;
 import com.sep490.backendclubmanagement.mapper.LikeMapper;
@@ -31,6 +33,7 @@ public class LikeServiceImpl implements LikeService {
     private final WebSocketService webSocketService;
     private final UserRepository userRepository;
     private final com.sep490.backendclubmanagement.repository.PostRepository postRepository;
+    private final NotificationService notificationService;
 
     @Override
     @Transactional
@@ -90,6 +93,51 @@ public class LikeServiceImpl implements LikeService {
         } catch (Exception e) {
             log.error("Failed to send like WebSocket notification", e);
             // Don't throw - WebSocket failure shouldn't break the like operation
+        }
+
+        // 🔔 Gửi notification khi like (chỉ khi liked = true, không gửi khi unlike)
+        if (liked) {
+            try {
+                Post post = postRepository.findById(postId).orElse(null);
+                if (post == null) {
+                    log.warn("Cannot send like notification: post not found for postId={}", postId);
+                    return liked;
+                }
+
+                User postAuthor = post.getCreatedBy();
+                if (postAuthor != null && !postAuthor.getId().equals(userId)) {
+                    // Không gửi notification cho chính mình
+                    User liker = userRepository.findById(userId).orElse(null);
+                    if (liker != null) {
+                        String title = liker.getFullName() + " đã thích bài viết của bạn";
+                        String message = post.getTitle() != null && !post.getTitle().isEmpty()
+                                ? "\"" + post.getTitle() + "\""
+                                : "Bài viết của bạn";
+                        String actionUrl = "/posts/" + postId;
+
+                        notificationService.sendToUser(
+                                postAuthor.getId(),
+                                userId,
+                                title,
+                                message,
+                                NotificationType.POST_LIKED,
+                                NotificationPriority.LOW, // Priority thấp vì like không quan trọng bằng comment
+                                actionUrl,
+                                post.getClub() != null ? post.getClub().getId() : null,
+                                null, // relatedNewsId
+                                null, // relatedTeamId
+                                null, // relatedRequestId
+                                null  // relatedEventId
+                        );
+
+                        log.info("Sent like notification to user {}: postId={}, liker={}",
+                                postAuthor.getId(), postId, userId);
+                    }
+                }
+            } catch (Exception e) {
+                log.error("Failed to send like notification", e);
+                // Don't throw - notification failure shouldn't break the like operation
+            }
         }
 
         return liked;

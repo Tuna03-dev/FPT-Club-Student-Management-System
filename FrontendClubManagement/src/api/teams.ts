@@ -1,6 +1,6 @@
 import { axiosClient } from "./axiosClient";
 import type { VisibleTeamDTO, MyTeamDetailDTO } from "@/types/team";
-import type { CreateTeamPayload, TeamResponse } from "@/types/team";
+import type { CreateTeamPayload, TeamResponse, UpdateTeamPayload } from "@/types/team";
 
 export async function getVisibleTeams(
   clubId?: number,
@@ -40,7 +40,20 @@ export async function getAllTeamsForPresident(
 }
 export async function createTeam(payload: CreateTeamPayload): Promise<TeamResponse> {
   const res = await axiosClient.post<TeamResponse>("/teams", payload);
-  // res hiện là ApiResponse<TeamResponse>
   if (res.code !== 200 || !res.data) throw new Error(res.message || "Create team failed");
   return res.data;                       // ✅ Trả về T duy nhất
+}
+export async function updateTeam(
+  teamId: number,
+  payload: UpdateTeamPayload
+): Promise<TeamResponse> {
+  const res = await axiosClient.patch<TeamResponse>(`/teams/${teamId}`, payload);
+  if (res.code !== 200 || !res.data)
+    throw new Error(res.message || "Update team failed");
+  return res.data;
+}
+export async function deleteTeam(teamId: number): Promise<void> {
+  const res = await axiosClient.delete<null>(`/teams/${teamId}`);
+  if (res.code !== 200)
+    throw new Error(res.message || "Delete team failed");
 }

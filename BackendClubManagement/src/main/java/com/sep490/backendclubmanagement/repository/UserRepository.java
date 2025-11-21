@@ -35,6 +35,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     boolean existsByStudentCodeIgnoreCase(String studentCode);
 
+    Optional<User> findByStudentCode(String studentCode);
+
     @Query(value = """
             SELECT u.*
             FROM users u

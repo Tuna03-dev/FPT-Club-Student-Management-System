@@ -4,30 +4,186 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { payosService } from "@/services/payosService";
-// import { SummaryCards } from "@/components/features/finance/SummaryCards";
-// import { TransactionsTable } from "@/components/features/finance/TransactionsTable";
+import { SummaryCards } from "@/components/features/finance/SummaryCards";
+import {
+  TransactionsTable,
+  type Transaction,
+} from "@/components/features/finance/TransactionsTable";
 import { FeesTable } from "@/components/features/finance/FeesTable";
 import { PayOSIntegration } from "@/components/features/finance/PayOsIntegration";
-// import { mockTransactions } from "@/components/features/finance/mocks";
+import { CreateTransactionDialog } from "@/components/features/finance/CreateTransactionDialog";
+import { EditTransactionDialog } from "@/components/features/finance/EditTransactionDialog";
 import type { Fee } from "@/types/fee";
 import type { PageResponse } from "@/types";
 import feeService from "@/services/feeService";
+import transactionService, {
+  type IncomeTransactionResponse,
+  type OutcomeTransactionResponse,
+  type CreateIncomeTransactionRequest,
+  type CreateOutcomeTransactionRequest,
+} from "@/services/transactionService";
+import financeService, {
+  type FinanceSummaryResponse,
+} from "@/services/financeService";
 
 const PAGE_SIZE = 10;
+
+// Helper function để convert API response sang Transaction type
+const convertIncomeToTransaction = (
+  income: IncomeTransactionResponse
+): Transaction => ({
+  id: income.id,
+  code: income.reference,
+  amount: income.amount,
+  description: income.description,
+  transactionDate: income.transactionDate,
+  type: "INCOME",
+  status:
+    income.status === "SUCCESS"
+      ? "COMPLETED"
+      : income.status === "PENDING"
+      ? "PENDING"
+      : income.status === "FAILED"
+      ? "FAILED"
+      : "CANCELLED",
+  source: income.source,
+  feeId: income.feeId ?? undefined,
+  feeTitle: income.feeTitle ?? undefined,
+  userName: income.userName ?? undefined,
+  userEmail: income.userEmail ?? undefined,
+  notes: income.notes ?? undefined,
+  createdBy: income.createdByName ?? undefined,
+  createdAt: income.createdAt,
+  updatedAt: income.updatedAt,
+});
+
+const convertOutcomeToTransaction = (
+  outcome: OutcomeTransactionResponse
+): Transaction => ({
+  id: outcome.id,
+  code: outcome.transactionCode,
+  amount: outcome.amount,
+  description: outcome.description,
+  transactionDate: outcome.transactionDate,
+  type: "OUTCOME",
+  status:
+    outcome.status === "SUCCESS" || outcome.status === "COMPLETED"
+      ? "COMPLETED"
+      : outcome.status === "PENDING"
+      ? "PENDING"
+      : outcome.status === "FAILED"
+      ? "FAILED"
+      : "CANCELLED",
+  recipient: outcome.recipient,
+  purpose: outcome.purpose,
+  receiptUrl: outcome.receiptUrl ?? undefined,
+  notes: outcome.notes ?? undefined,
+  createdBy: outcome.createdByName ?? undefined,
+  createdAt: outcome.createdAt,
+  updatedAt: outcome.updatedAt,
+});
+
+// Mock data cho transactions (match với backend entities)
 
 export default function Finance() {
   const { clubId } = useParams();
   const numericClubId = Number(clubId);
-  // const [transactions, setTransactions] = useState(mockTransactions);
+  const [incomeTransactions, setIncomeTransactions] = useState<Transaction[]>(
+    []
+  );
+  const [outcomeTransactions, setOutcomeTransactions] = useState<Transaction[]>(
+    []
+  );
+  const [incomeLoading, setIncomeLoading] = useState(false);
+  const [outcomeLoading, setOutcomeLoading] = useState(false);
   const [feesPage, setFeesPage] = useState<PageResponse<Fee> | null>(null);
   const [feesLoading, setFeesLoading] = useState<boolean>(false);
-  // const [isAddTransactionOpen, setIsAddTransactionOpen] = useState(false);
+  const [isAddTransactionOpen, setIsAddTransactionOpen] = useState(false);
+  const [isEditTransactionOpen, setIsEditTransactionOpen] = useState(false);
+  const [editingTransaction, setEditingTransaction] =
+    useState<Transaction | null>(null);
   const [isAddFeeOpen, setIsAddFeeOpen] = useState(false);
   const [clientId, setClientId] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [checksumKey, setChecksumKey] = useState("");
   const [payosLoading, setPayosLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(0);
+  const [incomePage, setIncomePage] = useState(0);
+  const [outcomePage, setOutcomePage] = useState(0);
+  const [activeTransactionTab, setActiveTransactionTab] = useState<
+    "INCOME" | "OUTCOME"
+  >("INCOME");
+  const [financeSummary, setFinanceSummary] =
+    useState<FinanceSummaryResponse | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+
+  const fetchFinanceSummary = useCallback(async () => {
+    if (!Number.isFinite(numericClubId) || numericClubId <= 0) return;
+    try {
+      setSummaryLoading(true);
+      const res = await financeService.getFinanceSummary(numericClubId);
+      if (res.code === 200 && res.data) {
+        setFinanceSummary(res.data);
+      }
+    } catch (e) {
+      console.error("Failed to fetch finance summary", e);
+      toast.error("Không thể tải tổng quan tài chính");
+    } finally {
+      setSummaryLoading(false);
+    }
+  }, [numericClubId]);
+
+  const fetchIncomeTransactions = useCallback(
+    async (page: number = 0) => {
+      if (!Number.isFinite(numericClubId) || numericClubId <= 0) return;
+      try {
+        setIncomeLoading(true);
+        const res = await transactionService.getIncomeTransactions(
+          numericClubId,
+          { page, size: PAGE_SIZE }
+        );
+        if (res.code === 200 && res.data) {
+          const transactions = res.data.content.map(convertIncomeToTransaction);
+          setIncomeTransactions(transactions);
+          setIncomePage(res.data.pageNumber ?? page);
+        }
+      } catch (e) {
+        console.error("Failed to fetch income transactions", e);
+        toast.error("Không thể tải danh sách giao dịch thu");
+        setIncomeTransactions([]);
+      } finally {
+        setIncomeLoading(false);
+      }
+    },
+    [numericClubId]
+  );
+
+  const fetchOutcomeTransactions = useCallback(
+    async (page: number = 0) => {
+      if (!Number.isFinite(numericClubId) || numericClubId <= 0) return;
+      try {
+        setOutcomeLoading(true);
+        const res = await transactionService.getOutcomeTransactions(
+          numericClubId,
+          { page, size: PAGE_SIZE }
+        );
+        if (res.code === 200 && res.data) {
+          const transactions = res.data.content.map(
+            convertOutcomeToTransaction
+          );
+          setOutcomeTransactions(transactions);
+          setOutcomePage(res.data.pageNumber ?? page);
+        }
+      } catch (e) {
+        console.error("Failed to fetch outcome transactions", e);
+        toast.error("Không thể tải danh sách giao dịch chi");
+        setOutcomeTransactions([]);
+      } finally {
+        setOutcomeLoading(false);
+      }
+    },
+    [numericClubId]
+  );
 
   const fetchFees = useCallback(
     async (page: number = 0) => {
@@ -99,6 +255,18 @@ export default function Finance() {
   }, [numericClubId]);
 
   useEffect(() => {
+    void fetchFinanceSummary();
+  }, [fetchFinanceSummary]);
+
+  useEffect(() => {
+    void fetchIncomeTransactions(0);
+  }, [fetchIncomeTransactions]);
+
+  useEffect(() => {
+    void fetchOutcomeTransactions(0);
+  }, [fetchOutcomeTransactions]);
+
+  useEffect(() => {
     void fetchFees(0);
   }, [fetchFees]);
 
@@ -117,10 +285,32 @@ export default function Finance() {
     [fetchFees]
   );
 
-  // const handleDeleteTransaction = (id: string) => {
-  //   setTransactions(transactions.filter((t) => t.id !== id));
-  //   toast("Đã xóa giao dịch");
-  // };
+  const handleDeleteTransaction = async (
+    id: string,
+    type?: "INCOME" | "OUTCOME"
+  ) => {
+    try {
+      // Gọi API xóa
+      if (type === "INCOME") {
+        await transactionService.deleteIncomeTransaction(
+          numericClubId,
+          Number(id)
+        );
+        await fetchIncomeTransactions(incomePage);
+      } else if (type === "OUTCOME") {
+        await transactionService.deleteOutcomeTransaction(
+          numericClubId,
+          Number(id)
+        );
+        await fetchOutcomeTransactions(outcomePage);
+      }
+      await fetchFinanceSummary();
+      toast.success("Đã xóa giao dịch");
+    } catch (e) {
+      console.error("Failed to delete transaction", e);
+      toast.error("Không thể xóa giao dịch");
+    }
+  };
 
   const handleFeeRemovedLocally = (id: string) => {
     setFeesPage((prev) => {
@@ -134,19 +324,119 @@ export default function Finance() {
     toast("Đã xóa khoản phí");
   };
 
-  // const handleApproveTransaction = (id: string) => {
-  //   setTransactions(
-  //     transactions.map((t) => (t.id === id ? { ...t, status: "completed" } : t))
-  //   );
-  //   toast("Đã duyệt giao dịch");
-  // };
+  const handleApproveTransaction = async (
+    id: string,
+    type?: "INCOME" | "OUTCOME"
+  ) => {
+    try {
+      if (type === "INCOME") {
+        await transactionService.approveTransaction(
+          numericClubId,
+          Number(id),
+          "income"
+        );
+        await fetchIncomeTransactions(incomePage);
+      } else if (type === "OUTCOME") {
+        await transactionService.approveTransaction(
+          numericClubId,
+          Number(id),
+          "outcome"
+        );
+        await fetchOutcomeTransactions(outcomePage);
+      }
+      await fetchFinanceSummary();
+      toast.success("Đã duyệt giao dịch thành công");
+    } catch (e) {
+      console.error("Failed to approve transaction", e);
+      toast.error("Không thể duyệt giao dịch");
+    }
+  };
 
-  // const handleRejectTransaction = (id: string) => {
-  //   setTransactions(
-  //     transactions.map((t) => (t.id === id ? { ...t, status: "rejected" } : t))
-  //   );
-  //   toast("Đã từ chối giao dịch");
-  // };
+  const handleRejectTransaction = async (
+    id: string,
+    type?: "INCOME" | "OUTCOME"
+  ) => {
+    try {
+      if (type === "INCOME") {
+        await transactionService.rejectTransaction(
+          numericClubId,
+          Number(id),
+          "income"
+        );
+        await fetchIncomeTransactions(incomePage);
+      } else if (type === "OUTCOME") {
+        await transactionService.rejectTransaction(
+          numericClubId,
+          Number(id),
+          "outcome"
+        );
+        await fetchOutcomeTransactions(outcomePage);
+      }
+      await fetchFinanceSummary();
+      toast.warning("Đã hủy giao dịch");
+    } catch (e) {
+      console.error("Failed to cancel transaction", e);
+      toast.error("Không thể hủy giao dịch");
+    }
+  };
+
+  const handleCreateIncomeTransaction = async (
+    data: CreateIncomeTransactionRequest
+  ) => {
+    try {
+      await transactionService.createIncomeTransaction(numericClubId, data);
+      await fetchIncomeTransactions(incomePage);
+      await fetchFinanceSummary();
+    } catch (error) {
+      console.error("Failed to create income transaction:", error);
+      throw error;
+    }
+  };
+
+  const handleCreateOutcomeTransaction = async (
+    data: CreateOutcomeTransactionRequest
+  ) => {
+    try {
+      await transactionService.createOutcomeTransaction(numericClubId, data);
+      await fetchOutcomeTransactions(outcomePage);
+      await fetchFinanceSummary();
+    } catch (error) {
+      console.error("Failed to create outcome transaction:", error);
+      throw error;
+    }
+  };
+
+  const handleUpdateIncomeTransaction = async (
+    id: number,
+    data: Partial<CreateIncomeTransactionRequest>
+  ) => {
+    try {
+      await transactionService.updateIncomeTransaction(numericClubId, id, data);
+      await fetchIncomeTransactions(incomePage);
+      await fetchFinanceSummary();
+    } catch (error) {
+      console.error("Failed to update income transaction:", error);
+      throw error;
+    }
+  };
+
+  const handleUpdateOutcomeTransaction = async (
+    id: number,
+    data: Partial<CreateOutcomeTransactionRequest>
+  ) => {
+    try {
+      await transactionService.updateOutcomeTransaction(
+        numericClubId,
+        id,
+        data
+      );
+      await fetchOutcomeTransactions(outcomePage);
+      await fetchFinanceSummary();
+    } catch (error) {
+      console.error("Failed to update outcome transaction:", error);
+      throw error;
+    }
+  };
 
   const handleFeeCreated = (newFee: Fee) => {
     setFeesPage((prev) => {
@@ -158,13 +448,6 @@ export default function Finance() {
       };
     });
   };
-
-  // const totalIncome = transactions
-  //   .filter((t) => t.type === "income" && t.status === "completed")
-  //   .reduce((sum, t) => sum + t.amount, 0);
-  // const totalExpense = transactions
-  //   .filter((t) => t.type === "expense" && t.status === "completed")
-  //   .reduce((sum, t) => sum + t.amount, 0);
 
   return (
     <div className="min-h-screen bg-background p-6">
@@ -178,27 +461,83 @@ export default function Finance() {
           </p>
         </div>
 
-        {/* <SummaryCards totalIncome={totalIncome} totalExpense={totalExpense} /> */}
+        <SummaryCards
+          totalBudget={financeSummary?.balance ?? 0}
+          totalIncome={financeSummary?.totalIncome ?? 0}
+          totalExpense={financeSummary?.totalExpense ?? 0}
+          remaining={financeSummary?.remaining ?? 0}
+          loading={summaryLoading}
+        />
 
-        <Tabs defaultValue="transactions" className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="transactions">Giao dịch</TabsTrigger>
+        <Tabs
+          defaultValue="income"
+          className="w-full"
+          onValueChange={(value) => {
+            if (value === "income") setActiveTransactionTab("INCOME");
+            if (value === "outcome") setActiveTransactionTab("OUTCOME");
+          }}
+        >
+          <TabsList className="grid w-full grid-cols-4">
+            <TabsTrigger value="income">Thu</TabsTrigger>
+            <TabsTrigger value="outcome">Chi</TabsTrigger>
             <TabsTrigger value="fees">Quản lý phí</TabsTrigger>
             <TabsTrigger value="payos">Tích hợp PayOS</TabsTrigger>
           </TabsList>
 
-          {/* <TabsContent value="transactions" className="space-y-4">
+          <TabsContent value="income" className="space-y-4">
             <TransactionsTable
-              transactions={transactions}
-              onAddTransaction={() => setIsAddTransactionOpen(true)}
-              onEditTransaction={() => {}}
-              onDeleteTransaction={handleDeleteTransaction}
-              onApproveTransaction={handleApproveTransaction}
-              onRejectTransaction={handleRejectTransaction}
+              transactions={incomeTransactions}
+              transactionType="INCOME"
+              onAddTransaction={() => {
+                setActiveTransactionTab("INCOME");
+                setIsAddTransactionOpen(true);
+              }}
+              onEditTransaction={(transaction) => {
+                setEditingTransaction(transaction);
+                setIsEditTransactionOpen(true);
+              }}
+              onDeleteTransaction={(id) =>
+                handleDeleteTransaction(id, "INCOME")
+              }
+              onApproveTransaction={(id) =>
+                handleApproveTransaction(id, "INCOME")
+              }
+              onRejectTransaction={(id) =>
+                handleRejectTransaction(id, "INCOME")
+              }
               isAddOpen={isAddTransactionOpen}
               setIsAddOpen={setIsAddTransactionOpen}
+              loading={incomeLoading}
+              fees={feesPage?.content ?? []}
             />
-          </TabsContent> */}
+          </TabsContent>
+
+          <TabsContent value="outcome" className="space-y-4">
+            <TransactionsTable
+              transactions={outcomeTransactions}
+              transactionType="OUTCOME"
+              onAddTransaction={() => {
+                setActiveTransactionTab("OUTCOME");
+                setIsAddTransactionOpen(true);
+              }}
+              onEditTransaction={(transaction) => {
+                setEditingTransaction(transaction);
+                setIsEditTransactionOpen(true);
+              }}
+              onDeleteTransaction={(id) =>
+                handleDeleteTransaction(id, "OUTCOME")
+              }
+              onApproveTransaction={(id) =>
+                handleApproveTransaction(id, "OUTCOME")
+              }
+              onRejectTransaction={(id) =>
+                handleRejectTransaction(id, "OUTCOME")
+              }
+              isAddOpen={isAddTransactionOpen}
+              setIsAddOpen={setIsAddTransactionOpen}
+              loading={outcomeLoading}
+            />
+          </TabsContent>
 
           <TabsContent value="fees" className="space-y-4">
             <FeesTable
@@ -233,6 +572,28 @@ export default function Finance() {
             />
           </TabsContent>
         </Tabs>
+
+        {/* Create Transaction Dialog */}
+        <CreateTransactionDialog
+          open={isAddTransactionOpen}
+          onOpenChange={setIsAddTransactionOpen}
+          transactionType={activeTransactionTab}
+          fees={feesPage?.content ?? []}
+          clubId={numericClubId}
+          onCreateIncome={handleCreateIncomeTransaction}
+          onCreateOutcome={handleCreateOutcomeTransaction}
+        />
+
+        {/* Edit Transaction Dialog */}
+        <EditTransactionDialog
+          open={isEditTransactionOpen}
+          onOpenChange={setIsEditTransactionOpen}
+          transaction={editingTransaction}
+          fees={feesPage?.content ?? []}
+          clubId={numericClubId}
+          onUpdateIncome={handleUpdateIncomeTransaction}
+          onUpdateOutcome={handleUpdateOutcomeTransaction}
+        />
       </div>
     </div>
   );

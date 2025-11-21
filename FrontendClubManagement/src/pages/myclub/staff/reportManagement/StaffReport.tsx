@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -24,6 +24,7 @@ import {
 } from "@/components/features/report/ReportSubmissionModal";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import {
   getAllReportRequirements,
@@ -51,6 +52,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 type FrontendReportType = "periodic" | "post-event" | "other" | "reports";
 
@@ -68,6 +70,7 @@ interface ReportRequirementDisplay {
 
 export function StaffReportManagement() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [reports, setReports] = useState<ReportRequirementDisplay[]>([]);
 
   const [selectedReport] = useState<ReportRequirementResponse | null>(null);
@@ -77,7 +80,12 @@ export function StaffReportManagement() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeTab, setActiveTab] = useState<FrontendReportType>("reports");
+  const initialTab = (location.state as any)?.tab as
+    | FrontendReportType
+    | undefined;
+  const [activeTab, setActiveTab] = useState<FrontendReportType>(
+    initialTab ?? "reports"
+  );
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize] = useState(10);
   const [totalPages, setTotalPages] = useState(0);
@@ -90,7 +98,7 @@ export function StaffReportManagement() {
   const [reportListTotalElements, setReportListTotalElements] = useState(0);
   const [reportListLoading, setReportListLoading] = useState(false);
   const [reportSearchQuery, setReportSearchQuery] = useState("");
-  const [reportStatusFilter, setReportStatusFilter] = useState<string>("");
+  const [reportStatusFilter, setReportStatusFilter] = useState<string>("ALL");
   const [debouncedReportSearchQuery, setDebouncedReportSearchQuery] =
     useState("");
   const [selectedReportDetail, setSelectedReportDetail] = useState<any>(null);
@@ -300,7 +308,9 @@ export function StaffReportManagement() {
   };
 
   const handlePeriodicReportView = (report: ReportRequirementDisplay) => {
-    navigate(`/staff/report/${report.id}/clubs`);
+    navigate(`/staff/report/${report.id}/clubs`, {
+      state: { fromTab: activeTab },
+    });
   };
 
   const formatDate = (dateString: string) => {
@@ -464,30 +474,21 @@ export function StaffReportManagement() {
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex gap-2 border-b border-border overflow-x-auto">
-          {[
-            { id: "reports", label: "Danh sách báo cáo" },
-            { id: "periodic", label: "Yêu cầu Định kỳ" },
-            { id: "post-event", label: "Yêu cầu Sau sự kiện" },
-            { id: "other", label: "Yêu cầu khác" },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => {
-                setActiveTab(tab.id as FrontendReportType);
-                setCurrentPage(1);
-                setReportListPage(1);
-              }}
-              className={`px-4 py-2 font-medium text-sm whitespace-nowrap transition-colors ${
-                activeTab === tab.id
-                  ? "text-primary border-b-2 border-primary"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
+        <Tabs
+          value={activeTab}
+          onValueChange={(v) => {
+            setActiveTab(v as FrontendReportType);
+            setCurrentPage(1);
+            setReportListPage(1);
+          }}
+        >
+          <TabsList className="grid w-full grid-cols-4">
+            <TabsTrigger value="reports">Danh sách báo cáo</TabsTrigger>
+            <TabsTrigger value="periodic">Yêu cầu Định kỳ</TabsTrigger>
+            <TabsTrigger value="post-event">Yêu cầu Sau sự kiện</TabsTrigger>
+            <TabsTrigger value="other">Yêu cầu khác</TabsTrigger>
+          </TabsList>
+        </Tabs>
 
         {/* Search and Filters */}
         {activeTab === "reports" ? (
@@ -502,9 +503,9 @@ export function StaffReportManagement() {
               />
             </div>
             <Select
-              value={reportStatusFilter || undefined}
+              value={reportStatusFilter}
               onValueChange={(value) => {
-                setReportStatusFilter(value === "ALL" ? "" : value);
+                setReportStatusFilter(value);
                 setReportListPage(1);
               }}
             >
@@ -551,9 +552,60 @@ export function StaffReportManagement() {
 
             {reportListLoading ? (
               <Card>
-                <CardContent className="p-8 text-center text-muted-foreground">
-                  Đang tải...
-                </CardContent>
+                <Table>
+                  <TableHeader className="bg-muted/50">
+                    <TableRow className="border-b-2 border-border hover:bg-muted/50">
+                      <TableHead className="w-[250px] font-semibold text-foreground">
+                        Tiêu đề báo cáo
+                      </TableHead>
+                      <TableHead className="w-[150px] font-semibold text-foreground">
+                        Câu lạc bộ
+                      </TableHead>
+                      <TableHead className="w-[150px] font-semibold text-foreground">
+                        Người nộp
+                      </TableHead>
+                      <TableHead className="w-[120px] font-semibold text-foreground">
+                        Ngày nộp
+                      </TableHead>
+                      <TableHead className="w-[120px] font-semibold text-foreground">
+                        Ngày duyệt
+                      </TableHead>
+                      <TableHead className="w-[150px] font-semibold text-foreground">
+                        Trạng thái
+                      </TableHead>
+                      <TableHead className="w-[100px] text-right font-semibold text-foreground">
+                        Hành động
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {Array.from({ length: pageSize }).map((_, i) => (
+                      <TableRow key={`report-skel-${i}`}>
+                        <TableCell>
+                          <Skeleton className="h-4 w-48" />
+                        </TableCell>
+                        <TableCell>
+                          <Skeleton className="h-4 w-28" />
+                        </TableCell>
+                        <TableCell>
+                          <Skeleton className="h-4 w-32" />
+                        </TableCell>
+                        <TableCell>
+                          <Skeleton className="h-4 w-20" />
+                        </TableCell>
+                        <TableCell>
+                          <Skeleton className="h-4 w-20" />
+                        </TableCell>
+                        <TableCell>
+                          <Skeleton className="h-4 w-24" />
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Skeleton className="h-8 w-8 rounded-md ml-auto" />
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               </Card>
             ) : reportList.length > 0 ? (
               <>
@@ -699,9 +751,66 @@ export function StaffReportManagement() {
 
             {isLoading ? (
               <Card>
-                <CardContent className="p-8 text-center text-muted-foreground">
-                  Đang tải...
-                </CardContent>
+                <Table>
+                  <TableHeader className="bg-muted/50">
+                    <TableRow className="border-b-2 border-border hover:bg-muted/50">
+                      <TableHead className="w-[300px] font-semibold text-foreground">
+                        Tiêu đề
+                      </TableHead>
+                      <TableHead className="w-[150px] font-semibold text-foreground">
+                        Loại báo cáo
+                      </TableHead>
+                      <TableHead className="w-[150px] font-semibold text-foreground">
+                        Người tạo
+                      </TableHead>
+                      <TableHead className="w-[120px] font-semibold text-foreground">
+                        Ngày tạo
+                      </TableHead>
+                      <TableHead className="w-[120px] font-semibold text-foreground">
+                        Hạn nộp
+                      </TableHead>
+                      <TableHead className="w-[100px] font-semibold text-foreground">
+                        Số CLB
+                      </TableHead>
+                      <TableHead className="w-[120px] font-semibold text-foreground">
+                        Trạng thái
+                      </TableHead>
+                      <TableHead className="w-[100px] text-right font-semibold text-foreground">
+                        Hành động
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {Array.from({ length: pageSize }).map((_, i) => (
+                      <TableRow key={`req-skel-${i}`}>
+                        <TableCell>
+                          <Skeleton className="h-4 w-48" />
+                        </TableCell>
+                        <TableCell>
+                          <Skeleton className="h-4 w-28" />
+                        </TableCell>
+                        <TableCell>
+                          <Skeleton className="h-4 w-32" />
+                        </TableCell>
+                        <TableCell>
+                          <Skeleton className="h-4 w-20" />
+                        </TableCell>
+                        <TableCell>
+                          <Skeleton className="h-4 w-20" />
+                        </TableCell>
+                        <TableCell>
+                          <Skeleton className="h-4 w-16" />
+                        </TableCell>
+                        <TableCell>
+                          <Skeleton className="h-4 w-24" />
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Skeleton className="h-8 w-8 rounded-md ml-auto" />
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               </Card>
             ) : reports.length > 0 ? (
               <>
@@ -751,12 +860,6 @@ export function StaffReportManagement() {
                             <TableCell className="font-medium">
                               <div className="flex items-center gap-2">
                                 <span className="truncate">{report.title}</span>
-                                {isDeadlineExp && (
-                                  <Badge className="bg-red-100 text-red-700 border-red-300 flex-shrink-0">
-                                    <AlertCircle className="h-3 w-3 mr-1" />
-                                    Quá hạn
-                                  </Badge>
-                                )}
                               </div>
                             </TableCell>
                             <TableCell>

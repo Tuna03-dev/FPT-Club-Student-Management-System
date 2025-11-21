@@ -60,6 +60,8 @@ interface PostCardProps {
   teamId?: number;
   teamName?: string;
   isTeamPost?: boolean; // true if post belongs to a specific team
+  // Notification scroll
+  highlightCommentId?: string; // Auto-open comments and highlight this comment
 }
 
 export const PostCard = ({
@@ -78,6 +80,7 @@ export const PostCard = ({
   teamId,
   teamName,
   isTeamPost = false,
+  highlightCommentId,
 }: PostCardProps) => {
   const { t } = useTranslation("common");
   const navigate = useNavigate();
@@ -105,6 +108,8 @@ export const PostCard = ({
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   // --- THÊM STATE CHO DIALOG XÓA COMMENT ---
   const [deleteCommentId, setDeleteCommentId] = useState<number | null>(null);
+  // --- COMMENT COUNT TRACKING ---
+  const [commentCount, setCommentCount] = useState(initialCommentsCount);
   // --- LIKE STATE ---
   const [isLiked, setIsLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(likes);
@@ -219,12 +224,58 @@ export const PostCard = ({
     checkLikeStatus();
   }, [postId]);
 
-  // Load comments when showing comments section
+  // Load comments immediately on mount to get accurate count
   useEffect(() => {
-    if (showComments && postId) {
+    if (postId) {
       loadComments();
     }
-  }, [showComments, postId, loadComments]);
+  }, [postId, loadComments]);
+
+  // Update comment count when comments list changes
+  useEffect(() => {
+    const totalCount = commentsList.reduce(
+      (total, c) => total + 1 + (c.replies?.length || 0),
+      0
+    );
+    setCommentCount(totalCount);
+  }, [commentsList]);
+
+  // Auto-open comments and highlight when coming from notification
+  useEffect(() => {
+    if (highlightCommentId && commentsList.length > 0) {
+      // Open comments section
+      setShowComments(true);
+
+      // Wait for DOM to update, then scroll to comment
+      setTimeout(() => {
+        const commentElement = document.getElementById(
+          `comment-${highlightCommentId}`
+        );
+        if (commentElement) {
+          commentElement.scrollIntoView({
+            behavior: "smooth",
+            block: "center",
+          });
+
+          // Add highlight effect
+          commentElement.classList.add(
+            "ring-2",
+            "ring-primary",
+            "ring-offset-2",
+            "bg-primary/5"
+          );
+          setTimeout(() => {
+            commentElement.classList.remove(
+              "ring-2",
+              "ring-primary",
+              "ring-offset-2",
+              "bg-primary/5"
+            );
+          }, 3000);
+        }
+      }, 300);
+    }
+  }, [highlightCommentId, commentsList]);
 
   // WebSocket subscription for realtime updates
   useEffect(() => {
@@ -282,6 +333,8 @@ export const PostCard = ({
               });
             }
           });
+          // Increment comment count
+          setCommentCount((prev) => prev + 1);
         } else if (message.action === "COMMENT_EDIT") {
           // Update comment - merge fields and preserve replies array to avoid losing nested replies
           setCommentsList((prev) => {
@@ -311,7 +364,7 @@ export const PostCard = ({
             return updateComment(prev);
           });
         } else if (message.action === "COMMENT_DELETE") {
-          // Remove comment
+          // Remove comment and decrement count
           setCommentsList((prev) => {
             const removeComment = (comments: CommentDTO[]): CommentDTO[] => {
               return comments
@@ -325,6 +378,8 @@ export const PostCard = ({
             };
             return removeComment(prev);
           });
+          // Decrement comment count
+          setCommentCount((prev) => Math.max(0, prev - 1));
         }
       }
     });
@@ -524,36 +579,40 @@ export const PostCard = ({
     []
   );
 
-  // Handle toggle like
+  // Handle toggle like - Facebook-like instant response
   const handleToggleLike = useCallback(async () => {
     if (isLiking) return;
 
+    // Capture current state for rollback
+    const previousIsLiked = isLiked;
+    const previousCount = likeCount;
+
+    // Optimistic update - instant UI response
+    const newIsLiked = !isLiked;
+    const newCount = newIsLiked ? likeCount + 1 : likeCount - 1;
+    setIsLiked(newIsLiked);
+    setLikeCount(newCount);
+    setIsLiking(true);
+
+    // Call API in background (non-blocking)
     try {
-      setIsLiking(true);
-
-      // Optimistic update
-      const newIsLiked = !isLiked;
-      const newCount = newIsLiked ? likeCount + 1 : likeCount - 1;
-      setIsLiked(newIsLiked);
-      setLikeCount(newCount);
-
       const response = await likeService.toggleLike(postId);
 
       if (response.code === 200 && response.data) {
-        // Update with actual data from server
+        // Sync with server data if different
         setIsLiked(response.data.liked);
         setLikeCount(response.data.count);
       } else {
         // Revert on error
-        setIsLiked(!newIsLiked);
-        setLikeCount(likeCount);
+        setIsLiked(previousIsLiked);
+        setLikeCount(previousCount);
         toast.error("Không thể thực hiện thao tác");
       }
     } catch (error) {
       console.error("Error toggling like:", error);
       // Revert on error
-      setIsLiked(!isLiked);
-      setLikeCount(likeCount);
+      setIsLiked(previousIsLiked);
+      setLikeCount(previousCount);
       toast.error("Có lỗi xảy ra");
     } finally {
       setIsLiking(false);
@@ -802,15 +861,7 @@ export const PostCard = ({
       <div className="flex items-center justify-between px-4 sm:px-5 py-2.5 text-xs sm:text-sm text-muted-foreground border-t border-border">
         <span>{likeCount} lượt thích</span>
         <div className="flex gap-3">
-          <span>
-            {showComments && commentsList.length > 0
-              ? commentsList.reduce(
-                  (total, c) => total + 1 + (c.replies?.length || 0),
-                  0
-                )
-              : initialCommentsCount}{" "}
-            bình luận
-          </span>
+          <span>{commentCount} bình luận</span>
         </div>
       </div>
 
@@ -818,30 +869,32 @@ export const PostCard = ({
       <div className="flex items-center border-t border-border">
         <Button
           variant="ghost"
-          className={`flex-1 gap-2 rounded-none py-2.5 sm:py-3 transition-colors ${
-            isLiked ? "text-red-500 hover:text-red-600" : ""
+          className={`flex-1 gap-2 rounded-none py-2.5 sm:py-3 transition-all duration-200 ease-in-out ${
+            isLiked
+              ? "text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30"
+              : "hover:bg-accent"
           }`}
           size="sm"
           onClick={handleToggleLike}
           disabled={isLiking}
         >
           <Heart
-            className={`h-4 w-4 sm:h-5 sm:w-5 transition-all ${
-              isLiked ? "fill-current" : ""
+            className={`h-4 w-4 sm:h-5 sm:w-5 transition-all duration-200 ease-in-out ${
+              isLiked ? "fill-current scale-110" : "scale-100"
             }`}
           />
-          <span className="text-sm sm:text-base">
+          <span className="text-sm sm:text-base font-medium">
             {isLiked ? "Đã thích" : "Thích"}
           </span>
         </Button>
         <Button
           variant="ghost"
-          className="flex-1 gap-2 rounded-none border-x border-border py-2.5 sm:py-3"
+          className="flex-1 gap-2 rounded-none border-x border-border py-2.5 sm:py-3 transition-all duration-200 hover:bg-accent"
           size="sm"
           onClick={() => setShowComments(!showComments)}
         >
-          <MessageCircle className="h-4 w-4 sm:h-5 sm:w-5" />
-          <span className="text-sm sm:text-base">Bình luận</span>
+          <MessageCircle className="h-4 w-4 sm:h-5 sm:w-5 transition-transform duration-200" />
+          <span className="text-sm sm:text-base font-medium">Bình luận</span>
         </Button>
       </div>
 
@@ -903,7 +956,11 @@ export const PostCard = ({
                 </div>
               ) : (
                 commentsList.map((comment) => (
-                  <div key={comment.id} className="space-y-2">
+                  <div
+                    key={comment.id}
+                    id={`comment-${comment.id}`}
+                    className="space-y-2 transition-all duration-300 rounded-lg"
+                  >
                     <div className="flex gap-2 sm:gap-3">
                       <Avatar className="h-8 w-8 sm:h-9 sm:w-9">
                         <AvatarImage src={comment.userAvatar || undefined} />
@@ -1000,7 +1057,11 @@ export const PostCard = ({
                     {comment.replies && comment.replies.length > 0 && (
                       <div className="ml-8 sm:ml-12 space-y-2">
                         {comment.replies.map((reply) => (
-                          <div key={reply.id} className="flex gap-2">
+                          <div
+                            key={reply.id}
+                            id={`comment-${reply.id}`}
+                            className="flex gap-2 transition-all duration-300 rounded-lg"
+                          >
                             <Avatar className="h-7 w-7 sm:h-8 sm:w-8">
                               <AvatarImage
                                 src={reply.userAvatar || undefined}

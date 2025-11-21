@@ -68,11 +68,12 @@ public class AuthController {
             Map<String, Object> profile = profileOpt.get();
             String fullName = Objects.toString(profile.getOrDefault("fullName", payload.get("name")), "");
             String avatarUrl = Objects.toString(profile.getOrDefault("avatarUrl", payload.get("picture")), "");
-            String studentCode = Objects.toString(profile.getOrDefault("studentCode", ""), "");
-            String systemRole = Objects.toString(profile.getOrDefault("systemRole", "STUDENT"));
+            String studentCode = Optional.ofNullable((String) profile.get("studentCode"))
+                    .filter(s -> !s.isBlank())
+                    .orElse(null);
 
-            // Ensure system role entity exists
-            SystemRole role = systemRoleService.findOrCreateRole(systemRole);
+
+            SystemRole role = systemRoleService.findByRoleName("STUDENT").orElseGet(SystemRole::new);
 
             // Handle user creation/retrieval
             // - New users: Create with Google/FapAPI information

@@ -190,3 +190,19 @@
 }
 
 }
+
+/* ===== Hairline / subpixel rendering fixes =====
+   These rules force compositing and ensure the gradient header
+   fills the rounded corner area (common fix for thin white lines). */
+.rounded-2xl.overflow-hidden {
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  background-clip: padding-box;
+}
+
+/* Ensure any gradient header uses padding-box clipping too */
+/* Targets elements that commonly hold header backgrounds */
+.bg-gradient-to-r, .card-header, .CardHeader {
+  background-clip: padding-box;
+}
