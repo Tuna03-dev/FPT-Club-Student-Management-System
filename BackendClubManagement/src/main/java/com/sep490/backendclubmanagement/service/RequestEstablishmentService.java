@@ -4,6 +4,7 @@ import com.sep490.backendclubmanagement.dto.request.AssignRequestEstablishmentRe
 import com.sep490.backendclubmanagement.dto.request.CreateRequestEstablishmentRequest;
 import com.sep490.backendclubmanagement.dto.request.CompleteDefenseRequest;
 import com.sep490.backendclubmanagement.dto.request.ProposeDefenseScheduleRequest;
+import com.sep490.backendclubmanagement.dto.request.RequestProposalRequest;
 import com.sep490.backendclubmanagement.dto.request.RejectContactRequest;
 import com.sep490.backendclubmanagement.dto.request.RejectDefenseScheduleRequest;
 import com.sep490.backendclubmanagement.dto.request.RejectProposalRequest;
@@ -11,25 +12,27 @@ import com.sep490.backendclubmanagement.dto.request.SubmitFinalFormRequest;
 import com.sep490.backendclubmanagement.dto.request.SubmitProposalRequest;
 import com.sep490.backendclubmanagement.dto.request.UpdateRequestEstablishmentRequest;
 import com.sep490.backendclubmanagement.dto.response.ClubCreationFinalFormResponse;
+import com.sep490.backendclubmanagement.dto.response.ClubCreationStepResponse;
 import com.sep490.backendclubmanagement.dto.response.ClubProposalResponse;
 import com.sep490.backendclubmanagement.dto.response.DefenseScheduleResponse;
 import com.sep490.backendclubmanagement.dto.response.RequestEstablishmentResponse;
 import com.sep490.backendclubmanagement.dto.response.WorkflowHistoryResponse;
-import com.sep490.backendclubmanagement.entity.ClubCreationFinalForm;
-import com.sep490.backendclubmanagement.entity.ClubProposal;
-import com.sep490.backendclubmanagement.entity.DefenseSchedule;
-import com.sep490.backendclubmanagement.entity.DefenseScheduleStatus;
-import com.sep490.backendclubmanagement.entity.RequestEstablishment;
-import com.sep490.backendclubmanagement.entity.RequestEstablishmentStatus;
-import com.sep490.backendclubmanagement.entity.User;
+import com.sep490.backendclubmanagement.entity.*;
 import com.sep490.backendclubmanagement.exception.AppException;
 import com.sep490.backendclubmanagement.exception.ErrorCode;
-import com.sep490.backendclubmanagement.entity.ClubCreationWorkFlowHistory;
 import com.sep490.backendclubmanagement.repository.ClubCreationFinalFormRepository;
 import com.sep490.backendclubmanagement.repository.ClubCreationWorkFlowHistoryRepository;
+import com.sep490.backendclubmanagement.repository.ClubCategoryRepository;
+import com.sep490.backendclubmanagement.repository.ClubCreationStepRepository;
+import com.sep490.backendclubmanagement.repository.ClubMemberShipRepository;
 import com.sep490.backendclubmanagement.repository.ClubProposalRepository;
+import com.sep490.backendclubmanagement.repository.ClubRepository;
+import com.sep490.backendclubmanagement.repository.ClubRoleRepository;
 import com.sep490.backendclubmanagement.repository.DefenseScheduleRepository;
 import com.sep490.backendclubmanagement.repository.RequestEstablishmentRepository;
+import com.sep490.backendclubmanagement.repository.RoleMemberShipRepository;
+import com.sep490.backendclubmanagement.repository.SemesterRepository;
+import com.sep490.backendclubmanagement.repository.SystemRoleRepository;
 import com.sep490.backendclubmanagement.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -40,8 +43,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -56,6 +62,14 @@ public class RequestEstablishmentService {
     private final CloudinaryService cloudinaryService;
     private final DefenseScheduleRepository defenseScheduleRepository;
     private final ClubCreationFinalFormRepository clubCreationFinalFormRepository;
+    private final ClubRepository clubRepository;
+    private final ClubRoleRepository clubRoleRepository;
+    private final SystemRoleRepository systemRoleRepository;
+    private final ClubMemberShipRepository clubMemberShipRepository;
+    private final RoleMemberShipRepository roleMemberShipRepository;
+    private final SemesterRepository semesterRepository;
+    private final ClubCategoryRepository clubCategoryRepository;
+    private final ClubCreationStepRepository clubCreationStepRepository;
 
     @Transactional
     public RequestEstablishmentResponse createRequest(Long userId, CreateRequestEstablishmentRequest request) throws AppException {
@@ -79,10 +93,16 @@ public class RequestEstablishmentService {
         RequestEstablishment requestEstablishment = RequestEstablishment.builder()
                 .clubName(request.getClubName().trim())
                 .clubCategory(request.getClubCategory().trim())
+                .clubCode(request.getClubCode() != null ? request.getClubCode().trim() : null)
                 .expectedMemberCount(request.getExpectedMemberCount())
                 .activityObjectives(request.getActivityObjectives())
                 .expectedActivities(request.getExpectedActivities())
                 .description(request.getDescription())
+                .email(request.getEmail() != null ? request.getEmail().trim() : null)
+                .phone(request.getPhone() != null ? request.getPhone().trim() : null)
+                .facebookLink(request.getFacebookLink() != null ? request.getFacebookLink().trim() : null)
+                .instagramLink(request.getInstagramLink() != null ? request.getInstagramLink().trim() : null)
+                .tiktokLink(request.getTiktokLink() != null ? request.getTiktokLink().trim() : null)
                 .status(status)
                 .createdBy(creator)
                 .sendDate(status == RequestEstablishmentStatus.SUBMITTED ? LocalDateTime.now() : null)
@@ -136,6 +156,9 @@ public class RequestEstablishmentService {
         if (request.getClubCategory() != null && !request.getClubCategory().trim().isEmpty()) {
             requestEstablishment.setClubCategory(request.getClubCategory().trim());
         }
+        if (request.getClubCode() != null) {
+            requestEstablishment.setClubCode(request.getClubCode().trim());
+        }
         if (request.getExpectedMemberCount() != null && request.getExpectedMemberCount() > 0) {
             requestEstablishment.setExpectedMemberCount(request.getExpectedMemberCount());
         }
@@ -147,6 +170,21 @@ public class RequestEstablishmentService {
         }
         if (request.getDescription() != null) {
             requestEstablishment.setDescription(request.getDescription());
+        }
+        if (request.getEmail() != null) {
+            requestEstablishment.setEmail(request.getEmail().trim());
+        }
+        if (request.getPhone() != null) {
+            requestEstablishment.setPhone(request.getPhone().trim());
+        }
+        if (request.getFacebookLink() != null) {
+            requestEstablishment.setFacebookLink(request.getFacebookLink().trim());
+        }
+        if (request.getInstagramLink() != null) {
+            requestEstablishment.setInstagramLink(request.getInstagramLink().trim());
+        }
+        if (request.getTiktokLink() != null) {
+            requestEstablishment.setTiktokLink(request.getTiktokLink().trim());
         }
 
         requestEstablishment = requestEstablishmentRepository.save(requestEstablishment);
@@ -214,9 +252,26 @@ public class RequestEstablishmentService {
     //  STAFF
 
     public Page<RequestEstablishmentResponse> getPendingRequests(Pageable pageable) throws AppException {
+        // Trả về tất cả các status đang xử lý (không phải APPROVED, REJECTED, CONTACT_REJECTED)
         List<RequestEstablishmentStatus> pendingStatuses = List.of(
                 RequestEstablishmentStatus.SUBMITTED,
-                RequestEstablishmentStatus.CONTACT_CONFIRMATION_PENDING
+                RequestEstablishmentStatus.CONTACT_CONFIRMATION_PENDING,
+                RequestEstablishmentStatus.CONTACT_CONFIRMED,
+                RequestEstablishmentStatus.PROPOSAL_REQUIRED,
+                RequestEstablishmentStatus.PROPOSAL_SUBMITTED,
+                RequestEstablishmentStatus.PROPOSAL_REJECTED,
+                RequestEstablishmentStatus.PROPOSAL_APPROVED,
+                RequestEstablishmentStatus.DEFENSE_SCHEDULE_PROPOSED,
+                RequestEstablishmentStatus.DEFENSE_SCHEDULE_APPROVED,
+                RequestEstablishmentStatus.DEFENSE_SCHEDULE_REJECTED,
+                RequestEstablishmentStatus.DEFENSE_SCHEDULED,
+                RequestEstablishmentStatus.DEFENSE_COMPLETED,
+                RequestEstablishmentStatus.FEEDBACK_PROVIDED,
+                RequestEstablishmentStatus.FINAL_FORM_SUBMITTED,
+                RequestEstablishmentStatus.FINAL_FORM_REVIEWED,
+                RequestEstablishmentStatus.APPROVED,
+                RequestEstablishmentStatus.REJECTED,
+                RequestEstablishmentStatus.CONTACT_REJECTED
         );
         Page<RequestEstablishment> requests = requestEstablishmentRepository.findByStatusIn(pendingStatuses, pageable);
         return requests.map(this::mapToResponse);
@@ -254,12 +309,18 @@ public class RequestEstablishmentService {
         RequestEstablishment requestEstablishment = requestEstablishmentRepository.findDetailById(requestId)
                 .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND, "Không tìm thấy yêu cầu thành lập CLB"));
 
-        if (requestEstablishment.getAssignedStaff() == null || !requestEstablishment.getAssignedStaff().getId().equals(staffId)) {
-            throw new AppException(ErrorCode.FORBIDDEN, "Bạn không có quyền nhận yêu cầu này");
-        }
-
         if (requestEstablishment.getStatus() != RequestEstablishmentStatus.SUBMITTED) {
             throw new AppException(ErrorCode.INVALID_INPUT, "Chỉ có thể nhận yêu cầu ở trạng thái SUBMITTED");
+        }
+
+        // Nếu chưa được gán, tự động gán cho staff đang nhận
+        if (requestEstablishment.getAssignedStaff() == null) {
+            User staff = userRepository.findById(staffId)
+                    .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND, "Không tìm thấy staff"));
+            requestEstablishment.setAssignedStaff(staff);
+        } else if (!requestEstablishment.getAssignedStaff().getId().equals(staffId)) {
+            // Nếu đã được gán cho staff khác, không cho phép nhận
+            throw new AppException(ErrorCode.FORBIDDEN, "Yêu cầu này đã được gán cho staff khác");
         }
 
         LocalDateTime now = LocalDateTime.now();
@@ -350,7 +411,7 @@ public class RequestEstablishmentService {
     }
 
     @Transactional
-    public RequestEstablishmentResponse requestProposal(Long requestId, Long staffId) throws AppException {
+    public RequestEstablishmentResponse requestProposal(Long requestId, Long staffId, RequestProposalRequest request) throws AppException {
         // Get request
         RequestEstablishment requestEstablishment = requestEstablishmentRepository.findDetailById(requestId)
                 .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND, "Không tìm thấy yêu cầu thành lập CLB"));
@@ -371,7 +432,11 @@ public class RequestEstablishmentService {
         requestEstablishmentRepository.flush();
 
         try {
-            workflowHistoryService.createWorkflowHistory(requestEstablishment.getId(), staffId, "PROPOSAL_REVIEW", "Staff đã yêu cầu sinh viên nộp đề án chi tiết");
+            String comment = (request != null && request.getComment() != null && !request.getComment().trim().isEmpty())
+                    ? request.getComment().trim()
+                    : "Staff đã yêu cầu sinh viên nộp đề án chi tiết";
+            // Tạo history với step code PROPOSAL_REQUIRED để đánh dấu staff đã yêu cầu nộp đề án
+            workflowHistoryService.createWorkflowHistory(requestEstablishment.getId(), staffId, "PROPOSAL_REQUIRED", comment);
         } catch (Exception e) {
             log.error("Failed to create workflow history, but continuing: {}", e.getMessage());
         }
@@ -395,10 +460,13 @@ public class RequestEstablishmentService {
             throw new AppException(ErrorCode.FORBIDDEN, "Bạn không có quyền nộp đề án cho yêu cầu này");
         }
 
-        // Check status: only PROPOSAL_REQUIRED or PROPOSAL_REJECTED can submit proposal
-        if (requestEstablishment.getStatus() != RequestEstablishmentStatus.PROPOSAL_REQUIRED &&
-            requestEstablishment.getStatus() != RequestEstablishmentStatus.PROPOSAL_REJECTED) {
-            throw new AppException(ErrorCode.INVALID_INPUT, "Chỉ có thể nộp đề án khi trạng thái là PROPOSAL_REQUIRED hoặc PROPOSAL_REJECTED");
+        // Check status: allow submit when staff already requested proposal, student is resubmitting after rejection,
+        // or student wants to update proposal while waiting for approval
+        RequestEstablishmentStatus previousStatus = requestEstablishment.getStatus();
+        if (previousStatus != RequestEstablishmentStatus.PROPOSAL_REQUIRED &&
+            previousStatus != RequestEstablishmentStatus.PROPOSAL_REJECTED &&
+            previousStatus != RequestEstablishmentStatus.PROPOSAL_SUBMITTED) {
+            throw new AppException(ErrorCode.INVALID_INPUT, "Chỉ có thể nộp đề án khi trạng thái là PROPOSAL_REQUIRED, PROPOSAL_REJECTED hoặc PROPOSAL_SUBMITTED (chờ staff duyệt)");
         }
 
         // Validate: phải có file hoặc fileUrl
@@ -448,7 +516,23 @@ public class RequestEstablishmentService {
 
         // Create workflow history
         try {
-            workflowHistoryService.createWorkflowHistory(requestEstablishment.getId(), userId, "PROPOSAL_REVIEW", "Sinh viên đã nộp đề án chi tiết");
+            String comments = request.getComment();
+            if (comments == null || comments.trim().isEmpty()) {
+                // Phân biệt nộp mới vs nộp lại để hiển thị rõ hơn trên workflow
+                if (previousStatus == RequestEstablishmentStatus.PROPOSAL_REJECTED) {
+                    comments = "Sinh viên đã nộp lại đề án chi tiết";
+                } else if (previousStatus == RequestEstablishmentStatus.PROPOSAL_SUBMITTED) {
+                    comments = "Sinh viên đã cập nhật đề án chi tiết";
+                } else {
+                    comments = "Sinh viên đã nộp đề án chi tiết";
+                }
+            }
+            workflowHistoryService.createWorkflowHistory(
+                    requestEstablishment.getId(),
+                    userId,
+                    "PROPOSAL_SUBMITTED",
+                    comments
+            );
         } catch (Exception e) {
             log.error("Failed to create workflow history, but continuing: {}", e.getMessage());
         }
@@ -541,6 +625,27 @@ public class RequestEstablishmentService {
                 pageable,
                 proposalResponses.size()
         );
+    }
+
+    /**
+     * Staff xem danh sách đề án của một request
+     */
+    public List<ClubProposalResponse> getProposalsForStaff(Long requestId, Long staffId) throws AppException {
+        // Get request to check permission
+        RequestEstablishment requestEstablishment = requestEstablishmentRepository.findDetailById(requestId)
+                .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND, "Không tìm thấy yêu cầu thành lập CLB"));
+
+        // Check permission: only assigned staff can view
+        if (requestEstablishment.getAssignedStaff() == null || !requestEstablishment.getAssignedStaff().getId().equals(staffId)) {
+            throw new AppException(ErrorCode.FORBIDDEN, "Bạn không có quyền xem đề án của yêu cầu này");
+        }
+
+        // Get all proposals for this request
+        List<ClubProposal> proposals = clubProposalRepository.findAllByRequestEstablishmentIdOrderByCreatedAtDesc(requestId);
+
+        return proposals.stream()
+                .map(this::mapToProposalResponse)
+                .toList();
     }
 
     /**
@@ -679,6 +784,10 @@ public class RequestEstablishmentService {
             throw new AppException(ErrorCode.INVALID_INPUT, "Chỉ có thể đề xuất lịch bảo vệ khi trạng thái là PROPOSAL_APPROVED hoặc DEFENSE_SCHEDULE_REJECTED");
         }
 
+        if (request.getDefenseEndDate() == null || !request.getDefenseEndDate().isAfter(request.getDefenseDate())) {
+            throw new AppException(ErrorCode.INVALID_INPUT, "Thời gian kết thúc bảo vệ phải sau thời gian bắt đầu");
+        }
+
         // Check if defense schedule already exists
         DefenseSchedule existingSchedule = defenseScheduleRepository.findByRequestEstablishmentId(requestId).orElse(null);
         
@@ -686,6 +795,7 @@ public class RequestEstablishmentService {
         if (existingSchedule != null) {
             // Update existing schedule
             existingSchedule.setDefenseDate(request.getDefenseDate());
+            existingSchedule.setDefenseEndDate(request.getDefenseEndDate());
             existingSchedule.setLocation(request.getLocation());
             existingSchedule.setMeetingLink(request.getMeetingLink());
             existingSchedule.setNotes(request.getNotes());
@@ -696,14 +806,14 @@ public class RequestEstablishmentService {
             // Create new schedule
             schedule = DefenseSchedule.builder()
                     .defenseDate(request.getDefenseDate())
+                    .defenseEndDate(request.getDefenseEndDate())
                     .location(request.getLocation())
                     .meetingLink(request.getMeetingLink())
                     .notes(request.getNotes())
-                    .result(DefenseScheduleStatus.PROPOSED)
+                    .result(null)
                     .requestEstablishment(requestEstablishment)
                     .build();
             schedule = defenseScheduleRepository.save(schedule);
-            log.info("Created new defense schedule {} for request {}", schedule.getId(), requestId);
         }
 
         // Update request status
@@ -714,7 +824,16 @@ public class RequestEstablishmentService {
 
         // Create workflow history
         try {
-            workflowHistoryService.createWorkflowHistory(requestEstablishment.getId(), userId, "PROPOSE_DEFENSE_TIME", "Sinh viên đã đề xuất lịch bảo vệ: " + request.getDefenseDate());
+            String comments = request.getNotes();
+            if (comments == null || comments.trim().isEmpty()) {
+                comments = "Sinh viên đã đề xuất lịch bảo vệ: " + request.getDefenseDate();
+            }
+            workflowHistoryService.createWorkflowHistory(
+                    requestEstablishment.getId(),
+                    userId,
+                    "PROPOSE_DEFENSE_TIME",
+                    comments
+            );
         } catch (Exception e) {
             log.error("Failed to create workflow history, but continuing: {}", e.getMessage());
         }
@@ -773,8 +892,13 @@ public class RequestEstablishmentService {
             throw new AppException(ErrorCode.INVALID_INPUT, "Không thể cập nhật lịch bảo vệ đã được xác nhận");
         }
 
+        if (request.getDefenseEndDate() == null || !request.getDefenseEndDate().isAfter(request.getDefenseDate())) {
+            throw new AppException(ErrorCode.INVALID_INPUT, "Thời gian kết thúc bảo vệ phải sau thời gian bắt đầu");
+        }
+
         // Update schedule
         schedule.setDefenseDate(request.getDefenseDate());
+        schedule.setDefenseEndDate(request.getDefenseEndDate());
         schedule.setLocation(request.getLocation());
         schedule.setMeetingLink(request.getMeetingLink());
         schedule.setNotes(request.getNotes());
@@ -898,7 +1022,7 @@ public class RequestEstablishmentService {
 
         // Create workflow history
         try {
-            workflowHistoryService.createWorkflowHistory(requestEstablishment.getId(), staffId, "PROPOSE_DEFENSE_TIME", "Staff đã duyệt lịch bảo vệ: " + schedule.getDefenseDate());
+            workflowHistoryService.createWorkflowHistory(requestEstablishment.getId(), staffId, "DEFENSE_SCHEDULE_CONFIRMED", "Staff đã duyệt lịch bảo vệ: " + schedule.getDefenseDate());
         } catch (Exception e) {
             log.error("Failed to create workflow history, but continuing: {}", e.getMessage());
         }
@@ -986,6 +1110,14 @@ public class RequestEstablishmentService {
         DefenseSchedule schedule = defenseScheduleRepository.findByRequestEstablishmentId(requestId)
                 .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND, "Không tìm thấy lịch bảo vệ"));
 
+        // Check if defense date has passed
+        LocalDateTime now = LocalDateTime.now();
+        if (schedule.getDefenseDate().isAfter(now)) {
+            throw new AppException(ErrorCode.INVALID_INPUT, 
+                    "Chưa đến thời gian bảo vệ. Chỉ có thể nhập kết quả sau khi thời gian bảo vệ đã qua. " +
+                    "Thời gian bảo vệ: " + schedule.getDefenseDate());
+        }
+
         // Update defense schedule
         schedule.setResult(request.getResult());
         schedule.setFeedback(request.getFeedback());
@@ -1037,9 +1169,11 @@ public class RequestEstablishmentService {
             throw new AppException(ErrorCode.FORBIDDEN, "Bạn không có quyền nộp form cuối cho yêu cầu này");
         }
 
-        // Check status: only DEFENSE_COMPLETED can submit final form
-        if (requestEstablishment.getStatus() != RequestEstablishmentStatus.DEFENSE_COMPLETED) {
-            throw new AppException(ErrorCode.INVALID_INPUT, "Chỉ có thể nộp form cuối khi trạng thái là DEFENSE_COMPLETED");
+        RequestEstablishmentStatus previousStatus = requestEstablishment.getStatus();
+        // Check status: DEFENSE_COMPLETED (first submission) or FINAL_FORM_SUBMITTED (update before approval)
+        if (previousStatus != RequestEstablishmentStatus.DEFENSE_COMPLETED &&
+            previousStatus != RequestEstablishmentStatus.FINAL_FORM_SUBMITTED) {
+            throw new AppException(ErrorCode.INVALID_INPUT, "Chỉ có thể nộp form cuối khi trạng thái là DEFENSE_COMPLETED hoặc FINAL_FORM_SUBMITTED");
         }
 
         // Validate: phải có file hoặc fileUrl
@@ -1077,20 +1211,24 @@ public class RequestEstablishmentService {
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND, "Không tìm thấy người dùng"));
 
         // Create formData JSON: {"title": "...", "fileUrl": "..."}
-        String formDataJson = String.format("{\"title\":\"%s\",\"fileUrl\":\"%s\"}", 
-                request.getTitle().replace("\"", "\\\""), 
+        String formDataJson = String.format("{\"title\":\"%s\",\"fileUrl\":\"%s\"}",
+                request.getTitle().replace("\"", "\\\""),
                 fileUrl != null ? fileUrl.replace("\"", "\\\"") : "");
 
-        // Luôn tạo final form mới (nhiều version) thay vì update form cũ
-        ClubCreationFinalForm finalForm = ClubCreationFinalForm.builder()
-                .formData(formDataJson)
-                .status("SUBMITTED")
-                .submittedAt(LocalDateTime.now())
-                .submittedBy(submittedBy)
-                .requestEstablishment(requestEstablishment)
-                .build();
+        ClubCreationFinalForm finalForm = clubCreationFinalFormRepository.findByRequestEstablishmentId(requestId).orElse(null);
+        if (finalForm == null) {
+            finalForm = ClubCreationFinalForm.builder()
+                    .requestEstablishment(requestEstablishment)
+                    .build();
+        }
+        finalForm.setFormData(formDataJson);
+        finalForm.setStatus("SUBMITTED");
+        finalForm.setSubmittedAt(LocalDateTime.now());
+        finalForm.setSubmittedBy(submittedBy);
+        finalForm.setReviewedAt(null);
+        finalForm.setReviewedBy(null);
         finalForm = clubCreationFinalFormRepository.save(finalForm);
-        log.info("Created new final form version {} for request {}", finalForm.getId(), requestId);
+        log.info("{} final form for request {}", previousStatus == RequestEstablishmentStatus.FINAL_FORM_SUBMITTED ? "Updated" : "Created new", requestId);
 
         // Update request status
         requestEstablishment.setStatus(RequestEstablishmentStatus.FINAL_FORM_SUBMITTED);
@@ -1100,7 +1238,20 @@ public class RequestEstablishmentService {
 
         // Create workflow history
         try {
-            workflowHistoryService.createWorkflowHistory(requestEstablishment.getId(), userId, "FINAL_FORM", "Sinh viên đã nộp form cuối: " + request.getTitle());
+            String comments = request.getComment();
+            if (comments == null || comments.trim().isEmpty()) {
+                if (previousStatus == RequestEstablishmentStatus.FINAL_FORM_SUBMITTED) {
+                    comments = "Sinh viên đã cập nhật form cuối: " + request.getTitle();
+                } else {
+                    comments = "Sinh viên đã nộp form cuối: " + request.getTitle();
+                }
+            }
+            workflowHistoryService.createWorkflowHistory(
+                    requestEstablishment.getId(),
+                    userId,
+                    "FINAL_FORM",
+                    comments
+            );
         } catch (Exception e) {
             log.error("Failed to create workflow history, but continuing: {}", e.getMessage());
         }
@@ -1108,6 +1259,187 @@ public class RequestEstablishmentService {
         log.info("Submitted final form for request establishment {} by user: {}", requestId, userId);
 
         return mapToFinalFormResponse(finalForm);
+    }
+
+    /**
+     * Student xem danh sách form cuối (tất cả version) của yêu cầu
+     */
+    public List<ClubCreationFinalFormResponse> getFinalFormsForStudent(Long requestId, Long userId) throws AppException {
+        RequestEstablishment requestEstablishment = requestEstablishmentRepository.findDetailById(requestId)
+                .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND, "Không tìm thấy yêu cầu thành lập CLB"));
+
+        if (!requestEstablishment.getCreatedBy().getId().equals(userId)) {
+            throw new AppException(ErrorCode.FORBIDDEN, "Bạn không có quyền xem form cuối của yêu cầu này");
+        }
+
+        List<ClubCreationFinalForm> finalForms = clubCreationFinalFormRepository
+                .findAllByRequestEstablishmentIdOrderByCreatedAtDesc(requestId);
+
+        return finalForms.stream()
+                .map(this::mapToFinalFormResponse)
+                .toList();
+    }
+
+    /**
+     * Staff xem danh sách form cuối (tất cả version) của yêu cầu được giao
+     */
+    public List<ClubCreationFinalFormResponse> getFinalFormsForStaff(Long requestId, Long staffId) throws AppException {
+        RequestEstablishment requestEstablishment = requestEstablishmentRepository.findDetailById(requestId)
+                .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND, "Không tìm thấy yêu cầu thành lập CLB"));
+
+        if (requestEstablishment.getAssignedStaff() == null ||
+                !requestEstablishment.getAssignedStaff().getId().equals(staffId)) {
+            throw new AppException(ErrorCode.FORBIDDEN, "Bạn không có quyền xem form cuối của yêu cầu này");
+        }
+
+        List<ClubCreationFinalForm> finalForms = clubCreationFinalFormRepository
+                .findAllByRequestEstablishmentIdOrderByCreatedAtDesc(requestId);
+
+        return finalForms.stream()
+                .map(this::mapToFinalFormResponse)
+                .toList();
+    }
+
+    /**
+     * Staff duyệt form cuối và tự động tạo CLB + vai trò mặc định
+     */
+    @Transactional
+    public RequestEstablishmentResponse approveFinalForm(Long requestId, Long staffId) throws AppException {
+        RequestEstablishment requestEstablishment = requestEstablishmentRepository.findDetailById(requestId)
+                .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND, "Không tìm thấy yêu cầu thành lập CLB"));
+
+        if (requestEstablishment.getAssignedStaff() == null ||
+                !requestEstablishment.getAssignedStaff().getId().equals(staffId)) {
+            throw new AppException(ErrorCode.FORBIDDEN, "Bạn không có quyền duyệt form cuối của yêu cầu này");
+        }
+
+        if (requestEstablishment.getStatus() != RequestEstablishmentStatus.FINAL_FORM_SUBMITTED) {
+            throw new AppException(ErrorCode.INVALID_INPUT, "Yêu cầu chưa ở trạng thái nộp form cuối");
+        }
+
+        ClubCreationFinalForm latestFinalForm = clubCreationFinalFormRepository
+                .findFirstByRequestEstablishmentIdOrderByCreatedAtDesc(requestId)
+                .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND, "Không tìm thấy form cuối để duyệt"));
+
+        User staff = userRepository.findById(staffId)
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND, "Không tìm thấy thông tin staff"));
+
+        latestFinalForm.setStatus("APPROVED");
+        latestFinalForm.setReviewedAt(LocalDateTime.now());
+        latestFinalForm.setReviewedBy(staff);
+        clubCreationFinalFormRepository.save(latestFinalForm);
+
+        Club club = createClubFromRequest(requestEstablishment);
+        List<ClubRole> defaultRoles = createDefaultClubRoles(club);
+
+        ClubRole presidentRole = defaultRoles.stream()
+                .filter(role -> "CLUB_PRESIDENT".equalsIgnoreCase(role.getRoleCode()))
+                .findFirst()
+                .orElseThrow(() -> new AppException(ErrorCode.INTERNAL_SERVER_ERROR, "Không tạo được vai trò Chủ nhiệm"));
+
+        ClubMemberShip founderMembership = createFounderMembership(club, requestEstablishment.getCreatedBy());
+        assignRoleToMembership(founderMembership, presidentRole);
+
+        requestEstablishment.setStatus(RequestEstablishmentStatus.APPROVED);
+        requestEstablishment = requestEstablishmentRepository.save(requestEstablishment);
+        
+        requestEstablishmentRepository.flush();
+
+        // Create workflow history: FINAL_FORM_APPROVED
+        try {
+            workflowHistoryService.createWorkflowHistory(
+                    requestEstablishment.getId(),
+                    staffId,
+                    "FINAL_FORM_APPROVED",
+                    "Staff đã duyệt form cuối"
+            );
+        } catch (Exception e) {
+            log.error("Failed to create workflow history for FINAL_FORM_APPROVED, but continuing: {}", e.getMessage());
+        }
+
+        // Create workflow history: CLUB_CREATED
+        try {
+            workflowHistoryService.createWorkflowHistory(
+                    requestEstablishment.getId(),
+                    staffId,
+                    "CLUB_CREATED",
+                    "Staff đã thành lập CLB"
+            );
+        } catch (Exception e) {
+            log.error("Failed to create workflow history for CLUB_CREATED, but continuing: {}", e.getMessage());
+        }
+
+        log.info("Approved final form and created club {} for request {}", club.getId(), requestId);
+        return mapToResponse(requestEstablishment);
+    }
+
+    private Club createClubFromRequest(RequestEstablishment requestEstablishment) throws AppException {
+        if (requestEstablishment.getClubCode() != null &&
+                clubRepository.findByClubCode(requestEstablishment.getClubCode()).isPresent()) {
+            throw new AppException(ErrorCode.INVALID_INPUT, "Mã CLB đã tồn tại, vui lòng cập nhật mã khác");
+        }
+
+        Club club = Club.builder()
+                .clubName(requestEstablishment.getClubName())
+                .clubCode(requestEstablishment.getClubCode())
+                .description(requestEstablishment.getDescription())
+                .email(requestEstablishment.getEmail())
+                .phone(requestEstablishment.getPhone())
+                .fbUrl(requestEstablishment.getFacebookLink())
+                .igUrl(requestEstablishment.getInstagramLink())
+                .ttUrl(requestEstablishment.getTiktokLink())
+                .status("ACTIVE")
+                .build();
+
+        Optional<ClubCategory> categoryOpt = Optional.ofNullable(requestEstablishment.getClubCategory())
+                .flatMap(name -> clubCategoryRepository.findByCategoryNameIgnoreCase(name));
+        categoryOpt.ifPresent(club::setClubCategory);
+
+        return clubRepository.save(club);
+    }
+
+    private List<ClubRole> createDefaultClubRoles(Club club) {
+        List<ClubRole> roles = new ArrayList<>();
+        for (DefaultRoleDefinition def : DEFAULT_ROLE_DEFINITIONS) {
+            SystemRole systemRole = null;
+            if (def.systemRoleName != null) {
+                systemRole = systemRoleRepository.findByRoleName(def.systemRoleName)
+                        .orElse(null);
+            }
+            ClubRole role = ClubRole.builder()
+                    .club(club)
+                    .roleCode(def.roleCode)
+                    .roleName(def.roleName)
+                    .description(def.description)
+                    .roleLevel(def.roleLevel)
+                    .systemRole(systemRole)
+                    .build();
+            roles.add(role);
+        }
+        return clubRoleRepository.saveAll(roles);
+    }
+
+    private ClubMemberShip createFounderMembership(Club club, User founder) {
+        ClubMemberShip membership = ClubMemberShip.builder()
+                .club(club)
+                .user(founder)
+                .joinDate(LocalDate.now())
+                .status(ClubMemberShipStatus.ACTIVE)
+                .build();
+        return clubMemberShipRepository.save(membership);
+    }
+
+    private void assignRoleToMembership(ClubMemberShip membership, ClubRole role) throws AppException {
+        Semester currentSemester = semesterRepository.findCurrentSemester()
+                .orElseThrow(() -> new AppException(ErrorCode.INTERNAL_SERVER_ERROR, "Không tìm thấy học kỳ hiện tại"));
+
+        RoleMemberShip roleMemberShip = RoleMemberShip.builder()
+                .clubMemberShip(membership)
+                .clubRole(role)
+                .semester(currentSemester)
+                .isActive(true)
+                .build();
+        roleMemberShipRepository.save(roleMemberShip);
     }
 
     private ClubCreationFinalFormResponse mapToFinalFormResponse(ClubCreationFinalForm finalForm) {
@@ -1140,6 +1472,7 @@ public class RequestEstablishmentService {
         return DefenseScheduleResponse.builder()
                 .id(schedule.getId())
                 .defenseDate(schedule.getDefenseDate())
+                .defenseEndDate(schedule.getDefenseEndDate())
                 .location(schedule.getLocation())
                 .meetingLink(schedule.getMeetingLink())
                 .panelMembers(schedule.getPanelMembers())
@@ -1180,6 +1513,11 @@ public class RequestEstablishmentService {
                 .activityObjectives(request.getActivityObjectives())
                 .expectedActivities(request.getExpectedActivities())
                 .description(request.getDescription())
+                .email(request.getEmail())
+                .phone(request.getPhone())
+                .facebookLink(request.getFacebookLink())
+                .instagramLink(request.getInstagramLink())
+                .tiktokLink(request.getTiktokLink())
                 .confirmationDeadline(request.getConfirmationDeadline())
                 .receivedAt(request.getReceivedAt())
                 .confirmedAt(request.getConfirmedAt())
@@ -1201,6 +1539,67 @@ public class RequestEstablishmentService {
         }
 
         return builder.build();
+    }
+
+    private static final List<DefaultRoleDefinition> DEFAULT_ROLE_DEFINITIONS = List.of(
+            new DefaultRoleDefinition(
+                    "CLUB_PRESIDENT",
+                    "Chủ nhiệm",
+                    "Người đứng đầu câu lạc bộ, quản lý toàn bộ hoạt động.",
+                    1,
+                    "CLUB_OFFICER"
+            ),
+            new DefaultRoleDefinition(
+                    "CLUB_VICE_PRESIDENT",
+                    "Phó Chủ nhiệm",
+                    "Phó Chủ nhiệm - trợ giúp Chủ nhiệm.",
+                    2,
+                    "CLUB_OFFICER"
+            ),
+            new DefaultRoleDefinition(
+                    "CLUB_TEAM_HEAD",
+                    "Trưởng ban",
+                    "Trưởng ban - phụ trách 1 ban chuyên môn.",
+                    3,
+                    "TEAM_OFFICER"
+            ),
+            new DefaultRoleDefinition(
+                    "CLUB_TEAM_DEPUTY",
+                    "Phó ban",
+                    "Phó ban - trợ giúp Trưởng ban.",
+                    4,
+                    "TEAM_OFFICER"
+            ),
+            new DefaultRoleDefinition(
+                    "CLUB_TREASURER",
+                    "Thủ quỹ",
+                    "Người quản lý tài chính cho CLB.",
+                    5,
+                    "CLUB_TREASURE"
+            ),
+            new DefaultRoleDefinition(
+                    "CLUB_MEMBER",
+                    "Thành viên",
+                    "Thành viên chung của CLB.",
+                    6,
+                    "MEMBER"
+            )
+    );
+
+    private static class DefaultRoleDefinition {
+        private final String roleCode;
+        private final String roleName;
+        private final String description;
+        private final int roleLevel;
+        private final String systemRoleName;
+
+        private DefaultRoleDefinition(String roleCode, String roleName, String description, int roleLevel, String systemRoleName) {
+            this.roleCode = roleCode;
+            this.roleName = roleName;
+            this.description = description;
+            this.roleLevel = roleLevel;
+            this.systemRoleName = systemRoleName;
+        }
     }
 
 
@@ -1237,6 +1636,28 @@ public class RequestEstablishmentService {
         }
 
         return builder.build();
+    }
+
+    /**
+     * Lấy danh sách tất cả các bước trong quy trình tạo CLB (sắp xếp theo orderIndex)
+     */
+    @Transactional(readOnly = true)
+    public List<ClubCreationStepResponse> getAllSteps() {
+        List<ClubCreationStep> steps = clubCreationStepRepository.findByActiveTrueOrderByOrderIndexAsc();
+        return steps.stream()
+                .map(this::mapToStepResponse)
+                .toList();
+    }
+
+    private ClubCreationStepResponse mapToStepResponse(ClubCreationStep step) {
+        return ClubCreationStepResponse.builder()
+                .id(step.getId())
+                .code(step.getCode())
+                .name(step.getName())
+                .description(step.getDescription())
+                .orderIndex(step.getOrderIndex())
+                .active(step.getActive())
+                .build();
     }
 }
 

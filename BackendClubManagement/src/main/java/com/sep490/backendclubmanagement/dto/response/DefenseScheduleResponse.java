@@ -13,6 +13,7 @@ import java.time.LocalDateTime;
 public class DefenseScheduleResponse {
     private Long id;
     private LocalDateTime defenseDate;
+    private LocalDateTime defenseEndDate;
     private String location;
     private String meetingLink;
     private String panelMembers;

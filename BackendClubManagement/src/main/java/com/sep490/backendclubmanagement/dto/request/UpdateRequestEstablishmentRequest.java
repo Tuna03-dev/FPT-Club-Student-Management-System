@@ -20,6 +20,18 @@ public class UpdateRequestEstablishmentRequest {
     private String expectedActivities; // Hoạt động dự kiến
 
     private String description; // Mô tả CLB
+
+    private String clubCode; // Mã CLB
+
+    private String email; // Email liên hệ
+
+    private String phone; // Số điện thoại liên hệ
+
+    private String facebookLink; // Link Facebook (optional)
+
+    private String instagramLink; // Link Instagram (optional)
+
+    private String tiktokLink; // Link TikTok (optional)
 }
 
 
