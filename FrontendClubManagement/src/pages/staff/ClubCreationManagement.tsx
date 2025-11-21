@@ -22,7 +22,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
 import {
   Calendar,
   CheckCircle2,
@@ -226,8 +225,6 @@ export default function ClubCreationManagement() {
   const [finalForms, setFinalForms] = useState<ClubCreationFinalFormResponse[]>([]);
   const [isFinalFormsLoading, setIsFinalFormsLoading] = useState(false);
   const [defenseSchedule, setDefenseSchedule] = useState<DefenseScheduleResponse | null>(null);
-  const [page, setPage] = useState(0);
-  const [totalPages, setTotalPages] = useState(0);
   const [selectedProposal, setSelectedProposal] = useState<ClubProposalResponse | null>(null);
   const [isProposalDialogOpen, setIsProposalDialogOpen] = useState(false);
   const [workflowSteps, setWorkflowSteps] = useState<ClubCreationStepResponse[]>([]);
@@ -255,9 +252,8 @@ export default function ClubCreationManagement() {
   const loadPendingRequests = async () => {
     setIsLoading(true);
     try {
-      const response = await clubCreationStaffApi.getPendingRequests(page, 20);
+      const response = await clubCreationStaffApi.getPendingRequests(0, 20);
       setClubRequests(response.content.map((req) => convertToClubCreationRequest(req, workflowSteps)));
-      setTotalPages(response.totalPages);
     } catch (error: any) {
       toast.error("Không thể tải danh sách yêu cầu", {
         description: error.message || "Đã xảy ra lỗi",
@@ -275,7 +271,7 @@ export default function ClubCreationManagement() {
     if (activeTab === "pending" && workflowSteps.length > 0) {
       loadPendingRequests();
     }
-  }, [activeTab, page, workflowSteps]);
+  }, [activeTab, workflowSteps]);
 
   // Load workflow history
   const loadWorkflowHistory = async (requestId: number) => {

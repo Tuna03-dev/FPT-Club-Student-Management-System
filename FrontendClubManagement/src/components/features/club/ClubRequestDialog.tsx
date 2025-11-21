@@ -94,10 +94,6 @@ export function ClubRequestDialog({
   finalForms = [],
   onViewProposalDetail,
 }: ClubRequestDialogProps) {
-  if (!request) return null;
-
-  const progress = (request.currentStep / request.totalSteps) * 100;
-
   const [isTimelineExpanded, setIsTimelineExpanded] = useState(true);
 
   const completedStepCodes = useMemo(() => {
@@ -135,6 +131,10 @@ export function ClubRequestDialog({
       return {};
     }
   };
+
+  if (!request) return null;
+
+  const progress = (request.currentStep / request.totalSteps) * 100;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
