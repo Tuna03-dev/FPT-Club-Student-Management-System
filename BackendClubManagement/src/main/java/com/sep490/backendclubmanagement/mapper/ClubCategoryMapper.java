@@ -9,8 +9,14 @@ import java.util.List;
 @Mapper(componentModel = "spring")
 public interface ClubCategoryMapper {
 
-    ClubCategoryDTO toDTO(ClubCategory clubCategory);
+    default ClubCategoryDTO toDTO(ClubCategory clubCategory) {
+        if (clubCategory == null) return null;
+        ClubCategoryDTO dto = new ClubCategoryDTO();
+        dto.setId(clubCategory.getId());
+        dto.setCategoryName(clubCategory.getCategoryName());
+        dto.setClubCount(clubCategory.getClubs() == null ? 0 : clubCategory.getClubs().size());
+        return dto;
+    }
 
     List<ClubCategoryDTO> toDTOList(List<ClubCategory> clubCategories);
 }
-

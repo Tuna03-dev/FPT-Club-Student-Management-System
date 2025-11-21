@@ -110,6 +110,13 @@ public interface ClubMemberShipRepository extends JpaRepository<ClubMemberShip, 
                                       @Param("clubId") Long clubId,
                                       @Param("semesterId") Long semesterId);
 
+//    @Query("""
+//    SELECT cms FROM ClubMemberShip cms
+//    WHERE cms.club.id = :clubId AND cms.user.id = :userId AND cms.status = 'ACTIVE'
+//    ORDER BY cms.joinDate DESC
+//    """)
+//    List<ClubMemberShip> findByClubIdAndUserIdActive(@Param("clubId") Long clubId, @Param("userId") Long userId);
+
     @Query("""
     SELECT cms FROM ClubMemberShip cms
     WHERE cms.club.id = :clubId AND cms.user.id = :userId

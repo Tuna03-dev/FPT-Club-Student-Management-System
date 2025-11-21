@@ -1,15 +1,18 @@
 package com.sep490.backendclubmanagement.dto.response;
 
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 import java.util.List;
-@Getter
-@Setter
+
+@Data
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
-public class ClubDetailData {
+public class ClubManagementResponse {
     private Long id;
     private String clubName;
     private String clubCode;
@@ -23,28 +26,14 @@ public class ClubDetailData {
     private String ttUrl;
     private String ytUrl;
     private String status;
-    
-    // Campus info
-    private Long campusId;
     private String campusName;
-    private String campusCode;
-    
-    // Category info
-    private Long categoryId;
+    private Long campusId;
     private String categoryName;
-    
-    // Statistics
+    private Long categoryId;
     private Long totalMembers;
     private Long totalEvents;
     private Long totalPosts;
-    
-    // Recruitment info
-    private Boolean isRecruiting; // Câu lạc bộ đang mở đợt tuyển
-    
-    // Presidents info (can have multiple presidents)
     private List<ClubPresidentData> presidents;
-
-    // Timestamps
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

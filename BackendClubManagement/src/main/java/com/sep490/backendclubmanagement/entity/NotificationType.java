@@ -70,7 +70,5 @@ public enum NotificationType {
     FOLLOW,
     GENERAL,
 
-
-    TEAM_ASSIGNMENT
 }
 
