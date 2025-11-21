@@ -166,6 +166,7 @@ public interface PostRepository extends JpaRepository<Post, Long> {
             "postMedia"
     })
 
+
     // feed
     @Query("""
        select p
@@ -176,10 +177,6 @@ public interface PostRepository extends JpaRepository<Post, Long> {
                p.IsClubWide = true
             or p.team.id in :teamIds
          )
-         and (
-                    lower(p.title)   like lower(concat('%', :q, '%'))
-                 or lower(p.content) like lower(concat('%', :q, '%'))
-              )
        """)
     Page<Post> findFeedForMemberInClub(
             @Param("clubId") Long clubId,
@@ -187,6 +184,7 @@ public interface PostRepository extends JpaRepository<Post, Long> {
             @Param("teamIds") List<Long> teamIds,
             Pageable pageable
     );
+
 
 
 }

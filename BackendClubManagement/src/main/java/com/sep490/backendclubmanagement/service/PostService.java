@@ -6,6 +6,7 @@ import com.sep490.backendclubmanagement.dto.response.*;
 import com.sep490.backendclubmanagement.entity.*;
 import com.sep490.backendclubmanagement.repository.ClubMemberShipRepository;
 import com.sep490.backendclubmanagement.repository.PostRepository;
+import com.sep490.backendclubmanagement.repository.RoleMemberShipRepository;
 import com.sep490.backendclubmanagement.util.PostStatus;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -27,7 +28,8 @@ public class PostService {
     private final PostRepository postRepository;
     private final CloudinaryService cloudinaryService;
     private final ClubRoleService clubRoleService;
-    private final ClubMemberShipRepository clubMemberShipRepository; // 👈 thêm
+    private final ClubMemberShipRepository clubMemberShipRepository;
+    private final RoleMemberShipRepository roleMemberShipRepository;
 
     @PersistenceContext
     private EntityManager em;
@@ -98,84 +100,79 @@ public class PostService {
         Page<Post> page = postRepository.findPendingTeamPosts(clubId, teamId, PostStatus.PENDING, pageable);
         return page.map(this::toDetailsDTO);
     }
-    public Page<PostWithRelationsData> searchPostsForUser(
+
+    //search
+    public Page<PostWithRelationsData> searchPostsInClub(
+            Long clubId,
             Long userId,
             String keyword,
             Pageable pageable
     ) {
-
-        String q = keyword == null ? "" : keyword.trim();
+        // 0) Chuẩn hoá keyword
+        String q = (keyword == null) ? "" : keyword.trim();
         if (q.isEmpty()) {
             return Page.empty(pageable);
         }
 
-        // 1) Lấy tất cả CLB user đang active kỳ hiện tại
-        List<ClubMemberShip> myClubs = clubMemberShipRepository.findByUserIdWithRoles(
-                userId, ClubMemberShipStatus.ACTIVE, null, true
-        );
-
-        if (myClubs.isEmpty()) {
-            return Page.empty(pageable);
-        }
+        // 1) Check quyền admin CLB (Chủ nhiệm / Phó)
+        boolean isClubBoss = clubRoleService.isClubLeaderOrVice(userId, clubId);
 
         List<Post> collected = new ArrayList<>();
 
-        // 2) Lặp qua từng CLB user tham gia
-        for (ClubMemberShip cms : myClubs) {
-            Long clubId = cms.getClub().getId();
+        if (isClubBoss) {
+            // === ADMIN: thấy TẤT CẢ bài trong CLB ===
+            collected.addAll(
+                    postRepository.searchAdminScope(
+                            clubId,
+                            PostStatus.PUBLISHED,
+                            q
+                    )
+            );
+        } else {
+            // === MEMBER / TEAM LEAD ===
 
-            boolean isAdmin = clubRoleService.isClubLeaderOrVice(userId, clubId);
+            // (a) Bài club-wide trong CLB
+            collected.addAll(
+                    postRepository.searchClubWideOnly(
+                            clubId,
+                            PostStatus.PUBLISHED,
+                            q
+                    )
+            );
 
-            if (isAdmin) {
-                // 2.1 Chủ nhiệm/phó → search toàn bộ CLB
+            // (b) Bài của các team mà user đang tham gia trong CLB
+            List<Long> teamIds = clubMemberShipRepository.findTeamIdsByUserAndClubAndStatus(
+                    userId,
+                    clubId,
+                    ClubMemberShipStatus.ACTIVE
+            );
+
+            if (teamIds != null && !teamIds.isEmpty()) {
                 collected.addAll(
-                        postRepository.searchAdminScope(
+                        postRepository.searchTeamScope(
                                 clubId,
+                                teamIds,
                                 PostStatus.PUBLISHED,
                                 q
                         )
                 );
-            } else {
-                // 2.2 Member/Lead → search theo quyền hạn
-
-                // (a) Club-wide của CLB này
-                collected.addAll(
-                        postRepository.searchClubWideOnly(
-                                clubId,
-                                PostStatus.PUBLISHED,
-                                q
-                        )
-                );
-
-                // (b) Team của user trong CLB này
-                List<Long> myTeams = clubMemberShipRepository.findTeamIdsByUserAndClubAndStatus(
-                        userId, clubId, ClubMemberShipStatus.ACTIVE
-                );
-
-                if (myTeams != null && !myTeams.isEmpty()) {
-                    collected.addAll(
-                            postRepository.searchTeamScope(
-                                    clubId,
-                                    myTeams,
-                                    PostStatus.PUBLISHED,
-                                    q
-                            )
-                    );
-                }
             }
         }
 
-        // 3) Loại trùng bài
+        // 2) Loại trùng + sort theo createdAt desc
         List<Post> distinct = collected.stream()
                 .distinct()
                 .sorted(Comparator.comparing(Post::getCreatedAt).reversed())
                 .toList();
 
-        // 4) Tạo Page thủ công
+        // 3) Phân trang thủ công
         int start = (int) pageable.getOffset();
+        if (start >= distinct.size()) {
+            return new PageImpl<>(List.of(), pageable, distinct.size());
+        }
         int end = Math.min(start + pageable.getPageSize(), distinct.size());
-        List<PostWithRelationsData> dtoPage = distinct.subList(start, end)
-                .stream()
+
+        List<PostWithRelationsData> dtoPage = distinct.subList(start, end).stream()
                 .map(this::toDetailsDTO)
                 .toList();
 

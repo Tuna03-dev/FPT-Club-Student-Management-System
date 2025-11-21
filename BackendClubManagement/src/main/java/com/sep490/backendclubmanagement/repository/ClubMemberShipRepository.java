@@ -179,6 +179,7 @@ public interface ClubMemberShipRepository extends JpaRepository<ClubMemberShip, 
             @Param("clubId") Long clubId,
             @Param("status") ClubMemberShipStatus status
     );
+
     @Query("""
     select distinct cm.user.id
     from ClubMemberShip cm
