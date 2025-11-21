@@ -6,6 +6,7 @@ import com.sep490.backendclubmanagement.dto.response.*;
 import com.sep490.backendclubmanagement.entity.*;
 import com.sep490.backendclubmanagement.repository.ClubMemberShipRepository;
 import com.sep490.backendclubmanagement.repository.PostRepository;
+import com.sep490.backendclubmanagement.repository.RoleMemberShipRepository;
 import com.sep490.backendclubmanagement.util.PostStatus;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -27,8 +28,8 @@ public class PostService {
     private final PostRepository postRepository;
     private final CloudinaryService cloudinaryService;
     private final ClubRoleService clubRoleService;
-    private final ClubMemberShipRepository clubMemberShipRepository; // 👈 thêm
-    private final NotificationService notificationService;
+    private final ClubMemberShipRepository clubMemberShipRepository;
+    private final NotificationService notificationService ;
 
     @PersistenceContext
     private EntityManager em;
@@ -99,17 +100,83 @@ public class PostService {
         Page<Post> page = postRepository.findPendingTeamPosts(clubId, teamId, PostStatus.PENDING, pageable);
         return page.map(this::toDetailsDTO);
     }
-    // search
-    public Page<PostWithRelationsData> searchPosts(
-            Long clubId, Long teamId, Boolean clubWide, String keyword, Pageable pageable
+
+    //search
+    public Page<PostWithRelationsData> searchPostsInClub(
+            Long clubId,
+            Long userId,
+            String keyword,
+            Pageable pageable
     ) {
+        // 0) Chuẩn hoá keyword
         String q = (keyword == null) ? "" : keyword.trim();
         if (q.isEmpty()) {
-            // Không có keyword thì trả về rỗng (hoặc bạn có thể quyết định trả tất cả)
             return Page.empty(pageable);
         }
-        Page<Post> page = postRepository.searchPosts(clubId, teamId, clubWide, "PUBLISHED", q, pageable);
-        return page.map(this::toDetailsDTO);
+
+        // 1) Check quyền admin CLB (Chủ nhiệm / Phó)
+        boolean isClubBoss = clubRoleService.isClubLeaderOrVice(userId, clubId);
+
+        List<Post> collected = new ArrayList<>();
+
+        if (isClubBoss) {
+            // === ADMIN: thấy TẤT CẢ bài trong CLB ===
+            collected.addAll(
+                    postRepository.searchAdminScope(
+                            clubId,
+                            PostStatus.PUBLISHED,
+                            q
+                    )
+            );
+        } else {
+            // === MEMBER / TEAM LEAD ===
+
+            // (a) Bài club-wide trong CLB
+            collected.addAll(
+                    postRepository.searchClubWideOnly(
+                            clubId,
+                            PostStatus.PUBLISHED,
+                            q
+                    )
+            );
+
+            // (b) Bài của các team mà user đang tham gia trong CLB
+            List<Long> teamIds = clubMemberShipRepository.findTeamIdsByUserAndClubAndStatus(
+                    userId,
+                    clubId,
+                    ClubMemberShipStatus.ACTIVE
+            );
+
+            if (teamIds != null && !teamIds.isEmpty()) {
+                collected.addAll(
+                        postRepository.searchTeamScope(
+                                clubId,
+                                teamIds,
+                                PostStatus.PUBLISHED,
+                                q
+                        )
+                );
+            }
+        }
+
+        // 2) Loại trùng + sort theo createdAt desc
+        List<Post> distinct = collected.stream()
+                .distinct()
+                .sorted(Comparator.comparing(Post::getCreatedAt).reversed())
+                .toList();
+
+        // 3) Phân trang thủ công
+        int start = (int) pageable.getOffset();
+        if (start >= distinct.size()) {
+            return new PageImpl<>(List.of(), pageable, distinct.size());
+        }
+        int end = Math.min(start + pageable.getPageSize(), distinct.size());
+
+        List<PostWithRelationsData> dtoPage = distinct.subList(start, end).stream()
+                .map(this::toDetailsDTO)
+                .toList();
+
+        return new PageImpl<>(dtoPage, pageable, distinct.size());
     }
 
     @Transactional
