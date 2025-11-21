@@ -12,7 +12,6 @@ import java.util.Optional;
 
 @Repository
 public interface ClubCategoryRepository extends JpaRepository<ClubCategory, Long> {
-    Optional<ClubCategory> findByCategoryNameIgnoreCase(String categoryName);
 
     @Query("SELECT cc FROM ClubCategory cc WHERE " +
            "(:keyword IS NULL OR :keyword = '' OR LOWER(cc.categoryName) LIKE LOWER(CONCAT('%', :keyword, '%')))")
