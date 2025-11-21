@@ -1,6 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -105,7 +111,10 @@ function MemberSelector({
       <div className="relative">
         <div className="flex gap-2">
           <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+            <Search
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+              size={18}
+            />
             <Input
               placeholder={loading ? "Đang tải danh sách..." : "Tìm kiếm theo tên..."}
               value={searchTerm}
@@ -196,6 +205,44 @@ export default function TeamCreatePage() {
       .map((id) => parseInt(id, 10));
   }, [selectedMembers, leader, deputy]);
 
+  // Validate "tên phòng ban có nghĩa" giống BE (client-side)
+  function validateMeaningfulTeamNameClient(trimmedName: string): string | undefined {
+    if (trimmedName.length < 3) {
+      return "Tên phòng ban phải có ít nhất 3 ký tự.";
+    }
+
+    // Phải có ít nhất 1 chữ cái (unicode – hỗ trợ tiếng Việt)
+    const hasLetter = /[\p{L}]/u.test(trimmedName);
+    if (!hasLetter) {
+      return "Tên phòng ban phải chứa ít nhất một chữ cái.";
+    }
+
+    // Không cho tên chỉ toàn số
+    const allDigits = /^\d+$/.test(trimmedName);
+    if (allDigits) {
+      return "Tên phòng ban không được chỉ gồm chữ số.";
+    }
+
+    // Không cho tên toàn 1 ký tự lặp (aaa, 1111,…)
+    const compact = trimmedName.replace(/\s+/g, "");
+    if (compact.length >= 3 && new Set(compact).size === 1) {
+      return "Tên phòng ban không hợp lệ. Vui lòng nhập tên có nghĩa hơn.";
+    }
+
+    // Hạn chế quá nhiều ký tự đặc biệt
+    let specialCount = 0;
+    for (const ch of trimmedName) {
+      if (!/[0-9\p{L}\s]/u.test(ch)) {
+        specialCount++;
+      }
+    }
+    if (specialCount > 3) {
+      return "Tên phòng ban có quá nhiều ký tự đặc biệt. Vui lòng đặt tên dễ đọc hơn.";
+    }
+
+    return undefined;
+  }
+
   function validateForm() {
     const newErrors: FormErrors = {};
 
@@ -203,24 +250,31 @@ export default function TeamCreatePage() {
     const trimmedDesc = description.trim();
     const trimmedLink = linkGroupChat.trim();
 
+    // Validate tên
     if (!trimmedName) {
       newErrors.teamName = "Vui lòng nhập tên phòng ban.";
-    } else if (trimmedName.length < 3) {
-      newErrors.teamName = "Tên phòng ban phải có ít nhất 3 ký tự.";
+    } else {
+      const nameError = validateMeaningfulTeamNameClient(trimmedName);
+      if (nameError) {
+        newErrors.teamName = nameError;
+      }
     }
 
+    // Validate mô tả
     if (!trimmedDesc) {
       newErrors.description = "Vui lòng nhập mô tả phòng ban.";
     } else if (trimmedDesc.length < 10) {
       newErrors.description = "Mô tả cần ít nhất 10 ký tự để mô tả rõ hơn.";
     }
 
+    // Validate link
     if (trimmedLink) {
       try {
         // Nếu có nhập thì phải là URL hợp lệ
         new URL(trimmedLink);
       } catch {
-        newErrors.linkGroupChat = "Link nhóm chat không hợp lệ. Vui lòng nhập dạng https://...";
+        newErrors.linkGroupChat =
+          "Link nhóm chat không hợp lệ. Vui lòng nhập dạng https://...";
       }
     }
 
@@ -252,10 +306,22 @@ export default function TeamCreatePage() {
       const result = await createTeam(payload);
       navigate(`/myclub/${clubId}/teams/${result.id}`);
     } catch (err: any) {
-      setErrors((prev) => ({
-        ...prev,
-        general: err?.message || "Không thể tạo phòng ban. Vui lòng thử lại.",
-      }));
+      const msg =
+        err?.message || "Không thể tạo phòng ban. Vui lòng thử lại.";
+
+      // Nếu backend trả thông báo có chữ "Tên ban" → show ngay dưới ô tên
+      if (msg.toLowerCase().includes("tên ban")) {
+        setErrors((prev) => ({
+          ...prev,
+          teamName: msg,
+          general: undefined,
+        }));
+      } else {
+        setErrors((prev) => ({
+          ...prev,
+          general: msg,
+        }));
+      }
     } finally {
       setSubmitting(false);
     }
@@ -264,7 +330,7 @@ export default function TeamCreatePage() {
   return (
     <form
       onSubmit={handleSubmit}
-      className="space-y-6 p-4 md:p-6 w-full mx-auto bg-white rounded-2xl shadow-xl border border-orange-100"
+      className="space-y-6 px-4 md:px-6 pt-0 pb-6 w-full mx-auto"
     >
       {/* Header tổng thể */}
       <div className="mb-2">
@@ -278,14 +344,16 @@ export default function TeamCreatePage() {
       </div>
 
       {/* Thông tin cơ bản */}
-      <Card className="border border-orange-100 shadow-md">
-        <CardHeader className="bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-t-lg">
-          <CardTitle>Tên & thông tin phòng ban</CardTitle>
-          <CardDescription className="text-orange-100">
+      <Card className="rounded-2xl overflow-hidden shadow-md bg-gradient-to-r from-orange-500 to-orange-600 text-white">
+        <CardHeader className="p-6">
+          <CardTitle className="w-full text-white">
+            Tên & thông tin phòng ban
+          </CardTitle>
+          <CardDescription className="text-orange-100/90 w-full">
             Đây là thông tin sẽ hiển thị cho toàn bộ thành viên.
           </CardDescription>
         </CardHeader>
-        <CardContent className="pt-6 space-y-4">
+        <CardContent className="pt-6 space-y-4 bg-white">
           <div className="space-y-2">
             <Label htmlFor="team-name" className="text-gray-800 font-semibold">
               Tên phòng ban <span className="text-red-500">*</span>
@@ -326,7 +394,9 @@ export default function TeamCreatePage() {
           <div className="space-y-2">
             <Label htmlFor="group-link" className="text-gray-800 font-semibold">
               Link nhóm chat{" "}
-              <span className="text-xs text-gray-500 font-normal">(có thể để trống)</span>
+              <span className="text-xs text-gray-500 font-normal">
+                (có thể để trống)
+              </span>
             </Label>
             <Input
               id="group-link"
@@ -339,21 +409,23 @@ export default function TeamCreatePage() {
               }`}
             />
             {errors.linkGroupChat && (
-              <p className="mt-1 text-sm text-red-500">{errors.linkGroupChat}</p>
+              <p className="mt-1 text-sm text-red-500">
+                {errors.linkGroupChat}
+              </p>
             )}
           </div>
         </CardContent>
       </Card>
 
       {/* Chọn thành viên */}
-      <Card className="border border-orange-100 shadow-md">
-        <CardHeader className="bg-gradient-to-r from-orange-400 to-orange-500 text-white rounded-t-lg">
-          <CardTitle>Chọn thành viên</CardTitle>
-          <CardDescription className="text-orange-50">
+      <Card className="rounded-2xl overflow-hidden shadow-md bg-gradient-to-r from-orange-500 to-orange-600 text-white">
+        <CardHeader className="p-6">
+          <CardTitle className="w-full text-white">Chọn thành viên</CardTitle>
+          <CardDescription className="text-orange-50/90 w-full">
             Thêm thành viên vào phòng ban để phân công vai trò (không bắt buộc).
           </CardDescription>
         </CardHeader>
-        <CardContent className="pt-6">
+        <CardContent className="pt-6 bg-white">
           <MemberSelector
             clubId={numericClubId}
             selectedIds={selectedMembers.map((m) => m.id)}
@@ -364,9 +436,9 @@ export default function TeamCreatePage() {
 
       {/* Danh sách đã chọn + gán vai trò */}
       {selectedMembers.length > 0 && (
-        <Card className="border border-orange-100 shadow-md">
-          <CardHeader className="bg-orange-50 rounded-t-lg border-b border-orange-100">
-            <CardTitle className="text-lg flex items-center justify-between">
+        <Card className="rounded-2xl overflow-hidden shadow-md bg-white">
+          <CardHeader className="bg-orange-50 rounded-t-lg border-b border-orange-100 p-4">
+            <CardTitle className="text-lg flex items-center justify-between w-full">
               <span>Danh sách thành viên ({selectedMembers.length})</span>
               <span className="text-xs font-normal text-orange-700 bg-orange-100 px-2 py-1 rounded-full">
                 Chọn Trưởng ban / Phó ban
@@ -430,19 +502,27 @@ export default function TeamCreatePage() {
 
       {/* Tóm tắt phân công */}
       {(leader || deputy) && (
-        <Card className="border border-orange-100 shadow-sm bg-orange-50">
-          <CardHeader>
-            <CardTitle className="text-base text-orange-800">Tóm tắt phân công</CardTitle>
+        <Card className="rounded-2xl overflow-hidden shadow-sm bg-orange-50">
+          <CardHeader className="p-4">
+            <CardTitle className="text-base text-orange-800">
+              Tóm tắt phân công
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
             {leader && (
               <p className="text-sm text-gray-700">
-                <span className="font-semibold text-orange-700">Trưởng ban:</span> {leader.name}
+                <span className="font-semibold text-orange-700">
+                  Trưởng ban:
+                </span>{" "}
+                {leader.name}
               </p>
             )}
             {deputy && (
               <p className="text-sm text-gray-700">
-                <span className="font-semibold text-amber-700">Phó ban:</span> {deputy.name}
+                <span className="font-semibold text-amber-700">
+                  Phó ban:
+                </span>{" "}
+                {deputy.name}
               </p>
             )}
           </CardContent>

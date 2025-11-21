@@ -24,6 +24,18 @@ public interface RoleMemberShipRepository extends JpaRepository<RoleMemberShip, 
 """)
     Long countActiveMembersInCurrentSemester(@Param("clubId") Long clubId);
 
+    @Query("""
+    SELECT DISTINCT cm.user.id
+    FROM RoleMemberShip rm
+    JOIN rm.clubMemberShip cm
+    JOIN rm.semester s
+    WHERE cm.club.id = :clubId
+      AND COALESCE(rm.isActive, TRUE) = TRUE
+      AND s.isCurrent = TRUE
+      AND cm.status = com.sep490.backendclubmanagement.entity.ClubMemberShipStatus.ACTIVE
+""")
+    List<Long> findActiveMemberUserIdsByClubId(@Param("clubId") Long clubId);
+
     // Trả về system role của user
     @Query(value = "SELECT sr.role_name\n" +
             "FROM users u\n" +
@@ -631,6 +643,7 @@ WHERE cm.club.id = :clubId
           AND cr.roleCode IN ('CLUB_PRESIDENT','CLUB_VICE_PRESIDENT')
     """)
     boolean isUserClubOfficer(@Param("userId") Long userId, @Param("clubId") Long clubId);
+    List<RoleMemberShip> findByTeamIdAndIsActiveTrue(Long teamId);
 }
 
 

@@ -28,8 +28,7 @@ public class PostService {
     private final PostRepository postRepository;
     private final CloudinaryService cloudinaryService;
     private final ClubRoleService clubRoleService;
-    private final ClubMemberShipRepository clubMemberShipRepository;
-    private final RoleMemberShipRepository roleMemberShipRepository;
+    private final ClubMemberShipRepository clubMemberShipRepository; // 👈 thêm
 
     @PersistenceContext
     private EntityManager em;
@@ -301,6 +300,42 @@ public class PostService {
 
         // 5) Lưu
         Post saved = postRepository.save(p);
+
+        // 🔔 Gửi notification cho club managers nếu post PENDING (cần duyệt)
+        if (PostStatus.PENDING.equals(status)) {
+            try {
+                // Lấy danh sách managers (Chủ nhiệm/Phó chủ nhiệm) của club
+                List<Long> managerIds = notificationService.getClubManagers(clubId);
+
+                if (!managerIds.isEmpty() && authorId != null) {
+                    String title = "Bài viết mới cần duyệt";
+                    String message = saved.getTitle() != null && !saved.getTitle().isEmpty()
+                            ? "Bài viết: \"" + saved.getTitle() + "\""
+                            : "Có bài viết mới cần duyệt";
+                    String actionUrl = "/posts/" + saved.getId();
+
+                    notificationService.sendToUsers(
+                            managerIds,
+                            authorId, // tác giả
+                            title,
+                            message,
+                            NotificationType.POST_PENDING_APPROVAL,
+                            NotificationPriority.NORMAL,
+                            actionUrl,
+                            clubId,
+                            null, // relatedNewsId
+                            teamId, // relatedTeamId
+                            null  // relatedRequestId
+                    );
+
+                    System.out.println("[Post] Notification sent to " + managerIds.size() + " managers: post pending approval " + saved.getId());
+                }
+            } catch (Exception e) {
+                System.err.println("[Post] Failed to send pending approval notification: " + e.getMessage());
+                // Don't throw - notification failure shouldn't break post creation
+            }
+        }
+
         return toDetailsDTO(saved);
     }
 

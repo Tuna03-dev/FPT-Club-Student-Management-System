@@ -38,6 +38,7 @@ public class MemberServiceImpl implements MemberService{
     private final UserRepository userRepository;
     private final ClubRepository clubRepository;
     private final TeamRepository teamRepository;
+    private final NotificationService notificationService;
 
 
     @Override
@@ -176,7 +177,7 @@ public class MemberServiceImpl implements MemberService{
 
         // Get all left members with basic filters
         List<ClubMemberShip> allLeftMembers = clubMemberShipRepository.findMembersWithFiltersList(
-                clubId, ClubMemberShipStatus.LEFT, searchTerm);
+                clubId, String.valueOf(ClubMemberShipStatus.LEFT), searchTerm);
 
         log.info("Filtered left members: {}", allLeftMembers.size());
 
@@ -260,6 +261,39 @@ public class MemberServiceImpl implements MemberService{
         target.setClubRole(clubRole);
         target.setIsActive(true);
         roleMemberShipRepository.save(target);
+
+        // 🔔 Gửi notification cho member được assign role
+        try {
+            if (!userId.equals(currentUserId)) {
+                // Không gửi notification nếu tự assign role cho mình
+                Club club = clubRepository.findById(clubId).orElse(null);
+                if (club != null) {
+                    String title = "Bạn đã được gán vai trò mới trong " + club.getClubName();
+                    String message = "Vai trò: " + clubRole.getRoleName();
+                    String actionUrl = "/clubs/" + clubId + "/members";
+
+                    notificationService.sendToUser(
+                            userId,
+                            currentUserId, // actor (người thực hiện assign)
+                            title,
+                            message,
+                            NotificationType.CLUB_ROLE_ASSIGNED,
+                            NotificationPriority.NORMAL,
+                            actionUrl,
+                            clubId,
+                            null, // relatedNewsId
+                            null, // relatedTeamId
+                            null, // relatedRequestId
+                            null  // relatedEventId
+                    );
+
+                    log.info("[Member] Notification sent to user {}: role assigned {}", userId, clubRole.getRoleName());
+                }
+            }
+        } catch (Exception e) {
+            log.error("[Member] Failed to send role assignment notification: {}", e.getMessage(), e);
+            // Don't throw - notification failure shouldn't break role assignment
+        }
     }
 
     @Override
@@ -323,6 +357,38 @@ public class MemberServiceImpl implements MemberService{
         cms.setStatus(ClubMemberShipStatus.LEFT);
         cms.setEndDate(java.time.LocalDate.now());
         clubMemberShipRepository.save(cms);
+
+        // 🔔 Gửi notification cho member bị remove
+        try {
+            Club club = clubRepository.findById(clubId).orElse(null);
+            if (club != null) {
+                String title = "Bạn đã bị xóa khỏi " + club.getClubName();
+                String message = reason != null && !reason.trim().isEmpty()
+                        ? "Lý do: " + reason
+                        : "Bạn không còn là thành viên của câu lạc bộ này";
+                String actionUrl = "/clubs";
+
+                notificationService.sendToUser(
+                        userId,
+                        null, // actor (system/admin)
+                        title,
+                        message,
+                        NotificationType.CLUB_MEMBER_REMOVED,
+                        NotificationPriority.HIGH,
+                        actionUrl,
+                        clubId,
+                        null, // relatedNewsId
+                        null, // relatedTeamId
+                        null, // relatedRequestId
+                        null  // relatedEventId
+                );
+
+                log.info("[Member] Notification sent to user {}: removed from club {}", userId, clubId);
+            }
+        } catch (Exception e) {
+            log.error("[Member] Failed to send removal notification: {}", e.getMessage(), e);
+            // Don't throw - notification failure shouldn't break member removal
+        }
     }
 
     private Semester resolveSemester(Long semesterId) {

@@ -56,6 +56,16 @@ const Header: React.FC = () => {
     };
   }, []);
 
+  const handleAvatarClick = async () => {
+    try {
+      await authService.refreshUserRoles();
+      const updatedUser = authService.getCurrentUser();
+      setUser(updatedUser);
+    } catch (error) {
+      console.error("Error refreshing user roles:", error);
+    }
+  };
+
   const handleLogout = async () => {
     try {
       await authService.logoutWithApi();
@@ -122,7 +132,13 @@ const Header: React.FC = () => {
           {/* Avatar / Login */}
           <div className="flex items-center gap-3">
             {isAuthenticated && user ? (
-              <DropdownMenu>
+              <DropdownMenu
+                onOpenChange={(open) => {
+                  if (open) {
+                    handleAvatarClick();
+                  }
+                }}
+              >
                 <DropdownMenuTrigger asChild>
                   <button className="flex items-center gap-2 rounded-md px-2 py-1 hover:bg-orange-50 transition">
                     <Avatar className="h-9 w-9">

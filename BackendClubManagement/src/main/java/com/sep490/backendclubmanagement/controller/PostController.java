@@ -4,12 +4,16 @@ import com.sep490.backendclubmanagement.dto.ApiResponse;
 import com.sep490.backendclubmanagement.dto.request.CreatePostRequest;
 import com.sep490.backendclubmanagement.dto.request.UpdatePostRequest;
 import com.sep490.backendclubmanagement.dto.response.PostWithRelationsData;
+import com.sep490.backendclubmanagement.entity.NotificationPriority;
+import com.sep490.backendclubmanagement.entity.NotificationType;
 import com.sep490.backendclubmanagement.entity.Post;
 import com.sep490.backendclubmanagement.exception.AppException;
 import com.sep490.backendclubmanagement.repository.PostRepository;
+import com.sep490.backendclubmanagement.service.NotificationService;
 import com.sep490.backendclubmanagement.service.PostService;
 import com.sep490.backendclubmanagement.service.UserService;
 import com.sep490.backendclubmanagement.util.PostStatus;
+import lombok.extern.slf4j.Slf4j;
 import jakarta.persistence.EntityManager;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -25,12 +29,14 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/posts")
 @RequiredArgsConstructor
+@Slf4j
 public class PostController {
     private final PostRepository postRepository;
     private final PostService postService;
     private final ObjectMapper objectMapper;
     private final UserService userService;
     private final EntityManager entityManager;
+    private final NotificationService notificationService;
 
 
     // 1) Bài toàn CLB (club-wide)
@@ -159,6 +165,39 @@ public ApiResponse<PostWithRelationsData> updatePost(
         p.setRejectedAt(null);
 
         postRepository.save(p);
+
+        // 🔔 Gửi notification cho tác giả bài post
+        try {
+            if (p.getCreatedBy() != null && !p.getCreatedBy().getId().equals(approverId)) {
+                // Không gửi notification nếu tự approve bài của mình
+                String title = "Bài viết của bạn đã được duyệt";
+                String message = p.getTitle() != null && !p.getTitle().isEmpty()
+                        ? "Bài viết: \"" + p.getTitle() + "\""
+                        : "Bài viết của bạn";
+                String actionUrl = "/posts/" + postId;
+
+                notificationService.sendToUser(
+                        p.getCreatedBy().getId(),
+                        approverId, // người duyệt
+                        title,
+                        message,
+                        NotificationType.POST_APPROVED,
+                        NotificationPriority.NORMAL,
+                        actionUrl,
+                        p.getClub() != null ? p.getClub().getId() : null,
+                        null, // relatedNewsId
+                        p.getTeam() != null ? p.getTeam().getId() : null, // relatedTeamId
+                        null, // relatedRequestId
+                        null  // relatedEventId
+                );
+
+                log.info("[Post] Notification sent to user {}: post approved {}", p.getCreatedBy().getId(), postId);
+            }
+        } catch (Exception e) {
+            log.error("[Post] Failed to send approval notification: {}", e.getMessage(), e);
+            // Don't throw - notification failure shouldn't break post approval
+        }
+
         return ApiResponse.success(null);
     }
     @Data
@@ -192,6 +231,51 @@ public ApiResponse<PostWithRelationsData> updatePost(
         p.setApprovedAt(null);
 
         postRepository.save(p);
+
+        // 🔔 Gửi notification cho tác giả bài post
+        try {
+            if (p.getCreatedBy() != null && !p.getCreatedBy().getId().equals(approverId)) {
+                // Không gửi notification nếu tự reject bài của mình
+                String title = "Bài viết của bạn đã bị từ chối";
+
+                // Build message với lý do từ chối (nếu có)
+                StringBuilder messageBuilder = new StringBuilder();
+                if (p.getTitle() != null && !p.getTitle().isEmpty()) {
+                    messageBuilder.append("Bài viết: \"").append(p.getTitle()).append("\"");
+                } else {
+                    messageBuilder.append("Bài viết của bạn");
+                }
+
+                if (reason != null && !reason.isBlank()) {
+                    messageBuilder.append(" - Lý do: ").append(reason);
+                }
+
+                String message = messageBuilder.toString();
+                String actionUrl = "/posts/" + postId;
+
+                notificationService.sendToUser(
+                        p.getCreatedBy().getId(),
+                        approverId, // người từ chối
+                        title,
+                        message,
+                        NotificationType.POST_REJECTED,
+                        NotificationPriority.HIGH, // Priority cao vì cần biết lý do để sửa
+                        actionUrl,
+                        p.getClub() != null ? p.getClub().getId() : null,
+                        null, // relatedNewsId
+                        p.getTeam() != null ? p.getTeam().getId() : null, // relatedTeamId
+                        null, // relatedRequestId
+                        null  // relatedEventId
+                );
+
+                log.info("[Post] Notification sent to user {}: post rejected {} with reason: {}",
+                        p.getCreatedBy().getId(), postId, reason);
+            }
+        } catch (Exception e) {
+            log.error("[Post] Failed to send rejection notification: {}", e.getMessage(), e);
+            // Don't throw - notification failure shouldn't break post rejection
+        }
+
         return ApiResponse.success(null);
     }
     private Sort parseSort(String sort) {

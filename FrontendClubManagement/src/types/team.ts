@@ -34,6 +34,11 @@ export interface CreateTeamPayload {
   viceLeaderUserId?: number;
   memberUserIds?: number[];
 }
+export interface UpdateTeamPayload {
+  teamName?: string;
+  description?: string;
+  linkGroupChat?: string;
+}
 
 export interface TeamResponse {
   id: number;

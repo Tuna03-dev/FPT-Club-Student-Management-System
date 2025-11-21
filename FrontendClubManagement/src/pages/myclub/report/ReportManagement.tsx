@@ -1047,10 +1047,49 @@ export function ClubReportManagement() {
                 {reportRequests.map((request) => {
                   const isDeadlineExp = isDeadlinePassed(request.deadline);
 
+                  // Determine whether the card should act as a click-to-view area.
+                  const currentUser = authService.getCurrentUser();
+                  const isCreator =
+                    currentUser?.id === request.report?.createdBy?.id;
+                  const showViewForCreator =
+                    request.status === "DRAFT" && request.report && isCreator;
+                  const showViewGeneral =
+                    !!request.report ||
+                    (request.status &&
+                      request.status !== "UNSUBMITTED" &&
+                      request.status !== null);
+                  const cardClickable = showViewForCreator || showViewGeneral;
+
+                  const handleCardClick = async () => {
+                    if (!cardClickable) return;
+                    try {
+                      setLoadingReportDetailId(request.request_id);
+                      const reportDetail =
+                        await getClubReportByRequirementForOfficer(
+                          Number(request.request_id),
+                          clubId!
+                        );
+                      if (reportDetail) {
+                        setSelectedReportDetail(reportDetail);
+                        setShowDetailModal(true);
+                      } else {
+                        toast.error("Không tìm thấy báo cáo");
+                      }
+                    } catch (error) {
+                      console.error("Error fetching report detail:", error);
+                      toast.error("Không thể tải chi tiết báo cáo");
+                    } finally {
+                      setLoadingReportDetailId(null);
+                    }
+                  };
+
                   return (
                     <Card
                       key={request.request_id}
-                      className="hover:shadow-lg transition-shadow"
+                      onClick={cardClickable ? handleCardClick : undefined}
+                      className={`hover:shadow-lg transition-shadow ${
+                        cardClickable ? "cursor-pointer" : ""
+                      }`}
                     >
                       <CardHeader>
                         <div className="flex items-start justify-between">
@@ -1293,7 +1332,8 @@ export function ClubReportManagement() {
                                     <Button
                                       variant="outline"
                                       size="sm"
-                                      onClick={async () => {
+                                      onClick={async (e) => {
+                                        e.stopPropagation();
                                         try {
                                           setLoadingReportDetailId(
                                             request.request_id
@@ -1348,7 +1388,8 @@ export function ClubReportManagement() {
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={async () => {
+                                onClick={async (e) => {
+                                  e.stopPropagation();
                                   try {
                                     setLoadingReportDetailId(
                                       request.request_id
@@ -4008,12 +4049,7 @@ export function ClubReportManagement() {
                 <p className="text-sm font-medium text-gray-900">
                   {selectedRequirementForAssign.title}
                 </p>
-                <p className="text-xs text-gray-500 mt-1">
-                  Hạn nộp:{" "}
-                  {new Date(
-                    selectedRequirementForAssign.deadline
-                  ).toLocaleDateString("vi-VN")}
-                </p>
+                <p className="text-xs text-gray-500 mt-1"></p>
               </div>
 
               <div className="space-y-2">
