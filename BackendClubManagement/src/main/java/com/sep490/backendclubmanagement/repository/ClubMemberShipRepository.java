@@ -56,33 +56,46 @@ public interface ClubMemberShipRepository extends JpaRepository<ClubMemberShip, 
         """)
     List<MemberDTO> findAllMembersByClubId(@Param("clubId") Long clubId);
 
-    @Query("""
-    SELECT DISTINCT cms FROM ClubMemberShip cms 
-    LEFT JOIN FETCH cms.roleMemberships rm 
-    LEFT JOIN FETCH rm.semester s
-    LEFT JOIN FETCH rm.clubRole cr
-    WHERE cms.club.id = :clubId 
-    AND (:status IS NULL OR cms.status = :status)
-    AND (:searchTerm IS NULL OR 
-         LOWER(cms.user.fullName) LIKE LOWER(CONCAT('%', :searchTerm, '%')) 
-         OR LOWER(cms.user.studentCode) LIKE LOWER(CONCAT('%', :searchTerm, '%')))
-""")
+    @Query(
+            value = """
+        SELECT DISTINCT cms.*
+        FROM club_memberships cms
+        LEFT JOIN role_memberships rm ON rm.club_membership_id = cms.id
+        LEFT JOIN semesters s ON s.id = rm.semester_id
+        LEFT JOIN club_roles cr ON cr.id = rm.clubrole_id
+        LEFT JOIN users u ON u.id = cms.user_id
+        WHERE cms.club_id = :clubId
+        AND (:status IS NULL OR cms.status = :status)
+        AND (:searchTerm IS NULL OR (
+            u.full_name LIKE CONCAT('%', :searchTerm, '%') COLLATE utf8mb4_general_ci
+            OR u.student_code LIKE CONCAT('%', :searchTerm, '%') COLLATE utf8mb4_general_ci
+        ))
+    """,
+            nativeQuery = true
+    )
     List<ClubMemberShip> findMembersWithFiltersList(
             @Param("clubId") Long clubId,
-            @Param("status") ClubMemberShipStatus status,
+            @Param("status") String status,
             @Param("searchTerm") String searchTerm
     );
 
-    @Query("""
-    SELECT DISTINCT cms FROM ClubMemberShip cms 
-    LEFT JOIN FETCH cms.roleMemberships rm 
-    LEFT JOIN FETCH rm.semester s
-    LEFT JOIN FETCH rm.clubRole cr
-    WHERE cms.club.id = :clubId 
-    AND (:searchTerm IS NULL OR 
-         LOWER(cms.user.fullName) LIKE LOWER(CONCAT('%', :searchTerm, '%')) 
-         OR LOWER(cms.user.studentCode) LIKE LOWER(CONCAT('%', :searchTerm, '%')))
-""")
+
+    @Query(
+            value = """
+        SELECT DISTINCT cms.*
+        FROM club_memberships cms
+        LEFT JOIN role_memberships rm ON rm.club_membership_id = cms.id
+        LEFT JOIN semesters s ON s.id = rm.semester_id
+        LEFT JOIN club_roles cr ON cr.id = rm.clubrole_id
+        LEFT JOIN users u ON u.id = cms.user_id
+        WHERE cms.club_id = :clubId
+        AND (:searchTerm IS NULL OR (
+            u.full_name LIKE CONCAT('%', :searchTerm, '%') COLLATE utf8mb4_general_ci
+            OR u.student_code LIKE CONCAT('%', :searchTerm, '%') COLLATE utf8mb4_general_ci
+        ))
+    """,
+            nativeQuery = true
+    )
     List<ClubMemberShip> findMembersWithFiltersList(
             @Param("clubId") Long clubId,
             @Param("searchTerm") String searchTerm

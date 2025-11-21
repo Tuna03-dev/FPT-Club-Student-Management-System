@@ -31,6 +31,20 @@ public class SecurityConfig {
     private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
     private final CustomAccessDeniedHandler customAccessDeniedHandler;
 
+    // System Role Constants
+    public static final String ROLE_ADMIN = "ADMIN";
+    public static final String ROLE_STAFF = "STAFF";
+    public static final String ROLE_STUDENT = "STUDENT";
+
+    // Authority strings for @PreAuthorize and @Secured annotations
+    public static final String AUTHORITY_ADMIN = "hasAuthority('ADMIN')";
+    public static final String AUTHORITY_STAFF = "hasAuthority('STAFF')";
+    public static final String AUTHORITY_STUDENT = "hasAuthority('STUDENT')";
+
+    public static final String AUTHORITY_ADMIN_OR_STAFF = "hasAnyAuthority('ADMIN', 'STAFF')";
+    public static final String AUTHORITY_ALL_ROLES = "hasAnyAuthority('ADMIN', 'STAFF', 'STUDENT')";
+
+    // Only truly public endpoints (no authentication required)
     private final String[] PUBLIC_URL = {
             "/api/auth/google",
             "/api/auth/refreshToken",

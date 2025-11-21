@@ -177,7 +177,7 @@ public class MemberServiceImpl implements MemberService{
 
         // Get all left members with basic filters
         List<ClubMemberShip> allLeftMembers = clubMemberShipRepository.findMembersWithFiltersList(
-                clubId, ClubMemberShipStatus.LEFT, searchTerm);
+                clubId, String.valueOf(ClubMemberShipStatus.LEFT), searchTerm);
 
         log.info("Filtered left members: {}", allLeftMembers.size());
 
