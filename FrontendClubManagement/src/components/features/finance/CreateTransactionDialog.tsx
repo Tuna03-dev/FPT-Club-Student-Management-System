@@ -40,6 +40,15 @@ interface CreateTransactionDialogProps {
   onCreateOutcome: (data: CreateOutcomeTransactionRequest) => Promise<void>;
 }
 
+// Helper function to remove Vietnamese accents
+const removeVietnameseAccents = (str: string): string => {
+  return str
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "D");
+};
+
 export function CreateTransactionDialog({
   open,
   onOpenChange,
@@ -167,23 +176,35 @@ export function CreateTransactionDialog({
 
   const filteredFees = React.useMemo(() => {
     if (!feeSearch) return fees;
-    const searchLower = feeSearch.toLowerCase();
-    return fees.filter(
-      (fee) =>
-        fee.title.toLowerCase().includes(searchLower) ||
-        fee.amount.toString().includes(searchLower)
-    );
+    const searchNormalized = removeVietnameseAccents(feeSearch.toLowerCase());
+    return fees.filter((fee) => {
+      const titleNormalized = removeVietnameseAccents(fee.title.toLowerCase());
+      const amountStr = fee.amount.toString();
+      return (
+        titleNormalized.includes(searchNormalized) ||
+        amountStr.includes(feeSearch)
+      );
+    });
   }, [fees, feeSearch]);
 
   const filteredMembers = React.useMemo(() => {
     if (!memberSearch) return members;
-    const searchLower = memberSearch.toLowerCase();
-    return members.filter(
-      (member) =>
-        member.fullName?.toLowerCase().includes(searchLower) ||
-        member.email?.toLowerCase().includes(searchLower) ||
-        member.studentCode?.toLowerCase().includes(searchLower)
+    const searchNormalized = removeVietnameseAccents(
+      memberSearch.toLowerCase()
     );
+    return members.filter((member) => {
+      const fullNameNormalized = removeVietnameseAccents(
+        (member.fullName || "").toLowerCase()
+      );
+      const emailLower = (member.email || "").toLowerCase();
+      const studentCodeLower = (member.studentCode || "").toLowerCase();
+
+      return (
+        fullNameNormalized.includes(searchNormalized) ||
+        emailLower.includes(searchNormalized) ||
+        studentCodeLower.includes(searchNormalized)
+      );
+    });
   }, [members, memberSearch]);
 
   const handleSubmit = async () => {
@@ -204,6 +225,14 @@ export function CreateTransactionDialog({
           setSubmitting(false);
           return;
         }
+
+        // Validate userId is required
+        if (!incomeData.userId) {
+          toast.error("Vui lòng chọn người đóng tiền");
+          setSubmitting(false);
+          return;
+        }
+
         await onCreateIncome(incomeData);
       } else {
         // Validate outcome transaction
@@ -375,7 +404,7 @@ export function CreateTransactionDialog({
                   </p>
                 </div>
                 <div>
-                  <Label>Người đóng tiền (nếu có)</Label>
+                  <Label>Người đóng tiền *</Label>
                   <Select
                     value={incomeData.userId?.toString() || "none"}
                     onValueChange={(value) => {

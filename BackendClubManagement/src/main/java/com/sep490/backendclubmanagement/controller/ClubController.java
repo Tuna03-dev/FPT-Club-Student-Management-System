@@ -4,9 +4,11 @@ import com.sep490.backendclubmanagement.dto.ApiResponse;
 import com.sep490.backendclubmanagement.dto.response.ClubDetailData;
 import com.sep490.backendclubmanagement.dto.response.ClubDto;
 import com.sep490.backendclubmanagement.exception.AppException;
+import com.sep490.backendclubmanagement.security.SecurityConfig;
 import com.sep490.backendclubmanagement.service.ClubServiceInterface;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -24,6 +26,7 @@ public class ClubController {
      * @return Club detail data
      */
     @GetMapping("/{id}")
+    @PreAuthorize(SecurityConfig.AUTHORITY_ALL_ROLES)
     public ResponseEntity<ApiResponse<ClubDetailData>> getClubDetail(@PathVariable Long id) throws AppException {
         ClubDetailData data = clubService.getClubDetail(id);
         return ResponseEntity.ok(ApiResponse.success(data));
@@ -35,6 +38,7 @@ public class ClubController {
      * @return Club detail data
      */
     @GetMapping("/code/{clubCode}")
+    @PreAuthorize(SecurityConfig.AUTHORITY_ALL_ROLES)
     public ResponseEntity<ApiResponse<ClubDetailData>> getClubDetailByCode(@PathVariable String clubCode) throws AppException {
         ClubDetailData data = clubService.getClubDetailByCode(clubCode);
         return ResponseEntity.ok(ApiResponse.success(data));
@@ -45,6 +49,7 @@ public class ClubController {
      * @return List of clubs with id and clubName
      */
     @GetMapping
+    @PreAuthorize(SecurityConfig.AUTHORITY_ALL_ROLES)
     public ResponseEntity<ApiResponse<List<ClubDto>>> getAllClubs() {
         List<ClubDto> clubs = clubService.getAllClubs();
         return ResponseEntity.ok(ApiResponse.success(clubs));
