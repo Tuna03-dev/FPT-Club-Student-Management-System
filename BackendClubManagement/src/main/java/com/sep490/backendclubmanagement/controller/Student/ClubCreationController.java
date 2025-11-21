@@ -120,6 +120,7 @@ public class ClubCreationController {
             @PathVariable Long requestId,
             @RequestPart("title") String title,
             @RequestPart(value = "fileUrl", required = false) String fileUrl,
+            @RequestPart(value = "comment", required = false) String comment,
             @RequestPart(value = "file", required = false) MultipartFile file
     ) throws AppException {
         Long userId = SecurityUtils.getCurrentUserId();
@@ -133,6 +134,7 @@ public class ClubCreationController {
         SubmitProposalRequest request = new SubmitProposalRequest();
         request.setTitle(title.trim());
         request.setFileUrl(fileUrl);
+        request.setComment(comment);
         
         RequestEstablishmentResponse response = requestEstablishmentService.submitProposal(requestId, userId, request, file);
         return ResponseEntity.ok(ApiResponse.success(response));
@@ -223,6 +225,7 @@ public class ClubCreationController {
             @PathVariable Long requestId,
             @RequestParam("title") String title,
             @RequestParam(value = "fileUrl", required = false) String fileUrl,
+            @RequestParam(value = "comment", required = false) String comment,
             @RequestParam(value = "file", required = false) MultipartFile file
     ) throws AppException {
         Long userId = SecurityUtils.getCurrentUserId();
@@ -236,6 +239,7 @@ public class ClubCreationController {
         SubmitFinalFormRequest request = new SubmitFinalFormRequest();
         request.setTitle(title.trim());
         request.setFileUrl(fileUrl);
+        request.setComment(comment);
         
         ClubCreationFinalFormResponse response = requestEstablishmentService.submitFinalForm(requestId, userId, request, file);
         return ResponseEntity.ok(ApiResponse.success(response));

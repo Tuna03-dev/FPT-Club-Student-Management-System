@@ -37,6 +37,8 @@ interface ClubRequestDialogProps {
   proposals?: import("@/api/clubCreation").ClubProposalResponse[];
   defenseSchedule?: import("@/api/clubCreation").DefenseScheduleResponse | null;
   finalForms?: import("@/api/clubCreation").ClubCreationFinalFormResponse[];
+  // Callback để mở dialog chi tiết đề án
+  onViewProposalDetail?: (proposal: import("@/api/clubCreation").ClubProposalResponse) => void;
 }
 
 interface WorkflowStep {
@@ -90,12 +92,13 @@ export function ClubRequestDialog({
   proposals = [],
   defenseSchedule,
   finalForms = [],
+  onViewProposalDetail,
 }: ClubRequestDialogProps) {
   if (!request) return null;
 
   const progress = (request.currentStep / request.totalSteps) * 100;
 
-  const [isTimelineExpanded, setIsTimelineExpanded] = useState(false);
+  const [isTimelineExpanded, setIsTimelineExpanded] = useState(true);
 
   const completedStepCodes = useMemo(() => {
     return new Set(
@@ -251,7 +254,23 @@ export function ClubRequestDialog({
             <>
               <div className="space-y-3">
                 <h3 className="font-semibold">Thông tin câu lạc bộ</h3>
-                <div className="space-y-2">
+                <div className="space-y-3">
+                  {requestDetail.clubName && (
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">
+                        Tên CLB
+                      </p>
+                      <p className="text-sm">{requestDetail.clubName}</p>
+                    </div>
+                  )}
+                  {requestDetail.clubCode && (
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">
+                        Mã CLB
+                      </p>
+                      <p className="text-sm">{requestDetail.clubCode}</p>
+                    </div>
+                  )}
                   {requestDetail.clubCategory && (
                     <div>
                       <p className="text-sm font-medium text-muted-foreground">
@@ -268,12 +287,97 @@ export function ClubRequestDialog({
                       <p className="text-sm">{requestDetail.description}</p>
                     </div>
                   )}
-                  {requestDetail.expectedMemberCount && (
+                  {requestDetail.activityObjectives && (
                     <div>
                       <p className="text-sm font-medium text-muted-foreground">
                         Đối tượng hướng tới
                       </p>
+                      <p className="text-sm">{requestDetail.activityObjectives}</p>
+                    </div>
+                  )}
+                  {requestDetail.expectedActivities && (
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">
+                        Hoạt động dự kiến
+                      </p>
+                      <p className="text-sm">{requestDetail.expectedActivities}</p>
+                    </div>
+                  )}
+                  {requestDetail.expectedMemberCount && (
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">
+                        Số lượng thành viên dự kiến
+                      </p>
                       <p className="text-sm">{requestDetail.expectedMemberCount} thành viên</p>
+                    </div>
+                  )}
+                  {(requestDetail.email || requestDetail.phone) && (
+                    <div className="pt-2 border-t">
+                      <p className="text-sm font-medium text-muted-foreground mb-2">
+                        Thông tin liên hệ
+                      </p>
+                      <div className="space-y-1">
+                        {requestDetail.email && (
+                          <div className="flex items-center gap-2">
+                            <Mail className="h-4 w-4 text-muted-foreground" />
+                            <p className="text-sm">{requestDetail.email}</p>
+                          </div>
+                        )}
+                        {requestDetail.phone && (
+                          <div className="flex items-center gap-2">
+                            <Phone className="h-4 w-4 text-muted-foreground" />
+                            <p className="text-sm">{requestDetail.phone}</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  {(requestDetail.facebookLink || requestDetail.instagramLink || requestDetail.tiktokLink) && (
+                    <div className="pt-2 border-t">
+                      <p className="text-sm font-medium text-muted-foreground mb-2">
+                        Mạng xã hội
+                      </p>
+                      <div className="space-y-1">
+                        {requestDetail.facebookLink && (
+                          <div>
+                            <p className="text-xs text-muted-foreground">Facebook</p>
+                            <a
+                              href={requestDetail.facebookLink}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-sm text-blue-600 hover:underline"
+                            >
+                              {requestDetail.facebookLink}
+                            </a>
+                          </div>
+                        )}
+                        {requestDetail.instagramLink && (
+                          <div>
+                            <p className="text-xs text-muted-foreground">Instagram</p>
+                            <a
+                              href={requestDetail.instagramLink}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-sm text-blue-600 hover:underline"
+                            >
+                              {requestDetail.instagramLink}
+                            </a>
+                          </div>
+                        )}
+                        {requestDetail.tiktokLink && (
+                          <div>
+                            <p className="text-xs text-muted-foreground">TikTok</p>
+                            <a
+                              href={requestDetail.tiktokLink}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-sm text-blue-600 hover:underline"
+                            >
+                              {requestDetail.tiktokLink}
+                            </a>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -322,16 +426,16 @@ export function ClubRequestDialog({
                         </div>
                         {proposal.fileUrl && (
                           <div className="flex gap-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
-                                window.open(proposal.fileUrl, "_blank");
-                              }}
-                            >
-                              <Eye className="mr-2 h-4 w-4" />
-                              Xem
-                            </Button>
+                            {onViewProposalDetail && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => onViewProposalDetail(proposal)}
+                              >
+                                <Eye className="mr-2 h-4 w-4" />
+                                Xem chi tiết
+                              </Button>
+                            )}
                             <Button
                               variant="outline"
                               size="sm"
@@ -344,7 +448,7 @@ export function ClubRequestDialog({
                               }}
                             >
                               <Download className="mr-2 h-4 w-4" />
-                              Tải
+                              Tải về
                             </Button>
                           </div>
                         )}
@@ -369,14 +473,28 @@ export function ClubRequestDialog({
                       <p className="text-sm font-medium text-muted-foreground">
                         Ngày và giờ bảo vệ
                       </p>
-                      <p className="text-sm">
-                        {new Date(defenseSchedule.defenseDate).toLocaleString("vi-VN", {
-                          year: "numeric",
-                          month: "2-digit",
-                          day: "2-digit",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
+                      <p className="text-sm space-y-1">
+                        <span className="block">
+                          {new Date(defenseSchedule.defenseDate).toLocaleString("vi-VN", {
+                            year: "numeric",
+                            month: "2-digit",
+                            day: "2-digit",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </span>
+                        {defenseSchedule.defenseEndDate && (
+                          <span className="block text-muted-foreground text-xs">
+                            Đến{" "}
+                            {new Date(defenseSchedule.defenseEndDate).toLocaleString("vi-VN", {
+                              year: "numeric",
+                              month: "2-digit",
+                              day: "2-digit",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </span>
+                        )}
                       </p>
                     </div>
                     {defenseSchedule.location && (
@@ -387,21 +505,7 @@ export function ClubRequestDialog({
                         <p className="text-sm">{defenseSchedule.location}</p>
                       </div>
                     )}
-                    {defenseSchedule.meetingLink && (
-                      <div>
-                        <p className="text-sm font-medium text-muted-foreground">
-                          Link meeting
-                        </p>
-                        <a
-                          href={defenseSchedule.meetingLink}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-sm text-blue-600 hover:underline"
-                        >
-                          {defenseSchedule.meetingLink}
-                        </a>
-                      </div>
-                    )}
+                  
                     {defenseSchedule.notes && (
                       <div>
                         <p className="text-sm font-medium text-muted-foreground">
@@ -410,7 +514,7 @@ export function ClubRequestDialog({
                         <p className="text-sm">{defenseSchedule.notes}</p>
                       </div>
                     )}
-                    {defenseSchedule.result && (
+                    {(defenseSchedule.result === "PASSED" || defenseSchedule.result === "FAILED") && (
                       <div>
                         <p className="text-sm font-medium text-muted-foreground">
                           Kết quả
@@ -508,42 +612,21 @@ export function ClubRequestDialog({
             </>
           )}
 
-          {/* Contact Information */}
-          {requestDetail && (
+          {/* Contact Information - Staff Assignment */}
+          {requestDetail && requestDetail.assignedStaffFullName && (
             <div className="space-y-3">
               <h3 className="font-semibold">Thông tin liên hệ</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {requestDetail.assignedStaffFullName && (
-                  <div className="flex items-start gap-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                    <Users className="h-5 w-5 text-blue-600 mt-0.5" />
-                    <div>
-                      <p className="text-sm font-medium text-blue-900">
-                        Người xét duyệt
-                      </p>
-                      <p className="text-sm text-blue-700">{requestDetail.assignedStaffFullName}</p>
-                    </div>
-                  </div>
-                )}
-                {requestDetail.email && (
-                  <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                    <Mail className="h-5 w-5 text-gray-600 mt-0.5" />
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">Email</p>
-                      <p className="text-sm text-gray-700">{requestDetail.email}</p>
-                    </div>
-                  </div>
-                )}
-                {requestDetail.phone && (
-                  <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                    <Phone className="h-5 w-5 text-gray-600 mt-0.5" />
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">
-                        Số điện thoại
-                      </p>
-                      <p className="text-sm text-gray-700">{requestDetail.phone}</p>
-                    </div>
-                  </div>
-                )}
+              <div className="flex items-start gap-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                <Users className="h-5 w-5 text-blue-600 mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium text-blue-900">
+                    Người xét duyệt
+                  </p>
+                  <p className="text-sm text-blue-700">{requestDetail.assignedStaffFullName}</p>
+                  {requestDetail.assignedStaffEmail && (
+                    <p className="text-xs text-blue-600 mt-1">{requestDetail.assignedStaffEmail}</p>
+                  )}
+                </div>
               </div>
             </div>
           )}

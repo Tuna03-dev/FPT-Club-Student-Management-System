@@ -4,6 +4,7 @@ import com.sep490.backendclubmanagement.dto.ApiResponse;
 import com.sep490.backendclubmanagement.dto.request.AssignRequestEstablishmentRequest;
 import com.sep490.backendclubmanagement.dto.request.CompleteDefenseRequest;
 import com.sep490.backendclubmanagement.dto.request.RejectContactRequest;
+import com.sep490.backendclubmanagement.dto.request.RequestProposalRequest;
 import com.sep490.backendclubmanagement.dto.request.RejectDefenseScheduleRequest;
 import com.sep490.backendclubmanagement.dto.request.RejectProposalRequest;
 import com.sep490.backendclubmanagement.dto.response.ClubCreationFinalFormResponse;
@@ -141,13 +142,14 @@ public class ClubCreationStaffController {
      */
     @PostMapping("/{requestId}/request-proposal")
     public ResponseEntity<ApiResponse<RequestEstablishmentResponse>> requestProposal(
-            @PathVariable Long requestId
+            @PathVariable Long requestId,
+            @RequestBody(required = false) RequestProposalRequest request
     ) throws AppException {
         Long staffId = SecurityUtils.getCurrentUserId();
         if (!roleService.isStaff(staffId)) {
             throw new ForbiddenException("Chỉ STAFF mới có quyền truy cập");
         }
-        RequestEstablishmentResponse response = requestEstablishmentService.requestProposal(requestId, staffId);
+        RequestEstablishmentResponse response = requestEstablishmentService.requestProposal(requestId, staffId, request);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 

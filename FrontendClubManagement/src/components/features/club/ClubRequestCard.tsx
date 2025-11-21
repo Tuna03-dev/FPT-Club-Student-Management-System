@@ -15,12 +15,14 @@ import {
   FileText,
   XCircle,
 } from "lucide-react";
+import type { RequestEstablishmentResponse } from "@/api/clubCreation";
 
 export interface ClubRequest {
   id: string;
   clubName: string;
   clubCode: string;
   submittedDate: string;
+  rawStatus: RequestEstablishmentResponse["status"];
   status:
     | "draft"
     | "pending_review"
@@ -28,6 +30,7 @@ export interface ClubRequest {
     | "pending_documents"
     | "documents_submitted"
     | "defense_scheduled"
+    | "defense_schedule_approved"
     | "defense_completed"
     | "final_form_submitted"
     | "approved"
@@ -82,6 +85,12 @@ const STATUS_CONFIG = {
     variant: "default" as const,
     icon: Calendar,
     color: "text-purple-500",
+  },
+  defense_schedule_approved: {
+    label: "Đã duyệt lịch bảo vệ",
+    variant: "default" as const,
+    icon: CheckCircle2,
+    color: "text-green-500",
   },
   defense_completed: {
     label: "Đã bảo vệ",

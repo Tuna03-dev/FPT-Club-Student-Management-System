@@ -35,7 +35,6 @@ import {
   Mail,
   Phone,
   Circle,
-  UserPlus,
   Send,
   Download,
 } from "lucide-react";
@@ -189,9 +188,9 @@ const convertToClubCreationRequest = (
     clubCode: response.clubCode,
     description: response.description,
     category: response.clubCategory,
-    targetMembers: response.expectedMemberCount?.toString(),
-    email: response.createdByEmail,
-    phone: "", // Not in response
+    targetMembers: response.activityObjectives, // Sửa: map từ activityObjectives thay vì expectedMemberCount
+    email: response.email || response.createdByEmail,
+    phone: response.phone || "",
     requestedBy: response.createdByFullName,
     requestedAt: response.sendDate || response.createdAt,
     status: response.status,
@@ -217,11 +216,9 @@ export default function ClubCreationManagement() {
     useState<ClubCreationRequest | null>(null);
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
   const [isReviewDialogOpen, setIsReviewDialogOpen] = useState(false);
-  const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false);
   const [isCompleteDefenseDialogOpen, setIsCompleteDefenseDialogOpen] = useState(false);
   const [reviewNote, setReviewNote] = useState("");
   const [reviewAction, setReviewAction] = useState<"approve" | "reject">("approve");
-  const [assignStaffId, setAssignStaffId] = useState("");
   const [defenseResult, setDefenseResult] = useState<"PASSED" | "FAILED">("PASSED");
   const [defenseFeedback, setDefenseFeedback] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -235,7 +232,11 @@ export default function ClubCreationManagement() {
   const [isProposalDialogOpen, setIsProposalDialogOpen] = useState(false);
   const [workflowSteps, setWorkflowSteps] = useState<ClubCreationStepResponse[]>([]);
   const [workflowHistory, setWorkflowHistory] = useState<WorkflowHistoryResponse[]>([]);
-  const [isWorkflowDialogOpen, setIsWorkflowDialogOpen] = useState(false);
+  const [isTimelineExpanded, setIsTimelineExpanded] = useState(true);
+  const [requestDetail, setRequestDetail] = useState<RequestEstablishmentResponse | null>(null);
+  const [isRequestProposalDialogOpen, setIsRequestProposalDialogOpen] = useState(false);
+  const [proposalRequestNote, setProposalRequestNote] = useState("");
+  const [proposalRequestTarget, setProposalRequestTarget] = useState<ClubCreationRequest | null>(null);
 
   // Load workflow steps
   const loadWorkflowSteps = async () => {
@@ -287,6 +288,24 @@ export default function ClubCreationManagement() {
     }
   };
 
+  const openRequestProposalDialog = (request: ClubCreationRequest) => {
+    setProposalRequestTarget(request);
+    setProposalRequestNote("");
+    setIsRequestProposalDialogOpen(true);
+  };
+
+  const handleSubmitProposalRequest = async () => {
+    if (!proposalRequestTarget) return;
+    const requestId = parseInt(proposalRequestTarget.id);
+    const comment = proposalRequestNote.trim();
+    const success = await handleRequestProposal(requestId, comment || undefined);
+    if (success) {
+      setIsRequestProposalDialogOpen(false);
+      setProposalRequestTarget(null);
+      setProposalRequestNote("");
+    }
+  };
+
   // Load request detail with proposals and defense schedule
   const loadRequestDetail = async (requestId: number) => {
     try {
@@ -305,10 +324,14 @@ export default function ClubCreationManagement() {
         clubCreationStaffApi.getDefenseSchedule(requestId).catch(() => null),
         clubCreationStaffApi.getFinalForms(requestId).catch(() => []),
       ]);
+      setRequestDetail(detail);
       setSelectedRequest(convertToClubCreationRequest(detail, steps));
       setProposals(Array.isArray(proposalsData) ? proposalsData : []);
       setDefenseSchedule(defenseScheduleData);
       setFinalForms(Array.isArray(finalFormsData) ? finalFormsData : []);
+      
+      // Load workflow history when detail dialog opens
+      await loadWorkflowHistory(requestId);
     } catch (error: any) {
       toast.error("Không thể tải thông tin chi tiết", {
         description: error.message || "Đã xảy ra lỗi",
@@ -324,33 +347,6 @@ export default function ClubCreationManagement() {
     setIsDetailDialogOpen(true);
   };
 
-  // Handle assign request
-  const handleAssignRequest = async () => {
-    if (!selectedRequest || !assignStaffId) {
-      toast.error("Vui lòng chọn staff để gán!");
-      return;
-    }
-
-    try {
-      setIsLoading(true);
-      await clubCreationStaffApi.assignRequest(parseInt(selectedRequest.id), {
-        staffId: parseInt(assignStaffId),
-      });
-      toast.success("Đã gán yêu cầu thành công!");
-      setIsAssignDialogOpen(false);
-      setAssignStaffId("");
-      await loadPendingRequests();
-      if (selectedRequest) {
-        await loadRequestDetail(parseInt(selectedRequest.id));
-      }
-    } catch (error: any) {
-      toast.error("Không thể gán yêu cầu", {
-        description: error.message || "Đã xảy ra lỗi",
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   // Handle receive request
   const handleReceiveRequest = async (requestId: number) => {
@@ -403,16 +399,21 @@ export default function ClubCreationManagement() {
   };
 
   // Handle request proposal
-  const handleRequestProposal = async (requestId: number) => {
+  const handleRequestProposal = async (requestId: number, comment?: string) => {
     try {
       setIsLoading(true);
-      await clubCreationStaffApi.requestProposal(requestId);
+      await clubCreationStaffApi.requestProposal(requestId, comment ? { comment } : undefined);
       toast.success("Đã yêu cầu đề án thành công!");
       await loadPendingRequests();
+      if (selectedRequest && parseInt(selectedRequest.id) === requestId) {
+        await loadRequestDetail(requestId);
+      }
+      return true;
     } catch (error: any) {
       toast.error("Không thể yêu cầu đề án", {
         description: error.message || "Đã xảy ra lỗi",
       });
+      return false;
     } finally {
       setIsLoading(false);
     }
@@ -568,14 +569,15 @@ export default function ClubCreationManagement() {
     if (reviewAction === "approve") {
       // Xử lý approve theo từng status
       if (selectedRequest.status === "SUBMITTED") {
-        // Nếu chưa được gán, tự động nhận và gán cho chính mình
+        // Tự động nhận yêu cầu
         handleReceiveRequest(requestId);
       } else if (selectedRequest.status === "CONTACT_CONFIRMATION_PENDING") {
         // Xác nhận liên hệ
         handleConfirmContact(requestId);
       } else if (selectedRequest.status === "CONTACT_CONFIRMED") {
-        // Yêu cầu đề án
-        handleRequestProposal(requestId);
+        // Yêu cầu đề án với ghi chú
+        setIsReviewDialogOpen(false);
+        openRequestProposalDialog(selectedRequest);
       } else if (selectedRequest.status === "PROPOSAL_SUBMITTED") {
         // Phê duyệt đề án
         handleApproveProposal(requestId);
@@ -666,12 +668,6 @@ export default function ClubCreationManagement() {
               <Users className="mr-2 h-4 w-4" />
               Người gửi: {request.requestedBy}
             </div>
-            {request.assignedStaff && (
-              <div className="flex items-center text-sm text-blue-600 font-medium">
-                <UserPlus className="mr-2 h-4 w-4" />
-                Được gán cho: {request.assignedStaff}
-              </div>
-            )}
           </div>
 
           <div className="space-y-1.5">
@@ -725,7 +721,7 @@ export default function ClubCreationManagement() {
                         } else if (status === "CONTACT_CONFIRMATION_PENDING") {
                           handleConfirmContact(requestId);
                         } else if (status === "CONTACT_CONFIRMED") {
-                          handleRequestProposal(requestId);
+                          openRequestProposalDialog(request);
                         } else if (status === "PROPOSAL_SUBMITTED") {
                           handleApproveProposal(requestId);
                         } else if (status === "DEFENSE_SCHEDULE_PROPOSED") {
@@ -755,7 +751,7 @@ export default function ClubCreationManagement() {
                           : status === "DEFENSE_SCHEDULE_APPROVED" || status === "DEFENSE_SCHEDULED"
                           ? "Nhập kết quả bảo vệ"
                           : status === "FINAL_FORM_SUBMITTED"
-                          ? "Duyệt form cuối"
+                          ? "Duyệt đề án cuối"
                           : "Duyệt";
                       })()}
                     </Button>
@@ -884,7 +880,16 @@ export default function ClubCreationManagement() {
       </Tabs>
 
       {/* Detail Dialog */}
-      <Dialog open={isDetailDialogOpen} onOpenChange={setIsDetailDialogOpen}>
+      <Dialog 
+        open={isDetailDialogOpen} 
+        onOpenChange={(open) => {
+          setIsDetailDialogOpen(open);
+          if (!open) {
+            setRequestDetail(null);
+            setIsTimelineExpanded(false);
+          }
+        }}
+      >
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           {selectedRequest && (
             <>
@@ -901,15 +906,10 @@ export default function ClubCreationManagement() {
               </DialogHeader>
 
               <div className="space-y-6">
-                {/* Progress Overview - Clickable to view workflow */}
+                {/* Progress Overview - Clickable to toggle workflow timeline */}
                 <div 
                   className="space-y-3 cursor-pointer hover:bg-gray-50 p-3 rounded-lg transition-colors"
-                  onClick={async () => {
-                    if (selectedRequest) {
-                      await loadWorkflowHistory(parseInt(selectedRequest.id));
-                      setIsWorkflowDialogOpen(true);
-                    }
-                  }}
+                  onClick={() => setIsTimelineExpanded((prev) => !prev)}
                 >
                   <div className="flex items-center justify-between">
                     <h3 className="font-semibold">Tiến độ xử lý</h3>
@@ -927,38 +927,262 @@ export default function ClubCreationManagement() {
                     className="h-3"
                   />
                   <p className="text-xs text-muted-foreground text-center">
-                    Nhấn để xem chi tiết quy trình
+                    {isTimelineExpanded ? "Nhấn để thu gọn" : "Nhấn để xem chi tiết quy trình"}
                   </p>
                 </div>
+
+                {isTimelineExpanded && selectedRequest && workflowSteps.length > 0 && (
+                  <div className="space-y-4 rounded-lg border border-orange-100 bg-orange-50/40 p-4">
+                    {(() => {
+                      // Group history by step_code
+                      const completedStepCodes = new Set(
+                        workflowHistory.map((h) => h.stepCode).filter((code): code is string => Boolean(code))
+                      );
+
+                      const historyByStepCode = workflowHistory.reduce(
+                        (acc, h) => {
+                          if (!h.stepCode) return acc;
+                          if (!acc[h.stepCode]) {
+                            acc[h.stepCode] = [];
+                          }
+                          acc[h.stepCode].push(h);
+                          return acc;
+                        },
+                        {} as Record<string, WorkflowHistoryResponse[]>
+                      );
+
+                      // Convert steps to display format
+                      const timelineSteps = workflowSteps
+                        .map((step) => ({
+                          id: step.id,
+                          label: step.name,
+                          description: step.description || "",
+                          icon: getIconForStepCode(step.code),
+                          orderIndex: step.orderIndex,
+                          code: step.code,
+                        }))
+                        .sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
+
+                      if (timelineSteps.length === 0) {
+                        return (
+                          <p className="text-sm text-muted-foreground">
+                            Chưa có dữ liệu quy trình để hiển thị.
+                          </p>
+                        );
+                      }
+
+                      return (
+                        <div className="space-y-4">
+                          {timelineSteps.map((step, index) => {
+                            const hasHistory = step.code ? completedStepCodes.has(step.code) : false;
+                            const isCompleted = hasHistory || step.orderIndex < selectedRequest.currentStep;
+                            const isCurrent = step.orderIndex === selectedRequest.currentStep;
+                            const StepIcon = step.icon;
+                            const stepHistories = step.code ? historyByStepCode[step.code] || [] : [];
+
+                            return (
+                              <div key={step.id} className="flex items-start gap-4">
+                                <div className="flex flex-col items-center">
+                                  <div
+                                    className={`rounded-full p-2 ${
+                                      isCompleted
+                                        ? "bg-green-100 text-green-600"
+                                        : isCurrent
+                                        ? "bg-blue-100 text-blue-600"
+                                        : "bg-gray-100 text-gray-400"
+                                    }`}
+                                  >
+                                    {isCompleted ? (
+                                      <CheckCircle2 className="h-5 w-5" />
+                                    ) : isCurrent ? (
+                                      <StepIcon className="h-5 w-5" />
+                                    ) : (
+                                      <Circle className="h-5 w-5" />
+                                    )}
+                                  </div>
+                                  {index < timelineSteps.length - 1 && (
+                                    <div
+                                      className={`w-0.5 h-12 ${
+                                        isCompleted ? "bg-green-200" : "bg-gray-200"
+                                      }`}
+                                    />
+                                  )}
+                                </div>
+                                <div className="flex-1 pb-8">
+                                  <h4
+                                    className={`font-medium ${
+                                      isCurrent ? "text-blue-600" : ""
+                                    }`}
+                                  >
+                                    {step.label}
+                                  </h4>
+                                  <p className="text-sm text-muted-foreground">
+                                    {step.description}
+                                  </p>
+                                  {stepHistories.length > 0 && (
+                                    <div className="mt-2 space-y-1 text-sm text-muted-foreground">
+                                      {stepHistories.map((history) => (
+                                        <p key={history.id}>
+                                          <span className="font-medium">
+                                            {history.actionDate
+                                              ? new Date(history.actionDate).toLocaleString("vi-VN")
+                                              : ""}
+                                          </span>
+                                          {history.comments && (
+                                            <>
+                                              {" — "}
+                                              {history.comments}
+                                            </>
+                                          )}
+                                        </p>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
 
                 <Separator />
 
                 {/* Club Information */}
-                <div className="space-y-3">
-                  <h3 className="font-semibold">Thông tin câu lạc bộ</h3>
-                  <div className="space-y-2">
-                    <div>
-                      <p className="text-sm font-medium text-muted-foreground">
-                        Lĩnh vực
-                      </p>
-                      <p className="text-sm">{selectedRequest.category}</p>
+                {requestDetail && (
+                  <div className="space-y-3">
+                    <h3 className="font-semibold">Thông tin câu lạc bộ</h3>
+                    <div className="space-y-3">
+                      {requestDetail.clubName && (
+                        <div>
+                          <p className="text-sm font-medium text-muted-foreground">
+                            Tên CLB
+                          </p>
+                          <p className="text-sm">{requestDetail.clubName}</p>
+                        </div>
+                      )}
+                      {requestDetail.clubCode && (
+                        <div>
+                          <p className="text-sm font-medium text-muted-foreground">
+                            Mã CLB
+                          </p>
+                          <p className="text-sm">{requestDetail.clubCode}</p>
+                        </div>
+                      )}
+                      {requestDetail.clubCategory && (
+                        <div>
+                          <p className="text-sm font-medium text-muted-foreground">
+                            Lĩnh vực
+                          </p>
+                          <p className="text-sm">{requestDetail.clubCategory}</p>
+                        </div>
+                      )}
+                      {requestDetail.description && (
+                        <div>
+                          <p className="text-sm font-medium text-muted-foreground">
+                            Mô tả
+                          </p>
+                          <p className="text-sm">{requestDetail.description}</p>
+                        </div>
+                      )}
+                      {requestDetail.activityObjectives && (
+                        <div>
+                          <p className="text-sm font-medium text-muted-foreground">
+                            Đối tượng hướng tới
+                          </p>
+                          <p className="text-sm">{requestDetail.activityObjectives}</p>
+                        </div>
+                      )}
+                      {requestDetail.expectedActivities && (
+                        <div>
+                          <p className="text-sm font-medium text-muted-foreground">
+                            Hoạt động dự kiến
+                          </p>
+                          <p className="text-sm">{requestDetail.expectedActivities}</p>
+                        </div>
+                      )}
+                      {requestDetail.expectedMemberCount && (
+                        <div>
+                          <p className="text-sm font-medium text-muted-foreground">
+                            Số lượng thành viên dự kiến
+                          </p>
+                          <p className="text-sm">{requestDetail.expectedMemberCount} thành viên</p>
+                        </div>
+                      )}
+                      {(requestDetail.email || requestDetail.phone) && (
+                        <div className="pt-2 border-t">
+                          <p className="text-sm font-medium text-muted-foreground mb-2">
+                            Thông tin liên hệ
+                          </p>
+                          <div className="space-y-1">
+                            {requestDetail.email && (
+                              <div className="flex items-center gap-2">
+                                <Mail className="h-4 w-4 text-muted-foreground" />
+                                <p className="text-sm">{requestDetail.email}</p>
+                              </div>
+                            )}
+                            {requestDetail.phone && (
+                              <div className="flex items-center gap-2">
+                                <Phone className="h-4 w-4 text-muted-foreground" />
+                                <p className="text-sm">{requestDetail.phone}</p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      {(requestDetail.facebookLink || requestDetail.instagramLink || requestDetail.tiktokLink) && (
+                        <div className="pt-2 border-t">
+                          <p className="text-sm font-medium text-muted-foreground mb-2">
+                            Mạng xã hội
+                          </p>
+                          <div className="space-y-1">
+                            {requestDetail.facebookLink && (
+                              <div>
+                                <p className="text-xs text-muted-foreground">Facebook</p>
+                                <a
+                                  href={requestDetail.facebookLink}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-sm text-blue-600 hover:underline"
+                                >
+                                  {requestDetail.facebookLink}
+                                </a>
+                              </div>
+                            )}
+                            {requestDetail.instagramLink && (
+                              <div>
+                                <p className="text-xs text-muted-foreground">Instagram</p>
+                                <a
+                                  href={requestDetail.instagramLink}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-sm text-blue-600 hover:underline"
+                                >
+                                  {requestDetail.instagramLink}
+                                </a>
+                              </div>
+                            )}
+                            {requestDetail.tiktokLink && (
+                              <div>
+                                <p className="text-xs text-muted-foreground">TikTok</p>
+                                <a
+                                  href={requestDetail.tiktokLink}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-sm text-blue-600 hover:underline"
+                                >
+                                  {requestDetail.tiktokLink}
+                                </a>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
-                    <div>
-                      <p className="text-sm font-medium text-muted-foreground">
-                        Mô tả
-                      </p>
-                      <p className="text-sm">{selectedRequest.description}</p>
-                    </div>
-                    {selectedRequest.targetMembers && (
-                      <div>
-                        <p className="text-sm font-medium text-muted-foreground">
-                          Đối tượng hướng tới
-                        </p>
-                        <p className="text-sm">{selectedRequest.targetMembers}</p>
-                      </div>
-                    )}
                   </div>
-                </div>
+                )}
 
                 <Separator />
 
@@ -1042,7 +1266,7 @@ export default function ClubCreationManagement() {
                                       }}
                                     >
                                       <Download className="mr-2 h-4 w-4" />
-                                      Tải
+                                      Tải về
                                     </Button>
                                   </>
                                 )}
@@ -1067,15 +1291,29 @@ export default function ClubCreationManagement() {
                             <p className="text-sm font-medium text-muted-foreground">
                               Ngày và giờ bảo vệ
                             </p>
-                            <p className="text-sm">
-                              {new Date(defenseSchedule.defenseDate).toLocaleString("vi-VN", {
+                        <div className="text-sm space-y-1">
+                          <span className="block">
+                            {new Date(defenseSchedule.defenseDate).toLocaleString("vi-VN", {
+                              year: "numeric",
+                              month: "2-digit",
+                              day: "2-digit",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </span>
+                          {defenseSchedule.defenseEndDate && (
+                            <span className="block text-muted-foreground text-xs">
+                              Đến{" "}
+                              {new Date(defenseSchedule.defenseEndDate).toLocaleString("vi-VN", {
                                 year: "numeric",
                                 month: "2-digit",
                                 day: "2-digit",
                                 hour: "2-digit",
                                 minute: "2-digit",
                               })}
-                            </p>
+                            </span>
+                          )}
+                        </div>
                           </div>
                           {defenseSchedule.location && (
                             <div>
@@ -1192,23 +1430,32 @@ export default function ClubCreationManagement() {
                 </div>
                 <Separator />
 
-                {/* Contact Information */}
+                {/* Contact Information - Student and Staff */}
                 <div className="space-y-3">
                   <h3 className="font-semibold">Thông tin liên hệ</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                      <Mail className="h-5 w-5 text-gray-600 mt-0.5" />
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">Email</p>
-                        <p className="text-sm text-gray-700">{selectedRequest.email}</p>
+                    {requestDetail?.assignedStaffFullName && (
+                      <div className="flex items-start gap-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                        <Users className="h-5 w-5 text-blue-600 mt-0.5" />
+                        <div>
+                          <p className="text-sm font-medium text-blue-900">
+                            Người xét duyệt
+                          </p>
+                          <p className="text-sm text-blue-700">{requestDetail.assignedStaffFullName}</p>
+                          {requestDetail.assignedStaffEmail && (
+                            <p className="text-xs text-blue-600 mt-1">{requestDetail.assignedStaffEmail}</p>
+                          )}
+                        </div>
                       </div>
-                    </div>
-
+                    )}
                     <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
                       <Users className="h-5 w-5 text-gray-600 mt-0.5" />
                       <div>
                         <p className="text-sm font-medium text-gray-900">Người gửi</p>
                         <p className="text-sm text-gray-700">{selectedRequest.requestedBy}</p>
+                        {requestDetail?.createdByEmail && (
+                          <p className="text-xs text-gray-600 mt-1">{requestDetail.createdByEmail}</p>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -1221,13 +1468,6 @@ export default function ClubCreationManagement() {
                   <DialogFooter className="gap-2 flex-wrap">
                     {selectedRequest.status === "SUBMITTED" && (
                       <>
-                        <Button
-                          variant="outline"
-                          onClick={() => setIsAssignDialogOpen(true)}
-                        >
-                          <UserPlus className="mr-2 h-4 w-4" />
-                          Gán staff
-                        </Button>
                         <Button
                           onClick={() => handleReceiveRequest(parseInt(selectedRequest.id))}
                         >
@@ -1257,7 +1497,7 @@ export default function ClubCreationManagement() {
                     )}
                     {selectedRequest.status === "CONTACT_CONFIRMED" && (
                       <Button
-                        onClick={() => handleRequestProposal(parseInt(selectedRequest.id))}
+                        onClick={() => openRequestProposalDialog(selectedRequest)}
                       >
                         <Send className="mr-2 h-4 w-4" />
                         Yêu cầu đề án
@@ -1311,15 +1551,28 @@ export default function ClubCreationManagement() {
                               <Clock className="mr-2 h-4 w-4" />
                               Chưa đến thời gian bảo vệ
                             </Button>
-                            <p className="text-xs text-muted-foreground text-center">
-                              Chỉ có thể nhập kết quả sau khi thời gian bảo vệ đã qua. 
-                              Thời gian bảo vệ: {new Date(defenseSchedule.defenseDate).toLocaleString("vi-VN", {
-                                year: "numeric",
-                                month: "2-digit",
-                                day: "2-digit",
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })}
+                            <p className="text-xs text-muted-foreground text-center space-y-1">
+                              <span className="block">
+                                Chỉ có thể nhập kết quả sau khi thời gian bảo vệ đã qua.
+                              </span>
+                              <span className="block">
+                                Thời gian bảo vệ:{" "}
+                                {new Date(defenseSchedule.defenseDate).toLocaleString("vi-VN", {
+                                  year: "numeric",
+                                  month: "2-digit",
+                                  day: "2-digit",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}
+                                {defenseSchedule.defenseEndDate &&
+                                  ` - ${new Date(defenseSchedule.defenseEndDate).toLocaleString("vi-VN", {
+                                    year: "numeric",
+                                    month: "2-digit",
+                                    day: "2-digit",
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })}`}
+                              </span>
                             </p>
                           </div>
                         ) : (
@@ -1341,7 +1594,7 @@ export default function ClubCreationManagement() {
                         }
                       >
                         <CheckCircle2 className="mr-2 h-4 w-4" />
-                        Duyệt form cuối & tạo CLB
+                        Duyệt đề án cuối & tạo CLB
                       </Button>
                     )}
                     {(selectedRequest.status === "PROPOSAL_REQUIRED" ||
@@ -1359,6 +1612,57 @@ export default function ClubCreationManagement() {
                 )}
             </>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Request Proposal Dialog */}
+      <Dialog
+        open={isRequestProposalDialogOpen}
+        onOpenChange={(open) => {
+          setIsRequestProposalDialogOpen(open);
+          if (!open) {
+            setProposalRequestTarget(null);
+            setProposalRequestNote("");
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Yêu cầu sinh viên nộp đề án</DialogTitle>
+            <DialogDescription>
+              {proposalRequestTarget?.clubName} - {proposalRequestTarget?.clubCode}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2">
+            <Label htmlFor="proposalRequestNote">Ghi chú (tùy chọn)</Label>
+            <Textarea
+              id="proposalRequestNote"
+              placeholder="Ví dụ: Nộp kế hoạch hoạt động chi tiết, dự trù kinh phí..."
+              value={proposalRequestNote}
+              onChange={(e) => setProposalRequestNote(e.target.value)}
+              rows={4}
+            />
+            <p className="text-xs text-muted-foreground">
+              Ghi chú sẽ xuất hiện trong lịch sử quy trình để sinh viên biết cần chuẩn bị gì.
+            </p>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsRequestProposalDialogOpen(false);
+                setProposalRequestTarget(null);
+                setProposalRequestNote("");
+              }}
+            >
+              Hủy
+            </Button>
+            <Button onClick={handleSubmitProposalRequest} disabled={isLoading}>
+              Gửi yêu cầu
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -1427,44 +1731,6 @@ export default function ClubCreationManagement() {
         </DialogContent>
       </Dialog>
 
-      {/* Assign Dialog */}
-      <Dialog open={isAssignDialogOpen} onOpenChange={setIsAssignDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Gán staff xử lý</DialogTitle>
-            <DialogDescription>
-              Chọn staff để gán xử lý yêu cầu này
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="staffId">Staff ID *</Label>
-              <Input
-                id="staffId"
-                type="number"
-                value={assignStaffId}
-                onChange={(e) => setAssignStaffId(e.target.value)}
-                placeholder="Nhập ID của staff"
-              />
-            </div>
-          </div>
-
-          <DialogFooter className="gap-2">
-            <Button
-              variant="outline"
-              onClick={() => setIsAssignDialogOpen(false)}
-            >
-              Hủy
-            </Button>
-            <Button onClick={handleAssignRequest}>
-              <UserPlus className="mr-2 h-4 w-4" />
-              Gán
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       {/* Complete Defense Dialog */}
       <Dialog open={isCompleteDefenseDialogOpen} onOpenChange={setIsCompleteDefenseDialogOpen}>
         <DialogContent className="sm:max-w-md">
@@ -1526,7 +1792,7 @@ export default function ClubCreationManagement() {
               <DialogHeader>
                 <DialogTitle className="text-2xl">{selectedProposal.title}</DialogTitle>
                 <DialogDescription>
-                  Đề án chi tiết - Request ID: {selectedProposal.requestEstablishmentId}
+                  Đề án chi tiết: {selectedRequest?.clubName} 
                 </DialogDescription>
               </DialogHeader>
 
@@ -1548,50 +1814,54 @@ export default function ClubCreationManagement() {
                       })}
                     </p>
                   </div>
-                  {selectedProposal.updatedAt && (
-                    <div>
-                      <p className="text-sm font-medium text-muted-foreground">Cập nhật lần cuối</p>
-                      <p className="text-sm">
-                        {new Date(selectedProposal.updatedAt).toLocaleDateString("vi-VN", {
-                          year: "numeric",
-                          month: "long",
-                          day: "numeric",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </p>
-                    </div>
-                  )}
-                  {selectedProposal.fileUrl && (
-                    <div>
-                      <p className="text-sm font-medium text-muted-foreground mb-2">File đề án</p>
-                      <div className="flex gap-2">
-                        <Button
-                          variant="outline"
-                          onClick={() => window.open(selectedProposal.fileUrl, "_blank")}
-                        >
-                          <Eye className="mr-2 h-4 w-4" />
-                          Xem file
-                        </Button>
-                        <Button
-                          variant="outline"
-                          onClick={() => {
-                            const link = document.createElement("a");
-                            link.href = selectedProposal.fileUrl!;
-                            link.download = selectedProposal.title || "proposal";
-                            link.target = "_blank";
-                            link.click();
-                          }}
-                        >
-                          <Download className="mr-2 h-4 w-4" />
-                          Tải xuống
-                        </Button>
+                  {selectedProposal.fileUrl && (() => {
+                    // Kiểm tra extension của file
+                    const fileUrl = selectedProposal.fileUrl;
+                    const fileExtension = fileUrl.split('.').pop()?.toLowerCase() || '';
+                    
+                    // Hàm để mở file trực tiếp trong trình duyệt
+                    const openFileInBrowser = () => {
+                      if (fileExtension === 'pdf') {
+                        // PDF có thể mở trực tiếp
+                        window.open(fileUrl, '_blank');
+                      } else if (['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'].includes(fileExtension)) {
+                        // File Office: dùng Office Online Viewer
+                        const viewerUrl = `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(fileUrl)}`;
+                        window.open(viewerUrl, '_blank');
+                      } else {
+                        // File khác: thử mở trực tiếp
+                        window.open(fileUrl, '_blank');
+                      }
+                    };
+                    
+                    return (
+                      <div>
+                        <p className="text-sm font-medium text-muted-foreground mb-2">File đề án</p>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            onClick={openFileInBrowser}
+                          >
+                            <Eye className="mr-2 h-4 w-4" />
+                            Xem file
+                          </Button>
+                          <Button
+                            variant="outline"
+                            onClick={() => {
+                              const link = document.createElement("a");
+                              link.href = selectedProposal.fileUrl!;
+                              link.download = selectedProposal.title || "proposal";
+                              link.target = "_blank";
+                              link.click();
+                            }}
+                          >
+                            <Download className="mr-2 h-4 w-4" />
+                            Tải về
+                          </Button>
+                        </div>
                       </div>
-                      <p className="text-xs text-muted-foreground mt-2 break-all">
-                        {selectedProposal.fileUrl}
-                      </p>
-                    </div>
-                  )}
+                    );
+                  })()}
                 </div>
               </div>
 
@@ -1605,159 +1875,6 @@ export default function ClubCreationManagement() {
         </DialogContent>
       </Dialog>
 
-      {/* Workflow Timeline Dialog */}
-      <Dialog open={isWorkflowDialogOpen} onOpenChange={setIsWorkflowDialogOpen}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="text-2xl">Quy trình xét duyệt</DialogTitle>
-            <DialogDescription>
-              {selectedRequest?.clubName} - Mã: {selectedRequest?.clubCode}
-            </DialogDescription>
-          </DialogHeader>
-
-          {selectedRequest && workflowSteps.length > 0 && (
-            <div className="space-y-4">
-              {/* Progress Overview */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-semibold">Tiến độ xử lý</h3>
-                  <Badge variant="outline">
-                    Bước {selectedRequest.currentStep}/{selectedRequest.totalSteps}
-                  </Badge>
-                </div>
-                <Progress
-                  value={(selectedRequest.currentStep / selectedRequest.totalSteps) * 100}
-                  className="h-3"
-                />
-                <p className="text-sm text-muted-foreground">
-                  Hoàn thành {Math.round((selectedRequest.currentStep / selectedRequest.totalSteps) * 100)}%
-                </p>
-              </div>
-
-              <Separator />
-
-              {/* Timeline */}
-              <div className="space-y-4">
-                <h3 className="font-semibold">Quy trình xét duyệt</h3>
-                {(() => {
-                  // Group history by step_code
-                  const completedStepCodes = new Set(
-                    workflowHistory.map((h) => h.stepCode).filter((code) => code)
-                  );
-
-                  const historyByStepCode = workflowHistory.reduce(
-                    (acc, h) => {
-                      if (!h.stepCode) return acc;
-                      if (!acc[h.stepCode]) {
-                        acc[h.stepCode] = [];
-                      }
-                      acc[h.stepCode].push(h);
-                      return acc;
-                    },
-                    {} as Record<string, WorkflowHistoryResponse[]>
-                  );
-
-                  // Convert steps to display format
-                  const steps = workflowSteps.map((step) => ({
-                    id: step.id,
-                    label: step.name,
-                    description: step.description || "",
-                    icon: getIconForStepCode(step.code),
-                    orderIndex: step.orderIndex,
-                    code: step.code,
-                  }));
-
-                  return (
-                    <div className="space-y-4">
-                      {steps.map((step) => {
-                        const hasHistory = step.code ? completedStepCodes.has(step.code) : false;
-                        const isCompleted = hasHistory || step.orderIndex < selectedRequest.currentStep;
-                        const isCurrent = step.orderIndex === selectedRequest.currentStep;
-                        const StepIcon = step.icon;
-                        const stepHistories = step.code ? historyByStepCode[step.code] || [] : [];
-
-                        return (
-                          <div key={step.id} className="flex items-start gap-4">
-                            <div className="flex flex-col items-center">
-                              <div
-                                className={`rounded-full p-2 ${
-                                  isCompleted
-                                    ? "bg-green-100 text-green-600"
-                                    : isCurrent
-                                    ? "bg-blue-100 text-blue-600"
-                                    : "bg-gray-100 text-gray-400"
-                                }`}
-                              >
-                                {isCompleted ? (
-                                  <CheckCircle2 className="h-5 w-5" />
-                                ) : isCurrent ? (
-                                  <StepIcon className="h-5 w-5" />
-                                ) : (
-                                  <Circle className="h-5 w-5" />
-                                )}
-                              </div>
-                              {step.orderIndex < steps.length && (
-                                <div
-                                  className={`w-0.5 h-12 ${
-                                    isCompleted ? "bg-green-200" : "bg-gray-200"
-                                  }`}
-                                />
-                              )}
-                            </div>
-                            <div className="flex-1 pb-8">
-                              <h4
-                                className={`font-medium ${
-                                  isCurrent ? "text-blue-600" : ""
-                                }`}
-                              >
-                                {step.label}
-                              </h4>
-                              <p className="text-sm text-muted-foreground">
-                                {step.description}
-                              </p>
-                              {stepHistories.length > 0 && (
-                                <div className="mt-2 space-y-1">
-                                  {stepHistories.map((history) => (
-                                    <p key={history.id} className="text-xs text-muted-foreground">
-                                      <span className="font-medium">
-                                        {history.actionDate
-                                          ? new Date(history.actionDate).toLocaleString("vi-VN")
-                                          : ""}
-                                      </span>
-                                      {history.comments && (
-                                        <>
-                                          {" — "}
-                                          {history.comments}
-                                        </>
-                                      )}
-                                    </p>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  );
-                })()}
-              </div>
-            </div>
-          )}
-
-          {workflowSteps.length === 0 && (
-            <p className="text-sm text-muted-foreground text-center py-8">
-              Đang tải thông tin quy trình...
-            </p>
-          )}
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsWorkflowDialogOpen(false)}>
-              Đóng
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

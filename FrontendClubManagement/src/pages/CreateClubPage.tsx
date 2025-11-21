@@ -16,13 +16,14 @@ import {
   type ClubCreationFinalFormResponse,
   type ClubCreationStepResponse,
   type WorkflowHistoryResponse,
+  type ClubCategory,
 } from "@/api/clubCreation";
 import { Button } from "@/components/ui/button";
 import { Card} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { FileText, Upload, Send, Trash2, Edit, Calendar } from "lucide-react";
+import { FileText, Upload, Send, Trash2, Edit, Calendar, Eye, Download } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -31,6 +32,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 // Helper function to map BE status to FE status
 const mapStatusToFE = (status: string): ClubRequest["status"] => {
@@ -45,7 +53,7 @@ const mapStatusToFE = (status: string): ClubRequest["status"] => {
     PROPOSAL_REJECTED: "revision_required",
     PROPOSAL_APPROVED: "documents_submitted",
     DEFENSE_SCHEDULE_PROPOSED: "defense_scheduled",
-    DEFENSE_SCHEDULE_APPROVED: "defense_scheduled",
+    DEFENSE_SCHEDULE_APPROVED: "defense_schedule_approved",
     DEFENSE_SCHEDULE_REJECTED: "revision_required",
     DEFENSE_SCHEDULED: "defense_scheduled",
     DEFENSE_COMPLETED: "defense_completed",
@@ -107,6 +115,7 @@ const convertToClubRequest = (
     clubName: response.clubName,
     clubCode: response.clubCode,
     submittedDate: response.sendDate || response.createdAt,
+    rawStatus: response.status,
     status: mapStatusToFE(response.status),
     currentStep: getCurrentStep(response.status, steps),
     totalSteps: steps.length,
@@ -132,15 +141,19 @@ const CreateClubPage = () => {
   const [requestDetail, setRequestDetail] = useState<RequestEstablishmentResponse | null>(null);
   const [proposals, setProposals] = useState<import("@/api/clubCreation").ClubProposalResponse[]>([]);
   const [defenseSchedule, setDefenseSchedule] = useState<import("@/api/clubCreation").DefenseScheduleResponse | null>(null);
+  const [selectedProposal, setSelectedProposal] = useState<import("@/api/clubCreation").ClubProposalResponse | null>(null);
+  const [isProposalDetailDialogOpen, setIsProposalDetailDialogOpen] = useState(false);
 
   // Proposal form state
   const [proposalTitle, setProposalTitle] = useState("");
   const [proposalFile, setProposalFile] = useState<File | null>(null);
   const [proposalFileUrl, setProposalFileUrl] = useState("");
+  const [proposalNote, setProposalNote] = useState("");
 
   // Defense schedule form state
   const [defenseDate, setDefenseDate] = useState("");
   const [defenseTime, setDefenseTime] = useState("");
+  const [defenseEndTime, setDefenseEndTime] = useState("");
   const [defenseLocation, setDefenseLocation] = useState("");
   const [defenseMeetingLink, setDefenseMeetingLink] = useState("");
   const [defenseNotes, setDefenseNotes] = useState("");
@@ -149,8 +162,29 @@ const CreateClubPage = () => {
   const [finalFormTitle, setFinalFormTitle] = useState("");
   const [finalFormFile, setFinalFormFile] = useState<File | null>(null);
   const [finalFormFileUrl, setFinalFormFileUrl] = useState("");
+  const [finalFormNote, setFinalFormNote] = useState("");
   const [finalFormHistory, setFinalFormHistory] = useState<ClubCreationFinalFormResponse[]>([]);
   const [isFinalFormHistoryLoading, setIsFinalFormHistoryLoading] = useState(false);
+  const [clubCategories, setClubCategories] = useState<ClubCategory[]>([]);
+  const [isEditCategoriesLoading, setIsEditCategoriesLoading] = useState(false);
+
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        setIsEditCategoriesLoading(true);
+        const categories = await clubCreationApi.getClubCategories();
+        setClubCategories(categories);
+      } catch (error: any) {
+        toast.error("Không thể tải danh sách lĩnh vực", {
+          description: error.message || "Đã xảy ra lỗi",
+        });
+      } finally {
+        setIsEditCategoriesLoading(false);
+      }
+    };
+
+    fetchCategories();
+  }, []);
   const loadFinalForms = async (requestId: number) => {
     try {
       setIsFinalFormHistoryLoading(true);
@@ -281,6 +315,7 @@ const CreateClubPage = () => {
       clubCode: formData.clubCode,
         clubCategory: formData.category,
         description: formData.description,
+        activityObjectives: formData.targetMembers || undefined,
         expectedMemberCount: formData.expectedMemberCount,
         email: formData.email,
         phone: formData.phone,
@@ -350,6 +385,7 @@ const CreateClubPage = () => {
         clubCode: editingRequest.clubCode,
         clubCategory: editingRequest.clubCategory,
         description: editingRequest.description,
+        activityObjectives: editingRequest.activityObjectives,
         expectedMemberCount: editingRequest.expectedMemberCount,
         email: editingRequest.email,
         phone: editingRequest.phone,
@@ -383,15 +419,30 @@ const CreateClubPage = () => {
       return;
     }
 
+    if (!defenseTime) {
+      toast.error("Vui lòng chọn giờ bắt đầu bảo vệ!");
+      return;
+    }
+
+    if (!defenseEndTime) {
+      toast.error("Vui lòng chọn giờ kết thúc bảo vệ!");
+      return;
+    }
+
     // Combine date and time
-    const defenseDateTime = defenseTime 
-      ? `${defenseDate}T${defenseTime}:00`
-      : `${defenseDate}T09:00:00`; // Default to 9 AM if no time provided
+    const defenseDateTime = `${defenseDate}T${defenseTime}:00`;
+    const defenseEndDateTime = `${defenseDate}T${defenseEndTime}:00`;
+
+    if (new Date(defenseEndDateTime) <= new Date(defenseDateTime)) {
+      toast.error("Giờ kết thúc phải muộn hơn giờ bắt đầu!");
+      return;
+    }
 
     try {
       setIsLoading(true);
       await clubCreationApi.proposeDefenseSchedule(parseInt(selectedRequest.id), {
         defenseDate: defenseDateTime,
+        defenseEndDate: defenseEndDateTime,
         location: defenseLocation.trim(),
         meetingLink: defenseMeetingLink.trim() || undefined,
         notes: defenseNotes.trim() || undefined,
@@ -405,6 +456,7 @@ const CreateClubPage = () => {
       // Reset form
       setDefenseDate("");
       setDefenseTime("");
+      setDefenseEndTime("");
       setDefenseLocation("");
       setDefenseMeetingLink("");
       setDefenseNotes("");
@@ -437,18 +489,22 @@ const CreateClubPage = () => {
         {
           title: proposalTitle,
           fileUrl: proposalFileUrl || undefined,
+          comment: proposalNote.trim() || undefined,
         },
         proposalFile || undefined
       );
-      toast.success(
+      const proposalToastMessage =
         selectedRequest.status === "revision_required"
           ? "Đã nộp lại đề án thành công!"
-          : "Đã nộp đề án thành công!"
-      );
+          : selectedRequest.rawStatus === "PROPOSAL_SUBMITTED"
+          ? "Đã cập nhật đề án thành công!"
+          : "Đã nộp đề án thành công!";
+      toast.success(proposalToastMessage);
       setIsProposalDialogOpen(false);
       setProposalTitle("");
       setProposalFile(null);
       setProposalFileUrl("");
+      setProposalNote("");
       await loadRequests();
     } catch (error: any) {
       toast.error("Không thể nộp đề án", {
@@ -478,14 +534,20 @@ const CreateClubPage = () => {
         {
           title: finalFormTitle,
           fileUrl: finalFormFileUrl || undefined,
+          comment: finalFormNote.trim() || undefined,
         },
         finalFormFile || undefined
       );
-      toast.success("Đã nộp form cuối thành công!");
+      const finalFormToastMessage =
+        selectedRequest.rawStatus === "FINAL_FORM_SUBMITTED"
+          ? "Đã cập nhật form cuối thành công!"
+          : "Đã nộp form cuối thành công!";
+      toast.success(finalFormToastMessage);
       setIsFinalFormDialogOpen(false);
       setFinalFormTitle("");
       setFinalFormFile(null);
       setFinalFormFileUrl("");
+      setFinalFormNote("");
       await loadRequests();
     } catch (error: any) {
       toast.error("Không thể nộp form cuối", {
@@ -511,6 +573,7 @@ const CreateClubPage = () => {
       r.status === "pending_documents" ||
       r.status === "documents_submitted" ||
       r.status === "defense_scheduled" ||
+      r.status === "defense_schedule_approved" ||
       r.status === "defense_completed" ||
       r.status === "final_form_submitted" ||
       r.status === "revision_required"
@@ -648,6 +711,20 @@ const CreateClubPage = () => {
                               Nộp đề án
                             </Button>
                           )}
+                          {request.rawStatus === "PROPOSAL_SUBMITTED" && (
+                            <Button
+                              size="sm"
+                              className="flex-1"
+                              variant="outline"
+                              onClick={() => {
+                                setSelectedRequest(request);
+                                setIsProposalDialogOpen(true);
+                              }}
+                            >
+                              <FileText className="mr-2 h-4 w-4" />
+                              Cập nhật đề án
+                            </Button>
+                          )}
                           {/* Nộp lại đề án khi bị yêu cầu chỉnh sửa đề án (PROPOSAL_REJECTED - step PROPOSAL_REVIEW) */}
                           {request.status === "revision_required" && request.currentStep === 5 && (
                             <Button
@@ -685,7 +762,8 @@ const CreateClubPage = () => {
                                 : "Đề xuất lịch bảo vệ"}
                             </Button>
                           ) : null}
-                          {request.status === "defense_completed" && (
+                          {(request.status === "defense_completed" ||
+                            request.rawStatus === "FINAL_FORM_SUBMITTED") && (
                             <Button
                               size="sm"
                               className="flex-1"
@@ -695,7 +773,9 @@ const CreateClubPage = () => {
                               }}
                             >
                               <FileText className="mr-2 h-4 w-4" />
-                              Nộp form cuối
+                              {request.rawStatus === "FINAL_FORM_SUBMITTED"
+                                ? "Cập nhật form cuối"
+                                : "Nộp form cuối"}
                             </Button>
                           )}
                         </div>
@@ -766,6 +846,10 @@ const CreateClubPage = () => {
         proposals={proposals}
         defenseSchedule={defenseSchedule}
         finalForms={finalFormHistory}
+        onViewProposalDetail={(proposal) => {
+          setSelectedProposal(proposal);
+          setIsProposalDetailDialogOpen(true);
+        }}
       />
 
       {/* Edit request dialog */}
@@ -780,36 +864,172 @@ const CreateClubPage = () => {
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="clubName">Tên CLB *</Label>
-                  <Input
-                    id="clubName"
-                    value={editingRequest.clubName}
-                    onChange={(e) =>
-                      setEditingRequest({ ...editingRequest, clubName: e.target.value })
-                    }
-                  />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="clubName">Tên CLB *</Label>
+                    <Input
+                      id="clubName"
+                      value={editingRequest.clubName || ""}
+                      onChange={(e) =>
+                        setEditingRequest({ ...editingRequest, clubName: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="clubCode">Mã CLB *</Label>
+                    <Input
+                      id="clubCode"
+                      value={editingRequest.clubCode || ""}
+                      onChange={(e) =>
+                        setEditingRequest({ ...editingRequest, clubCode: e.target.value })
+                      }
+                    />
+                  </div>
                 </div>
+
                 <div className="space-y-2">
-                  <Label htmlFor="clubCode">Mã CLB *</Label>
-                  <Input
-                    id="clubCode"
-                    value={editingRequest.clubCode}
-                    onChange={(e) =>
-                      setEditingRequest({ ...editingRequest, clubCode: e.target.value })
+                  <Label htmlFor="clubCategory">Lĩnh vực hoạt động *</Label>
+                  <Select
+                    value={editingRequest.clubCategory || ""}
+                    onValueChange={(value) =>
+                      setEditingRequest({ ...editingRequest, clubCategory: value })
                     }
-                  />
+                  >
+                    <SelectTrigger>
+                      <SelectValue
+                        placeholder={
+                          isEditCategoriesLoading ? "Đang tải..." : "Chọn lĩnh vực"
+                        }
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {isEditCategoriesLoading ? (
+                        <div className="px-4 py-2 text-sm text-muted-foreground">
+                          Đang tải...
+                        </div>
+                      ) : clubCategories.length > 0 ? (
+                        clubCategories.map((category) => (
+                          <SelectItem key={category.id} value={category.categoryName}>
+                            {category.categoryName}
+                          </SelectItem>
+                        ))
+                      ) : (
+                        <div className="px-4 py-2 text-sm text-muted-foreground">
+                          Chưa có dữ liệu lĩnh vực
+                        </div>
+                      )}
+                    </SelectContent>
+                  </Select>
                 </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="description">Mô tả *</Label>
                   <Textarea
                     id="description"
-                    value={editingRequest.description}
+                    value={editingRequest.description || ""}
                     onChange={(e) =>
                       setEditingRequest({ ...editingRequest, description: e.target.value })
                     }
                     rows={4}
+                    placeholder="Mô tả hoạt động, mục tiêu của CLB..."
                   />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="activityObjectives">Đối tượng hướng tới *</Label>
+                  <Input
+                    id="activityObjectives"
+                    value={editingRequest.activityObjectives || ""}
+                    onChange={(e) =>
+                      setEditingRequest({ ...editingRequest, activityObjectives: e.target.value })
+                    }
+                    placeholder="VD: Sinh viên yêu thích lập trình, muốn phát triển kỹ năng coding"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="expectedMemberCount">Số lượng thành viên dự kiến *</Label>
+                    <Input
+                      id="expectedMemberCount"
+                      type="number"
+                      min="1"
+                      value={editingRequest.expectedMemberCount ?? ""}
+                      onChange={(e) =>
+                        setEditingRequest({
+                          ...editingRequest,
+                          expectedMemberCount: e.target.value
+                            ? parseInt(e.target.value, 10)
+                            : undefined,
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email liên hệ *</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      value={editingRequest.email || ""}
+                      onChange={(e) =>
+                        setEditingRequest({ ...editingRequest, email: e.target.value })
+                      }
+                      placeholder="club@fpt.edu.vn"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="phone">Số điện thoại *</Label>
+                    <Input
+                      id="phone"
+                      type="tel"
+                      value={editingRequest.phone || ""}
+                      onChange={(e) =>
+                        setEditingRequest({ ...editingRequest, phone: e.target.value })
+                      }
+                      placeholder="0123456789"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-muted-foreground">Người phụ trách</Label>
+                    <Input
+                      value={editingRequest.createdByFullName || ""}
+                      disabled
+                      className="bg-muted"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground">Mạng xã hội (không bắt buộc)</Label>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <Input
+                      placeholder="Facebook URL"
+                      value={editingRequest.facebookLink || ""}
+                      onChange={(e) =>
+                        setEditingRequest({ ...editingRequest, facebookLink: e.target.value })
+                      }
+                    />
+                    <Input
+                      placeholder="Instagram URL"
+                      value={editingRequest.instagramLink || ""}
+                      onChange={(e) =>
+                        setEditingRequest({
+                          ...editingRequest,
+                          instagramLink: e.target.value,
+                        })
+                      }
+                    />
+                    <Input
+                      placeholder="TikTok URL"
+                      value={editingRequest.tiktokLink || ""}
+                      onChange={(e) =>
+                        setEditingRequest({ ...editingRequest, tiktokLink: e.target.value })
+                      }
+                    />
+                  </div>
                 </div>
               </div>
               <DialogFooter>
@@ -833,6 +1053,7 @@ const CreateClubPage = () => {
             setProposalTitle("");
             setProposalFile(null);
             setProposalFileUrl("");
+            setProposalNote("");
             setSelectedRequest(null);
           }
         }}
@@ -842,11 +1063,15 @@ const CreateClubPage = () => {
             <DialogTitle>
               {selectedRequest?.status === "revision_required"
                 ? "Nộp lại đề án chi tiết"
+                : selectedRequest?.rawStatus === "PROPOSAL_SUBMITTED"
+                ? "Cập nhật đề án chi tiết"
                 : "Nộp đề án chi tiết"}
             </DialogTitle>
             <DialogDescription>
               {selectedRequest?.status === "revision_required"
                 ? "Vui lòng chỉnh sửa và nộp lại đề án theo yêu cầu của staff"
+                : selectedRequest?.rawStatus === "PROPOSAL_SUBMITTED"
+                ? "Bạn có thể cập nhật file đề án mới trước khi staff duyệt"
                 : "Upload file đề án (Word, Excel, PDF, PowerPoint)"}
             </DialogDescription>
           </DialogHeader>
@@ -878,6 +1103,19 @@ const CreateClubPage = () => {
                 placeholder="https://..."
               />
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="proposalNote">Ghi chú cho staff (không bắt buộc)</Label>
+              <Textarea
+                id="proposalNote"
+                value={proposalNote}
+                onChange={(e) => setProposalNote(e.target.value)}
+                placeholder="Ví dụ: Đã cập nhật phần kinh phí, vui lòng xem giúp em..."
+                rows={3}
+              />
+              <p className="text-xs text-muted-foreground">
+                Ghi chú sẽ được lưu trong lịch sử quy trình để staff hiểu rõ nội dung cập nhật.
+              </p>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsProposalDialogOpen(false)}>
@@ -887,6 +1125,8 @@ const CreateClubPage = () => {
               <Upload className="mr-2 h-4 w-4" />
               {selectedRequest?.status === "revision_required"
                 ? "Nộp lại đề án"
+                : selectedRequest?.rawStatus === "PROPOSAL_SUBMITTED"
+                ? "Cập nhật đề án"
                 : "Nộp đề án"}
             </Button>
           </DialogFooter>
@@ -902,6 +1142,7 @@ const CreateClubPage = () => {
             // Reset form when closing dialog
             setDefenseDate("");
             setDefenseTime("");
+            setDefenseEndTime("");
             setDefenseLocation("");
             setDefenseMeetingLink("");
             setDefenseNotes("");
@@ -923,7 +1164,7 @@ const CreateClubPage = () => {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="defenseDate">Ngày bảo vệ *</Label>
                 <Input
@@ -936,12 +1177,21 @@ const CreateClubPage = () => {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="defenseTime">Thời gian</Label>
+                <Label htmlFor="defenseTime">Giờ bắt đầu *</Label>
                 <Input
                   id="defenseTime"
                   type="time"
                   value={defenseTime}
                   onChange={(e) => setDefenseTime(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="defenseEndTime">Giờ kết thúc *</Label>
+                <Input
+                  id="defenseEndTime"
+                  type="time"
+                  value={defenseEndTime}
+                  onChange={(e) => setDefenseEndTime(e.target.value)}
                 />
               </div>
             </div>
@@ -951,17 +1201,8 @@ const CreateClubPage = () => {
                 id="defenseLocation"
                 value={defenseLocation}
                 onChange={(e) => setDefenseLocation(e.target.value)}
-                placeholder="VD: Phòng A101, Tòa nhà Alpha"
+                placeholder="VD: Phòng AL101, Tòa nhà Alpha"
                 required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="defenseMeetingLink">Link meeting (nếu có)</Label>
-              <Input
-                id="defenseMeetingLink"
-                value={defenseMeetingLink}
-                onChange={(e) => setDefenseMeetingLink(e.target.value)}
-                placeholder="https://meet.google.com/..."
               />
             </div>
             <div className="space-y-2">
@@ -990,12 +1231,30 @@ const CreateClubPage = () => {
       </Dialog>
 
       {/* Submit final form dialog */}
-      <Dialog open={isFinalFormDialogOpen} onOpenChange={setIsFinalFormDialogOpen}>
+      <Dialog
+        open={isFinalFormDialogOpen}
+        onOpenChange={(open) => {
+          setIsFinalFormDialogOpen(open);
+          if (!open) {
+            setFinalFormTitle("");
+            setFinalFormFile(null);
+            setFinalFormFileUrl("");
+            setFinalFormNote("");
+            setSelectedRequest(null);
+          }
+        }}
+      >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Nộp form cuối</DialogTitle>
+            <DialogTitle>
+              {selectedRequest?.rawStatus === "FINAL_FORM_SUBMITTED"
+                ? "Cập nhật form cuối"
+                : "Nộp form cuối"}
+            </DialogTitle>
             <DialogDescription>
-              Upload file form cuối (Word, Excel, PDF, PowerPoint)
+              {selectedRequest?.rawStatus === "FINAL_FORM_SUBMITTED"
+                ? "Bạn có thể thay thế file form cuối trước khi staff duyệt."
+                : "Upload file form cuối (Word, Excel, PDF, PowerPoint)."}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -1025,6 +1284,19 @@ const CreateClubPage = () => {
                 onChange={(e) => setFinalFormFileUrl(e.target.value)}
                 placeholder="https://..."
               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="finalFormNote">Ghi chú cho staff (không bắt buộc)</Label>
+              <Textarea
+                id="finalFormNote"
+                value={finalFormNote}
+                onChange={(e) => setFinalFormNote(e.target.value)}
+                placeholder="Ví dụ: Đã bổ sung chữ ký, vui lòng kiểm tra giúp em..."
+                rows={3}
+              />
+              <p className="text-xs text-muted-foreground">
+                Ghi chú sẽ hiển thị trong lịch sử quy trình để staff hiểu nội dung cập nhật.
+              </p>
             </div>
             <div className="space-y-2">
               <Label>Lịch sử form đã nộp</Label>
@@ -1077,9 +1349,102 @@ const CreateClubPage = () => {
             </Button>
             <Button onClick={handleSubmitFinalForm}>
               <Upload className="mr-2 h-4 w-4" />
-              Nộp form cuối
+              {selectedRequest?.rawStatus === "FINAL_FORM_SUBMITTED"
+                ? "Cập nhật form cuối"
+                : "Nộp form cuối"}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Proposal Detail Dialog */}
+      <Dialog open={isProposalDetailDialogOpen} onOpenChange={setIsProposalDetailDialogOpen}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          {selectedProposal && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="text-2xl">{selectedProposal.title}</DialogTitle>
+                <DialogDescription>
+                  Đề án chi tiết: {selectedRequest?.clubName}
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Tiêu đề</p>
+                    <p className="text-sm">{selectedProposal.title}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Ngày nộp</p>
+                    <p className="text-sm">
+                      {new Date(selectedProposal.createdAt).toLocaleDateString("vi-VN", {
+                        year: "numeric",
+                        month: "long",
+                        day: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </p>
+                  </div>
+                  {selectedProposal.fileUrl && (() => {
+                    // Kiểm tra extension của file
+                    const fileUrl = selectedProposal.fileUrl;
+                    const fileExtension = fileUrl.split('.').pop()?.toLowerCase() || '';
+                    
+                    // Hàm để mở file trực tiếp trong trình duyệt
+                    const openFileInBrowser = () => {
+                      if (fileExtension === 'pdf') {
+                        // PDF có thể mở trực tiếp
+                        window.open(fileUrl, '_blank');
+                      } else if (['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'].includes(fileExtension)) {
+                        // File Office: dùng Office Online Viewer
+                        const viewerUrl = `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(fileUrl)}`;
+                        window.open(viewerUrl, '_blank');
+                      } else {
+                        // File khác: thử mở trực tiếp
+                        window.open(fileUrl, '_blank');
+                      }
+                    };
+                    
+                    return (
+                      <div>
+                        <p className="text-sm font-medium text-muted-foreground mb-2">File đề án</p>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            onClick={openFileInBrowser}
+                          >
+                            <Eye className="mr-2 h-4 w-4" />
+                            Xem file
+                          </Button>
+                          <Button
+                            variant="outline"
+                            onClick={() => {
+                              const link = document.createElement("a");
+                              link.href = selectedProposal.fileUrl!;
+                              link.download = selectedProposal.title || "proposal";
+                              link.target = "_blank";
+                              link.click();
+                            }}
+                          >
+                            <Download className="mr-2 h-4 w-4" />
+                            Tải về
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setIsProposalDetailDialogOpen(false)}>
+                  Đóng
+                </Button>
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
     </div>

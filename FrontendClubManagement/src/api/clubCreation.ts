@@ -98,11 +98,13 @@ export interface ClubProposalResponse {
 export interface SubmitProposalRequest {
   title: string;
   fileUrl?: string;
+  comment?: string;
 }
 
 export interface DefenseScheduleResponse {
   id: number;
   defenseDate: string;
+  defenseEndDate?: string;
   location?: string;
   meetingLink?: string;
   panelMembers?: string;
@@ -120,6 +122,7 @@ export interface DefenseScheduleResponse {
 
 export interface ProposeDefenseScheduleRequest {
   defenseDate: string;
+  defenseEndDate: string;
   location?: string;
   meetingLink?: string;
   notes?: string;
@@ -145,6 +148,7 @@ export interface ClubCreationFinalFormResponse {
 export interface SubmitFinalFormRequest {
   title: string;
   fileUrl?: string;
+  comment?: string;
 }
 
 export interface ClubCategory {
@@ -194,6 +198,10 @@ export interface AssignRequestEstablishmentRequest {
 
 export interface RejectContactRequest {
   reason?: string;
+}
+
+export interface RequestProposalPayload {
+  comment?: string;
 }
 
 export interface RejectProposalRequest {
@@ -305,6 +313,9 @@ export const clubCreationApi = {
     if (data.fileUrl) {
       formData.append("fileUrl", data.fileUrl);
     }
+    if (data.comment) {
+      formData.append("comment", data.comment);
+    }
     if (file) {
       formData.append("file", file);
     }
@@ -392,6 +403,9 @@ export const clubCreationApi = {
     formData.append("title", data.title);
     if (data.fileUrl) {
       formData.append("fileUrl", data.fileUrl);
+    }
+    if (data.comment) {
+      formData.append("comment", data.comment);
     }
     if (file) {
       formData.append("file", file);
@@ -540,10 +554,16 @@ export const clubCreationStaffApi = {
 
   // Request proposal
   requestProposal: async (
-    requestId: number
+    requestId: number,
+    data?: RequestProposalPayload
   ): Promise<RequestEstablishmentResponse> => {
+    const payload =
+      data && data.comment && data.comment.trim().length > 0
+        ? { comment: data.comment.trim() }
+        : {};
     const res = await axiosClient.post<RequestEstablishmentResponse>(
-      `/staff/club-creation/requests/${requestId}/request-proposal`
+      `/staff/club-creation/requests/${requestId}/request-proposal`,
+      payload
     );
     if (res.code !== 200) throw new Error(res.message || "Failed to request proposal");
     return res.data!;

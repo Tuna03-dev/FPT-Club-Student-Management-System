@@ -4,6 +4,7 @@ import com.sep490.backendclubmanagement.dto.request.AssignRequestEstablishmentRe
 import com.sep490.backendclubmanagement.dto.request.CreateRequestEstablishmentRequest;
 import com.sep490.backendclubmanagement.dto.request.CompleteDefenseRequest;
 import com.sep490.backendclubmanagement.dto.request.ProposeDefenseScheduleRequest;
+import com.sep490.backendclubmanagement.dto.request.RequestProposalRequest;
 import com.sep490.backendclubmanagement.dto.request.RejectContactRequest;
 import com.sep490.backendclubmanagement.dto.request.RejectDefenseScheduleRequest;
 import com.sep490.backendclubmanagement.dto.request.RejectProposalRequest;
@@ -410,7 +411,7 @@ public class RequestEstablishmentService {
     }
 
     @Transactional
-    public RequestEstablishmentResponse requestProposal(Long requestId, Long staffId) throws AppException {
+    public RequestEstablishmentResponse requestProposal(Long requestId, Long staffId, RequestProposalRequest request) throws AppException {
         // Get request
         RequestEstablishment requestEstablishment = requestEstablishmentRepository.findDetailById(requestId)
                 .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND, "Không tìm thấy yêu cầu thành lập CLB"));
@@ -431,8 +432,11 @@ public class RequestEstablishmentService {
         requestEstablishmentRepository.flush();
 
         try {
+            String comment = (request != null && request.getComment() != null && !request.getComment().trim().isEmpty())
+                    ? request.getComment().trim()
+                    : "Staff đã yêu cầu sinh viên nộp đề án chi tiết";
             // Tạo history với step code PROPOSAL_REQUIRED để đánh dấu staff đã yêu cầu nộp đề án
-            workflowHistoryService.createWorkflowHistory(requestEstablishment.getId(), staffId, "PROPOSAL_REQUIRED", "Staff đã yêu cầu sinh viên nộp đề án chi tiết");
+            workflowHistoryService.createWorkflowHistory(requestEstablishment.getId(), staffId, "PROPOSAL_REQUIRED", comment);
         } catch (Exception e) {
             log.error("Failed to create workflow history, but continuing: {}", e.getMessage());
         }
@@ -456,11 +460,13 @@ public class RequestEstablishmentService {
             throw new AppException(ErrorCode.FORBIDDEN, "Bạn không có quyền nộp đề án cho yêu cầu này");
         }
 
-        // Check status: only PROPOSAL_REQUIRED or PROPOSAL_REJECTED can submit proposal
+        // Check status: allow submit when staff already requested proposal, student is resubmitting after rejection,
+        // or student wants to update proposal while waiting for approval
         RequestEstablishmentStatus previousStatus = requestEstablishment.getStatus();
         if (previousStatus != RequestEstablishmentStatus.PROPOSAL_REQUIRED &&
-            previousStatus != RequestEstablishmentStatus.PROPOSAL_REJECTED) {
-            throw new AppException(ErrorCode.INVALID_INPUT, "Chỉ có thể nộp đề án khi trạng thái là PROPOSAL_REQUIRED hoặc PROPOSAL_REJECTED");
+            previousStatus != RequestEstablishmentStatus.PROPOSAL_REJECTED &&
+            previousStatus != RequestEstablishmentStatus.PROPOSAL_SUBMITTED) {
+            throw new AppException(ErrorCode.INVALID_INPUT, "Chỉ có thể nộp đề án khi trạng thái là PROPOSAL_REQUIRED, PROPOSAL_REJECTED hoặc PROPOSAL_SUBMITTED (chờ staff duyệt)");
         }
 
         // Validate: phải có file hoặc fileUrl
@@ -515,6 +521,8 @@ public class RequestEstablishmentService {
                 // Phân biệt nộp mới vs nộp lại để hiển thị rõ hơn trên workflow
                 if (previousStatus == RequestEstablishmentStatus.PROPOSAL_REJECTED) {
                     comments = "Sinh viên đã nộp lại đề án chi tiết";
+                } else if (previousStatus == RequestEstablishmentStatus.PROPOSAL_SUBMITTED) {
+                    comments = "Sinh viên đã cập nhật đề án chi tiết";
                 } else {
                     comments = "Sinh viên đã nộp đề án chi tiết";
                 }
@@ -776,6 +784,10 @@ public class RequestEstablishmentService {
             throw new AppException(ErrorCode.INVALID_INPUT, "Chỉ có thể đề xuất lịch bảo vệ khi trạng thái là PROPOSAL_APPROVED hoặc DEFENSE_SCHEDULE_REJECTED");
         }
 
+        if (request.getDefenseEndDate() == null || !request.getDefenseEndDate().isAfter(request.getDefenseDate())) {
+            throw new AppException(ErrorCode.INVALID_INPUT, "Thời gian kết thúc bảo vệ phải sau thời gian bắt đầu");
+        }
+
         // Check if defense schedule already exists
         DefenseSchedule existingSchedule = defenseScheduleRepository.findByRequestEstablishmentId(requestId).orElse(null);
         
@@ -783,6 +795,7 @@ public class RequestEstablishmentService {
         if (existingSchedule != null) {
             // Update existing schedule
             existingSchedule.setDefenseDate(request.getDefenseDate());
+            existingSchedule.setDefenseEndDate(request.getDefenseEndDate());
             existingSchedule.setLocation(request.getLocation());
             existingSchedule.setMeetingLink(request.getMeetingLink());
             existingSchedule.setNotes(request.getNotes());
@@ -793,14 +806,14 @@ public class RequestEstablishmentService {
             // Create new schedule
             schedule = DefenseSchedule.builder()
                     .defenseDate(request.getDefenseDate())
+                    .defenseEndDate(request.getDefenseEndDate())
                     .location(request.getLocation())
                     .meetingLink(request.getMeetingLink())
                     .notes(request.getNotes())
-                    .result(DefenseScheduleStatus.PROPOSED)
+                    .result(null)
                     .requestEstablishment(requestEstablishment)
                     .build();
             schedule = defenseScheduleRepository.save(schedule);
-            log.info("Created new defense schedule {} for request {}", schedule.getId(), requestId);
         }
 
         // Update request status
@@ -879,8 +892,13 @@ public class RequestEstablishmentService {
             throw new AppException(ErrorCode.INVALID_INPUT, "Không thể cập nhật lịch bảo vệ đã được xác nhận");
         }
 
+        if (request.getDefenseEndDate() == null || !request.getDefenseEndDate().isAfter(request.getDefenseDate())) {
+            throw new AppException(ErrorCode.INVALID_INPUT, "Thời gian kết thúc bảo vệ phải sau thời gian bắt đầu");
+        }
+
         // Update schedule
         schedule.setDefenseDate(request.getDefenseDate());
+        schedule.setDefenseEndDate(request.getDefenseEndDate());
         schedule.setLocation(request.getLocation());
         schedule.setMeetingLink(request.getMeetingLink());
         schedule.setNotes(request.getNotes());
@@ -1151,9 +1169,11 @@ public class RequestEstablishmentService {
             throw new AppException(ErrorCode.FORBIDDEN, "Bạn không có quyền nộp form cuối cho yêu cầu này");
         }
 
-        // Check status: only DEFENSE_COMPLETED can submit final form
-        if (requestEstablishment.getStatus() != RequestEstablishmentStatus.DEFENSE_COMPLETED) {
-            throw new AppException(ErrorCode.INVALID_INPUT, "Chỉ có thể nộp form cuối khi trạng thái là DEFENSE_COMPLETED");
+        RequestEstablishmentStatus previousStatus = requestEstablishment.getStatus();
+        // Check status: DEFENSE_COMPLETED (first submission) or FINAL_FORM_SUBMITTED (update before approval)
+        if (previousStatus != RequestEstablishmentStatus.DEFENSE_COMPLETED &&
+            previousStatus != RequestEstablishmentStatus.FINAL_FORM_SUBMITTED) {
+            throw new AppException(ErrorCode.INVALID_INPUT, "Chỉ có thể nộp form cuối khi trạng thái là DEFENSE_COMPLETED hoặc FINAL_FORM_SUBMITTED");
         }
 
         // Validate: phải có file hoặc fileUrl
@@ -1191,20 +1211,24 @@ public class RequestEstablishmentService {
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND, "Không tìm thấy người dùng"));
 
         // Create formData JSON: {"title": "...", "fileUrl": "..."}
-        String formDataJson = String.format("{\"title\":\"%s\",\"fileUrl\":\"%s\"}", 
-                request.getTitle().replace("\"", "\\\""), 
+        String formDataJson = String.format("{\"title\":\"%s\",\"fileUrl\":\"%s\"}",
+                request.getTitle().replace("\"", "\\\""),
                 fileUrl != null ? fileUrl.replace("\"", "\\\"") : "");
 
-        // Luôn tạo final form mới (nhiều version) thay vì update form cũ
-        ClubCreationFinalForm finalForm = ClubCreationFinalForm.builder()
-                .formData(formDataJson)
-                .status("SUBMITTED")
-                .submittedAt(LocalDateTime.now())
-                .submittedBy(submittedBy)
-                .requestEstablishment(requestEstablishment)
-                .build();
+        ClubCreationFinalForm finalForm = clubCreationFinalFormRepository.findByRequestEstablishmentId(requestId).orElse(null);
+        if (finalForm == null) {
+            finalForm = ClubCreationFinalForm.builder()
+                    .requestEstablishment(requestEstablishment)
+                    .build();
+        }
+        finalForm.setFormData(formDataJson);
+        finalForm.setStatus("SUBMITTED");
+        finalForm.setSubmittedAt(LocalDateTime.now());
+        finalForm.setSubmittedBy(submittedBy);
+        finalForm.setReviewedAt(null);
+        finalForm.setReviewedBy(null);
         finalForm = clubCreationFinalFormRepository.save(finalForm);
-        log.info("Created new final form version {} for request {}", finalForm.getId(), requestId);
+        log.info("{} final form for request {}", previousStatus == RequestEstablishmentStatus.FINAL_FORM_SUBMITTED ? "Updated" : "Created new", requestId);
 
         // Update request status
         requestEstablishment.setStatus(RequestEstablishmentStatus.FINAL_FORM_SUBMITTED);
@@ -1216,7 +1240,11 @@ public class RequestEstablishmentService {
         try {
             String comments = request.getComment();
             if (comments == null || comments.trim().isEmpty()) {
-                comments = "Sinh viên đã nộp form cuối: " + request.getTitle();
+                if (previousStatus == RequestEstablishmentStatus.FINAL_FORM_SUBMITTED) {
+                    comments = "Sinh viên đã cập nhật form cuối: " + request.getTitle();
+                } else {
+                    comments = "Sinh viên đã nộp form cuối: " + request.getTitle();
+                }
             }
             workflowHistoryService.createWorkflowHistory(
                     requestEstablishment.getId(),
@@ -1444,6 +1472,7 @@ public class RequestEstablishmentService {
         return DefenseScheduleResponse.builder()
                 .id(schedule.getId())
                 .defenseDate(schedule.getDefenseDate())
+                .defenseEndDate(schedule.getDefenseEndDate())
                 .location(schedule.getLocation())
                 .meetingLink(schedule.getMeetingLink())
                 .panelMembers(schedule.getPanelMembers())
