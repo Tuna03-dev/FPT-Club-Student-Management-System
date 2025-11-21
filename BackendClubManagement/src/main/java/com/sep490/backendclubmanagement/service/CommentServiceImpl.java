@@ -3,6 +3,8 @@ package com.sep490.backendclubmanagement.service;
 import com.sep490.backendclubmanagement.dto.response.CommentDTO;
 import com.sep490.backendclubmanagement.dto.websocket.CommentWebSocketPayload;
 import com.sep490.backendclubmanagement.entity.Comment;
+import com.sep490.backendclubmanagement.entity.NotificationPriority;
+import com.sep490.backendclubmanagement.entity.NotificationType;
 import com.sep490.backendclubmanagement.entity.Post;
 import com.sep490.backendclubmanagement.entity.User;
 import com.sep490.backendclubmanagement.exception.AppException;
@@ -28,6 +30,7 @@ public class CommentServiceImpl implements ICommentService {
     private final UserService userService;      // đã có sẵn trong project bạn
     private final CommentMapper commentMapper;
     private final WebSocketService webSocketService;
+    private final NotificationService notificationService;
     // 👈 Inject mapper mới tách
 
     /* ====== CREATE ====== */
@@ -102,16 +105,94 @@ public class CommentServiceImpl implements ICommentService {
                         payload
                 );
             }
-            
-            // Gửi notification đến author của post (nếu có)
-            if (post.getCreatedBy() != null && post.getCreatedBy().getEmail() != null) {
-                // Có thể gửi notification riêng nếu cần
-            }
         } catch (Exception e) {
             // Log error nhưng không throw để không ảnh hưởng đến việc tạo comment
             System.err.println("Failed to send WebSocket notification: " + e.getMessage());
         }
         
+        // ✅ Gửi notification sau khi tạo comment thành công
+        try {
+            if (parent != null) {
+                // Trường hợp REPLY comment: gửi notification cho người được reply
+                User parentAuthor = parent.getUser();
+                if (parentAuthor != null && !parentAuthor.getId().equals(userId)) {
+                    // Không gửi notification cho chính mình
+                    String title = user.getFullName() + " đã trả lời bình luận của bạn";
+                    String message = "\"" + content.trim() + "\"";
+                    String actionUrl = "/posts/" + postId + "/comments/" + saved.getId();
+
+                    notificationService.sendToUser(
+                            parentAuthor.getId(),
+                            userId,
+                            title,
+                            message,
+                            NotificationType.POST_REPLIED,
+                            NotificationPriority.NORMAL,
+                            actionUrl,
+                            post.getClub() != null ? post.getClub().getId() : null,
+                            null, // relatedNewsId
+                            null, // relatedTeamId
+                            null, // relatedRequestId
+                            null  // relatedEventId
+                    );
+                }
+
+                // ✅ BONUS: Cũng gửi cho tác giả bài post (nếu khác người được reply và khác người comment)
+                User postAuthor = post.getCreatedBy();
+                if (postAuthor != null && 
+                    !postAuthor.getId().equals(userId) && 
+                    parentAuthor != null &&
+                    !postAuthor.getId().equals(parentAuthor.getId())) {
+
+                    String title = user.getFullName() + " đã bình luận trong bài viết của bạn";
+                    String message = "\"" + content.trim() + "\"";
+                    String actionUrl = "/posts/" + postId + "/comments/" + saved.getId();
+
+                    notificationService.sendToUser(
+                            postAuthor.getId(),
+                            userId,
+                            title,
+                            message,
+                            NotificationType.POST_COMMENTED,
+                            NotificationPriority.NORMAL,
+                            actionUrl,
+                            post.getClub() != null ? post.getClub().getId() : null,
+                            null, // relatedNewsId
+                            null, // relatedTeamId
+                            null, // relatedRequestId
+                            null  // relatedEventId
+                    );
+                }
+            } else {
+                // Trường hợp COMMENT mới (không phải reply): gửi notification cho tác giả bài post
+                User postAuthor = post.getCreatedBy();
+                if (postAuthor != null && !postAuthor.getId().equals(userId)) {
+                    // Không gửi notification cho chính mình
+                    String title = user.getFullName() + " đã bình luận trong bài viết của bạn";
+                    String message = "\"" + content.trim() + "\"";
+                    String actionUrl = "/posts/" + postId + "/comments/" + saved.getId();
+
+                    notificationService.sendToUser(
+                            postAuthor.getId(),
+                            userId,
+                            title,
+                            message,
+                            NotificationType.POST_COMMENTED,
+                            NotificationPriority.NORMAL,
+                            actionUrl,
+                            post.getClub() != null ? post.getClub().getId() : null,
+                            null, // relatedNewsId
+                            null, // relatedTeamId
+                            null, // relatedRequestId
+                            null  // relatedEventId
+                    );
+                }
+            }
+        } catch (Exception e) {
+            // Log error nhưng không throw để không ảnh hưởng đến việc tạo comment
+            System.err.println("Failed to send notification: " + e.getMessage());
+        }
+
         return commentDTO; // 👈 dùng mapper
     }
 

@@ -1,3 +1,4 @@
+// src/layouts/ClubLayout.tsx
 import {
   Home,
   Users,
@@ -7,7 +8,6 @@ import {
   Menu,
   Shield,
   FileText,
-  Clock,
   Briefcase,
   DollarSign,
   Wallet,
@@ -48,6 +48,7 @@ import useMyClubs from "@/hooks/useMyClubs";
 import { PermissionContext } from "@/contexts/PermissionContext";
 import { useClubPermissions } from "@/hooks/useClubPermissions";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
+import { useWebSocket } from "@/hooks/useWebSocket"; // 🔥 thêm
 
 const navItems = [
   { key: "dashboard", url: "", icon: Home },
@@ -57,7 +58,6 @@ const navItems = [
   { key: "notifications", url: "/notifications", icon: Bell },
 ];
 
-// Define permission levels for each menu item
 type PermissionLevel = "CLUB_OFFICER" | "TEAM_OFFICER" | "MEMBER";
 
 interface ManagementItem {
@@ -125,13 +125,6 @@ const managementItems: ManagementItem[] = [
     label: "Quản lý tài chính",
     requiredRole: "CLUB_OFFICER",
   },
-  {
-    key: "pending_requests",
-    url: "/pending-requests",
-    icon: Clock,
-    label: "Yêu cầu chờ duyệt",
-    requiredRole: "CLUB_OFFICER",
-  },
 ];
 
 const managementColors: Record<string, string> = {
@@ -160,6 +153,14 @@ export const ClubLayout = () => {
   const { clubId = "0" } = useParams();
   const numericClubId = Number(clubId);
   const validClubId = Number.isFinite(numericClubId) && numericClubId > 0;
+
+  // 🔥 Lấy token cho WebSocket
+  const token =
+    typeof window !== "undefined"
+      ? localStorage.getItem("accessToken") || null
+      : null;
+
+  const { isConnected, subscribeToClub } = useWebSocket(token);
 
   // Load clubs list
   const shouldLoadMyClubs = isAuthenticated && !!user;
@@ -195,7 +196,34 @@ export const ClubLayout = () => {
     data: teams,
     loading: teamsLoading,
     error: teamsError,
+    refetch: refetchTeams, // 🔥 dùng cho realtime
   } = useTeams(validClubId ? numericClubId : undefined);
+
+  // 🔥 Realtime: lắng nghe TEAM trên kênh club
+  useEffect(() => {
+    if (!validClubId || !isConnected) return;
+
+    const off = subscribeToClub(numericClubId, (msg) => {
+      if (msg.type !== "TEAM") return;
+
+      if (
+        msg.action === "CREATED" ||
+        msg.action === "UPDATED" ||
+        msg.action === "DELETED"
+      ) {
+        refetchTeams();
+
+        // tuỳ bạn, có thể không toast
+        // toast.success("Danh sách phòng ban đã được cập nhật.", {
+        //   duration: 2000,
+        // });
+      }
+    });
+
+    return () => {
+      off?.();
+    };
+  }, [validClubId, numericClubId, isConnected, subscribeToClub, refetchTeams]);
 
   // ===== Check permissions from localStorage (unified approach) =====
   const {

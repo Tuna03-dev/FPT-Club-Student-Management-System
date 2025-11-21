@@ -12,6 +12,7 @@ public enum NotificationType {
     POST_PENDING_APPROVAL,
     POST_LIKED,
     POST_COMMENTED,
+    POST_REPLIED,
 
     // News related
     NEWS_PUBLISHED,
@@ -52,7 +53,13 @@ public enum NotificationType {
     FEE_PAID,
     FEE_OVERDUE,
     FEE_REMINDER,
+    FEE_PUBLISHED,
 
+    // Member management
+    CLUB_TEAM_ASSIGNED,
+    CLUB_MEMBER_STATUS_UPDATED,
+    CLUB_MEMBER_REMOVED,
+    TEAM_ASSIGNMENT,
     // System related
     SYSTEM_ANNOUNCEMENT,
     SYSTEM_WARNING,
@@ -61,6 +68,9 @@ public enum NotificationType {
     // Others
     MENTION,
     FOLLOW,
-    GENERAL
+    GENERAL,
+
+
+    TEAM_ASSIGNMENT
 }
 

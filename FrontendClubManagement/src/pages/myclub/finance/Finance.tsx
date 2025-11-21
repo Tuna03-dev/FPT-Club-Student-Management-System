@@ -22,6 +22,9 @@ import transactionService, {
   type CreateIncomeTransactionRequest,
   type CreateOutcomeTransactionRequest,
 } from "@/services/transactionService";
+import financeService, {
+  type FinanceSummaryResponse,
+} from "@/services/financeService";
 
 const PAGE_SIZE = 10;
 
@@ -63,7 +66,14 @@ const convertOutcomeToTransaction = (
   description: outcome.description,
   transactionDate: outcome.transactionDate,
   type: "OUTCOME",
-  status: outcome.status,
+  status:
+    outcome.status === "SUCCESS" || outcome.status === "COMPLETED"
+      ? "COMPLETED"
+      : outcome.status === "PENDING"
+      ? "PENDING"
+      : outcome.status === "FAILED"
+      ? "FAILED"
+      : "CANCELLED",
   recipient: outcome.recipient,
   purpose: outcome.purpose,
   receiptUrl: outcome.receiptUrl ?? undefined,
@@ -103,6 +113,25 @@ export default function Finance() {
   const [activeTransactionTab, setActiveTransactionTab] = useState<
     "INCOME" | "OUTCOME"
   >("INCOME");
+  const [financeSummary, setFinanceSummary] =
+    useState<FinanceSummaryResponse | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+
+  const fetchFinanceSummary = useCallback(async () => {
+    if (!Number.isFinite(numericClubId) || numericClubId <= 0) return;
+    try {
+      setSummaryLoading(true);
+      const res = await financeService.getFinanceSummary(numericClubId);
+      if (res.code === 200 && res.data) {
+        setFinanceSummary(res.data);
+      }
+    } catch (e) {
+      console.error("Failed to fetch finance summary", e);
+      toast.error("Không thể tải tổng quan tài chính");
+    } finally {
+      setSummaryLoading(false);
+    }
+  }, [numericClubId]);
 
   const fetchIncomeTransactions = useCallback(
     async (page: number = 0) => {
@@ -226,6 +255,10 @@ export default function Finance() {
   }, [numericClubId]);
 
   useEffect(() => {
+    void fetchFinanceSummary();
+  }, [fetchFinanceSummary]);
+
+  useEffect(() => {
     void fetchIncomeTransactions(0);
   }, [fetchIncomeTransactions]);
 
@@ -271,6 +304,7 @@ export default function Finance() {
         );
         await fetchOutcomeTransactions(outcomePage);
       }
+      await fetchFinanceSummary();
       toast.success("Đã xóa giao dịch");
     } catch (e) {
       console.error("Failed to delete transaction", e);
@@ -310,6 +344,7 @@ export default function Finance() {
         );
         await fetchOutcomeTransactions(outcomePage);
       }
+      await fetchFinanceSummary();
       toast.success("Đã duyệt giao dịch thành công");
     } catch (e) {
       console.error("Failed to approve transaction", e);
@@ -337,6 +372,7 @@ export default function Finance() {
         );
         await fetchOutcomeTransactions(outcomePage);
       }
+      await fetchFinanceSummary();
       toast.warning("Đã hủy giao dịch");
     } catch (e) {
       console.error("Failed to cancel transaction", e);
@@ -350,6 +386,7 @@ export default function Finance() {
     try {
       await transactionService.createIncomeTransaction(numericClubId, data);
       await fetchIncomeTransactions(incomePage);
+      await fetchFinanceSummary();
     } catch (error) {
       console.error("Failed to create income transaction:", error);
       throw error;
@@ -362,6 +399,7 @@ export default function Finance() {
     try {
       await transactionService.createOutcomeTransaction(numericClubId, data);
       await fetchOutcomeTransactions(outcomePage);
+      await fetchFinanceSummary();
     } catch (error) {
       console.error("Failed to create outcome transaction:", error);
       throw error;
@@ -375,6 +413,7 @@ export default function Finance() {
     try {
       await transactionService.updateIncomeTransaction(numericClubId, id, data);
       await fetchIncomeTransactions(incomePage);
+      await fetchFinanceSummary();
     } catch (error) {
       console.error("Failed to update income transaction:", error);
       throw error;
@@ -392,6 +431,7 @@ export default function Finance() {
         data
       );
       await fetchOutcomeTransactions(outcomePage);
+      await fetchFinanceSummary();
     } catch (error) {
       console.error("Failed to update outcome transaction:", error);
       throw error;
@@ -409,13 +449,6 @@ export default function Finance() {
     });
   };
 
-  const totalIncome = incomeTransactions
-    .filter((t) => t.status === "COMPLETED")
-    .reduce((sum, t) => sum + t.amount, 0);
-  const totalExpense = outcomeTransactions
-    .filter((t) => t.status === "COMPLETED")
-    .reduce((sum, t) => sum + t.amount, 0);
-
   return (
     <div className="min-h-screen bg-background p-6">
       <div className="max-w-7xl mx-auto space-y-6">
@@ -429,9 +462,11 @@ export default function Finance() {
         </div>
 
         <SummaryCards
-          totalIncome={totalIncome}
-          totalExpense={totalExpense}
-          loading={incomeLoading || outcomeLoading}
+          totalBudget={financeSummary?.balance ?? 0}
+          totalIncome={financeSummary?.totalIncome ?? 0}
+          totalExpense={financeSummary?.totalExpense ?? 0}
+          remaining={financeSummary?.remaining ?? 0}
+          loading={summaryLoading}
         />
 
         <Tabs

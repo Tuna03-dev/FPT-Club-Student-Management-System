@@ -60,6 +60,8 @@ interface PostCardProps {
   teamId?: number;
   teamName?: string;
   isTeamPost?: boolean; // true if post belongs to a specific team
+  // Notification scroll
+  highlightCommentId?: string; // Auto-open comments and highlight this comment
 }
 
 export const PostCard = ({
@@ -78,6 +80,7 @@ export const PostCard = ({
   teamId,
   teamName,
   isTeamPost = false,
+  highlightCommentId,
 }: PostCardProps) => {
   const { t } = useTranslation("common");
   const navigate = useNavigate();
@@ -236,6 +239,43 @@ export const PostCard = ({
     );
     setCommentCount(totalCount);
   }, [commentsList]);
+
+  // Auto-open comments and highlight when coming from notification
+  useEffect(() => {
+    if (highlightCommentId && commentsList.length > 0) {
+      // Open comments section
+      setShowComments(true);
+
+      // Wait for DOM to update, then scroll to comment
+      setTimeout(() => {
+        const commentElement = document.getElementById(
+          `comment-${highlightCommentId}`
+        );
+        if (commentElement) {
+          commentElement.scrollIntoView({
+            behavior: "smooth",
+            block: "center",
+          });
+
+          // Add highlight effect
+          commentElement.classList.add(
+            "ring-2",
+            "ring-primary",
+            "ring-offset-2",
+            "bg-primary/5"
+          );
+          setTimeout(() => {
+            commentElement.classList.remove(
+              "ring-2",
+              "ring-primary",
+              "ring-offset-2",
+              "bg-primary/5"
+            );
+          }, 3000);
+        }
+      }, 300);
+    }
+  }, [highlightCommentId, commentsList]);
 
   // WebSocket subscription for realtime updates
   useEffect(() => {
@@ -916,7 +956,11 @@ export const PostCard = ({
                 </div>
               ) : (
                 commentsList.map((comment) => (
-                  <div key={comment.id} className="space-y-2">
+                  <div
+                    key={comment.id}
+                    id={`comment-${comment.id}`}
+                    className="space-y-2 transition-all duration-300 rounded-lg"
+                  >
                     <div className="flex gap-2 sm:gap-3">
                       <Avatar className="h-8 w-8 sm:h-9 sm:w-9">
                         <AvatarImage src={comment.userAvatar || undefined} />
@@ -1013,7 +1057,11 @@ export const PostCard = ({
                     {comment.replies && comment.replies.length > 0 && (
                       <div className="ml-8 sm:ml-12 space-y-2">
                         {comment.replies.map((reply) => (
-                          <div key={reply.id} className="flex gap-2">
+                          <div
+                            key={reply.id}
+                            id={`comment-${reply.id}`}
+                            className="flex gap-2 transition-all duration-300 rounded-lg"
+                          >
                             <Avatar className="h-7 w-7 sm:h-8 sm:w-8">
                               <AvatarImage
                                 src={reply.userAvatar || undefined}

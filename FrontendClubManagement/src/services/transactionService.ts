@@ -31,7 +31,7 @@ export interface OutcomeTransactionResponse {
   transactionDate: string;
   recipient: string;
   purpose: string;
-  status: "PENDING" | "COMPLETED" | "CANCELLED" | "FAILED";
+  status: "SUCCESS" | "PENDING" | "COMPLETED" | "CANCELLED" | "FAILED";
   notes: string | null;
   receiptUrl: string | null;
   createdAt: string;
@@ -57,6 +57,7 @@ export interface CreateIncomeTransactionRequest {
   notes?: string;
   feeId?: number;
   userId?: number; // ID người đóng tiền (optional)
+  receiptUrl?: string; // URL ảnh bằng chứng (optional)
 }
 
 // Create Outcome Transaction Request
@@ -176,7 +177,7 @@ export const transactionService = {
     ApiResponse<IncomeTransactionResponse | OutcomeTransactionResponse>
   > {
     const url = `/clubs/${clubId}/transactions/${type}/${transactionId}/approve`;
-    return axiosClient.patch<
+    return axiosClient.post<
       IncomeTransactionResponse | OutcomeTransactionResponse
     >(url, {});
   },

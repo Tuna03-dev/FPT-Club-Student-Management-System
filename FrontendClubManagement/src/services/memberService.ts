@@ -72,6 +72,27 @@ export interface SimpleMemberResponse {
   avatarUrl: string;
 }
 
+export interface ImportMemberError {
+  row: number;
+  studentCode: string;
+  semesterCode: string;
+  message: string;
+}
+
+export interface ImportMembersResponse {
+  totalRows: number;
+  processedUsers: number;
+  processedHistories: number;
+  createdUsers: number;
+  updatedUsers: number;
+  createdMemberships: number;
+  updatedMemberships: number;
+  createdRoleMemberships: number;
+  updatedRoleMemberships: number;
+  errors: ImportMemberError[];
+  summary: string;
+}
+
 export interface GetMembersParams {
   status?: string; // ACTIVE | LEFT
   // backend may accept numeric id or semester code string
@@ -157,6 +178,26 @@ export const memberService = {
   async removeMember(clubId: number, userId: number) {
     const url = `/clubs/${clubId}/members/${userId}`;
     return axiosClient.delete(url);
+  },
+
+  async importMembersFromExcel(
+    clubId: number,
+    file: File,
+    currentUserId: number
+  ): Promise<ApiResponse<ImportMembersResponse>> {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("currentUserId", currentUserId.toString());
+
+    return axiosClient.post<ImportMembersResponse>(
+      `clubs/${clubId}/members/import`,
+      formData,
+      {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      }
+    );
   },
 };
 

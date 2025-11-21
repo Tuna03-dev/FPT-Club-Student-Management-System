@@ -20,6 +20,9 @@ export const Dashboard = () => {
   // Dùng ref để tránh dependency issues
   const loadingRef = useRef(false);
 
+  // Refs for scrolling to specific posts
+  const postRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+
   const { clubId: clubIdParam } = useParams<{ clubId: string }>();
   const location = useLocation();
 
@@ -92,6 +95,45 @@ export const Dashboard = () => {
     loadPosts(0, false, searchQuery);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clubId, location.search]);
+
+  // Handle scroll to post from notification
+  useEffect(() => {
+    const state = location.state as {
+      scrollToPostId?: string;
+      highlightCommentId?: string;
+    } | null;
+
+    if (state?.scrollToPostId && posts.length > 0) {
+      const targetPostId = state.scrollToPostId;
+      const postElement = postRefs.current.get(targetPostId);
+
+      if (postElement) {
+        // Scroll to post with smooth animation
+        setTimeout(() => {
+          postElement.scrollIntoView({
+            behavior: "smooth",
+            block: "center",
+          });
+
+          // Add highlight effect
+          postElement.classList.add("ring-2", "ring-primary", "ring-offset-2");
+          setTimeout(() => {
+            postElement.classList.remove(
+              "ring-2",
+              "ring-primary",
+              "ring-offset-2"
+            );
+          }, 2000);
+        }, 100);
+
+        // Clear navigation state
+        window.history.replaceState({}, document.title);
+      } else {
+        // Post not found in current view, might need to load more or show message
+        console.log("Post not found in current view:", targetPostId);
+      }
+    }
+  }, [posts, location.state]);
 
   // IntersectionObserver sentinel-based infinite scroll
   const sentinelRef = useRef<HTMLDivElement | null>(null);
@@ -231,14 +273,37 @@ export const Dashboard = () => {
         {/* Posts Feed */}
         {posts.length > 0 && (
           <div className="space-y-4">
-            {posts.map((post) => (
-              <PostCard
-                key={post.id}
-                {...convertPostToCard(post)}
-                onPostUpdated={refreshPosts}
-                onPostDeleted={refreshPosts}
-              />
-            ))}
+            {posts.map((post) => {
+              const state = location.state as {
+                scrollToPostId?: string;
+                highlightCommentId?: string;
+              } | null;
+              const shouldHighlight =
+                state?.scrollToPostId === post.id.toString();
+
+              return (
+                <div
+                  key={post.id}
+                  ref={(el) => {
+                    if (el) {
+                      postRefs.current.set(post.id.toString(), el);
+                    } else {
+                      postRefs.current.delete(post.id.toString());
+                    }
+                  }}
+                  className="transition-all duration-300"
+                >
+                  <PostCard
+                    {...convertPostToCard(post)}
+                    onPostUpdated={refreshPosts}
+                    onPostDeleted={refreshPosts}
+                    highlightCommentId={
+                      shouldHighlight ? state?.highlightCommentId : undefined
+                    }
+                  />
+                </div>
+              );
+            })}
           </div>
         )}
 

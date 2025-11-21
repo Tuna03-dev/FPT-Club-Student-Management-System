@@ -31,6 +31,9 @@ public class UpdateIncomeTransactionRequest {
     @Size(max = 2000, message = "Ghi chú không được vượt quá 2000 ký tự")
     private String notes;
 
+    @Size(max = 500, message = "URL biên lai không được vượt quá 500 ký tự")
+    private String receiptUrl;
+
     private Long feeId;
 
     private Long userId;
