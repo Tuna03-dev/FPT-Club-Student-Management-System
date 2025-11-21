@@ -28,7 +28,8 @@ public class PostService {
     private final PostRepository postRepository;
     private final CloudinaryService cloudinaryService;
     private final ClubRoleService clubRoleService;
-    private final ClubMemberShipRepository clubMemberShipRepository; // 👈 thêm
+    private final ClubMemberShipRepository clubMemberShipRepository;
+    private final NotificationService notificationService ;
 
     @PersistenceContext
     private EntityManager em;
