@@ -481,9 +481,8 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
 
       // Show toast notification based on action
       switch (msg.action) {
-        case "REQUEST_SUBMITTED":
+        case "REQUEST_SUBMITTED": {
           // Only show toast for Club Officers (not for Team Officers who created it)
-          const user = authService.getCurrentUser();
           const clubRole = clubId ? authService.getClubRole(clubId) : null;
           const systemRoleInClub = clubRole?.systemRole?.toUpperCase();
           const isClubOfficer = systemRoleInClub === "CLUB_OFFICER";
@@ -502,6 +501,7 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
               });
           }
           break;
+        }
         case "REQUEST_APPROVED_BY_CLUB":
           toast.success("Yêu cầu đã được duyệt", {
             description: payload.message || `Yêu cầu tạo sự kiện "${payload.eventTitle}" đã được Club Officer duyệt`,
