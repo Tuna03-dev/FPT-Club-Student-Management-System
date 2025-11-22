@@ -58,6 +58,25 @@ export interface ClubCreationWebSocketPayload {
   clubCode?: string;
 }
 
+export interface EventWebSocketPayload {
+  eventId?: number;
+  eventTitle?: string;
+  requestEventId?: number;
+  status?: string;
+  clubId?: number;
+  clubName?: string;
+  creatorId?: number;
+  creatorName?: string;
+  creatorEmail?: string;
+  startTime?: string;
+  endTime?: string;
+  location?: string;
+  eventTypeName?: string;
+  responseMessage?: string;
+  reason?: string;
+  message?: string;
+}
+
 interface UseWebSocketOptions {
   url?: string;
   reconnectDelay?: number;

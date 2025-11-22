@@ -6,6 +6,7 @@ import com.sep490.backendclubmanagement.dto.request.UpdateEventRequest;
 import com.sep490.backendclubmanagement.dto.response.EventData;
 import com.sep490.backendclubmanagement.dto.response.MyDraftEventDto;
 import com.sep490.backendclubmanagement.dto.response.PendingRequestDto;
+import com.sep490.backendclubmanagement.dto.websocket.EventWebSocketPayload;
 import com.sep490.backendclubmanagement.entity.*;
 import com.sep490.backendclubmanagement.exception.ForbiddenException;
 import com.sep490.backendclubmanagement.exception.NotFoundException;
@@ -35,6 +36,8 @@ public class EventManagementService {
     private final EventMapper eventMapper;
     private final EventMediaRepository eventMediaRepository;
     private final CloudinaryService cloudinaryService;
+    private final WebSocketService webSocketService;
+    private final NotificationService notificationService;
 
 
     @Transactional
@@ -101,6 +104,67 @@ public class EventManagementService {
                     .build();
             
             requestEventRepository.save(requestEvent);
+            requestEventRepository.flush();
+            
+            // 🔔 WebSocket: Gửi cho tất cả Staff
+            try {
+                EventWebSocketPayload payload = EventWebSocketPayload.builder()
+                        .eventId(savedEvent.getId())
+                        .eventTitle(savedEvent.getTitle())
+                        .requestEventId(requestEvent.getId())
+                        .status(RequestStatus.PENDING_UNIVERSITY)
+                        .clubId(club != null ? club.getId() : null)
+                        .clubName(club != null ? club.getClubName() : null)
+                        .creatorId(user.getId())
+                        .creatorName(user.getFullName())
+                        .creatorEmail(user.getEmail())
+                        .startTime(savedEvent.getStartTime())
+                        .endTime(savedEvent.getEndTime())
+                        .location(savedEvent.getLocation())
+                        .eventTypeName(eventType != null ? eventType.getTypeName() : null)
+                        .message(String.format("%s (Chủ nhiệm CLB %s) đã gửi yêu cầu tạo sự kiện: %s",
+                                user.getFullName(),
+                                club != null ? club.getClubName() : "N/A",
+                                savedEvent.getTitle()))
+                        .build();
+                
+                webSocketService.broadcastToSystemRole("STAFF", "EVENT", "REQUEST_SUBMITTED", payload);
+                log.info("Sent WebSocket notification to STAFF for event request submission: {}", savedEvent.getId());
+            } catch (Exception e) {
+                log.error("Failed to send WebSocket notification for event request submission: {}", e.getMessage(), e);
+            }
+            
+            // 🔔 Notification: Gửi cho tất cả Staff
+            try {
+                List<User> staffUsers = userRepository.findBySystemRole_RoleNameIgnoreCase("STAFF");
+                if (!staffUsers.isEmpty()) {
+                    String title = "Yêu cầu tạo sự kiện mới";
+                    String message = String.format("%s (Chủ nhiệm CLB %s) đã gửi yêu cầu tạo sự kiện \"%s\"",
+                            user.getFullName(),
+                            club != null ? club.getClubName() : "N/A",
+                            savedEvent.getTitle());
+                    String actionUrl = "/events/pending-requests";
+                    
+                    List<Long> staffIds = staffUsers.stream().map(User::getId).toList();
+                    notificationService.sendToUsers(
+                            staffIds,
+                            userId,
+                            title,
+                            message,
+                            NotificationType.EVENT_REQUEST_SUBMITTED,
+                            NotificationPriority.NORMAL,
+                            actionUrl,
+                            club != null ? club.getId() : null,
+                            null, // relatedNewsId
+                            null, // relatedTeamId
+                            null  // relatedRequestId
+                    );
+                    log.info("Sent notification to {} staff members for event request submission: {}", staffIds.size(), savedEvent.getId());
+                }
+            } catch (Exception e) {
+                log.error("Failed to send notification for event request submission: {}", e.getMessage(), e);
+            }
+            
             return eventMapper.toDto(savedEvent);
             
         } else if (isClubOfficer) {
@@ -118,6 +182,76 @@ public class EventManagementService {
                     .build();
             
             requestEventRepository.save(requestEvent);
+            requestEventRepository.flush();
+            
+            // 🔔 WebSocket + Notification: Gửi cho tất cả Club Officers (Club Presidents) của CLB
+            try {
+                if (club != null) {
+                    List<Long> managerIds = notificationService.getClubManagers(club.getId());
+                    if (!managerIds.isEmpty()) {
+                        EventWebSocketPayload payload = EventWebSocketPayload.builder()
+                                .eventId(savedEvent.getId())
+                                .eventTitle(savedEvent.getTitle())
+                                .requestEventId(requestEvent.getId())
+                                .status(RequestStatus.PENDING_CLUB)
+                                .clubId(club.getId())
+                                .clubName(club.getClubName())
+                                .creatorId(user.getId())
+                                .creatorName(user.getFullName())
+                                .creatorEmail(user.getEmail())
+                                .startTime(savedEvent.getStartTime())
+                                .endTime(savedEvent.getEndTime())
+                                .location(savedEvent.getLocation())
+                                .eventTypeName(eventType != null ? eventType.getTypeName() : null)
+                                .message(String.format("%s đã gửi yêu cầu tạo sự kiện: %s",
+                                        user.getFullName(),
+                                        savedEvent.getTitle()))
+                                .build();
+                        
+                        // Gửi WebSocket cho từng Club Officer (giống như CANCELLED_BY_STAFF và RESTORED_BY_STAFF)
+                        List<User> managers = userRepository.findAllById(managerIds);
+                        for (User manager : managers) {
+                            if (manager.getEmail() != null) {
+                                webSocketService.sendToUser(manager.getEmail(), "EVENT", "REQUEST_SUBMITTED", payload);
+                            }
+                        }
+                        log.info("Sent WebSocket notification to {} club managers for event request submission: {}", managers.size(), savedEvent.getId());
+                        
+                        // Gửi Notification cho từng Club Officer
+                        String title = "Yêu cầu tạo sự kiện mới";
+                        String message = String.format("%s đã gửi yêu cầu tạo sự kiện \"%s\" cho CLB %s",
+                                user.getFullName(),
+                                savedEvent.getTitle(),
+                                club.getClubName());
+                        String actionUrl = "/events/pending-requests";
+                        
+                        for (Long managerId : managerIds) {
+                            try {
+                                notificationService.sendToUser(
+                                        managerId,
+                                        userId,
+                                        title,
+                                        message,
+                                        NotificationType.EVENT_REQUEST_SUBMITTED,
+                                        NotificationPriority.NORMAL,
+                                        actionUrl,
+                                        club.getId(),
+                                        null, // relatedNewsId
+                                        null, // relatedTeamId
+                                        null,  // relatedRequestId
+                                        savedEvent.getId() // relatedEventId
+                                );
+                            } catch (Exception e) {
+                                log.error("Failed to send notification to manager {}: {}", managerId, e.getMessage());
+                            }
+                        }
+                        log.info("Sent notification to {} club managers for event request submission: {}", managerIds.size(), savedEvent.getId());
+                    }
+                }
+            } catch (Exception e) {
+                log.error("Failed to send WebSocket/Notification for event request submission: {}", e.getMessage(), e);
+            }
+            
             return eventMapper.toDto(savedEvent);
         }
         
@@ -214,6 +348,189 @@ public class EventManagementService {
         
         requestEvent.setResponseMessage(request.getResponseMessage());
         requestEventRepository.save(requestEvent);
+        requestEventRepository.flush();
+        
+        Event event = requestEvent.getEvent();
+        Club club = event != null ? event.getClub() : null;
+        User creator = requestEvent.getCreatedBy();
+        User approver = getUserById(userId); // Người duyệt (Club Officer)
+        
+        // 🔔 WebSocket + Notification
+        if (request.getStatus() == RequestStatus.APPROVED_CLUB) {
+            // Approve: Gửi cho Team Officer (creator)
+            try {
+                EventWebSocketPayload payload = EventWebSocketPayload.builder()
+                        .eventId(event != null ? event.getId() : null)
+                        .eventTitle(event != null ? event.getTitle() : null)
+                        .requestEventId(requestEvent.getId())
+                        .status(RequestStatus.PENDING_UNIVERSITY)
+                        .clubId(club != null ? club.getId() : null)
+                        .clubName(club != null ? club.getClubName() : null)
+                        .creatorId(creator != null ? creator.getId() : null)
+                        .creatorName(creator != null ? creator.getFullName() : null)
+                        .creatorEmail(creator != null ? creator.getEmail() : null)
+                        .startTime(event != null ? event.getStartTime() : null)
+                        .endTime(event != null ? event.getEndTime() : null)
+                        .location(event != null ? event.getLocation() : null)
+                        .eventTypeName(event != null && event.getEventType() != null ? event.getEventType().getTypeName() : null)
+                        .responseMessage(requestEvent.getResponseMessage())
+                        .message(String.format("Yêu cầu tạo sự kiện của bạn đã được %s (Chủ nhiệm CLB %s) duyệt và đã chuyển lên Staff",
+                                approver.getFullName(),
+                                club != null ? club.getClubName() : "N/A"))
+                        .build();
+                
+                if (creator != null && creator.getEmail() != null) {
+                    webSocketService.sendToUser(creator.getEmail(), "EVENT", "REQUEST_APPROVED_BY_CLUB", payload);
+                    log.info("Sent WebSocket notification to creator for event approval by club: {}", requestEvent.getId());
+                }
+            } catch (Exception e) {
+                log.error("Failed to send WebSocket notification for event approval by club: {}", e.getMessage(), e);
+            }
+            
+            try {
+                if (creator != null) {
+                    String title = "Yêu cầu tạo sự kiện đã được duyệt";
+                    String message = String.format("Yêu cầu tạo sự kiện \"%s\" của bạn đã được %s (Chủ nhiệm CLB %s) duyệt và đã chuyển lên Staff để xem xét",
+                            event != null ? event.getTitle() : "N/A",
+                            approver.getFullName(),
+                            club != null ? club.getClubName() : "N/A");
+                    String actionUrl = "/events/my-draft-events?clubId=" + (club != null ? club.getId() : "");
+                    
+                    notificationService.sendToUser(
+                            creator.getId(),
+                            userId,
+                            title,
+                            message,
+                            NotificationType.EVENT_REQUEST_APPROVED_BY_CLUB,
+                            NotificationPriority.NORMAL,
+                            actionUrl,
+                            club != null ? club.getId() : null,
+                            null, null, null,
+                            event != null ? event.getId() : null
+                    );
+                    log.info("Sent notification to creator for event approval by club: {}", requestEvent.getId());
+                }
+            } catch (Exception e) {
+                log.error("Failed to send notification for event approval by club: {}", e.getMessage(), e);
+            }
+            
+            // 🔔 WebSocket + Notification: Gửi cho tất cả Staff (vì request đã chuyển sang PENDING_UNIVERSITY)
+            try {
+                EventWebSocketPayload staffPayload = EventWebSocketPayload.builder()
+                        .eventId(event != null ? event.getId() : null)
+                        .eventTitle(event != null ? event.getTitle() : null)
+                        .requestEventId(requestEvent.getId())
+                        .status(RequestStatus.PENDING_UNIVERSITY)
+                        .clubId(club != null ? club.getId() : null)
+                        .clubName(club != null ? club.getClubName() : null)
+                        .creatorId(creator != null ? creator.getId() : null)
+                        .creatorName(creator != null ? creator.getFullName() : null)
+                        .creatorEmail(creator != null ? creator.getEmail() : null)
+                        .startTime(event != null ? event.getStartTime() : null)
+                        .endTime(event != null ? event.getEndTime() : null)
+                        .location(event != null ? event.getLocation() : null)
+                        .eventTypeName(event != null && event.getEventType() != null ? event.getEventType().getTypeName() : null)
+                        .message(String.format("Yêu cầu tạo sự kiện \"%s\" từ CLB %s đã được %s (Chủ nhiệm CLB) duyệt và đang chờ bạn xem xét",
+                                event != null ? event.getTitle() : "N/A",
+                                club != null ? club.getClubName() : "N/A",
+                                approver.getFullName()))
+                        .build();
+                
+                webSocketService.broadcastToSystemRole("STAFF", "EVENT", "REQUEST_SUBMITTED", staffPayload);
+                log.info("Sent WebSocket notification to STAFF for event approval by club: {}", requestEvent.getId());
+            } catch (Exception e) {
+                log.error("Failed to send WebSocket notification to STAFF for event approval by club: {}", e.getMessage(), e);
+            }
+            
+            try {
+                List<User> staffUsers = userRepository.findBySystemRole_RoleNameIgnoreCase("STAFF");
+                if (!staffUsers.isEmpty()) {
+                    String title = "Yêu cầu tạo sự kiện mới cần duyệt";
+                    String message = String.format("Yêu cầu tạo sự kiện \"%s\" từ CLB %s đã được %s (Chủ nhiệm CLB) duyệt và đang chờ bạn xem xét",
+                            event != null ? event.getTitle() : "N/A",
+                            club != null ? club.getClubName() : "N/A",
+                            approver.getFullName());
+                    String actionUrl = "/events/pending-requests";
+                    
+                    List<Long> staffIds = staffUsers.stream().map(User::getId).toList();
+                    notificationService.sendToUsers(
+                            staffIds,
+                            userId,
+                            title,
+                            message,
+                            NotificationType.EVENT_REQUEST_SUBMITTED,
+                            NotificationPriority.NORMAL,
+                            actionUrl,
+                            club != null ? club.getId() : null,
+                            null, // relatedNewsId
+                            null, // relatedTeamId
+                            null  // relatedRequestId
+                    );
+                    log.info("Sent notification to {} staff members for event approval by club: {}", staffIds.size(), requestEvent.getId());
+                }
+            } catch (Exception e) {
+                log.error("Failed to send notification to STAFF for event approval by club: {}", e.getMessage(), e);
+            }
+        } else {
+            // Reject: Gửi cho Team Officer (creator)
+            try {
+                EventWebSocketPayload payload = EventWebSocketPayload.builder()
+                        .eventId(event != null ? event.getId() : null)
+                        .eventTitle(event != null ? event.getTitle() : null)
+                        .requestEventId(requestEvent.getId())
+                        .status(RequestStatus.REJECTED_CLUB)
+                        .clubId(club != null ? club.getId() : null)
+                        .clubName(club != null ? club.getClubName() : null)
+                        .creatorId(creator != null ? creator.getId() : null)
+                        .creatorName(creator != null ? creator.getFullName() : null)
+                        .creatorEmail(creator != null ? creator.getEmail() : null)
+                        .startTime(event != null ? event.getStartTime() : null)
+                        .endTime(event != null ? event.getEndTime() : null)
+                        .location(event != null ? event.getLocation() : null)
+                        .eventTypeName(event != null && event.getEventType() != null ? event.getEventType().getTypeName() : null)
+                        .responseMessage(requestEvent.getResponseMessage())
+                        .reason(requestEvent.getResponseMessage())
+                        .message(String.format("Yêu cầu tạo sự kiện của bạn đã bị %s (Chủ nhiệm CLB %s) từ chối",
+                                approver.getFullName(),
+                                club != null ? club.getClubName() : "N/A"))
+                        .build();
+                
+                if (creator != null && creator.getEmail() != null) {
+                    webSocketService.sendToUser(creator.getEmail(), "EVENT", "REQUEST_REJECTED_BY_CLUB", payload);
+                    log.info("Sent WebSocket notification to creator for event rejection by club: {}", requestEvent.getId());
+                }
+            } catch (Exception e) {
+                log.error("Failed to send WebSocket notification for event rejection by club: {}", e.getMessage(), e);
+            }
+            
+            try {
+                if (creator != null) {
+                    String title = "Yêu cầu tạo sự kiện đã bị từ chối";
+                    String message = String.format("Yêu cầu tạo sự kiện \"%s\" của bạn đã bị %s (Chủ nhiệm CLB %s) từ chối. Lý do: %s",
+                            event != null ? event.getTitle() : "N/A",
+                            approver.getFullName(),
+                            club != null ? club.getClubName() : "N/A",
+                            requestEvent.getResponseMessage() != null ? requestEvent.getResponseMessage() : "Không có lý do");
+                    String actionUrl = "/events/my-draft-events?clubId=" + (club != null ? club.getId() : "");
+                    
+                    notificationService.sendToUser(
+                            creator.getId(),
+                            userId,
+                            title,
+                            message,
+                            NotificationType.EVENT_REQUEST_REJECTED_BY_CLUB,
+                            NotificationPriority.HIGH,
+                            actionUrl,
+                            club != null ? club.getId() : null,
+                            null, null, null,
+                            event != null ? event.getId() : null
+                    );
+                    log.info("Sent notification to creator for event rejection by club: {}", requestEvent.getId());
+                }
+            } catch (Exception e) {
+                log.error("Failed to send notification for event rejection by club: {}", e.getMessage(), e);
+            }
+        }
     }
     
 
@@ -243,13 +560,152 @@ public class EventManagementService {
         
         requestEvent.setResponseMessage(request.getResponseMessage());
         requestEventRepository.save(requestEvent);
+        requestEventRepository.flush();
+        
+        Event event = requestEvent.getEvent();
+        Club club = event != null ? event.getClub() : null;
+        User creator = requestEvent.getCreatedBy();
+        User approver = getUserById(userId); // Người duyệt (Staff)
+        
+        // 🔔 WebSocket + Notification
+        if (request.getStatus() == RequestStatus.APPROVED_UNIVERSITY) {
+            // Approve: Gửi cho Club Officer (creator)
+            try {
+                EventWebSocketPayload payload = EventWebSocketPayload.builder()
+                        .eventId(event != null ? event.getId() : null)
+                        .eventTitle(event != null ? event.getTitle() : null)
+                        .requestEventId(requestEvent.getId())
+                        .status(RequestStatus.APPROVED_UNIVERSITY)
+                        .clubId(club != null ? club.getId() : null)
+                        .clubName(club != null ? club.getClubName() : null)
+                        .creatorId(creator != null ? creator.getId() : null)
+                        .creatorName(creator != null ? creator.getFullName() : null)
+                        .creatorEmail(creator != null ? creator.getEmail() : null)
+                        .startTime(event != null ? event.getStartTime() : null)
+                        .endTime(event != null ? event.getEndTime() : null)
+                        .location(event != null ? event.getLocation() : null)
+                        .eventTypeName(event != null && event.getEventType() != null ? event.getEventType().getTypeName() : null)
+                        .responseMessage(requestEvent.getResponseMessage())
+                        .message(String.format("Yêu cầu tạo sự kiện của bạn đã được %s (Staff) duyệt và sự kiện đã được công bố",
+                                approver.getFullName()))
+                        .build();
+                
+                if (creator != null && creator.getEmail() != null) {
+                    webSocketService.sendToUser(creator.getEmail(), "EVENT", "REQUEST_APPROVED_BY_UNIVERSITY", payload);
+                    log.info("Sent WebSocket notification to creator for event approval by staff: {}", requestEvent.getId());
+                }
+            } catch (Exception e) {
+                log.error("Failed to send WebSocket notification for event approval by staff: {}", e.getMessage(), e);
+            }
+            
+            try {
+                if (creator != null) {
+                    String title = "Yêu cầu tạo sự kiện đã được duyệt";
+                    String message = String.format("Yêu cầu tạo sự kiện \"%s\" của bạn đã được %s (Staff) duyệt và sự kiện đã được công bố",
+                            event != null ? event.getTitle() : "N/A",
+                            approver.getFullName());
+                    String actionUrl = "/events/" + (event != null ? event.getId() : "");
+                    
+                    notificationService.sendToUser(
+                            creator.getId(),
+                            userId,
+                            title,
+                            message,
+                            NotificationType.EVENT_REQUEST_APPROVED_BY_UNIVERSITY,
+                            NotificationPriority.NORMAL,
+                            actionUrl,
+                            club != null ? club.getId() : null,
+                            null, null, null,
+                            event != null ? event.getId() : null
+                    );
+                    log.info("Sent notification to creator for event approval by staff: {}", requestEvent.getId());
+                }
+            } catch (Exception e) {
+                log.error("Failed to send notification for event approval by staff: {}", e.getMessage(), e);
+            }
+        } else {
+            // Reject: Gửi cho người tạo request (creator - Club Officer)
+            try {
+                EventWebSocketPayload payload = EventWebSocketPayload.builder()
+                        .eventId(event != null ? event.getId() : null)
+                        .eventTitle(event != null ? event.getTitle() : null)
+                        .requestEventId(requestEvent.getId())
+                        .status(RequestStatus.REJECTED_UNIVERSITY)
+                        .clubId(club != null ? club.getId() : null)
+                        .clubName(club != null ? club.getClubName() : null)
+                        .creatorId(creator != null ? creator.getId() : null)
+                        .creatorName(creator != null ? creator.getFullName() : null)
+                        .creatorEmail(creator != null ? creator.getEmail() : null)
+                        .startTime(event != null ? event.getStartTime() : null)
+                        .endTime(event != null ? event.getEndTime() : null)
+                        .location(event != null ? event.getLocation() : null)
+                        .eventTypeName(event != null && event.getEventType() != null ? event.getEventType().getTypeName() : null)
+                        .responseMessage(requestEvent.getResponseMessage())
+                        .reason(requestEvent.getResponseMessage())
+                        .approverId(userId)
+                        .approverName(approver.getFullName())
+                        .approverRole("STAFF")
+                        .message(String.format("Yêu cầu tạo sự kiện \"%s\" của bạn đã bị %s (Staff) từ chối. Lý do: %s",
+                                event != null ? event.getTitle() : "N/A",
+                                approver.getFullName(),
+                                requestEvent.getResponseMessage() != null ? requestEvent.getResponseMessage() : "Không có lý do"))
+                        .build();
+                
+                if (creator != null && creator.getEmail() != null) {
+                    webSocketService.sendToUser(creator.getEmail(), "EVENT", "REQUEST_REJECTED_BY_UNIVERSITY", payload);
+                    log.info("Sent WebSocket notification to creator for event rejection by staff: {}", requestEvent.getId());
+                }
+            } catch (Exception e) {
+                log.error("Failed to send WebSocket notification for event rejection by staff: {}", e.getMessage(), e);
+            }
+            
+            try {
+                if (creator != null) {
+                    String title = "Yêu cầu tạo sự kiện đã bị từ chối";
+                    String message = String.format("Yêu cầu tạo sự kiện \"%s\" của bạn đã bị %s (Staff) từ chối. Lý do: %s",
+                            event != null ? event.getTitle() : "N/A",
+                            approver.getFullName(),
+                            requestEvent.getResponseMessage() != null ? requestEvent.getResponseMessage() : "Không có lý do");
+                    String actionUrl = "/events/my-draft-events?clubId=" + (club != null ? club.getId() : "");
+                    
+                    notificationService.sendToUser(
+                            creator.getId(),
+                            userId,
+                            title,
+                            message,
+                            NotificationType.EVENT_REQUEST_REJECTED_BY_UNIVERSITY,
+                            NotificationPriority.HIGH,
+                            actionUrl,
+                            club != null ? club.getId() : null,
+                            null, null, null,
+                            event != null ? event.getId() : null
+                    );
+                    log.info("Sent notification to creator for event rejection by staff: {}", requestEvent.getId());
+                }
+            } catch (Exception e) {
+                log.error("Failed to send notification for event rejection by staff: {}", e.getMessage(), e);
+            }
+        }
     }
     
-    public List<PendingRequestDto> getPendingRequests(Long userId) {
+    public List<PendingRequestDto> getPendingRequests(Long userId, Long clubId) {
         if (roleService.isStaff(userId)) {
             List<RequestEvent> list = requestEventRepository.findAllByStatusWithAll(RequestStatus.PENDING_UNIVERSITY);
             return mapToPendingDtos(list);
         }
+        
+        // Nếu có clubId, check role trong club cụ thể đó
+        if (clubId != null && clubId > 0) {
+            if (roleService.isClubPresident(userId, clubId)) {
+                // Club Officer: Lấy requests PENDING_CLUB của club này
+                List<RequestEvent> result = requestEventRepository.findAllByStatusAndClubIdWithAll(RequestStatus.PENDING_CLUB, clubId);
+                return mapToPendingDtos(result);
+            }
+            // Nếu không phải Club Officer của club này, trả về empty
+            return List.of();
+        }
+        
+        // Fallback: Nếu không có clubId, check global role và lấy tất cả clubs
         if (roleService.isClubPresident(userId)) {
             List<Club> clubs = roleService.getClubsWhereUserIsPresident(userId);
             if (clubs.isEmpty()) return List.of();
@@ -482,6 +938,59 @@ public class EventManagementService {
             requestEvent.setRequestTitle(saved.getTitle());
             requestEvent.setDescription(saved.getDescription());
             requestEventRepository.save(requestEvent);
+            requestEventRepository.flush();
+            
+            // 🔔 WebSocket + Notification: Gửi cho creator (nếu có)
+            try {
+                User creator = requestEvent.getCreatedBy();
+                Club club = saved.getClub();
+                
+                if (creator != null) {
+                    EventWebSocketPayload payload = EventWebSocketPayload.builder()
+                            .eventId(saved.getId())
+                            .eventTitle(saved.getTitle())
+                            .requestEventId(requestEvent.getId())
+                            .status(RequestStatus.APPROVED_UNIVERSITY)
+                            .clubId(club != null ? club.getId() : null)
+                            .clubName(club != null ? club.getClubName() : null)
+                            .creatorId(creator.getId())
+                            .creatorName(creator.getFullName())
+                            .creatorEmail(creator.getEmail())
+                            .startTime(saved.getStartTime())
+                            .endTime(saved.getEndTime())
+                            .location(saved.getLocation())
+                            .eventTypeName(saved.getEventType() != null ? saved.getEventType().getTypeName() : null)
+                            .responseMessage("Tự động duyệt do đổi sang loại MEETING")
+                            .message("Sự kiện \"" + saved.getTitle() + "\" đã được tự động duyệt do đổi sang loại MEETING")
+                            .build();
+                    
+                    if (creator.getEmail() != null) {
+                        webSocketService.sendToUser(creator.getEmail(), "EVENT", "AUTO_APPROVED", payload);
+                        log.info("Sent WebSocket notification to creator for event auto-approval: {}", saved.getId());
+                    }
+                    
+                    String title = "Sự kiện đã được tự động duyệt";
+                    String message = String.format("Sự kiện \"%s\" của bạn đã được tự động duyệt do đổi sang loại MEETING",
+                            saved.getTitle());
+                    String actionUrl = "/events/" + saved.getId();
+                    
+                    notificationService.sendToUser(
+                            creator.getId(),
+                            userId,
+                            title,
+                            message,
+                            NotificationType.EVENT_AUTO_APPROVED,
+                            NotificationPriority.NORMAL,
+                            actionUrl,
+                            club != null ? club.getId() : null,
+                            null, null, null,
+                            saved.getId()
+                    );
+                    log.info("Sent notification to creator for event auto-approval: {}", saved.getId());
+                }
+            } catch (Exception e) {
+                log.error("Failed to send WebSocket/Notification for event auto-approval: {}", e.getMessage(), e);
+            }
         }
         else {
             // Đồng bộ request title/description với bản nháp đã cập nhật
@@ -587,11 +1096,95 @@ public class EventManagementService {
         }
         event.setIsDraft(true);
         eventRepository.save(event);
+        eventRepository.flush();
+        
+        Club club = event.getClub();
+        RequestEvent requestEvent = requestEventRepository.findByEventId(eventId).orElse(null);
+        User creator = requestEvent != null ? requestEvent.getCreatedBy() : null;
+        
         // Optionally: lưu reason vào requestEvent nếu tồn tại
-        requestEventRepository.findByEventId(eventId).ifPresent(re -> {
-            re.setResponseMessage(reason);
-            requestEventRepository.save(re);
-        });
+        if (requestEvent != null) {
+            requestEvent.setResponseMessage(reason);
+            requestEventRepository.save(requestEvent);
+        }
+        
+        // 🔔 WebSocket + Notification: Gửi cho tất cả Club Officers của CLB
+        try {
+            List<Long> recipientIds = new ArrayList<>();
+            
+            // Thêm Club Officers
+            if (club != null) {
+                List<Long> managerIds = notificationService.getClubManagers(club.getId());
+                recipientIds.addAll(managerIds);
+            }
+            
+            // Thêm creator (Team Officer) nếu có
+            if (creator != null && !recipientIds.contains(creator.getId())) {
+                recipientIds.add(creator.getId());
+            }
+            
+            if (!recipientIds.isEmpty()) {
+                EventWebSocketPayload payload = EventWebSocketPayload.builder()
+                        .eventId(event.getId())
+                        .eventTitle(event.getTitle())
+                        .requestEventId(requestEvent != null ? requestEvent.getId() : null)
+                        .status(null) // Cancelled status
+                        .clubId(club != null ? club.getId() : null)
+                        .clubName(club != null ? club.getClubName() : null)
+                        .creatorId(creator != null ? creator.getId() : null)
+                        .creatorName(creator != null ? creator.getFullName() : null)
+                        .creatorEmail(creator != null ? creator.getEmail() : null)
+                        .startTime(event.getStartTime())
+                        .endTime(event.getEndTime())
+                        .location(event.getLocation())
+                        .eventTypeName(event.getEventType() != null ? event.getEventType().getTypeName() : null)
+                        .reason(reason)
+                        .approverId(userId)
+                        .approverName(getUserById(userId).getFullName())
+                        .approverRole("STAFF")
+                        .message("Sự kiện \"" + event.getTitle() + "\" đã bị Staff hủy" + (reason != null ? ". Lý do: " + reason : ""))
+                        .build();
+                
+                // Gửi WebSocket cho từng recipient (giống như RESTORED_BY_STAFF)
+                List<User> recipients = userRepository.findAllById(recipientIds);
+                for (User recipient : recipients) {
+                    if (recipient.getEmail() != null) {
+                        webSocketService.sendToUser(recipient.getEmail(), "EVENT", "CANCELLED_BY_STAFF", payload);
+                    }
+                }
+                log.info("Sent WebSocket notification to {} recipients for event cancellation: {}", recipients.size(), event.getId());
+                
+                // Gửi Notification cho từng Club Officer
+                String title = "Sự kiện đã bị hủy";
+                String message = String.format("Sự kiện \"%s\" của CLB %s đã bị Staff hủy%s",
+                        event.getTitle(),
+                        club != null ? club.getClubName() : "N/A",
+                        reason != null ? ". Lý do: " + reason : "");
+                String actionUrl = "/events/" + event.getId();
+                
+                for (Long recipientId : recipientIds) {
+                    try {
+                        notificationService.sendToUser(
+                                recipientId,
+                                userId,
+                                title,
+                                message,
+                                NotificationType.EVENT_CANCELLED_BY_STAFF,
+                                NotificationPriority.HIGH,
+                                actionUrl,
+                                club != null ? club.getId() : null,
+                                null, null, null,
+                                event.getId()
+                        );
+                    } catch (Exception e) {
+                        log.error("Failed to send notification to user {}: {}", recipientId, e.getMessage());
+                    }
+                }
+                log.info("Sent notification to {} recipients for event cancellation: {}", recipientIds.size(), event.getId());
+            }
+        } catch (Exception e) {
+            log.error("Failed to send WebSocket/Notification for event cancellation: {}", e.getMessage(), e);
+        }
     }
 
     @Transactional
@@ -609,6 +1202,85 @@ public class EventManagementService {
         }
         event.setIsDraft(false);
         eventRepository.save(event);
+        eventRepository.flush();
+        
+        Club club = event.getClub();
+        RequestEvent requestEvent = requestEventRepository.findByEventId(eventId).orElse(null);
+        User creator = requestEvent != null ? requestEvent.getCreatedBy() : null;
+        
+        // 🔔 WebSocket + Notification: Gửi cho Club Officer và Team Officer (nếu có creator)
+        try {
+            List<Long> recipientIds = new ArrayList<>();
+            
+            // Thêm Club Officers
+            if (club != null) {
+                List<Long> managerIds = notificationService.getClubManagers(club.getId());
+                recipientIds.addAll(managerIds);
+            }
+            
+            // Thêm creator (Team Officer) nếu có
+            if (creator != null && !recipientIds.contains(creator.getId())) {
+                recipientIds.add(creator.getId());
+            }
+            
+            if (!recipientIds.isEmpty()) {
+                EventWebSocketPayload payload = EventWebSocketPayload.builder()
+                        .eventId(event.getId())
+                        .eventTitle(event.getTitle())
+                        .requestEventId(requestEvent != null ? requestEvent.getId() : null)
+                        .status(null) // Restored status
+                        .clubId(club != null ? club.getId() : null)
+                        .clubName(club != null ? club.getClubName() : null)
+                        .creatorId(creator != null ? creator.getId() : null)
+                        .creatorName(creator != null ? creator.getFullName() : null)
+                        .creatorEmail(creator != null ? creator.getEmail() : null)
+                        .startTime(event.getStartTime())
+                        .endTime(event.getEndTime())
+                        .location(event.getLocation())
+                        .eventTypeName(event.getEventType() != null ? event.getEventType().getTypeName() : null)
+                        .message("Sự kiện \"" + event.getTitle() + "\" đã được Staff khôi phục")
+                        .build();
+                
+                // Gửi WebSocket cho từng recipient
+                List<User> recipients = userRepository.findAllById(recipientIds);
+                for (User recipient : recipients) {
+                    if (recipient.getEmail() != null) {
+                        webSocketService.sendToUser(recipient.getEmail(), "EVENT", "RESTORED_BY_STAFF", payload);
+                    }
+                }
+                log.info("Sent WebSocket notification to {} recipients for event restoration: {}", recipients.size(), event.getId());
+                
+                // Gửi Notification
+                String title = "Sự kiện đã được khôi phục";
+                String message = String.format("Sự kiện \"%s\" của CLB %s đã được Staff khôi phục",
+                        event.getTitle(),
+                        club != null ? club.getClubName() : "N/A");
+                String actionUrl = "/events/" + event.getId();
+                
+                // Gửi notification cho từng user để có thể truyền relatedEventId
+                for (Long recipientId : recipientIds) {
+                    try {
+                        notificationService.sendToUser(
+                                recipientId,
+                                userId,
+                                title,
+                                message,
+                                NotificationType.EVENT_RESTORED_BY_STAFF,
+                                NotificationPriority.NORMAL,
+                                actionUrl,
+                                club != null ? club.getId() : null,
+                                null, null, null,
+                                event.getId()
+                        );
+                    } catch (Exception e) {
+                        log.error("Failed to send notification to user {}: {}", recipientId, e.getMessage());
+                    }
+                }
+                log.info("Sent notification to {} recipients for event restoration: {}", recipientIds.size(), event.getId());
+            }
+        } catch (Exception e) {
+            log.error("Failed to send WebSocket/Notification for event restoration: {}", e.getMessage(), e);
+        }
     }
 
     @Transactional
@@ -630,6 +1302,89 @@ public class EventManagementService {
         
         event.setIsDraft(false);
         Event saved = eventRepository.save(event);
+        eventRepository.flush();
+        
+        User publisher = getUserById(userId);
+        
+        // 🔔 WebSocket + Notification: Gửi cho tất cả users không phải STAFF (STUDENT, TEAM_OFFICER, CLUB_OFFICER)
+        try {
+            EventWebSocketPayload payload = EventWebSocketPayload.builder()
+                    .eventId(saved.getId())
+                    .eventTitle(saved.getTitle())
+                    .requestEventId(null) // Staff draft events không có RequestEvent
+                    .status(null)
+                    .clubId(null) // Event toàn trường
+                    .clubName(null)
+                    .creatorId(userId)
+                    .creatorName(publisher != null ? publisher.getFullName() : null)
+                    .creatorEmail(publisher != null ? publisher.getEmail() : null)
+                    .startTime(saved.getStartTime())
+                    .endTime(saved.getEndTime())
+                    .location(saved.getLocation())
+                    .eventTypeName(saved.getEventType() != null ? saved.getEventType().getTypeName() : null)
+                    .message(String.format("Sự kiện toàn trường \"%s\" đã được %s (Staff) công bố",
+                            saved.getTitle(),
+                            publisher != null ? publisher.getFullName() : "Staff"))
+                    .build();
+            
+            // Broadcast WebSocket cho STUDENT, TEAM_OFFICER, và CLUB_OFFICER
+            webSocketService.broadcastToSystemRole("STUDENT", "EVENT", "PUBLISHED", payload);
+            webSocketService.broadcastToSystemRole("TEAM_OFFICER", "EVENT", "PUBLISHED", payload);
+            webSocketService.broadcastToSystemRole("CLUB_OFFICER", "EVENT", "PUBLISHED", payload);
+            log.info("Sent WebSocket broadcast to STUDENT/TEAM_OFFICER/CLUB_OFFICER roles for event publication: {}", saved.getId());
+            
+            // Gửi Notification cho tất cả users không phải STAFF
+            List<Long> recipientIds = new ArrayList<>();
+            
+            // Lấy STUDENT
+            List<User> studentUsers = userRepository.findBySystemRole_RoleNameIgnoreCase("STUDENT");
+            recipientIds.addAll(studentUsers.stream().map(User::getId).toList());
+            
+            // Lấy TEAM_OFFICER
+            List<User> teamOfficerUsers = userRepository.findBySystemRole_RoleNameIgnoreCase("TEAM_OFFICER");
+            recipientIds.addAll(teamOfficerUsers.stream().map(User::getId).toList());
+            
+            // Lấy CLUB_OFFICER
+            List<User> clubOfficerUsers = userRepository.findBySystemRole_RoleNameIgnoreCase("CLUB_OFFICER");
+            recipientIds.addAll(clubOfficerUsers.stream().map(User::getId).toList());
+            
+            // Loại bỏ duplicate IDs
+            recipientIds = recipientIds.stream().distinct().toList();
+            
+            if (!recipientIds.isEmpty()) {
+                String title = "Sự kiện mới đã được công bố";
+                String message = String.format("Sự kiện toàn trường \"%s\" đã được %s (Staff) công bố. Thời gian: %s - %s",
+                        saved.getTitle(),
+                        publisher != null ? publisher.getFullName() : "Staff",
+                        saved.getStartTime() != null ? saved.getStartTime().toString() : "N/A",
+                        saved.getEndTime() != null ? saved.getEndTime().toString() : "N/A");
+                String actionUrl = "/events/" + saved.getId();
+                
+                // Gửi notification cho từng user để có thể truyền relatedEventId
+                for (Long recipientId : recipientIds) {
+                    try {
+                        notificationService.sendToUser(
+                                recipientId,
+                                userId,
+                                title,
+                                message,
+                                NotificationType.EVENT_PUBLISHED,
+                                NotificationPriority.NORMAL,
+                                actionUrl,
+                                null, // relatedClubId (event toàn trường)
+                                null, null, null,
+                                saved.getId() // relatedEventId
+                        );
+                    } catch (Exception e) {
+                        log.error("Failed to send notification to user {}: {}", recipientId, e.getMessage());
+                    }
+                }
+                log.info("Sent notification to {} users (STUDENT/TEAM_OFFICER/CLUB_OFFICER) for event publication: {}", recipientIds.size(), saved.getId());
+            }
+        } catch (Exception e) {
+            log.error("Failed to send WebSocket/Notification for event publication: {}", e.getMessage(), e);
+        }
+        
         return eventMapper.toDto(saved);
     }
 
