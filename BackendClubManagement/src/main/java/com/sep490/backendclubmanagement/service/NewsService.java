@@ -42,16 +42,17 @@ public class NewsService {
         if (!keywords.isEmpty()) {
             newsList = newsList.stream()
                     .filter(news -> {
-                        String title = news.getTitle() != null ? news.getTitle().toLowerCase() : "";
-                        String content = news.getContent() != null ? news.getContent().toLowerCase() : "";
-                        String type = news.getNewsType() != null ? news.getNewsType().toLowerCase() : "";
+                        String title = normalizeVietnamese(news.getTitle() != null ? news.getTitle() : "");
+                        String content = normalizeVietnamese(news.getContent() != null ? news.getContent() : "");
+                        String type = normalizeVietnamese(news.getNewsType() != null ? news.getNewsType() : "");
 
-                        // Ít nhất một keyword khớp với title, content hoặc news_type
-                        return keywords.stream().anyMatch(kw ->
-                                title.contains(kw.toLowerCase()) ||
-                                        content.contains(kw.toLowerCase()) ||
-                                        type.contains(kw.toLowerCase())
-                        );
+                        // Ít nhất một keyword khớp với title, content hoặc news_type (normalize keyword trước khi so sánh)
+                        return keywords.stream().anyMatch(kw -> {
+                            String normalizedKw = normalizeVietnamese(kw);
+                            return title.contains(normalizedKw) ||
+                                    content.contains(normalizedKw) ||
+                                    type.contains(normalizedKw);
+                        });
                     })
                     .toList();
         }
@@ -79,5 +80,17 @@ public class NewsService {
             throw new NotFoundException("News not found");
         }
         return newsMapper.toDto(news.get());
+    }
+
+    /**
+     * Normalize Vietnamese text by removing diacritics (accents)
+     * Example: "đọc sách" -> "doc sach"
+     */
+    private String normalizeVietnamese(String text) {
+        if (text == null || text.isBlank()) return "";
+        String normalized = text.replace("đ", "d").replace("Đ", "d");
+        normalized = java.text.Normalizer.normalize(normalized, java.text.Normalizer.Form.NFD);
+        normalized = normalized.replaceAll("\\p{InCombiningDiacriticalMarks}+", "");
+        return normalized.toLowerCase();
     }
 }
