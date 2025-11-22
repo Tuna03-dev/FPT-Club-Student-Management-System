@@ -62,6 +62,7 @@ import type {
 } from "@/types/staffClub";
 import {
   getStaffClubs,
+  getStaffClubDetail,
   createStaffClub,
   updateStaffClub,
   // getAllCampuses,
@@ -86,6 +87,7 @@ export function StaffClubsManagement() {
     useState<ClubManagementResponse | null>(null);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showViewDialog, setShowViewDialog] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showActivateConfirm, setShowActivateConfirm] = useState(false);
   const [editingClub, setEditingClub] = useState<ClubManagementResponse | null>(
@@ -199,9 +201,9 @@ export function StaffClubsManagement() {
   // }, []);
 
   // Lazy-load club categories only when needed (e.g., when opening the Create dialog)
-  const loadClubCategories = async () => {
+  const loadClubCategories = async (force = false) => {
     try {
-      if (clubCategories && clubCategories.length > 0) return; // already loaded
+      if (!force && clubCategories && clubCategories.length > 0) return; // already loaded
       const categoriesData = await getAllClubCategories();
       setClubCategories(categoriesData);
     } catch (err) {
@@ -386,6 +388,17 @@ export function StaffClubsManagement() {
         toast.success("Tạo thể loại thành công");
         // Refetch to get correct order from backend
         await fetchCategories();
+        // Also update categories used in Clubs tab and refresh clubs list
+        try {
+          await loadClubCategories(true);
+        } catch (e) {
+          console.error("Error loading club categories after create:", e);
+        }
+        try {
+          await fetchClubs();
+        } catch (e) {
+          console.error("Error refreshing clubs after category create:", e);
+        }
       } else {
         console.error("Create category failed:", resp.message);
         // show API message and close confirm dialog
@@ -419,6 +432,17 @@ export function StaffClubsManagement() {
         toast.success("Cập nhật thể loại thành công");
         // Refetch to get correct order from backend
         await fetchCategories();
+        // Also update categories used in Clubs tab and refresh clubs list
+        try {
+          await loadClubCategories(true);
+        } catch (e) {
+          console.error("Error loading club categories after update:", e);
+        }
+        try {
+          await fetchClubs();
+        } catch (e) {
+          console.error("Error refreshing clubs after category update:", e);
+        }
       } else {
         console.error("Update failed:", resp.message);
         // surface API message and close update confirm
@@ -446,6 +470,17 @@ export function StaffClubsManagement() {
         toast.success("Xóa thể loại thành công");
         // Refetch to get correct order from backend
         await fetchCategories();
+        // Also update categories used in Clubs tab and refresh clubs list
+        try {
+          await loadClubCategories(true);
+        } catch (e) {
+          console.error("Error loading club categories after delete:", e);
+        }
+        try {
+          await fetchClubs();
+        } catch (e) {
+          console.error("Error refreshing clubs after category delete:", e);
+        }
       } else {
         console.error("Delete failed:", resp.message);
         // show API message and close delete confirm
@@ -1054,9 +1089,30 @@ export function StaffClubsManagement() {
                                         <Button
                                           variant="outline"
                                           size="sm"
-                                          onClick={() => {
+                                          onClick={async () => {
+                                            // Open dialog with the list item first, then fetch fresh details
                                             setSelectedClub(club);
                                             setShowViewDialog(true);
+                                            try {
+                                              setDetailLoading(true);
+                                              const detail =
+                                                await getStaffClubDetail(
+                                                  club.id
+                                                );
+                                              setSelectedClub(detail);
+                                            } catch (err: any) {
+                                              console.error(
+                                                "Error fetching club detail:",
+                                                err
+                                              );
+                                              const msg =
+                                                err?.response?.data?.message ||
+                                                err?.message ||
+                                                "Không thể tải chi tiết câu lạc bộ";
+                                              toast.error(msg);
+                                            } finally {
+                                              setDetailLoading(false);
+                                            }
                                           }}
                                         >
                                           <Eye className="h-4 w-4" />
@@ -1071,7 +1127,66 @@ export function StaffClubsManagement() {
                                             {selectedClub?.description}
                                           </DialogDescription>
                                         </DialogHeader>
-                                        {selectedClub && (
+                                        {detailLoading ? (
+                                          <div className="space-y-6">
+                                            <div className="flex gap-4 items-start">
+                                              <div>
+                                                <Skeleton className="h-16 w-16 rounded-full" />
+                                              </div>
+                                              <div className="flex-1">
+                                                <Skeleton className="h-6 w-3/4 mb-2" />
+                                                <div className="flex gap-2">
+                                                  <Skeleton className="h-6 w-24" />
+                                                  <Skeleton className="h-6 w-32" />
+                                                </div>
+                                              </div>
+                                            </div>
+
+                                            <Separator />
+
+                                            <div className="grid grid-cols-2 gap-4">
+                                              <div>
+                                                <Skeleton className="h-4 w-40 mb-3" />
+                                                <div className="space-y-2">
+                                                  <Skeleton className="h-4 w-32" />
+                                                  <Skeleton className="h-4 w-28" />
+                                                  <Skeleton className="h-4 w-20" />
+                                                </div>
+                                              </div>
+                                              <div>
+                                                <Skeleton className="h-4 w-24 mb-3" />
+                                                <div className="space-y-2">
+                                                  <Skeleton className="h-4 w-40" />
+                                                  <Skeleton className="h-4 w-36" />
+                                                </div>
+                                              </div>
+                                            </div>
+
+                                            <Separator />
+
+                                            <div>
+                                              <Skeleton className="h-4 w-52 mb-3" />
+                                              <div className="space-y-3">
+                                                <div className="p-3 bg-muted rounded-lg">
+                                                  <div className="flex items-center gap-2">
+                                                    <Skeleton className="h-8 w-8 rounded-full" />
+                                                    <div>
+                                                      <Skeleton className="h-4 w-40 mb-2" />
+                                                      <Skeleton className="h-4 w-32" />
+                                                    </div>
+                                                  </div>
+                                                </div>
+                                              </div>
+                                            </div>
+
+                                            <Separator />
+
+                                            <div className="flex gap-2">
+                                              <Skeleton className="h-10 w-full" />
+                                              <Skeleton className="h-10 w-full" />
+                                            </div>
+                                          </div>
+                                        ) : selectedClub ? (
                                           <div className="space-y-6">
                                             <div className="flex gap-4 items-start">
                                               <Avatar className="h-16 w-16">
@@ -1110,12 +1225,12 @@ export function StaffClubsManagement() {
                                                   Thông tin chung
                                                 </h4>
                                                 <div className="space-y-2 text-sm">
-                                                  <div>
+                                                  {/* <div>
                                                     <span className="text-muted-foreground">
                                                       Campus:
                                                     </span>{" "}
                                                     {selectedClub.campusName}
-                                                  </div>
+                                                  </div> */}
                                                   <div>
                                                     <span className="text-muted-foreground">
                                                       Thành viên:
@@ -1266,7 +1381,7 @@ export function StaffClubsManagement() {
                                               )}
                                             </div>
                                           </div>
-                                        )}
+                                        ) : null}
                                       </DialogContent>
                                     </Dialog>
                                   </div>
