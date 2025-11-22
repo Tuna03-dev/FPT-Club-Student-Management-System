@@ -770,9 +770,9 @@ export const ClubLayout = () => {
                           {team.teamName.charAt(0).toUpperCase()}
                         </div>
                         <div className="flex-1 truncate">{team.teamName}</div>
-                        <span className="text-[10px] text-muted-foreground">
+                        {/* <span className="text-[10px] text-muted-foreground">
                           {team.memberCount}
-                        </span>
+                        </span> */}
                       </NavLink>
                     );
                   })}
