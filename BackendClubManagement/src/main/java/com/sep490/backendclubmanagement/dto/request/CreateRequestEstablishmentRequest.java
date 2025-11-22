@@ -26,6 +26,20 @@ public class CreateRequestEstablishmentRequest {
 
     private String description; // Mô tả CLB
 
+    private String clubCode; // Mã CLB
+
+    @NotBlank(message = "Email liên hệ không được để trống")
+    private String email; // Email liên hệ
+
+    @NotBlank(message = "Số điện thoại không được để trống")
+    private String phone; // Số điện thoại liên hệ
+
+    private String facebookLink; // Link Facebook (optional)
+
+    private String instagramLink; // Link Instagram (optional)
+
+    private String tiktokLink; // Link TikTok (optional)
+
     // true = lưu bản nháp (DRAFT), false = gửi yêu cầu (SUBMITTED)
     private Boolean isDraft = true;
 }

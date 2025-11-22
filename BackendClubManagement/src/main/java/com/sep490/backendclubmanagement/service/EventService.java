@@ -63,16 +63,17 @@ public class EventService {
         if (!keywords.isEmpty()) {
             events = events.stream()
                     .filter(event -> {
-                        String title = event.getTitle() != null ? event.getTitle().toLowerCase() : "";
-                        String desc = event.getDescription() != null ? event.getDescription().toLowerCase() : "";
-                        String loc = event.getLocation() != null ? event.getLocation().toLowerCase() : "";
+                        String title = normalizeVietnamese(event.getTitle() != null ? event.getTitle() : "");
+                        String desc = normalizeVietnamese(event.getDescription() != null ? event.getDescription() : "");
+                        String loc = normalizeVietnamese(event.getLocation() != null ? event.getLocation() : "");
 
-                        // Ít nhất một keyword khớp
-                        return keywords.stream().anyMatch(kw ->
-                                title.contains(kw.toLowerCase()) ||
-                                        desc.contains(kw.toLowerCase()) ||
-                                        loc.contains(kw.toLowerCase())
-                        );
+                        // Ít nhất một keyword khớp (normalize keyword trước khi so sánh)
+                        return keywords.stream().anyMatch(kw -> {
+                            String normalizedKw = normalizeVietnamese(kw);
+                            return title.contains(normalizedKw) ||
+                                    desc.contains(normalizedKw) ||
+                                    loc.contains(normalizedKw);
+                        });
                     })
                     .toList();
         }
@@ -204,6 +205,15 @@ public class EventService {
             // Fallback to LocalDateTime without zone if provided
             return LocalDateTime.parse(value);
         }
+    }
+
+
+    private String normalizeVietnamese(String text) {
+        if (text == null || text.isBlank()) return "";
+        String normalized = text.replace("đ", "d").replace("Đ", "d");
+        normalized = java.text.Normalizer.normalize(normalized, java.text.Normalizer.Form.NFD);
+        normalized = normalized.replaceAll("\\p{InCombiningDiacriticalMarks}+", "");
+        return normalized.toLowerCase();
     }
 
 

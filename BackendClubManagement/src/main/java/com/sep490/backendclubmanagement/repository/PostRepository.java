@@ -94,32 +94,56 @@ public interface PostRepository extends JpaRepository<Post, Long> {
             Pageable pageable
     );
 
-    //Search
-    @EntityGraph(attributePaths = {
-            "club", "createdBy", "team",
-            "comments", "comments.user",
-            "likes", "likes.user",
-            "postMedia"
-    })
+   // search
+   // Admin search tất cả bài trong CLB
+   @Query("""
+       select p from Post p
+       where p.club.id = :clubId
+         and p.status = :status
+         and (
+             lower(p.title) like lower(concat('%', :q, '%'))
+          or lower(p.content) like lower(concat('%', :q, '%'))
+         )
+       """)
+   List<Post> searchAdminScope(
+           @Param("clubId") Long clubId,
+           @Param("status") String status,
+           @Param("q") String q
+   );
+
     @Query("""
-           select p from Post p
-           where (:clubId is null or p.club.id = :clubId)
-             and (:teamId is null or p.team.id = :teamId)
-             and (:clubWide is null or p.IsClubWide = :clubWide)
-             and p.status = :status
-             and (
-                   lower(p.title)   like lower(concat('%', :q, '%'))
-                or lower(p.content) like lower(concat('%', :q, '%'))
-             )
-           """)
-    Page<Post> searchPosts(
-            @Param("clubId")   Long clubId,          // null => bỏ lọc
-            @Param("teamId")   Long teamId,          // null => bỏ lọc
-            @Param("clubWide") Boolean clubWide,     // null => bỏ lọc
-            @Param("status")   String status,        // ví dụ: "PUBLISHED"
-            @Param("q")        String q,             // từ khóa
-            Pageable pageable
+       select p from Post p
+       where p.club.id = :clubId
+         and p.IsClubWide = true
+         and p.status = :status
+         and (
+             lower(p.title) like lower(concat('%', :q, '%'))
+          or lower(p.content) like lower(concat('%', :q, '%'))
+         )
+       """)
+    List<Post> searchClubWideOnly(
+            @Param("clubId") Long clubId,
+            @Param("status") String status,
+            @Param("q") String q
     );
+
+    @Query("""
+       select p from Post p
+       where p.club.id = :clubId
+         and p.team.id in :teamIds
+         and p.status = :status
+         and (
+             lower(p.title) like lower(concat('%', :q, '%'))
+          or lower(p.content) like lower(concat('%', :q, '%'))
+         )
+       """)
+    List<Post> searchTeamScope(
+            @Param("clubId") Long clubId,
+            @Param("teamIds") List<Long> teamIds,
+            @Param("status") String status,
+            @Param("q") String q
+    );
+
 
     // Chủ nhiệm / phó chủ nhiệm: thấy TẤT CẢ post của CLB (mọi team + club-wide)
     @EntityGraph(attributePaths = {
@@ -141,6 +165,9 @@ public interface PostRepository extends JpaRepository<Post, Long> {
             "likes", "likes.user",
             "postMedia"
     })
+
+
+    // feed
     @Query("""
        select p
        from Post p
@@ -157,6 +184,7 @@ public interface PostRepository extends JpaRepository<Post, Long> {
             @Param("teamIds") List<Long> teamIds,
             Pageable pageable
     );
+
 
 
 }

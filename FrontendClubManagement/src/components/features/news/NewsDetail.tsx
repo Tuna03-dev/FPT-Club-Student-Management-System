@@ -1,9 +1,35 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Calendar, Tag, Facebook, Phone } from "lucide-react"
+import { Calendar, Tag, Facebook } from "lucide-react"
 import { Link } from "react-router-dom"
 import { getNewsById, type NewsData } from "@/service/NewsService"
+
+// Convert URLs in text to clickable links
+const convertUrlsToLinks = (text: string): React.ReactNode => {
+  if (!text) return text
+  
+  const urlRegex = /(https?:\/\/[^\s]+)/g
+  const parts = text.split(urlRegex)
+  
+  return parts.map((part, index) => {
+    // Check if this part is a URL
+    if (part.match(/^https?:\/\//)) {
+      return (
+        <a
+          key={index}
+          href={part}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-primary hover:underline break-all"
+        >
+          {part}
+        </a>
+      )
+    }
+    return <span key={index}>{part}</span>
+  })
+}
 
 interface NewsDetailProps {
   newsId: string
@@ -114,13 +140,19 @@ export function NewsDetail({ newsId }: NewsDetailProps) {
         <h1 className="text-4xl font-bold text-foreground mb-6 leading-tight">{news.title}</h1>
 
         {/* Action Buttons */}
-        <div className="grid grid-cols-2 gap-3 mb-6">
-          <button className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 text-sm">
-            <Phone className="w-4 h-4" />
-            <span>Liên hệ</span>
-          </button>
-          <button className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 text-sm">
-            <Facebook className="w-4 h-4" />
+        <div className="flex justify-end mb-6">
+          <button 
+            onClick={() => {
+              const url = window.location.href
+              // Facebook Share với text mặc định (quote parameter - có thể không hoạt động do Facebook đã deprecated)
+              // Nhưng vẫn thử để có thể hoạt động trong một số trường hợp
+              const shareText = news.title
+              const facebookShareUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}&quote=${encodeURIComponent(shareText)}`
+              window.open(facebookShareUrl, '_blank', 'width=600,height=400')
+            }}
+            className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors flex items-center justify-center gap-2"
+          >
+            <Facebook className="w-5 h-5" />
             <span>Chia sẻ Facebook</span>
           </button>
         </div>
@@ -128,9 +160,9 @@ export function NewsDetail({ newsId }: NewsDetailProps) {
         {/* Article content */}
         <div className="prose prose-lg max-w-none">
           <div className="text-lg text-foreground leading-relaxed space-y-6">
-            <p className="text-base text-foreground/90 whitespace-pre-line">
-              {news.content}
-            </p>
+            <div className="text-base text-foreground/90 whitespace-pre-line">
+              {convertUrlsToLinks(news.content || "")}
+            </div>
           </div>
         </div>
       </div>

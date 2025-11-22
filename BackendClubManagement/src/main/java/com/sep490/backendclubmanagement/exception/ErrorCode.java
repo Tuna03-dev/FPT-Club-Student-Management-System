@@ -37,7 +37,15 @@ public enum ErrorCode {
     // Club Category related errors
     CLUB_CATEGORY_NOT_FOUND(HttpStatus.NOT_FOUND, 6000, "Không tìm thấy thể loại câu lạc bộ"),
     CLUB_CATEGORY_ALREADY_EXISTS(HttpStatus.BAD_REQUEST, 6001, "Tên thể loại câu lạc bộ đã tồn tại"),
-    CLUB_CATEGORY_IN_USE(HttpStatus.BAD_REQUEST, 6002, "Không thể xóa thể loại này vì đang có câu lạc bộ sử dụng");
+    CLUB_CATEGORY_IN_USE(HttpStatus.BAD_REQUEST, 6002, "Không thể xóa thể loại này vì đang có câu lạc bộ sử dụng"),
+
+    // Campus related errors
+    CAMPUS_NOT_FOUND(HttpStatus.NOT_FOUND, 7000, "Không tìm thấy cơ sở"),
+
+    // Club management errors
+    CLUB_CODE_EXISTED(HttpStatus.BAD_REQUEST, 8000, "Mã câu lạc bộ đã tồn tại"),
+    CLUB_NAME_EXISTED(HttpStatus.BAD_REQUEST, 8001, "Tên câu lạc bộ đã tồn tại"),
+    USER_NOT_VALID(HttpStatus.BAD_REQUEST, 8002, "Email người dùng không hợp lệ hoặc không thuộc tổ chức");
 
     private final HttpStatus httpStatus;
     private final int code;

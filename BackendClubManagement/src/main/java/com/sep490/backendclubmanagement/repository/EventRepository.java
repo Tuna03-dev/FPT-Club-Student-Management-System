@@ -43,6 +43,7 @@ public interface EventRepository extends JpaRepository<Event, Long> {
                                                  OR (e.end_time >= :#{#request.startTime} AND e.start_time <= :#{#request.endTime})
                                              )
                                             AND e.is_draft = false
+                                            AND (et.type_name IS NULL OR UPPER(TRIM(et.type_name)) <> 'MEETING')
           """, nativeQuery = true,countProjection = "e.id")
     public Page<Event> getAllByFilter(EventRequest request, Pageable pageable);
 

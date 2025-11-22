@@ -14,6 +14,9 @@ public class ProposeDefenseScheduleRequest {
     @NotNull(message = "Ngày giờ bảo vệ không được để trống")
     private LocalDateTime defenseDate;
 
+    @NotNull(message = "Thời gian kết thúc không được để trống")
+    private LocalDateTime defenseEndDate;
+
     @NotBlank(message = "Địa điểm không được để trống")
     private String location;
 

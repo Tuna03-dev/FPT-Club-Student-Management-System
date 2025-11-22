@@ -60,6 +60,7 @@ import ClubDetailPage from "@/pages/myclub/ClubDetailPage";
 import StaffNotifications from "@/pages/myclub/staff/StaffNotifications";
 import CreateClubPage from "@/pages/CreateClubPage";
 import ClubCreationManagement from "@/pages/staff/ClubCreationManagement";
+import { StaffClubsManagement } from "@/pages/staff/ClubManagement";
 export const router = createBrowserRouter([
   {
     path: "/",
@@ -281,6 +282,10 @@ export const router = createBrowserRouter([
       {
         path: "reports",
         element: <StaffReportManagement />,
+      },
+      {
+        path: "clubs",
+        element: <StaffClubsManagement />,
       },
       {
         path: "report/:reportId/clubs",
