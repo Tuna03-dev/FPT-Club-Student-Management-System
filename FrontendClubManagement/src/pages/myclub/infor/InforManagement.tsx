@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
@@ -85,6 +85,23 @@ export function ClubInforManagement() {
 
   const [categories, setCategories] = useState<ClubCategoryDTO[]>([]);
   const [loadingCategories, setLoadingCategories] = useState(false);
+
+  // stable sorted presidents list to avoid swapping when clubData updates
+  const presidents = useMemo(() => {
+    const list = (clubData?.presidents ?? []).slice();
+    list.sort((a, b) => {
+      const ai = a?.userId ?? 0;
+      const bi = b?.userId ?? 0;
+      if (ai !== bi) return ai - bi;
+      const ae = (a?.email || "").toString();
+      const be = (b?.email || "").toString();
+      if (ae !== be) return ae.localeCompare(be);
+      const an = (a?.fullName || "").toString();
+      const bn = (b?.fullName || "").toString();
+      return an.localeCompare(bn);
+    });
+    return list;
+  }, [clubData?.presidents]);
 
   // Fetch club data on mount
   useEffect(() => {
@@ -609,34 +626,36 @@ export function ClubInforManagement() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {clubData?.presidents && clubData.presidents.length > 0 ? (
+          {presidents.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {clubData.presidents.map((president) => (
-                <div
-                  key={president.userId}
-                  className="flex items-center gap-3 p-3 rounded-lg border bg-card hover:shadow-md transition-shadow"
-                >
-                  {/* Avatar */}
-                  <div className="flex-shrink-0">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary font-semibold">
-                      {(president.userName &&
-                        president.userName.charAt(0).toUpperCase()) ||
-                        "?"}
+              {presidents.map((president, idx) => {
+                const key = president?.userId ?? president?.email ?? idx;
+                const initial = (
+                  (president?.fullName || "").trim().charAt(0) || "?"
+                ).toUpperCase();
+                const name = president?.fullName ?? "—";
+                const email = president?.email ?? "—";
+
+                return (
+                  <div
+                    key={key}
+                    className="flex items-center gap-3 p-3 rounded-lg border bg-card hover:shadow-md transition-shadow"
+                  >
+                    <div className="flex-shrink-0">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary font-semibold">
+                        {initial}
+                      </div>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-medium text-sm truncate">{name}</h4>
+                      <p className="text-xs text-muted-foreground truncate flex items-center gap-1">
+                        <Mail className="h-3 w-3 flex-shrink-0" />
+                        <span className="truncate">{email}</span>
+                      </p>
                     </div>
                   </div>
-
-                  {/* Info */}
-                  <div className="flex-1 min-w-0">
-                    <h4 className="font-medium text-sm truncate">
-                      {president.userName}
-                    </h4>
-                    <p className="text-xs text-muted-foreground truncate flex items-center gap-1">
-                      <Mail className="h-3 w-3 flex-shrink-0" />
-                      <span className="truncate">{president.email}</span>
-                    </p>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center py-8 text-center">

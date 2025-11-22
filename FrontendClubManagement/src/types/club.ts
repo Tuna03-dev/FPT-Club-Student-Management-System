@@ -17,7 +17,7 @@ export interface ClubDetailDTO {
 
 export interface ClubPresidentData {
   userId: number;
-  userName: string;
+  fullName: string;
   email: string;
 }
 

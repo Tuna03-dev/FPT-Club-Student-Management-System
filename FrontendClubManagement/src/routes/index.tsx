@@ -96,7 +96,6 @@ export const router = createBrowserRouter([
 
       // B vẫn giữ các biến thể cũ để không phá link đang dùng
       { path: "club/:clubId", element: <ClubDetail /> },
-      { path: "clubDetail/:clubId", element: <ClubDetail /> },
 
       {
         path: "achievements",

@@ -431,6 +431,9 @@ public class ClubService implements ClubServiceInterface {
         response.setTotalMembers(clubRepository.countMembersByClubId(club.getId()));
         response.setTotalEvents(clubRepository.countEventsByClubId(club.getId()));
         response.setTotalPosts(clubRepository.countNewsByClubId(club.getId()));
+        // Find all presidents manually and set to result
+        List<ClubPresidentData> presidents = findClubPresidentsManually(club);
+        response.setPresidents(presidents);
         return response;
     }
 
