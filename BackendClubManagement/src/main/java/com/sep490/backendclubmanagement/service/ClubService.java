@@ -2,6 +2,7 @@ package com.sep490.backendclubmanagement.service;
 
 import com.sep490.backendclubmanagement.dto.request.ClubFilterRequest;
 import com.sep490.backendclubmanagement.dto.request.CreateClubRequest;
+import com.sep490.backendclubmanagement.dto.request.UpdateClubInfoRequest;
 import com.sep490.backendclubmanagement.dto.request.UpdateClubRequest;
 import com.sep490.backendclubmanagement.dto.response.ClubDetailData;
 import com.sep490.backendclubmanagement.dto.response.ClubDto;
@@ -48,12 +49,6 @@ public class ClubService implements ClubServiceInterface {
                 .orElseThrow(() -> new AppException(ErrorCode.CLUB_NOT_FOUND));
         
         ClubDetailData result = clubMapper.toClubDetailData(club);
-        
-        // Set statistics using count queries (avoid N+1 and Cartesian product)
-        result.setTotalMembers(clubRepository.countMembersByClubId(clubId));
-        result.setTotalEvents(clubRepository.countEventsByClubId(clubId));
-        result.setTotalPosts(clubRepository.countNewsByClubId(clubId));
-        result.setIsRecruiting(clubRepository.hasActiveRecruitment(clubId));
         
         // Find all presidents manually and set to result
         List<ClubPresidentData> presidents = findClubPresidentsManually(club);
@@ -437,6 +432,109 @@ public class ClubService implements ClubServiceInterface {
         response.setTotalEvents(clubRepository.countEventsByClubId(club.getId()));
         response.setTotalPosts(clubRepository.countNewsByClubId(club.getId()));
         return response;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ClubDetailData getClubInfo(Long clubId, Long userId) throws AppException {
+        // Kiểm tra user có phải thành viên ACTIVE của club không
+        boolean isMember = clubMemberShipRepository.existsByUserIdAndClubIdAndStatus(
+            userId, clubId, ClubMemberShipStatus.ACTIVE
+        );
+        if (!isMember) {
+            throw new AppException(ErrorCode.FORBIDDEN);
+        }
+
+        // Lấy thông tin club
+        return getClubDetail(clubId);
+    }
+
+    @Override
+    @Transactional
+    public ClubDetailData updateClubInfo(Long clubId, UpdateClubInfoRequest request, Long userId) throws AppException {
+        boolean isClubOfficer = roleMemberShipRepository.existsClubAdmin(userId, clubId);
+        if (!isClubOfficer) {
+            throw new AppException(ErrorCode.FORBIDDEN);
+        }
+
+        // Tìm club
+        Club club = clubRepository.findById(clubId)
+                .orElseThrow(() -> new AppException(ErrorCode.CLUB_NOT_FOUND));
+
+        // ===== Validate and update clubCode (allow updating clubCode) =====
+        if (request.getClubCode() != null) {
+            String newCode = request.getClubCode().trim();
+            if (!newCode.equals(club.getClubCode())) {
+                // Nếu có club khác đã dùng mã này -> lỗi
+                clubRepository.findByClubCode(newCode).ifPresent(existing -> {
+                    if (!existing.getId().equals(clubId)) {
+                        throw new RuntimeException("CLUB_CODE_EXISTED");
+                    }
+                });
+                club.setClubCode(newCode);
+            }
+        }
+
+        // ===== Validate and update clubName (cannot update to an existing name) =====
+        if (request.getClubName() != null) {
+            String newName = request.getClubName().trim();
+            if (!newName.equals(club.getClubName())) {
+                clubRepository.findByClubName(newName).ifPresent(existing -> {
+                    if (!existing.getId().equals(clubId)) {
+                        throw new RuntimeException("CLUB_NAME_EXISTED");
+                    }
+                });
+                club.setClubName(newName);
+            }
+        }
+
+        // Cập nhật các field còn lại (chỉ cập nhật khi khác null)
+        if (request.getDescription() != null) {
+            club.setDescription(request.getDescription());
+        }
+        if (request.getLogoUrl() != null) {
+            club.setLogoUrl(request.getLogoUrl());
+        }
+        if (request.getBannerUrl() != null) {
+            club.setBannerUrl(request.getBannerUrl());
+        }
+        if (request.getEmail() != null) {
+            club.setEmail(request.getEmail());
+        }
+        if (request.getPhone() != null) {
+            club.setPhone(request.getPhone());
+        }
+        if (request.getFbUrl() != null) {
+            club.setFbUrl(request.getFbUrl());
+        }
+        if (request.getIgUrl() != null) {
+            club.setIgUrl(request.getIgUrl());
+        }
+        if (request.getTtUrl() != null) {
+            club.setTtUrl(request.getTtUrl());
+        }
+        if (request.getYtUrl() != null) {
+            club.setYtUrl(request.getYtUrl());
+        }
+
+        // Lưu thay đổi — trước sẽ ném RuntimeException nếu trùng tên/mã, chuyển sang AppException
+        try {
+            clubRepository.save(club);
+        } catch (RuntimeException ex) {
+            String msg = ex.getMessage();
+            if ("CLUB_CODE_EXISTED".equals(msg)) {
+                throw new AppException(ErrorCode.CLUB_CODE_EXISTED);
+            }
+            if ("CLUB_NAME_EXISTED".equals(msg)) {
+                throw new AppException(ErrorCode.CLUB_NAME_EXISTED);
+            }
+            throw ex;
+        }
+
+        log.info("Club officer {} updated club {} information", userId, clubId);
+
+        // Trả về thông tin club đã cập nhật
+        return getClubDetail(clubId);
     }
 }
 

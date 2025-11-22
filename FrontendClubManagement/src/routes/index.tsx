@@ -16,6 +16,7 @@ import { StaffEventList } from "@/pages/myclub/staff/StaffEventList";
 import EventAttendancePage from "@/pages/myclub/events/attendance/AttendancePage";
 import { Notifications } from "@/pages/myclub/Notifications";
 import { Settings } from "@/pages/myclub/Settings";
+import { ClubInforManagement } from "@/pages/myclub/infor/InforManagement";
 
 import { EventsPage } from "@/pages/events/EventPageList";
 import NewsPageList from "@/pages/news/NewsPageList";
@@ -164,7 +165,10 @@ export const router = createBrowserRouter([
       { path: "staff", element: <StaffList /> },
       { path: "campus", element: <CampusManagement /> },
       { path: "semester", element: <SemesterManagement /> },
-      { path: "settings", element: <div className="p-6">Cấu hình hệ thống</div> },
+      {
+        path: "settings",
+        element: <div className="p-6">Cấu hình hệ thống</div>,
+      },
       {
         path: "settings",
         element: <div className="p-6">Cấu hình hệ thống</div>,
@@ -242,6 +246,7 @@ export const router = createBrowserRouter([
       { path: "payments", element: <Payment /> },
       { path: "notifications", element: <Notifications /> },
       { path: "settings", element: <Settings /> },
+      { path: "information", element: <ClubInforManagement /> },
       { path: "teams/:teamId", element: <TeamDetailPage /> },
       { path: "reports", element: <ClubReportManagement /> },
 
