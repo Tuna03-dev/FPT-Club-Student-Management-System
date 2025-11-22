@@ -186,7 +186,7 @@ export default function Finance() {
   );
 
   const fetchFees = useCallback(
-    async (page: number = 0) => {
+    async (page: number = 0, search?: string, isExpired?: boolean) => {
       if (!Number.isFinite(numericClubId) || numericClubId <= 0) {
         setFeesPage(null);
         return;
@@ -196,6 +196,8 @@ export default function Finance() {
         const res = await feeService.getFees(numericClubId, {
           page,
           size: PAGE_SIZE,
+          search,
+          isExpired,
         });
         if (res.code === 200 && res.data) {
           const pageData = res.data;
@@ -271,9 +273,9 @@ export default function Finance() {
   }, [fetchFees]);
 
   const handleReloadFees = useCallback(
-    async (page?: number) => {
+    async (page?: number, search?: string, isExpired?: boolean) => {
       const targetPage = page ?? currentPage;
-      await fetchFees(targetPage);
+      await fetchFees(targetPage, search, isExpired);
     },
     [currentPage, fetchFees]
   );

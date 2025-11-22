@@ -39,5 +39,15 @@ public interface IncomeTransactionRepository extends JpaRepository<IncomeTransac
             @Param("clubWalletId") Long clubWalletId,
             @Param("status") TransactionStatus status,
             Pageable pageable);
+
+    /**
+     * Find all income transactions by fee and status
+     */
+    @Query("SELECT i FROM IncomeTransaction i " +
+           "LEFT JOIN FETCH i.user " +
+           "WHERE i.fee.id = :feeId AND i.status = :status")
+    java.util.List<IncomeTransaction> findByFee_IdAndStatus(
+            @Param("feeId") Long feeId,
+            @Param("status") TransactionStatus status);
 }
 

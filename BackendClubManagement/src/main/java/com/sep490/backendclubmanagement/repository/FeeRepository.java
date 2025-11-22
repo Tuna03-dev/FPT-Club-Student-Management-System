@@ -57,5 +57,35 @@ public interface FeeRepository extends JpaRepository<Fee, Long> {
                                             Pageable pageable);
 
     List<Fee> findByDueDateBeforeAndHasEverExpiredFalseAndIsDraftFalse(LocalDate date);
+
+    /**
+     * Find all fees that have successful income transactions but hasEverExpired is still false
+     * These fees should be locked because someone has already paid
+     */
+    @Query("SELECT DISTINCT f FROM Fee f " +
+            "JOIN f.incomeTransactions it " +
+            "WHERE f.hasEverExpired = false " +
+            "AND f.isDraft = false " +
+            "AND it.status = 'SUCCESS'")
+    List<Fee> findFeesWithSuccessfulPaymentsButNotLocked();
+
+    /**
+     * Search fees by club with optional filters
+     * JPQL query - Hibernate tự động convert camelCase -> snake_case
+     * Search không dấu được xử lý trong service layer
+     *
+     * @param clubId Club ID
+     * @param isExpired Filter by expiration status: true=expired only, false=active only, null=all
+     * @param pageable Pagination with sorting support
+     */
+    @Query("SELECT f FROM Fee f " +
+            "WHERE f.club.id = :clubId " +
+            "AND f.isDraft = false " +
+            "AND (:isExpired IS NULL OR " +
+            "    (:isExpired = true AND f.dueDate < CURRENT_DATE) OR " +
+            "    (:isExpired = false AND (f.dueDate IS NULL OR f.dueDate >= CURRENT_DATE)))")
+    Page<Fee> searchFees(@Param("clubId") Long clubId,
+                         @Param("isExpired") Boolean isExpired,
+                         Pageable pageable);
 }
 
