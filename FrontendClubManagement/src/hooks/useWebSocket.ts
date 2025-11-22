@@ -29,6 +29,35 @@ export interface NotificationWebSocketPayload {
   createdAt: string;
 }
 
+export interface ClubCreationWebSocketPayload {
+  requestId: number;
+  clubName: string;
+  status: string;
+  assignedStaffId?: number;
+  assignedStaffName?: string;
+  assignedStaffEmail?: string;
+  creatorId?: number;
+  creatorName?: string;
+  creatorEmail?: string;
+  deadline?: string;
+  reason?: string;
+  comment?: string;
+  message?: string;
+  proposalId?: number;
+  proposalTitle?: string;
+  defenseScheduleId?: number;
+  defenseDate?: string;
+  defenseEndDate?: string;
+  location?: string;
+  meetingLink?: string;
+  defenseResult?: string;
+  feedback?: string;
+  finalFormId?: number;
+  finalFormTitle?: string;
+  clubId?: number;
+  clubCode?: string;
+}
+
 interface UseWebSocketOptions {
   url?: string;
   reconnectDelay?: number;
