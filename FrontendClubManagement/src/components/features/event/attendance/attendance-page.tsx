@@ -43,7 +43,6 @@ interface AttendancePageProps {
 
 export function AttendancePage({ eventId, event: propEvent }: AttendancePageProps) {
   const [searchParams] = useSearchParams()
-  const user = authService.getCurrentUser()
   const [searchTerm, setSearchTerm] = useState("")
   const [students, setStudents] = useState<Student[]>([])
   const [loading, setLoading] = useState(false)

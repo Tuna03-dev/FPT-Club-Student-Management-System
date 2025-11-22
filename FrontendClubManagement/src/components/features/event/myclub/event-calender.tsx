@@ -966,7 +966,7 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
             onEventClick={handleEventClick}
             getStatusColor={getStatusColor}
             getEventsForDate={getEventsForDate}
-            clubId={clubId}
+            clubId={clubId as number | undefined}
           />
         </div>
 
