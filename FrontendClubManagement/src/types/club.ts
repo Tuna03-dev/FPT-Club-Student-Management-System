@@ -73,4 +73,5 @@ export interface UpdateClubInfoRequest {
   igUrl?: string;
   ttUrl?: string;
   ytUrl?: string;
+  categoryId?: number;
 }

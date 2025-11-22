@@ -52,6 +52,7 @@ interface ClubFormData {
   logoUrl: string;
   bannerUrl: string;
   categoryName: string;
+  categoryId: number;
 }
 
 export function ClubInforManagement() {
@@ -79,6 +80,7 @@ export function ClubInforManagement() {
     logoUrl: "",
     bannerUrl: "",
     categoryName: "",
+    categoryId: 0,
   });
 
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -125,6 +127,7 @@ export function ClubInforManagement() {
           logoUrl: data.logoUrl || "",
           bannerUrl: data.bannerUrl || "",
           categoryName: data.categoryName || "",
+          categoryId: data.categoryId || 0,
         });
       } catch (error) {
         console.error("Error fetching club data:", error);
@@ -183,6 +186,7 @@ export function ClubInforManagement() {
         ytUrl: formData.ytUrl,
         logoUrl: formData.logoUrl,
         bannerUrl: formData.bannerUrl,
+        categoryId: formData.categoryId || undefined,
       };
 
       const updatedData = await updateClubInfo(clubIdNum, request);
@@ -234,7 +238,9 @@ export function ClubInforManagement() {
         ytUrl: clubData.ytUrl || "",
         logoUrl: clubData.logoUrl || "",
         bannerUrl: clubData.bannerUrl || "",
+
         categoryName: clubData.categoryName || "",
+        categoryId: clubData.categoryId || 0,
       });
     }
     setIsEditing(false);
@@ -464,15 +470,15 @@ export function ClubInforManagement() {
                 {!isEditing ? (
                   <Input
                     id="category"
-                    value={formData.categoryName}
+                    value={clubData?.categoryName || ""}
                     disabled={true}
                     placeholder="Thể loại câu lạc bộ"
                   />
                 ) : (
                   <Select
-                    value={formData.categoryName}
+                    value={formData.categoryId ? String(formData.categoryId) : ""}
                     onValueChange={(value) =>
-                      handleInputChange("categoryName", value)
+                      handleInputChange("categoryId", Number(value))
                     }
                     disabled={loadingCategories}
                   >
@@ -485,7 +491,7 @@ export function ClubInforManagement() {
                     </SelectTrigger>
                     <SelectContent>
                       {categories.map((cat) => (
-                        <SelectItem key={cat.id} value={cat.categoryName}>
+                        <SelectItem key={cat.id} value={String(cat.id)}>
                           {cat.categoryName}
                         </SelectItem>
                       ))}

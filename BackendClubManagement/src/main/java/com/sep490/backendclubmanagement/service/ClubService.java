@@ -519,6 +519,11 @@ public class ClubService implements ClubServiceInterface {
         if (request.getYtUrl() != null) {
             club.setYtUrl(request.getYtUrl());
         }
+        if(request.getCategoryId() != 0) {
+            ClubCategory category = clubCategoryRepository.findById(request.getCategoryId())
+                    .orElseThrow(() -> new AppException(ErrorCode.CLUB_CATEGORY_NOT_FOUND));
+            club.setClubCategory(category);
+        }
 
         // Lưu thay đổi — trước sẽ ném RuntimeException nếu trùng tên/mã, chuyển sang AppException
         try {

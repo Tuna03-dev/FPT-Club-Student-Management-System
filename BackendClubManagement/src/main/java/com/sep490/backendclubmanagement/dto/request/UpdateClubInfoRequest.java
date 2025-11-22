@@ -20,6 +20,7 @@ public class UpdateClubInfoRequest {
     private String logoUrl;
 
     private String bannerUrl;
+    private long categoryId;
 
     @Email(message = "Email không hợp lệ")
     @Size(max = 100, message = "Email không được quá 100 ký tự")
