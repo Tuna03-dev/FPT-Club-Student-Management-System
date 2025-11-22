@@ -14,6 +14,7 @@ import {
   Plus,
   Newspaper,
   X,
+  ClipboardList,
 } from "lucide-react";
 import {
   NavLink,
@@ -125,6 +126,13 @@ const managementItems: ManagementItem[] = [
     label: "Quản lý tài chính",
     requiredRole: "CLUB_OFFICER",
   },
+  {
+    key: "manage_information",
+    url: "/information",
+    icon: ClipboardList,
+    label: "Quản lý thông tin",
+    requiredRole: "MEMBER",
+  },
 ];
 
 const managementColors: Record<string, string> = {
@@ -137,6 +145,7 @@ const managementColors: Record<string, string> = {
   pending_requests: "bg-gradient-to-br from-orange-500 to-orange-600",
   manage_reports: "bg-gradient-to-br from-pink-500 to-pink-600",
   club_news: "bg-gradient-to-br from-indigo-500 to-indigo-600",
+  manage_information: "bg-gradient-to-br from-indigo-500 to-indigo-600",
 };
 
 export const ClubLayout = () => {
@@ -639,8 +648,8 @@ export const ClubLayout = () => {
                         {userRoleLevel === "CLUB_OFFICER"
                           ? "QUẢN LÝ"
                           : userRoleLevel === "TEAM_OFFICER"
-                          ? "QUẢN LÝ"
-                          : "DANH MỤC"}
+                            ? "QUẢN LÝ"
+                            : "DANH MỤC"}
                       </h3>
                       {filteredManagementItems.map((item) => (
                         <DropdownMenuItem key={item.key} asChild>
@@ -679,8 +688,8 @@ export const ClubLayout = () => {
                         {userRoleLevel === "CLUB_OFFICER"
                           ? "QUẢN LÝ"
                           : userRoleLevel === "TEAM_OFFICER"
-                          ? "QUẢN LÝ"
-                          : "DANH MỤC"}
+                            ? "QUẢN LÝ"
+                            : "DANH MỤC"}
                       </h2>
                       {!permissionsLoading && userRoleLevel === "MEMBER" && (
                         <p className="text-[10px] text-muted-foreground mt-1">

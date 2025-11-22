@@ -32,17 +32,18 @@ public class SecurityConfig {
     private final CustomAccessDeniedHandler customAccessDeniedHandler;
 
     // System Role Constants
-    public static final String ROLE_ADMIN = "ADMIN";
-    public static final String ROLE_STAFF = "STAFF";
-    public static final String ROLE_STUDENT = "STUDENT";
+    public static final String ROLE_ADMIN = "ROLE_ADMIN";
+    public static final String ROLE_STAFF = "ROLE_STAFF";
+    public static final String ROLE_STUDENT = "ROLE_STUDENT";
 
-    // Authority strings for @PreAuthorize and @Secured annotations
-    public static final String AUTHORITY_ADMIN = "hasAuthority('ADMIN')";
-    public static final String AUTHORITY_STAFF = "hasAuthority('STAFF')";
-    public static final String AUTHORITY_STUDENT = "hasAuthority('STUDENT')";
+    // Authority strings for @PreAuthorize annotations
+    public static final String AUTHORITY_ADMIN = "hasAuthority('ROLE_ADMIN')";
+    public static final String AUTHORITY_STAFF = "hasAuthority('ROLE_STAFF')";
+    public static final String AUTHORITY_STUDENT = "hasAuthority('ROLE_STUDENT')";
 
-    public static final String AUTHORITY_ADMIN_OR_STAFF = "hasAnyAuthority('ADMIN', 'STAFF')";
-    public static final String AUTHORITY_ALL_ROLES = "hasAnyAuthority('ADMIN', 'STAFF', 'STUDENT')";
+    public static final String AUTHORITY_ADMIN_OR_STAFF = "hasAnyAuthority('ROLE_ADMIN', 'ROLE_STAFF')";
+    public static final String AUTHORITY_ALL_ROLES = "hasAnyAuthority('ROLE_ADMIN', 'ROLE_STAFF', 'ROLE_STUDENT')";
+
 
     // Only truly public endpoints (no authentication required)
     private final String[] PUBLIC_URL = {
