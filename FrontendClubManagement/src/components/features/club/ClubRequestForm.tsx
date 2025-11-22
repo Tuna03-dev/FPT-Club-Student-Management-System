@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -13,6 +13,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Send } from "lucide-react";
 import { toast } from "sonner";
+import { clubCreationApi, type ClubCategory } from "@/api/clubCreation";
 
 interface ClubRequestFormProps {
   onSubmit: (formData: ClubRequestFormData) => void;
@@ -24,6 +25,7 @@ export interface ClubRequestFormData {
   category: string;
   description: string;
   targetMembers: string;
+  expectedMemberCount: number;
   email: string;
   phone: string;
   facebookLink?: string;
@@ -38,12 +40,15 @@ export function ClubRequestForm({ onSubmit }: ClubRequestFormProps) {
     category: "",
     description: "",
     targetMembers: "",
+    expectedMemberCount: 0,
     email: "",
     phone: "",
     facebookLink: "",
     instagramLink: "",
     tiktokLink: "",
   });
+  const [categories, setCategories] = useState<ClubCategory[]>([]);
+  const [isCategoryLoading, setIsCategoryLoading] = useState(false);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -56,6 +61,24 @@ export function ClubRequestForm({ onSubmit }: ClubRequestFormProps) {
     setFormData((prev) => ({ ...prev, category: value }));
   };
 
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        setIsCategoryLoading(true);
+        const data = await clubCreationApi.getClubCategories();
+        setCategories(data);
+      } catch (error: any) {
+        toast.error("Không thể tải danh sách lĩnh vực", {
+          description: error.message || "Đã xảy ra lỗi",
+        });
+      } finally {
+        setIsCategoryLoading(false);
+      }
+    };
+
+    fetchCategories();
+  }, []);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -65,6 +88,8 @@ export function ClubRequestForm({ onSubmit }: ClubRequestFormProps) {
       !formData.category ||
       !formData.description ||
       !formData.targetMembers ||
+      !formData.expectedMemberCount ||
+      formData.expectedMemberCount <= 0 ||
       !formData.email ||
       !formData.phone
     ) {
@@ -81,6 +106,7 @@ export function ClubRequestForm({ onSubmit }: ClubRequestFormProps) {
       category: "",
       description: "",
       targetMembers: "",
+      expectedMemberCount: 0,
       email: "",
       phone: "",
       facebookLink: "",
@@ -130,20 +156,26 @@ export function ClubRequestForm({ onSubmit }: ClubRequestFormProps) {
             <Label htmlFor="category">
               Lĩnh vực hoạt động <span className="text-red-500">*</span>
             </Label>
-            <Select
-              value={formData.category}
-              onValueChange={handleSelectChange}
-            >
+            <Select value={formData.category} onValueChange={handleSelectChange}>
               <SelectTrigger>
                 <SelectValue placeholder="Chọn lĩnh vực" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="technology">Công nghệ</SelectItem>
-                <SelectItem value="sports">Thể thao</SelectItem>
-                <SelectItem value="arts">Nghệ thuật</SelectItem>
-                <SelectItem value="social">Xã hội</SelectItem>
-                <SelectItem value="academic">Học thuật</SelectItem>
-                <SelectItem value="other">Khác</SelectItem>
+                {isCategoryLoading ? (
+                  <div className="px-4 py-2 text-sm text-muted-foreground">
+                    Đang tải...
+                  </div>
+                ) : categories.length > 0 ? (
+                  categories.map((category) => (
+                    <SelectItem key={category.id} value={category.categoryName}>
+                      {category.categoryName}
+                    </SelectItem>
+                  ))
+                ) : (
+                  <div className="px-4 py-2 text-sm text-muted-foreground">
+                    Chưa có dữ liệu lĩnh vực
+                  </div>
+                )}
               </SelectContent>
             </Select>
           </div>
@@ -173,6 +205,27 @@ export function ClubRequestForm({ onSubmit }: ClubRequestFormProps) {
               placeholder="VD: Sinh viên yêu thích lập trình, muốn phát triển kỹ năng coding"
               value={formData.targetMembers}
               onChange={handleChange}
+              required
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="expectedMemberCount">
+              Số lượng thành viên dự kiến <span className="text-red-500">*</span>
+            </Label>
+            <Input
+              id="expectedMemberCount"
+              name="expectedMemberCount"
+              type="number"
+              min="1"
+              placeholder="VD: 50"
+              value={formData.expectedMemberCount || ""}
+              onChange={(e) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  expectedMemberCount: parseInt(e.target.value) || 0,
+                }))
+              }
               required
             />
           </div>

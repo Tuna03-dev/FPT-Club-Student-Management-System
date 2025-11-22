@@ -14,9 +14,9 @@ interface DefenseScheduleFormProps {
 
 export interface DefenseScheduleData {
   requestId: string;
-  preferredDate1: string;
-  preferredDate2: string;
-  preferredDate3: string;
+  preferredDate1: string; // Main defense date
+  preferredDate2?: string; // Optional
+  preferredDate3?: string; // Optional
   notes?: string;
 }
 
@@ -42,34 +42,18 @@ export function DefenseScheduleForm({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (
-      !formData.preferredDate1 ||
-      !formData.preferredDate2 ||
-      !formData.preferredDate3
-    ) {
-      toast.error("Vui lòng chọn đầy đủ 3 ngày mong muốn!");
+    if (!formData.preferredDate1) {
+      toast.error("Vui lòng chọn ngày bảo vệ!");
       return;
     }
 
-    // Validate dates are in the future
+    // Validate date is in the future
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const dates = [
-      new Date(formData.preferredDate1),
-      new Date(formData.preferredDate2),
-      new Date(formData.preferredDate3),
-    ];
-
-    if (dates.some((date) => date < today)) {
+    const defenseDate = new Date(formData.preferredDate1);
+    if (defenseDate < today) {
       toast.error("Ngày bảo vệ phải là ngày trong tương lai!");
-      return;
-    }
-
-    // Validate dates are different
-    const uniqueDates = new Set(dates.map((d) => d.getTime()));
-    if (uniqueDates.size !== 3) {
-      toast.error("Vui lòng chọn 3 ngày khác nhau!");
       return;
     }
 
@@ -93,13 +77,12 @@ export function DefenseScheduleForm({
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            Vui lòng chọn 3 ngày mong muốn để bảo vệ đề án thành lập CLB. Ban
-            quản lý sẽ chọn một trong các ngày phù hợp nhất.
+            Vui lòng chọn ngày và thời gian để bảo vệ đề án thành lập CLB.
           </p>
 
           <div className="space-y-2">
             <Label htmlFor="preferredDate1">
-              Ngày mong muốn thứ 1 <span className="text-red-500">*</span>
+              Ngày bảo vệ <span className="text-red-500">*</span>
             </Label>
             <Input
               id="preferredDate1"
@@ -107,36 +90,6 @@ export function DefenseScheduleForm({
               type="date"
               min={minDate}
               value={formData.preferredDate1}
-              onChange={handleChange}
-              required
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="preferredDate2">
-              Ngày mong muốn thứ 2 <span className="text-red-500">*</span>
-            </Label>
-            <Input
-              id="preferredDate2"
-              name="preferredDate2"
-              type="date"
-              min={minDate}
-              value={formData.preferredDate2}
-              onChange={handleChange}
-              required
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="preferredDate3">
-              Ngày mong muốn thứ 3 <span className="text-red-500">*</span>
-            </Label>
-            <Input
-              id="preferredDate3"
-              name="preferredDate3"
-              type="date"
-              min={minDate}
-              value={formData.preferredDate3}
               onChange={handleChange}
               required
             />
