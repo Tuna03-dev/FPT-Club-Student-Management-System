@@ -2,14 +2,27 @@
 "use client";
 
 import { useNavigate, useParams, useLocation } from "react-router-dom";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import Skeleton from "@/components/common/Skeleton";
 import { draftsApi } from "@/api/newsDrafts";
 import { requestsApi } from "@/api/newsRequests";
 import { uploadImageOnly } from "@/api/uploads";
 import type { NewsData, RequestStatus } from "@/types/news";
-import { ArrowLeft, Tag, Loader2, Image as ImageIcon } from "lucide-react";
-import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
+import {
+  ArrowLeft,
+  Tag,
+  Loader2,
+  Image as ImageIcon,
+  Upload,
+  X,
+} from "lucide-react";
+import {
+  Select,
+  SelectTrigger,
+  SelectContent,
+  SelectItem,
+  SelectValue,
+} from "@/components/ui/select";
 
 /* ===== Constants ===== */
 const NEWS_TYPES = [
@@ -33,6 +46,7 @@ const ALLOW_TYPES: ReadonlySet<string> = new Set<string>([
   "image/webp",
   "image/jpg",
 ]);
+
 /* ===== Helpers ===== */
 const readAsDataURL = (file: File) =>
   new Promise<string>((resolve, reject) => {
@@ -46,9 +60,18 @@ function validateImageFile(file: File): string | null {
   if (!ALLOW_TYPES.has(file.type)) return "Ảnh phải là JPG/PNG/WEBP.";
   const mb = file.size / (1024 * 1024);
   if (mb > LIMITS.imageMaxMB)
-    return `Kích thước tối đa ${LIMITS.imageMaxMB}MB. Ảnh hiện tại ~${mb.toFixed(1)}MB.`;
+    return `Kích thước tối đa ${LIMITS.imageMaxMB}MB. Ảnh hiện tại ~${mb.toFixed(
+      1
+    )}MB.`;
   return null;
 }
+
+type FormErrors = {
+  title?: string;
+  content?: string;
+  newsType?: string;
+  thumbnailUrl?: string;
+};
 
 /* ===== Main Component ===== */
 export default function PresidentNewsEditor() {
@@ -63,76 +86,71 @@ export default function PresidentNewsEditor() {
   const [thumbnailUrl, setThumbnailUrl] = useState("");
   const [newsType, setNewsType] = useState("");
   const [saving, setSaving] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [thumbPreview, setThumbPreview] = useState("");
   const [fileObj, setFileObj] = useState<File | null>(null);
+  const [errors, setErrors] = useState<FormErrors>({});
 
-  const [touched, setTouched] = useState<{ title?: boolean; content?: boolean; type?: boolean; image?: boolean }>({});
-  const errors = useMemo(() => {
-    const e: Record<string, string> = {};
-    if (!title.trim()) e.title = "Vui lòng nhập tiêu đề.";
-    if (!content.trim()) e.content = "Vui lòng nhập nội dung.";
-    if (!newsType) e.type = "Vui lòng chọn loại bản tin.";
-    if (!(thumbPreview || thumbnailUrl)) e.image = "Vui lòng chọn ảnh bìa.";
-    return e;
-  }, [title, content, newsType, thumbPreview, thumbnailUrl]);
-
-  const markTouched = (k: keyof typeof touched) =>
-    setTouched((t) => (t[k] ? t : { ...t, [k]: true }));
-
+  // Lấy draftId từ query
   useEffect(() => {
     const p = new URLSearchParams(window.location.search);
     const did = Number(p.get("draftId"));
     setDraftId(Number.isFinite(did) ? did : null);
   }, []);
 
+  // Load dữ liệu nháp
   useEffect(() => {
-    const load = async () => {
-      if (location.state?.draft) {
-        const d = location.state.draft;
-        setTitle(d.title || "");
-        setContent(d.content || "");
-        setThumbnailUrl(d.thumbnailUrl || "");
-        setThumbPreview(d.thumbnailUrl || "");
-        setNewsType(d.newsType || "");
-        setLoading(false);
-        return;
-      }
-      if (!draftId) {
-        setLoading(false);
-        return;
-      }
+    const fillFrom = (d?: NewsData) => {
+      setTitle(d?.title || "");
+      setContent(d?.content || "");
+      setThumbnailUrl(d?.thumbnailUrl || "");
+      setThumbPreview(d?.thumbnailUrl || "");
+      setNewsType(d?.newsType || "");
+    };
 
-      setLoading(true);
+    const load = async () => {
       try {
+        if (location.state?.draft) {
+          fillFrom(location.state.draft);
+          return;
+        }
+
+        if (!draftId) return;
+
         const res = await draftsApi.get(draftId);
         const d = (res as any)?.data as NewsData | undefined;
-        if (d) {
-          setTitle(d.title || "");
-          setContent(d.content || "");
-          setThumbnailUrl(d.thumbnailUrl || "");
-          setThumbPreview(d.thumbnailUrl || "");
-          setNewsType(d.newsType || "");
-        }
-      } finally {
-        setLoading(false);
+        fillFrom(d);
+      } catch {
+        // ignore
       }
     };
-    setLoading(true);
-    load();
+
+    (async () => {
+      await load();
+      setLoading(false);
+    })();
   }, [draftId, location.state]);
 
-  const validateBeforeSubmit = () => {
-    setTouched({ title: true, content: true, type: true, image: true });
+  const validate = () => {
     if (!Number.isFinite(clubId)) {
       alert("Thiếu clubId trên URL");
       return false;
     }
-    return Object.keys(errors).length === 0;
+
+    const next: FormErrors = {};
+    if (!title.trim()) next.title = "Vui lòng nhập tiêu đề";
+    if (!content.trim()) next.content = "Vui lòng nhập nội dung";
+    if (!newsType.trim()) next.newsType = "Vui lòng chọn loại tin";
+    if (!(thumbPreview || thumbnailUrl))
+      next.thumbnailUrl = "Vui lòng chọn ảnh bìa";
+
+    setErrors(next);
+    return Object.keys(next).length === 0;
   };
 
+  /* ===== Actions (giữ nguyên logic) ===== */
   const saveDraft = async () => {
-    if (!validateBeforeSubmit()) return;
+    if (!validate()) return;
     setSaving(true);
     try {
       let finalThumb = thumbnailUrl;
@@ -145,15 +163,29 @@ export default function PresidentNewsEditor() {
         }
         const up = await uploadImageOnly(fileObj);
         finalThumb = up.url;
+        setThumbnailUrl(up.url);
       }
 
       if (draftId) {
-        const res = await draftsApi.update(draftId, { title, content, thumbnailUrl: finalThumb, newsType });
-        if (res.code !== 200 || !res.data) throw new Error(res.message || "Update draft failed");
+        const res = await draftsApi.update(draftId, {
+          title,
+          content,
+          thumbnailUrl: finalThumb,
+          newsType,
+        });
+        if (res.code !== 200 || !res.data)
+          throw new Error(res.message || "Update draft failed");
         alert(`Đã cập nhật nháp #${res.data.id}`);
       } else {
-        const res = await draftsApi.create({ title, content, thumbnailUrl: finalThumb, newsType, clubId } as any);
-        if (res.code !== 200 || !res.data) throw new Error(res.message || "Create draft failed");
+        const res = await draftsApi.create({
+          title,
+          content,
+          thumbnailUrl: finalThumb,
+          newsType,
+          clubId,
+        } as any);
+        if (res.code !== 200 || !res.data)
+          throw new Error(res.message || "Create draft failed");
         alert(`Đã lưu nháp #${res.data.id}`);
       }
       nav(`/myclub/${clubId}/news?tab=drafts`);
@@ -165,7 +197,7 @@ export default function PresidentNewsEditor() {
   };
 
   const submitRequest = async () => {
-    if (!validateBeforeSubmit()) return;
+    if (!validate()) return;
     setSaving(true);
     try {
       let finalThumb = thumbnailUrl;
@@ -178,16 +210,28 @@ export default function PresidentNewsEditor() {
         }
         const up = await uploadImageOnly(fileObj);
         finalThumb = up.url;
+        setThumbnailUrl(up.url);
       }
 
       if (draftId) {
         const res = await draftsApi.submit(draftId);
-        if (res.code !== 200) throw new Error(res.message || "Submit draft failed");
-        const payload = res.data as { requestId: number; status: RequestStatus };
+        if (res.code !== 200)
+          throw new Error(res.message || "Submit draft failed");
+        const payload = res.data as {
+          requestId: number;
+          status: RequestStatus;
+        };
         alert(`Đã submit nháp #${draftId} → request #${payload?.requestId}`);
       } else {
-        const res = await requestsApi.create({ title, content, thumbnailUrl: finalThumb, newsType, clubId });
-        if (res.code !== 200 || !res.data) throw new Error(res.message || "Create request failed");
+        const res = await requestsApi.create({
+          title,
+          content,
+          thumbnailUrl: finalThumb,
+          newsType,
+          clubId,
+        });
+        if (res.code !== 200 || !res.data)
+          throw new Error(res.message || "Create request failed");
         alert(`Đã tạo request #${res.data.id}`);
       }
       nav(`/myclub/${clubId}/news?tab=requests`);
@@ -199,6 +243,7 @@ export default function PresidentNewsEditor() {
   };
 
   const goBack = () => nav(-1);
+
   const metaClub = Number.isFinite(clubId) ? `CLB #${clubId}` : "—";
   const todayVN = new Date().toLocaleDateString("vi-VN", {
     day: "2-digit",
@@ -206,169 +251,320 @@ export default function PresidentNewsEditor() {
     year: "numeric",
   });
 
-  return (
-    <div className="max-w-6xl mx-auto p-4 pb-24 space-y-6">
-      {loading && (
-        <div className="space-y-6">
-          <Skeleton width="100%" height={220} />
-          <Skeleton width="60%" height={36} />
+  /* ===== Loading skeleton (giống style Staff) ===== */
+  if (loading) {
+    return (
+      <div className="max-w-4xl mx-auto p-6 space-y-6">
+        <div className="flex items-center justify-between">
+          <Skeleton width={120} height={32} />
+          <Skeleton width={160} height={20} />
         </div>
-      )}
 
+        <div className="space-y-4">
+          <div className="space-y-3">
+            <label className="text-sm font-semibold">Ảnh bìa</label>
+            <div className="rounded-2xl overflow-hidden bg-slate-100">
+              <Skeleton width="100%" height={220} />
+            </div>
+          </div>
+          <div className="space-y-3">
+            <label className="text-sm font-semibold">Tiêu đề</label>
+            <Skeleton width="100%" height={36} />
+          </div>
+          <div className="space-y-3">
+            <label className="text-sm font-semibold">Loại tin</label>
+            <Skeleton width={220} height={36} />
+          </div>
+          <div className="space-y-3">
+            <label className="text-sm font-semibold">Nội dung</label>
+            <Skeleton width="100%" height={280} />
+          </div>
+        </div>
+
+        <div className="flex gap-3 pt-6 border-t">
+          <Skeleton width={160} height={44} />
+          <Skeleton width={160} height={44} />
+          <Skeleton width={120} height={44} />
+        </div>
+      </div>
+    );
+  }
+
+  /* ===== UI giống StaffNewsEditor ===== */
+  return (
+    <div className="max-w-4xl mx-auto p-6 space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between">
-        <button onClick={goBack} className="inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 hover:bg-slate-50">
+        <button
+          onClick={goBack}
+          className="inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 hover:bg-slate-50 text-sm"
+        >
           <ArrowLeft className="h-4 w-4" /> Quay lại
         </button>
-        <div className="text-sm text-slate-500">
-          {draftId ? `Sửa nháp #${draftId}` : "Tạo bài mới"}
-        </div>
-      </div>
-
-      <div className="rounded-2xl overflow-hidden bg-slate-100">
-        {(thumbPreview || thumbnailUrl) ? (
-          <img
-            src={thumbPreview || thumbnailUrl}
-            alt="thumbnail"
-            className="w-full h-[340px] object-cover"
-            onError={() => {
-              setThumbPreview("");
-              setThumbnailUrl("");
-            }}
-          />
-        ) : (
-          <div className="w-full h-[220px] bg-gradient-to-br from-slate-100 to-slate-200" />
-        )}
-      </div>
-      {touched.image && errors.image && <p className="text-xs text-rose-600 mt-1">* {errors.image}</p>}
-
-      <div className="space-y-2">
-        <div className="flex items-center gap-2 flex-wrap text-sm text-slate-500">
+        <div className="text-xs sm:text-sm text-slate-500 flex items-center gap-2 flex-wrap justify-end">
           <span>{metaClub}</span>
           <span>•</span>
           <span>{todayVN}</span>
           {newsType && (
             <>
               <span>•</span>
-              <span className="inline-flex items-center gap-1 rounded-full bg-slate-200 text-slate-700 px-2.5 py-0.5 text-xs font-medium">
+              <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 text-slate-700 px-2.5 py-0.5 text-xs font-medium">
                 <Tag className="h-3.5 w-3.5" /> {newsType}
               </span>
             </>
           )}
+          {draftId ? (
+            <>
+              <span>•</span>
+              <span className="text-xs text-slate-400">
+                Đang sửa nháp #{draftId}
+              </span>
+            </>
+          ) : null}
         </div>
-        <h1 className="text-3xl font-extrabold tracking-tight leading-snug">
-          {title.trim() ? title : "Tiêu đề bài viết"}
-        </h1>
       </div>
 
-      {/* === Form === */}
-      <div className="grid gap-3">
-        <div>
-          <input
-            className={`w-full px-4 py-2.5 rounded-lg border ${touched.title && errors.title ? "border-rose-300" : "border-slate-300"}`}
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            onBlur={() => markTouched("title")}
-            placeholder="Tiêu đề"
-          />
-          {touched.title && errors.title && <p className="text-xs text-rose-600 mt-1">* {errors.title}</p>}
-        </div>
+      {/* Thumbnail */}
+      <div className="space-y-3">
+        <label className="text-sm font-semibold">Ảnh bìa</label>
+        <DropImagePreview
+          preview={thumbPreview || thumbnailUrl}
+          onPick={async (file, dataUrl) => {
+            const err = validateImageFile(file);
+            if (err) {
+              alert(err);
+              return;
+            }
+            setFileObj(file);
+            setThumbPreview(dataUrl);
+            if (errors.thumbnailUrl)
+              setErrors((x) => ({ ...x, thumbnailUrl: undefined }));
+          }}
+          onClear={() => {
+            setFileObj(null);
+            setThumbPreview("");
+            setThumbnailUrl("");
+          }}
+          errorMsg={errors.thumbnailUrl}
+        />
+      </div>
 
-        <div>
-          <textarea
-            className={`w-full px-4 py-2.5 rounded-lg border resize-none min-h-[220px] ${touched.content && errors.content ? "border-rose-300" : "border-slate-300"}`}
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            onBlur={() => markTouched("content")}
-            placeholder="Nội dung"
-          />
-          {touched.content && errors.content && <p className="text-xs text-rose-600 mt-1">* {errors.content}</p>}
-        </div>
+      {/* Title */}
+      <div className="space-y-2">
+        <label className="text-sm font-semibold">Tiêu đề</label>
+        <input
+          className={`w-full border rounded-lg p-3 focus:outline-none focus:ring-2 ${
+            errors.title
+              ? "border-rose-500 focus:ring-rose-200"
+              : "border-slate-300 focus:ring-blue-500"
+          }`}
+          placeholder="Nhập tiêu đề tin tức"
+          value={title}
+          maxLength={LIMITS.titleMax}
+          onChange={(e) => {
+            setTitle(e.target.value);
+            if (errors.title) setErrors((x) => ({ ...x, title: undefined }));
+          }}
+        />
+        {errors.title && (
+          <p className="text-rose-600 text-xs">{errors.title}</p>
+        )}
+      </div>
 
-        <div className="grid sm:grid-cols-2 gap-3">
-          <div>
-            <div className="text-sm font-medium text-slate-700 mb-1">Loại bản tin</div>
-            <Select value={newsType || undefined} onValueChange={(v) => setNewsType(v)}>
-              <SelectTrigger className={`w-full px-3 py-2 rounded-lg border ${touched.type && errors.type ? "border-rose-300" : "border-slate-300"}`}>
-                <SelectValue placeholder="Chọn loại" />
-              </SelectTrigger>
-              <SelectContent>
-                {NEWS_TYPES.map((t) => (
-                  <SelectItem key={t.value} value={t.value}>
-                    {t.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {touched.type && errors.type && <p className="text-xs text-rose-600 mt-1">* {errors.type}</p>}
-          </div>
-
-          {/* Drop-zone ảnh */}
-          <div
-            className={`rounded-lg border border-dashed p-3 flex items-center justify-between gap-3 ${touched.image && errors.image ? "border-rose-300" : "border-slate-300"}`}
-            onDrop={async (e) => {
-              e.preventDefault();
-              const f = e.dataTransfer.files?.[0];
-              if (!f || !f.type.startsWith("image/")) return;
-              const err = validateImageFile(f);
-              if (err) {
-                alert(err);
-                return;
-              }
-              const dataUrl = await readAsDataURL(f);
-              setFileObj(f);
-              setThumbPreview(dataUrl);
-              markTouched("image");
-            }}
-            onDragOver={(e) => e.preventDefault()}
-            onPaste={(e) => {
-              if (e.clipboardData?.getData("text/plain")) e.preventDefault();
-            }}
+      {/* News type */}
+      <div className="space-y-2">
+        <label className="text-sm font-semibold">Loại tin</label>
+        <Select
+          value={newsType || undefined}
+          onValueChange={(v) => {
+            setNewsType(v);
+            if (errors.newsType)
+              setErrors((x) => ({ ...x, newsType: undefined }));
+          }}
+        >
+          <SelectTrigger
+            className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 ${
+              errors.newsType
+                ? "border-rose-500 focus:ring-rose-200"
+                : "border-slate-300 focus:ring-blue-500"
+            }`}
           >
-            <div className="text-sm text-slate-600">
-              <div className="font-medium">Ảnh bìa</div>
-              <div className="text-xs text-slate-500">Kéo-thả ảnh hoặc chọn file (Không dán link)</div>
-            </div>
-            <label className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border hover:bg-slate-50 cursor-pointer">
-              <ImageIcon className="h-4 w-4" /> Chọn ảnh
-              <input
-                type="file"
-                accept={[...ALLOW_TYPES].join(",")}
-                className="hidden"
-                onChange={async (e) => {
-                  const f = e.target.files?.[0];
-                  if (!f) return;
-                  const err = validateImageFile(f);
-                  if (err) {
-                    alert(err);
-                    return;
-                  }
-                  const dataUrl = await readAsDataURL(f);
-                  setFileObj(f);
-                  setThumbPreview(dataUrl);
-                  markTouched("image");
-                }}
-              />
-            </label>
-          </div>
-        </div>
+            <SelectValue placeholder="Chọn loại" />
+          </SelectTrigger>
+          <SelectContent>
+            {NEWS_TYPES.map((t) => (
+              <SelectItem key={t.value} value={t.value}>
+                {t.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {errors.newsType && (
+          <p className="text-rose-600 text-xs">{errors.newsType}</p>
+        )}
       </div>
 
-      {/* === Actions === */}
-      <div className="flex gap-2 pt-2 border-t">
-        <button onClick={saveDraft} disabled={saving} className="inline-flex items-center gap-2 rounded-lg border px-3 py-2 hover:bg-slate-50 disabled:opacity-60">
-          {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+      {/* Content */}
+      <div className="space-y-2">
+        <label className="text-sm font-semibold">Nội dung</label>
+        <textarea
+          className={`w-full border rounded-lg p-3 min-h-[280px] focus:outline-none focus:ring-2 ${
+            errors.content
+              ? "border-rose-500 focus:ring-rose-200"
+              : "border-slate-300 focus:ring-blue-500"
+          }`}
+          placeholder="Nhập nội dung tin tức"
+          value={content}
+          maxLength={LIMITS.contentMax}
+          onChange={(e) => {
+            setContent(e.target.value);
+            if (errors.content)
+              setErrors((x) => ({ ...x, content: undefined }));
+          }}
+        />
+        {errors.content && (
+          <p className="text-rose-600 text-xs">{errors.content}</p>
+        )}
+      </div>
+
+      {/* Actions */}
+      <div className="flex gap-3 pt-6 border-t">
+        <button
+          onClick={saveDraft}
+          className="px-6 py-3 rounded-lg bg-gray-900 text-white font-medium disabled:opacity-50 hover:bg-gray-800 transition"
+          disabled={saving}
+        >
+          {saving ? (
+            <Loader2 className="h-4 w-4 animate-spin inline-block mr-2" />
+          ) : null}
           {draftId ? "Cập nhật nháp" : "Lưu bản nháp"}
         </button>
 
-        <button onClick={submitRequest} disabled={saving} className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 text-white px-3 py-2 hover:bg-indigo-700 disabled:opacity-60">
-          {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+        <button
+          onClick={submitRequest}
+          className="px-6 py-3 rounded-lg bg-indigo-600 text-white font-medium disabled:opacity-50 hover:bg-indigo-700 transition"
+          disabled={saving}
+        >
+          {saving ? (
+            <Loader2 className="h-4 w-4 animate-spin inline-block mr-2" />
+          ) : null}
           Gửi yêu cầu
         </button>
 
-        <button onClick={goBack} className="inline-flex items-center gap-2 rounded-lg border px-3 py-2 hover:bg-slate-50">
+        <button
+          onClick={goBack}
+          className="px-6 py-3 rounded-lg border hover:bg-slate-50 transition"
+          disabled={saving}
+        >
           Hủy
         </button>
       </div>
+    </div>
+  );
+}
+
+/** Drop-zone preview giống StaffNewsEditor, nhưng vẫn dùng validateImageFile ở trên (tại parent) */
+function DropImagePreview({
+  preview,
+  onPick,
+  onClear,
+  errorMsg,
+}: {
+  preview?: string;
+  onPick: (file: File, dataUrl: string) => void;
+  onClear: () => void;
+  errorMsg?: string;
+}) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const hasImage = Boolean(preview);
+
+  const open = () => inputRef.current?.click();
+
+  const handleFile = async (file?: File | null) => {
+    if (!file || !file.type.startsWith("image/")) return;
+    const dataUrl = await readAsDataURL(file);
+    onPick(file, dataUrl);
+  };
+
+  return (
+    <div>
+      <div
+        className={`relative rounded-lg border-2 border-dashed transition-all ${
+          dragOver
+            ? "border-blue-500 bg-blue-50"
+            : errorMsg
+              ? "border-rose-500 bg-rose-50/40"
+              : "border-slate-300 bg-slate-50"
+        } p-3`}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragOver(true);
+        }}
+        onDragLeave={(e) => {
+          e.preventDefault();
+          setDragOver(false);
+        }}
+        onDrop={async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setDragOver(false);
+          await handleFile(e.dataTransfer.files?.[0]);
+        }}
+        onPaste={(e) => {
+          if (e.clipboardData?.getData("text/plain")) e.preventDefault(); // chặn dán link
+        }}
+      >
+        <div
+          className="aspect-[16/9] w-full rounded-md bg-white overflow-hidden cursor-pointer"
+          onClick={open}
+        >
+          {hasImage ? (
+            <img
+              src={preview}
+              alt="thumbnail"
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-slate-400">
+              <ImageIcon className="h-5 w-5 mr-2" /> Kéo-thả hoặc bấm để chọn
+              ảnh
+            </div>
+          )}
+        </div>
+
+        <div className="mt-3 flex gap-2">
+          <button
+            type="button"
+            onClick={open}
+            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md border bg-white hover:bg-slate-50 text-sm font-medium"
+          >
+            <Upload className="h-4 w-4" /> Chọn ảnh
+          </button>
+          {hasImage && (
+            <button
+              type="button"
+              onClick={onClear}
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md border bg-white hover:bg-slate-50 text-sm font-medium"
+            >
+              <X className="h-4 w-4" /> Xóa
+            </button>
+          )}
+        </div>
+      </div>
+      {errorMsg && <p className="text-rose-600 text-xs mt-2">{errorMsg}</p>}
+
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={async (e) => {
+          const f = e.target.files?.[0];
+          await handleFile(f || undefined);
+          if (inputRef.current) inputRef.current.value = "";
+        }}
+      />
     </div>
   );
 }
