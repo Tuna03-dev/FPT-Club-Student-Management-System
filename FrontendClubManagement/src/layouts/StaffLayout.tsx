@@ -13,7 +13,7 @@ import {
   UserSquare2,
 } from "lucide-react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -32,6 +32,8 @@ import {
 import { authService } from "@/services/authService";
 import { useTranslation } from "react-i18next";
 import { StaffNotificationBell } from "@/components/notifications/StaffNotificationBell";
+import { useWebSocket, type EventWebSocketPayload } from "@/hooks/useWebSocket";
+import { toast } from "sonner";
 
 const navItems = [
   { key: "events", url: "/events", icon: Calendar, label: "Sự kiện" },
@@ -104,6 +106,33 @@ export const StaffLayout = () => {
   const { t } = useTranslation("common");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const navigate = useNavigate();
+
+  // WebSocket setup for Staff event notifications
+  const token = localStorage.getItem("accessToken") || null;
+  const { isConnected, subscribeToSystemRole } = useWebSocket(token);
+
+  // Subscribe to STAFF role for event notifications
+  useEffect(() => {
+    if (!isConnected) return;
+
+    const unsubscribe = subscribeToSystemRole("STAFF", (msg) => {
+      if (msg.type !== "EVENT") return;
+
+      const payload = msg.payload as EventWebSocketPayload;
+
+      if (msg.action === "REQUEST_SUBMITTED") {
+        toast.info("Yêu cầu tạo sự kiện mới", {
+          description: payload.message || `Có yêu cầu tạo sự kiện "${payload.eventTitle}" chờ duyệt`,
+          action: {
+            label: "Xem",
+            onClick: () => navigate("/myclub/staff/events"),
+          },
+        });
+      }
+    });
+
+    return () => unsubscribe?.();
+  }, [isConnected, subscribeToSystemRole, navigate]);
 
   const handleLogout = async () => {
     try {

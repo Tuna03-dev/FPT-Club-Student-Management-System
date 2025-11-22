@@ -8,6 +8,9 @@ import { Calendar, Search } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { computeEventStatus, getAllEventTypes, getAllClubs, getAllEventsByFilter, type EventStatusFilter, type EventTypeDto, type ClubDto, type EventData } from "@/service/EventService"
+import { useWebSocket, type EventWebSocketPayload } from "@/hooks/useWebSocket"
+import { toast } from "sonner"
+import { authService } from "@/services/authService"
 
 export function EventsPage() {
   const [searchQuery, setSearchQuery] = useState("")
@@ -51,6 +54,7 @@ export function EventsPage() {
 
   // Use ref to track if filters just changed to prevent pagination effect from running
   const filtersJustChangedRef = useRef(false)
+  const [refreshTrigger, setRefreshTrigger] = useState(0) // Trigger to force refresh
 
   // Reset to page 1 when filters change
   useEffect(() => {
@@ -174,7 +178,7 @@ export function EventsPage() {
       controller.abort()
       clearTimeout(debounce)
     }
-  }, [searchQuery, selectedTypeId, selectedClubId, selectedStatus])
+  }, [searchQuery, selectedTypeId, selectedClubId, selectedStatus, refreshTrigger])
 
   // Handle pagination - use client-side pagination if searching, otherwise server-side
   useEffect(() => {
@@ -251,6 +255,59 @@ export function EventsPage() {
     setCurrentPage(page)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
+
+  // WebSocket connection for real-time event updates
+  const token = localStorage.getItem("accessToken") || null;
+  const { isConnected, subscribeToSystemRole, subscribeToUserQueue } = useWebSocket(token);
+
+  // 🔔 WebSocket: Subscribe to STUDENT/TEAM_OFFICER/CLUB_OFFICER roles for event publication notifications
+  useEffect(() => {
+    if (!isConnected) return;
+
+    const user = authService.getCurrentUser();
+    if (!user) return;
+    
+    const roleUpper = user.systemRole
+      ? String(user.systemRole).trim().toUpperCase()
+      : "";
+    
+    // Only subscribe if user is not STAFF (STUDENT, TEAM_OFFICER, CLUB_OFFICER)
+    if (roleUpper === "STAFF" || roleUpper === "ADMIN") return;
+
+    const handleEventPublished = (msg: any) => {
+      if (msg.type !== "EVENT") return;
+
+      const payload = msg.payload as EventWebSocketPayload;
+
+      if (msg.action === "PUBLISHED") {
+        toast.info("Sự kiện mới đã được công bố", {
+          description: payload.message || `Sự kiện "${payload.eventTitle}" đã được công bố`,
+        });
+        
+        // Refresh events list by triggering refresh
+        setRefreshTrigger((prev) => prev + 1);
+      }
+    };
+
+    // Subscribe to STUDENT role
+    const unsubscribeStudent = subscribeToSystemRole("STUDENT", handleEventPublished);
+    
+    // Subscribe to TEAM_OFFICER role
+    const unsubscribeTeamOfficer = subscribeToSystemRole("TEAM_OFFICER", handleEventPublished);
+    
+    // Subscribe to CLUB_OFFICER role
+    const unsubscribeClubOfficer = subscribeToSystemRole("CLUB_OFFICER", handleEventPublished);
+
+    // Also subscribe to user queue for personal notifications
+    const unsubscribeUser = subscribeToUserQueue(handleEventPublished);
+
+    return () => {
+      unsubscribeStudent();
+      unsubscribeTeamOfficer();
+      unsubscribeClubOfficer();
+      unsubscribeUser();
+    };
+  }, [isConnected, subscribeToSystemRole, subscribeToUserQueue]);
 
   return (
     <div className="min-h-screen bg-background">

@@ -43,16 +43,20 @@ interface AttendancePageProps {
 
 export function AttendancePage({ eventId, event: propEvent }: AttendancePageProps) {
   const [searchParams] = useSearchParams()
-  const user = authService.getCurrentUser()
-  const isPresident = user?.systemRole === "CLUB_OFFICER"
-  const isOfficer = user?.systemRole === "TEAM_OFFICER"
-  const canMarkAttendance = isPresident || isOfficer
-  const readOnly = (searchParams.get("mode") ?? "") === "view" || !canMarkAttendance
   const [searchTerm, setSearchTerm] = useState("")
   const [students, setStudents] = useState<Student[]>([])
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [event, setEvent] = useState<Event | undefined>(propEvent)
+  const [eventClubId, setEventClubId] = useState<number | null>(null)
+  
+  // Check systemRole in clubRoleList instead of global systemRole
+  const clubRole = eventClubId ? authService.getClubRole(eventClubId) : null
+  const systemRoleInClub = clubRole?.systemRole?.toUpperCase()
+  const isPresident = eventClubId && systemRoleInClub === "CLUB_OFFICER"
+  const isOfficer = eventClubId && systemRoleInClub === "TEAM_OFFICER"
+  const canMarkAttendance = isPresident || isOfficer
+  const readOnly = (searchParams.get("mode") ?? "") === "view" || !canMarkAttendance
 
   // Fetch event data and registrations
   useEffect(() => {
@@ -74,6 +78,8 @@ export function AttendancePage({ eventId, event: propEvent }: AttendancePageProp
           time: startDate.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
           location: eventData.location || "Chưa có địa điểm"
         })
+        // Store clubId from event for permission check
+        setEventClubId(eventData.clubId ?? null)
         
         // Fetch registrations
         const registrations = await getEventRegistrations(eventIdNum)
