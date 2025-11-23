@@ -514,7 +514,7 @@ const Members = () => {
               </div>
             </div>
             <div>
-              <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-primary via-primary-glow to-primary bg-clip-text text-transparent">
+              <h1 className="text-3xl sm:text-4xl font-bold text-foreground">
                 {isOfficer ? "Quản lý thành viên" : "Danh sách thành viên"}
               </h1>
               {!isOfficer && (
