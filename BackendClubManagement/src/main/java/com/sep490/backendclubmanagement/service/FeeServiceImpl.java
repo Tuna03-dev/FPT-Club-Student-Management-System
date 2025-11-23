@@ -63,22 +63,64 @@ public class FeeServiceImpl implements FeeService {
                 ? searchTerm.trim()
                 : null;
 
-        // Query từ database với filters (không có search term)
-        Page<Fee> feePage = feeRepository.searchFees(clubId, isExpired, pageable);
-
-        // Filter theo search term trong Java với accent-insensitive
-        List<Fee> filteredFees = feePage.getContent();
-        if (normalizedSearch != null) {
-            filteredFees = filteredFees.stream()
-                    .filter(fee -> com.sep490.backendclubmanagement.util.VietnameseTextNormalizer.matchesAny(
-                            normalizedSearch,
-                            fee.getTitle(),
-                            fee.getDescription()
-                    ))
-                    .toList();
+        // If no search term, directly use database query with pagination
+        if (normalizedSearch == null) {
+            Page<Fee> feePage = feeRepository.searchFees(clubId, isExpired, pageable);
+            return buildFeePageResponse(feePage, clubId);
         }
 
-        return buildFeePageResponse(feePage, clubId, filteredFees);
+        // With search term, need to fetch all matching records and paginate in memory
+        // Use a large pageable to get all records (or fetch all pages)
+        Page<Fee> allFeesPage = feeRepository.searchFees(clubId, isExpired,
+                Pageable.unpaged()); // Get all records
+
+        // Filter theo search term trong Java với accent-insensitive
+        List<Fee> filteredFees = allFeesPage.getContent().stream()
+                .filter(fee -> com.sep490.backendclubmanagement.util.VietnameseTextNormalizer.matchesAny(
+                        normalizedSearch,
+                        fee.getTitle(),
+                        fee.getDescription()
+                ))
+                .toList();
+
+        // Manual pagination after filtering
+        int totalElements = filteredFees.size();
+        int totalPages = (int) Math.ceil((double) totalElements / pageable.getPageSize());
+        int startIndex = pageable.getPageNumber() * pageable.getPageSize();
+        int endIndex = Math.min(startIndex + pageable.getPageSize(), totalElements);
+
+        List<Fee> pageContent = startIndex < totalElements
+                ? filteredFees.subList(startIndex, endIndex)
+                : List.of();
+
+        // Build response with correct pagination info
+        long totalMembers = roleMemberShipRepository.countActiveMembersInCurrentSemester(clubId);
+
+        List<FeeDetailResponse> content = pageContent.stream()
+                .map(fee -> {
+                    FeeDetailResponse response = feeMapper.toFeeDetailResponse(fee);
+
+                    int paidMembers = fee.getIncomeTransactions().stream()
+                            .map(IncomeTransaction::getUser)
+                            .collect(Collectors.toSet())
+                            .size();
+
+                    response.setPaidMembers(paidMembers);
+                    response.setTotalMembers((int) totalMembers);
+
+                    return response;
+                })
+                .collect(Collectors.toList());
+
+        return PageResponse.<FeeDetailResponse>builder()
+                .content(content)
+                .pageNumber(pageable.getPageNumber())
+                .pageSize(pageable.getPageSize())
+                .totalElements(totalElements)
+                .totalPages(totalPages)
+                .hasNext(pageable.getPageNumber() < totalPages - 1)
+                .hasPrevious(pageable.getPageNumber() > 0)
+                .build();
     }
 
     /**

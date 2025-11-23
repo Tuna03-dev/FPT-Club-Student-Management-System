@@ -28,7 +28,7 @@ import type {
   UpdateFeeRequest,
   FeeType,
 } from "@/types/fee";
-import { useMemo, useState, useCallback, useEffect } from "react";
+import { useMemo, useState, useCallback, useEffect, useRef } from "react";
 import feeService from "@/services/feeService";
 import { clubService, type SemesterDTO } from "@/services/clubService";
 import { Switch } from "@/components/ui/switch";
@@ -163,6 +163,7 @@ export function FeesTable({
   const [paidMembersTotalElements, setPaidMembersTotalElements] = useState<number>(0);
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [expiredFilter, setExpiredFilter] = useState<string>("all");
+  const prevSearchRef = useRef<{ search: string; filter: string }>({ search: "", filter: "all" });
 
   // Load semesters when component mounts
   useEffect(() => {
@@ -288,24 +289,29 @@ export function FeesTable({
     });
   }, [form]);
 
-  const refreshFees = useCallback(
-    async (page?: number, search?: string, isExpired?: boolean) => {
-      if (onReloadFees) {
-        await onReloadFees(page, search, isExpired);
-      }
-    },
-    [onReloadFees]
-  );
-
   // Auto search on change with debounce
   useEffect(() => {
+    // Chỉ trigger search khi có thay đổi thực sự
+    const hasChanged = 
+      prevSearchRef.current.search !== searchTerm || 
+      prevSearchRef.current.filter !== expiredFilter;
+    
+    if (!hasChanged) {
+      return;
+    }
+
     const timer = setTimeout(() => {
-      const isExpired = expiredFilter === "all" ? undefined : expiredFilter === "expired";
-      refreshFees(0, searchTerm || undefined, isExpired);
+      if (onReloadFees) {
+        const isExpired = expiredFilter === "all" ? undefined : expiredFilter === "expired";
+        onReloadFees(0, searchTerm || undefined, isExpired);
+        // Cập nhật giá trị đã search
+        prevSearchRef.current = { search: searchTerm, filter: expiredFilter };
+      }
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [searchTerm, expiredFilter, refreshFees]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchTerm, expiredFilter]);
 
   const handleCreateFee = useCallback(
     async (values: FormValues, publishImmediately: boolean) => {
@@ -327,7 +333,9 @@ export function FeesTable({
           const targetPage = publishImmediately ? 0 : pageNumber;
           const isExpired = expiredFilter === "all" ? undefined : expiredFilter === "expired";
           try {
-            await refreshFees(targetPage, searchTerm || undefined, isExpired);
+            if (onReloadFees) {
+              await onReloadFees(targetPage, searchTerm || undefined, isExpired);
+            }
           } catch {
             onFeeCreated?.(createdFee);
           }
@@ -351,7 +359,7 @@ export function FeesTable({
         setSubmitting(false);
       }
     },
-    [clubId, onFeeCreated, pageNumber, refreshFees, resetForm, setIsAddOpen, searchTerm, expiredFilter]
+    [clubId, onFeeCreated, pageNumber, onReloadFees, resetForm, setIsAddOpen, searchTerm, expiredFilter]
   );
 
   const editSchema = useMemo(
@@ -509,7 +517,9 @@ export function FeesTable({
         if (updatedFee) {
           const isExpired = expiredFilter === "all" ? undefined : expiredFilter === "expired";
           try {
-            await refreshFees(pageNumber, searchTerm || undefined, isExpired);
+            if (onReloadFees) {
+              await onReloadFees(pageNumber, searchTerm || undefined, isExpired);
+            }
           } catch {
             onFeeCreated?.(updatedFee);
           }
@@ -538,7 +548,7 @@ export function FeesTable({
       isAmountLockedInEdit,
       onFeeCreated,
       pageNumber,
-      refreshFees,
+      onReloadFees,
       searchTerm,
       expiredFilter,
     ]
@@ -550,7 +560,9 @@ export function FeesTable({
       try {
         await feeService.publishFee(clubId, feeId);
         const isExpired = expiredFilter === "all" ? undefined : expiredFilter === "expired";
-        await refreshFees(pageNumber, searchTerm || undefined, isExpired);
+        if (onReloadFees) {
+          await onReloadFees(pageNumber, searchTerm || undefined, isExpired);
+        }
         toast.success("Đã kích hoạt khoản phí!");
         if (options?.closeEdit) {
           setIsEditOpen(false);
@@ -568,14 +580,16 @@ export function FeesTable({
         setPublishingFeeId(null);
       }
     },
-    [clubId, editForm, pageNumber, refreshFees, searchTerm, expiredFilter]
+    [clubId, editForm, pageNumber, onReloadFees, searchTerm, expiredFilter]
   );
 
   const handleClearSearch = useCallback(() => {
     setSearchTerm("");
     setExpiredFilter("all");
-    refreshFees(0, undefined, undefined);
-  }, [refreshFees]);
+    if (onReloadFees) {
+      onReloadFees(0, undefined, undefined);
+    }
+  }, [onReloadFees]);
 
   const handleViewPaidMembers = useCallback(async (fee: Fee, page: number = 0) => {
     setSelectedFeeForMembers(fee);
@@ -608,7 +622,9 @@ export function FeesTable({
       await feeService.deleteFee(clubId, deleteFeeId);
       const isExpired = expiredFilter === "all" ? undefined : expiredFilter === "expired";
       try {
-        await refreshFees(pageNumber, searchTerm || undefined, isExpired);
+        if (onReloadFees) {
+          await onReloadFees(pageNumber, searchTerm || undefined, isExpired);
+        }
       } catch {
         onDeleteFee?.(String(deleteFeeId));
       }
@@ -624,7 +640,7 @@ export function FeesTable({
     } finally {
       setDeleteLoading(false);
     }
-  }, [clubId, deleteFeeId, onDeleteFee, pageNumber, refreshFees, searchTerm, expiredFilter]);
+  }, [clubId, deleteFeeId, onDeleteFee, pageNumber, onReloadFees, searchTerm, expiredFilter]);
 
   const getFeeToDelete = useCallback(() => {
     if (deleteFeeId === null) return null;
@@ -1445,7 +1461,7 @@ export function FeesTable({
 
       {/* Paid Members Dialog */}
       <Dialog open={isPaidMembersOpen} onOpenChange={setIsPaidMembersOpen}>
-        <DialogContent className="max-w-3xl">
+        <DialogContent className="max-w-4xl max-h-[85vh]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Users className="w-5 h-5 text-primary" />
@@ -1457,7 +1473,7 @@ export function FeesTable({
               </p>
             )}
           </DialogHeader>
-          <div className="mt-4">
+          <div className="mt-4 overflow-auto max-h-[calc(85vh-180px)]">
             {loadingPaidMembers ? (
               <div className="space-y-3">
                 {[...Array(5)].map((_, idx) => (
@@ -1477,36 +1493,36 @@ export function FeesTable({
               </div>
             ) : (
               <>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Thành viên</TableHead>
-                      <TableHead>MSSV</TableHead>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Ngày đóng</TableHead>
-                      <TableHead className="text-right">Số tiền</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {paidMembers.map((member) => (
-                      <TableRow key={member.userId}>
-                        <TableCell>
-                          <div className="flex items-center gap-3">
-                            <Avatar className="h-8 w-8">
-                              <AvatarImage src={member.avatarUrl} alt={member.fullName} />
-                              <AvatarFallback>{member.fullName.charAt(0)}</AvatarFallback>
-                            </Avatar>
-                            <span className="font-medium">{member.fullName}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell>{member.studentCode}</TableCell>
-                        <TableCell className="text-sm text-muted-foreground">{member.email}</TableCell>
-                        <TableCell>{new Date(member.paidDate).toLocaleDateString('vi-VN')}</TableCell>
-                        <TableCell className="text-right font-semibold">{formatCurrency(member.amount)}</TableCell>
+                <div className="border rounded-lg overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-[30%]">Thành viên</TableHead>
+                        <TableHead className="w-[20%]">MSSV</TableHead>
+                        <TableHead className="w-[30%]">Email</TableHead>
+                        <TableHead className="w-[20%]">Ngày đóng</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {paidMembers.map((member) => (
+                        <TableRow key={member.userId}>
+                          <TableCell>
+                            <div className="flex items-center gap-3">
+                              <Avatar className="h-8 w-8">
+                                <AvatarImage src={member.avatarUrl} alt={member.fullName} />
+                                <AvatarFallback>{member.fullName.charAt(0)}</AvatarFallback>
+                              </Avatar>
+                              <span className="font-medium">{member.fullName}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell>{member.studentCode}</TableCell>
+                          <TableCell className="text-sm text-muted-foreground truncate max-w-[200px]" title={member.email}>{member.email}</TableCell>
+                          <TableCell>{new Date(member.paidDate).toLocaleDateString('vi-VN')}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
                 {paidMembersTotalPages > 1 && (
                   <div className="mt-4">
                     <Pagination>

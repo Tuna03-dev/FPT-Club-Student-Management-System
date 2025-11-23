@@ -256,21 +256,40 @@ export default function Finance() {
     })();
   }, [numericClubId]);
 
+  // State để track xem tab nào đã được load
+  const [loadedTabs, setLoadedTabs] = useState<Set<string>>(new Set());
+  const [activeTab, setActiveTab] = useState<string>('income');
+
   useEffect(() => {
     void fetchFinanceSummary();
   }, [fetchFinanceSummary]);
 
+  // Load income transactions khi mount (tab mặc định)
   useEffect(() => {
-    void fetchIncomeTransactions(0);
-  }, [fetchIncomeTransactions]);
+    if (activeTab === 'income' && !loadedTabs.has('income')) {
+      void fetchIncomeTransactions(0);
+      setLoadedTabs(prev => new Set(prev).add('income'));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
 
+  // Load outcome transactions khi chuyển sang tab outcome
   useEffect(() => {
-    void fetchOutcomeTransactions(0);
-  }, [fetchOutcomeTransactions]);
+    if (activeTab === 'outcome' && !loadedTabs.has('outcome')) {
+      void fetchOutcomeTransactions(0);
+      setLoadedTabs(prev => new Set(prev).add('outcome'));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
 
+  // Load fees khi chuyển sang tab fees
   useEffect(() => {
-    void fetchFees(0);
-  }, [fetchFees]);
+    if (activeTab === 'fees' && !loadedTabs.has('fees')) {
+      void fetchFees(0);
+      setLoadedTabs(prev => new Set(prev).add('fees'));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
 
   const handleReloadFees = useCallback(
     async (page?: number, search?: string, isExpired?: boolean) => {
@@ -475,6 +494,7 @@ export default function Finance() {
           defaultValue="income"
           className="w-full"
           onValueChange={(value) => {
+            setActiveTab(value);
             if (value === "income") setActiveTransactionTab("INCOME");
             if (value === "outcome") setActiveTransactionTab("OUTCOME");
           }}
