@@ -276,20 +276,10 @@ export function PendingRequestsCard({
                         e.stopPropagation();
                         const userNow = authService.getCurrentUser();
                         if (!userNow) return;
-                        // Nếu là STAFF, mở dialog để nhập lý do
-                        if (userNow.systemRole === "STAFF") {
-                          setRejectingRequestId(req.requestEventId);
-                          setRejectReason("");
-                          setRejectDialogOpen(true);
-                        } else {
-                          // Check systemRole in clubRoleList instead of global systemRole
-                          const clubRole = clubId ? authService.getClubRole(clubId) : null;
-                          const systemRoleInClub = clubRole?.systemRole?.toUpperCase();
-                          if (systemRoleInClub === "CLUB_OFFICER") {
-                            // Club Officer không cần lý do (hoặc có thể thêm sau)
-                            handleReject(req.requestEventId, false, "");
-                          }
-                        }
+                        // Mở dialog để nhập lý do cho cả STAFF và CLUB_OFFICER
+                        setRejectingRequestId(req.requestEventId);
+                        setRejectReason("");
+                        setRejectDialogOpen(true);
                       }}
                     >
                       ✗ Từ chối
@@ -302,7 +292,7 @@ export function PendingRequestsCard({
         </div>
       )}
       
-      {/* Dialog nhập lý do từ chối (chỉ cho STAFF) */}
+      {/* Dialog nhập lý do từ chối (cho cả STAFF và CLUB_OFFICER) */}
       <Dialog open={rejectDialogOpen} onOpenChange={setRejectDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -340,7 +330,9 @@ export function PendingRequestsCard({
                   return;
                 }
                 if (rejectingRequestId !== null) {
-                  await handleReject(rejectingRequestId, true, rejectReason.trim());
+                  const userNow = authService.getCurrentUser();
+                  const isStaff = userNow?.systemRole === "STAFF";
+                  await handleReject(rejectingRequestId, isStaff, rejectReason.trim());
                   setRejectDialogOpen(false);
                   setRejectReason("");
                   setRejectingRequestId(null);

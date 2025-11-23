@@ -490,9 +490,11 @@ public class EventManagementService {
                         .eventTypeName(event != null && event.getEventType() != null ? event.getEventType().getTypeName() : null)
                         .responseMessage(requestEvent.getResponseMessage())
                         .reason(requestEvent.getResponseMessage())
-                        .message(String.format("Yêu cầu tạo sự kiện của bạn đã bị %s (Chủ nhiệm CLB %s) từ chối",
+                        .message(String.format("Yêu cầu tạo sự kiện \"%s\" của bạn đã bị %s (Chủ nhiệm CLB %s) từ chối. Lý do: %s",
+                                event != null ? event.getTitle() : "N/A",
                                 approver.getFullName(),
-                                club != null ? club.getClubName() : "N/A"))
+                                club != null ? club.getClubName() : "N/A",
+                                requestEvent.getResponseMessage() != null ? requestEvent.getResponseMessage() : "Không có lý do"))
                         .build();
                 
                 if (creator != null && creator.getEmail() != null) {
@@ -746,31 +748,49 @@ public class EventManagementService {
         }
         
         List<RequestStatus> statuses;
+        boolean isClubPresident = false;
+        boolean isClubOfficer = false;
         
         // Check role theo clubId nếu có, nếu không thì check global role
         if (clubId != null && clubId > 0) {
-            if (roleService.isClubPresident(userId, clubId)) {
+            isClubPresident = roleService.isClubPresident(userId, clubId);
+            isClubOfficer = roleService.isClubOfficer(userId, clubId);
+            
+            if (isClubPresident) {
                 statuses = List.of(RequestStatus.PENDING_UNIVERSITY);
-            } else if (roleService.isClubOfficer(userId, clubId)) {
+            } else if (isClubOfficer) {
                 statuses = List.of(RequestStatus.PENDING_CLUB);
             } else {
                 return List.of();
             }
         } else {
             // Fallback: check global role (for backward compatibility)
-            if (roleService.isClubPresident(userId)) {
+            isClubPresident = roleService.isClubPresident(userId);
+            isClubOfficer = roleService.isClubOfficer(userId);
+            
+            if (isClubPresident) {
                 statuses = List.of(RequestStatus.PENDING_UNIVERSITY);
-            } else if (roleService.isClubOfficer(userId)) {
+            } else if (isClubOfficer) {
                 statuses = List.of(RequestStatus.PENDING_CLUB);
             } else {
                 return List.of();
             }
         }
         
-        List<RequestEvent> reqEvents = requestEventRepository.findByCreatedByIdAndStatusIn(userId, statuses);
+        List<RequestEvent> reqEvents;
+        
+        // CLUB_OFFICER (isClubPresident): Lấy tất cả draft events của club với status PENDING_UNIVERSITY
+        // (không chỉ events do họ tạo, mà cả events do TEAM_OFFICER tạo và đã được họ duyệt)
+        if (isClubPresident && clubId != null && clubId > 0) {
+            reqEvents = requestEventRepository.findAllByStatusesAndClubIdWithAll(statuses, clubId);
+        } else {
+            // TEAM_OFFICER: Chỉ lấy events do chính họ tạo
+            reqEvents = requestEventRepository.findByCreatedByIdAndStatusIn(userId, statuses);
+        }
+        
         if (reqEvents == null || reqEvents.isEmpty()) return List.of();
         
-        // Filter by clubId if provided
+        // Filter by clubId if provided (for TEAM_OFFICER case)
         return reqEvents.stream()
             .filter(re -> re.getEvent() != null)
             .filter(re -> {
@@ -873,29 +893,49 @@ public class EventManagementService {
         
         // Xác định status hợp lệ theo role và clubId
         List<RequestStatus> allowedStatuses;
+        boolean isClubPresident = false;
+        boolean isClubOfficer = false;
+        
         if (clubId != null && clubId > 0) {
             // Check role theo clubId
-            if (roleService.isClubPresident(userId, clubId)) {
+            isClubPresident = roleService.isClubPresident(userId, clubId);
+            isClubOfficer = roleService.isClubOfficer(userId, clubId);
+            
+            if (isClubPresident) {
                 allowedStatuses = List.of(RequestStatus.PENDING_UNIVERSITY);
-            } else if (roleService.isClubOfficer(userId, clubId)) {
+            } else if (isClubOfficer) {
                 allowedStatuses = List.of(RequestStatus.PENDING_CLUB);
             } else {
                 throw new ForbiddenException("Bạn không có quyền cập nhật sự kiện này");
             }
         } else {
             // Event toàn trường hoặc không có club - check global role
-            if (roleService.isClubPresident(userId)) {
+            isClubPresident = roleService.isClubPresident(userId);
+            isClubOfficer = roleService.isClubOfficer(userId);
+            
+            if (isClubPresident) {
                 allowedStatuses = List.of(RequestStatus.PENDING_UNIVERSITY);
-            } else if (roleService.isClubOfficer(userId)) {
+            } else if (isClubOfficer) {
                 allowedStatuses = List.of(RequestStatus.PENDING_CLUB);
             } else {
                 throw new ForbiddenException("Bạn không có quyền cập nhật sự kiện này");
             }
         }
 
-        RequestEvent requestEvent = requestEventRepository
-                .findByEventIdAndCreatorWithEventAndStatusIn(eventId, userId, allowedStatuses)
-                .orElseThrow(() -> new NotFoundException("Không tìm thấy sự kiện nháp của bạn hoặc trạng thái không phù hợp"));
+        RequestEvent requestEvent;
+        
+        // CLUB_OFFICER (isClubPresident): Có thể chỉnh sửa tất cả draft events của club với status PENDING_UNIVERSITY
+        // (không chỉ events do họ tạo, mà cả events do TEAM_OFFICER tạo và đã được họ duyệt)
+        if (isClubPresident && clubId != null && clubId > 0 && allowedStatuses.contains(RequestStatus.PENDING_UNIVERSITY)) {
+            requestEvent = requestEventRepository
+                    .findByEventIdAndStatusesAndClubIdWithAll(eventId, allowedStatuses, clubId)
+                    .orElseThrow(() -> new NotFoundException("Không tìm thấy sự kiện nháp hoặc trạng thái không phù hợp"));
+        } else {
+            // TEAM_OFFICER: Chỉ có thể chỉnh sửa events do chính họ tạo
+            requestEvent = requestEventRepository
+                    .findByEventIdAndCreatorWithEventAndStatusIn(eventId, userId, allowedStatuses)
+                    .orElseThrow(() -> new NotFoundException("Không tìm thấy sự kiện nháp của bạn hoặc trạng thái không phù hợp"));
+        }
 
         // Đảm bảo event từ requestEvent match với event đã lấy
         Event eventToUpdate = requestEvent.getEvent();

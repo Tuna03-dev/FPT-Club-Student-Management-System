@@ -174,10 +174,12 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
             );
             const mappedDrafts: Event[] = (drafts ?? [])
               .filter((d: MyDraftEventDto) => {
-                // Only show draft events that are pending (PENDING_CLUB or PENDING_UNIVERSITY)
+                // Show draft events that are:
+                // 1. Pending (PENDING_CLUB or PENDING_UNIVERSITY) - for club officers/team officers
+                // 2. null requestStatus - for STAFF draft events
                 // Filter out cancelled events (events that are draft but not pending)
                 const status = d.requestStatus?.toUpperCase();
-                return status === "PENDING_CLUB" || status === "PENDING_UNIVERSITY";
+                return status === "PENDING_CLUB" || status === "PENDING_UNIVERSITY" || d.requestStatus === null;
               })
               .map((d: MyDraftEventDto) => ({
                 id: d.event.id.toString(),
@@ -209,8 +211,9 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
                 });
               else {
                 // Only add if it's a pending draft (not cancelled)
+                // Include STAFF drafts (requestStatus === null) and pending drafts
                 const status = draft.requestStatus?.toUpperCase();
-                if (status === "PENDING_CLUB" || status === "PENDING_UNIVERSITY") {
+                if (status === "PENDING_CLUB" || status === "PENDING_UNIVERSITY" || draft.requestStatus === null) {
                   byId.set(draft.id, draft);
                 }
               }
@@ -310,10 +313,12 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
           );
           const mappedDrafts: Event[] = (drafts ?? [])
             .filter((d: MyDraftEventDto) => {
-              // Only show draft events that are pending (PENDING_CLUB or PENDING_UNIVERSITY)
+              // Show draft events that are:
+              // 1. Pending (PENDING_CLUB or PENDING_UNIVERSITY) - for club officers/team officers
+              // 2. null requestStatus - for STAFF draft events
               // Filter out cancelled events (events that are draft but not pending)
               const status = d.requestStatus?.toUpperCase();
-              return status === "PENDING_CLUB" || status === "PENDING_UNIVERSITY";
+              return status === "PENDING_CLUB" || status === "PENDING_UNIVERSITY" || d.requestStatus === null;
             })
             .map((d: MyDraftEventDto) => ({
               id: d.event.id.toString(),
@@ -351,8 +356,9 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
               });
             } else {
               // Only add if it's a pending draft (not cancelled)
+              // Include STAFF drafts (requestStatus === null) and pending drafts
               const status = draft.requestStatus?.toUpperCase();
-              if (status === "PENDING_CLUB" || status === "PENDING_UNIVERSITY") {
+              if (status === "PENDING_CLUB" || status === "PENDING_UNIVERSITY" || draft.requestStatus === null) {
                 byId.set(draft.id, draft);
               }
             }
