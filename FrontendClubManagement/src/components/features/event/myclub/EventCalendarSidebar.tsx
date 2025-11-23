@@ -51,7 +51,7 @@ export function EventCalendarSidebar({
 }: EventCalendarSidebarProps) {
   return (
     <div>
-      <EventLegend />
+      <EventLegend clubId={clubId} />
       <PendingRequestsCard
         clubId={clubId}
         pendingRequests={pendingRequests}

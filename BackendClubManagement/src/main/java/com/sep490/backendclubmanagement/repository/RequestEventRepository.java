@@ -56,6 +56,15 @@ public interface RequestEventRepository extends JpaRepository<RequestEvent, Long
     List<RequestEvent> findAllByStatusAndClubIdWithAll(@Param("status") RequestStatus status,
                                                        @Param("clubId") Long clubId);
 
+    @Query("SELECT re FROM RequestEvent re " +
+           "JOIN FETCH re.event e " +
+           "LEFT JOIN FETCH e.club c " +
+           "LEFT JOIN FETCH re.createdBy u " +
+           "LEFT JOIN FETCH e.eventType et " +
+           "WHERE re.status IN :statuses AND e.club.id = :clubId")
+    List<RequestEvent> findAllByStatusesAndClubIdWithAll(@Param("statuses") List<RequestStatus> statuses,
+                                                         @Param("clubId") Long clubId);
+
 
     @Query("SELECT re.event.id FROM RequestEvent re WHERE re.createdBy.id = :userId AND re.status IN :statuses")
     List<Long> findEventIdsOfDraftByUser(@Param("userId") Long userId, @Param("statuses") List<RequestStatus> statuses);
@@ -67,6 +76,15 @@ public interface RequestEventRepository extends JpaRepository<RequestEvent, Long
     Optional<RequestEvent> findByEventIdAndCreatorWithEventAndStatusIn(@Param("eventId") Long eventId,
                                                                        @Param("userId") Long userId,
                                                                        @Param("statuses") List<RequestStatus> statuses);
+
+    @Query("SELECT re FROM RequestEvent re JOIN FETCH re.event e " +
+           "LEFT JOIN FETCH e.club c " +
+           "LEFT JOIN FETCH re.createdBy u " +
+           "LEFT JOIN FETCH e.eventType et " +
+           "WHERE e.id = :eventId AND re.status IN :statuses AND e.club.id = :clubId")
+    Optional<RequestEvent> findByEventIdAndStatusesAndClubIdWithAll(@Param("eventId") Long eventId,
+                                                                      @Param("statuses") List<RequestStatus> statuses,
+                                                                      @Param("clubId") Long clubId);
 
     @Query("SELECT re FROM RequestEvent re JOIN FETCH re.event e WHERE e.id = :eventId AND re.createdBy.id = :userId")
     Optional<RequestEvent> findByEventIdAndCreatedById(@Param("eventId") Long eventId,

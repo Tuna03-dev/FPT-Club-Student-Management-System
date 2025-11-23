@@ -98,7 +98,15 @@ public class RoleService {
         if (isStaff(userId)) {
             return true;
         }
-        // Các role khác check từ club membership
+        // Các role khác check từ club membership - check systemRole trong club cụ thể
+        if (clubId != null) {
+            String systemRoleInClub = roleMemberShipRepository.findSystemRoleByUserIdAndClubId(userId, clubId)
+                    .map(r -> r == null ? "" : r.trim().toUpperCase())
+                    .orElse("");
+            return "CLUB_OFFICER".equals(systemRoleInClub) || 
+                   "TEAM_OFFICER".equals(systemRoleInClub);
+        }
+        // Fallback: nếu không có clubId, check global systemRole (cho backward compatibility)
         String systemRole = getUserSystemRole(userId);
         return "CLUB_OFFICER".equals(systemRole) || 
                "TEAM_OFFICER".equals(systemRole);

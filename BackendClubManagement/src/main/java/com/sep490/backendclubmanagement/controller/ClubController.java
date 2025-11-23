@@ -1,11 +1,14 @@
 package com.sep490.backendclubmanagement.controller;
 
 import com.sep490.backendclubmanagement.dto.ApiResponse;
+import com.sep490.backendclubmanagement.dto.request.UpdateClubInfoRequest;
 import com.sep490.backendclubmanagement.dto.response.ClubDetailData;
 import com.sep490.backendclubmanagement.dto.response.ClubDto;
 import com.sep490.backendclubmanagement.exception.AppException;
 import com.sep490.backendclubmanagement.security.SecurityConfig;
 import com.sep490.backendclubmanagement.service.ClubServiceInterface;
+import com.sep490.backendclubmanagement.util.SecurityUtils;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -53,6 +56,37 @@ public class ClubController {
     public ResponseEntity<ApiResponse<List<ClubDto>>> getAllClubs() {
         List<ClubDto> clubs = clubService.getAllClubs();
         return ResponseEntity.ok(ApiResponse.success(clubs));
+    }
+
+    /**
+     * Get club information for club members to view
+     * Only accessible by active members of the club
+     * @param id Club ID
+     * @return Club detail data
+     */
+    @GetMapping("/{id}/club-info")
+    @PreAuthorize(SecurityConfig.AUTHORITY_ALL_ROLES)
+    public ResponseEntity<ApiResponse<ClubDetailData>> getClubInfo(
+            @PathVariable Long id) throws AppException {
+        Long userId = SecurityUtils.getCurrentUserId();
+        ClubDetailData data = clubService.getClubInfo(id, userId);
+        return ResponseEntity.ok(ApiResponse.success(data));
+    }
+
+    /**
+     * Update club information (Club Officer only - roleLevel <= 2)
+     * @param id Club ID
+     * @param request Update request with club information
+     * @return Updated club detail data
+     */
+    @PutMapping("/{id}/officer-update")
+    @PreAuthorize(SecurityConfig.AUTHORITY_ALL_ROLES)
+    public ResponseEntity<ApiResponse<ClubDetailData>> updateClubInfo(
+            @PathVariable Long id,
+            @Valid @RequestBody UpdateClubInfoRequest request) throws AppException {
+        Long userId = SecurityUtils.getCurrentUserId();
+        ClubDetailData data = clubService.updateClubInfo(id, request, userId);
+        return ResponseEntity.ok(ApiResponse.success(data));
     }
 }
 

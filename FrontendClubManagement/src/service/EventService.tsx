@@ -220,8 +220,12 @@ export interface PendingRequestDto {
   createdBy: { id: number; fullName: string } | null;
 }
 
-export async function getPendingRequests(): Promise<PendingRequestDto[]> {
-  const res = await axiosClient.get<PendingRequestDto[]>("/events/pending-requests", { timeout: 30000 });
+export async function getPendingRequests(clubId?: number): Promise<PendingRequestDto[]> {
+  const params = clubId && clubId > 0 ? { clubId } : {};
+  const res = await axiosClient.get<PendingRequestDto[]>("/events/pending-requests", { 
+    params,
+    timeout: 30000 
+  });
   return res.data ?? [];
 }
 

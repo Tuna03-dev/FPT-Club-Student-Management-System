@@ -1,5 +1,5 @@
 "use client";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -29,6 +29,7 @@ import { authService } from "@/services/authService";
 import { useClubPermissions } from "@/hooks/useClubPermissions";
 import { EventCalendarGrid, type CalendarEvent } from "./EventCalendarGrid";
 import { EventCalendarSidebar } from "./EventCalendarSidebar";
+import { useWebSocket, type EventWebSocketPayload } from "@/hooks/useWebSocket";
 
 // Helper to normalize error messages
 const getErrorMessage = (
@@ -96,6 +97,10 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
   const { isClubOfficer: isPresidentOfCurrentClub } =
     useClubPermissions(clubId);
 
+  // WebSocket connection
+  const token = localStorage.getItem("accessToken") || null;
+  const { isConnected, subscribeToUserQueue, subscribeToSystemRole, subscribeToClub } = useWebSocket(token);
+
   // Fetch events from API
   useEffect(() => {
     const fetchEvents = async () => {
@@ -156,18 +161,27 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
           eventTypeName: event.eventTypeName,
         }));
         let all: Event[] = mappedEvents;
-        const userUpper = roleUpper;
-        if (
-          userUpper === "CLUB_OFFICER" ||
-          userUpper === "TEAM_OFFICER" ||
-          userUpper === "STAFF"
-        ) {
+        // Check if user can see draft events: STAFF or has CLUB_OFFICER/TEAM_OFFICER role in this club
+        const clubRole = clubId ? authService.getClubRole(clubId) : null;
+        const systemRoleInClub = clubRole?.systemRole?.toUpperCase();
+        const canSeeDrafts = isStaff || 
+          (clubId && systemRoleInClub && ["CLUB_OFFICER", "TEAM_OFFICER"].includes(systemRoleInClub));
+        
+        if (canSeeDrafts) {
           try {
             const drafts = await getMyDraftEvents(
               clubId && clubId > 0 ? clubId : undefined
             );
-            const mappedDrafts: Event[] = (drafts ?? []).map(
-              (d: MyDraftEventDto) => ({
+            const mappedDrafts: Event[] = (drafts ?? [])
+              .filter((d: MyDraftEventDto) => {
+                // Show draft events that are:
+                // 1. Pending (PENDING_CLUB or PENDING_UNIVERSITY) - for club officers/team officers
+                // 2. null requestStatus - for STAFF draft events
+                // Filter out cancelled events (events that are draft but not pending)
+                const status = d.requestStatus?.toUpperCase();
+                return status === "PENDING_CLUB" || status === "PENDING_UNIVERSITY" || d.requestStatus === null;
+              })
+              .map((d: MyDraftEventDto) => ({
                 id: d.event.id.toString(),
                 title: d.event.title,
                 description: d.event.description,
@@ -183,8 +197,7 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
                 isMyDraft: true,
                 requestStatus: d.requestStatus,
                 eventTypeName: d.event.eventTypeName,
-              })
-            );
+              }));
             const byId = new Map<string, Event>();
             for (const e of all) byId.set(e.id, e);
             for (const draft of mappedDrafts) {
@@ -196,7 +209,14 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
                   isMyDraft: true,
                   requestStatus: draft.requestStatus,
                 });
-              else byId.set(draft.id, draft);
+              else {
+                // Only add if it's a pending draft (not cancelled)
+                // Include STAFF drafts (requestStatus === null) and pending drafts
+                const status = draft.requestStatus?.toUpperCase();
+                if (status === "PENDING_CLUB" || status === "PENDING_UNIVERSITY" || draft.requestStatus === null) {
+                  byId.set(draft.id, draft);
+                }
+              }
             }
             all = Array.from(byId.values());
           } catch (e: unknown) {
@@ -215,8 +235,8 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
     fetchEvents();
   }, [clubId, currentDate]);
 
-  // Refetch events function
-  const refetchEvents = async () => {
+  // Refetch events function - wrapped in useCallback to ensure stable reference
+  const refetchEvents = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -279,17 +299,28 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
 
       let all: Event[] = mappedEvents;
 
-      if (
-        roleUpper === "CLUB_OFFICER" ||
-        roleUpper === "TEAM_OFFICER" ||
-        roleUpper === "STAFF"
-      ) {
+      // Check if user can see draft events: STAFF or has CLUB_OFFICER/TEAM_OFFICER role in this club
+      const isStaffRefetch = roleUpper === "STAFF";
+      const clubRoleRefetch = clubId ? authService.getClubRole(clubId) : null;
+      const systemRoleInClubRefetch = clubRoleRefetch?.systemRole?.toUpperCase();
+      const canSeeDraftsRefetch = isStaffRefetch || 
+        (clubId && systemRoleInClubRefetch && ["CLUB_OFFICER", "TEAM_OFFICER"].includes(systemRoleInClubRefetch));
+
+      if (canSeeDraftsRefetch) {
         try {
           const drafts = await getMyDraftEvents(
             clubId && clubId > 0 ? clubId : undefined
           );
-          const mappedDrafts: Event[] = (drafts ?? []).map(
-            (d: MyDraftEventDto) => ({
+          const mappedDrafts: Event[] = (drafts ?? [])
+            .filter((d: MyDraftEventDto) => {
+              // Show draft events that are:
+              // 1. Pending (PENDING_CLUB or PENDING_UNIVERSITY) - for club officers/team officers
+              // 2. null requestStatus - for STAFF draft events
+              // Filter out cancelled events (events that are draft but not pending)
+              const status = d.requestStatus?.toUpperCase();
+              return status === "PENDING_CLUB" || status === "PENDING_UNIVERSITY" || d.requestStatus === null;
+            })
+            .map((d: MyDraftEventDto) => ({
               id: d.event.id.toString(),
               title: d.event.title,
               description: d.event.description,
@@ -305,14 +336,14 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
               isMyDraft: true,
               requestStatus: d.requestStatus,
               eventTypeName: d.event.eventTypeName,
-            })
-          );
+            }));
           const byId = new Map<string, Event>();
           // First add all regular events
           for (const e of all) {
             byId.set(e.id, e);
           }
           // Then merge drafts, preserving draft flags
+          // Only add drafts that are pending (not cancelled)
           for (const draft of mappedDrafts) {
             const existing = byId.get(draft.id);
             if (existing) {
@@ -324,7 +355,12 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
                 requestStatus: draft.requestStatus,
               });
             } else {
-              byId.set(draft.id, draft);
+              // Only add if it's a pending draft (not cancelled)
+              // Include STAFF drafts (requestStatus === null) and pending drafts
+              const status = draft.requestStatus?.toUpperCase();
+              if (status === "PENDING_CLUB" || status === "PENDING_UNIVERSITY" || draft.requestStatus === null) {
+                byId.set(draft.id, draft);
+              }
             }
           }
           all = Array.from(byId.values());
@@ -341,7 +377,7 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
       toast.error(getErrorMessage(err, "Không thể tải danh sách sự kiện"));
       setLoading(false);
     }
-  };
+  }, [currentDate, clubId]);
 
   // Load event types for create form
   useEffect(() => {
@@ -367,7 +403,7 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
     const isReviewer = roleUpper === "STAFF" || isPresidentOfCurrentClub;
     if (isReviewer) {
       setLoadingPending(true);
-      getPendingRequests()
+      getPendingRequests(clubId && clubId > 0 ? clubId : undefined)
         .then((list) => setPendingRequests(list))
         .catch(() => setPendingRequests([]))
         .finally(() => setLoadingPending(false));
@@ -432,6 +468,241 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
     window.addEventListener("events:refetch", handler);
     return () => window.removeEventListener("events:refetch", handler);
   }, [clubId]);
+
+  // 🔔 WebSocket: Real-time updates for Event Management
+  useEffect(() => {
+    if (!isConnected) return;
+
+    const user = authService.getCurrentUser();
+    if (!user) return;
+    const roleUpper = user.systemRole
+      ? String(user.systemRole).trim().toUpperCase()
+      : "";
+
+    // Subscribe to user queue (for personal notifications)
+    const unsubscribeUser = subscribeToUserQueue((msg) => {
+      if (msg.type !== "EVENT") return;
+
+      const payload = msg.payload as EventWebSocketPayload;
+
+      // Show toast notification based on action
+      switch (msg.action) {
+        case "REQUEST_SUBMITTED": {
+          // Only show toast for Club Officers (not for Team Officers who created it)
+          const clubRole = clubId ? authService.getClubRole(clubId) : null;
+          const systemRoleInClub = clubRole?.systemRole?.toUpperCase();
+          const isClubOfficer = systemRoleInClub === "CLUB_OFFICER";
+          if (isClubOfficer) {
+            toast.info("Yêu cầu tạo sự kiện mới", {
+              description: payload.message || `Có yêu cầu tạo sự kiện "${payload.eventTitle}" chờ duyệt`,
+            });
+            // Refresh pending requests
+            getPendingRequests(clubId && clubId > 0 ? clubId : undefined)
+              .then((list) => {
+                console.log("[EventCalendar] Refreshed pending requests after REQUEST_SUBMITTED:", list);
+                setPendingRequests(list);
+              })
+              .catch((err) => {
+                console.error("[EventCalendar] Error refreshing pending requests:", err);
+              });
+          }
+          break;
+        }
+        case "REQUEST_APPROVED_BY_CLUB":
+          toast.success("Yêu cầu đã được duyệt", {
+            description: payload.message || `Yêu cầu tạo sự kiện "${payload.eventTitle}" đã được Club Officer duyệt`,
+          });
+          // Refresh draft events
+          refetchEvents();
+          break;
+        case "REQUEST_REJECTED_BY_CLUB":
+          toast.error("Yêu cầu đã bị từ chối", {
+            description: payload.message || `Yêu cầu tạo sự kiện "${payload.eventTitle}" đã bị Club Officer từ chối`,
+          });
+          // Refresh draft events
+          refetchEvents();
+          break;
+        case "REQUEST_APPROVED_BY_UNIVERSITY":
+          toast.success("Yêu cầu đã được duyệt", {
+            description: payload.message || `Yêu cầu tạo sự kiện "${payload.eventTitle}" đã được Staff duyệt và công bố`,
+          });
+          // Refresh events and draft events
+          refetchEvents();
+          break;
+        case "REQUEST_REJECTED_BY_UNIVERSITY":
+          toast.error("Yêu cầu đã bị từ chối", {
+            description: payload.message || `Yêu cầu tạo sự kiện "${payload.eventTitle}" đã bị Staff từ chối`,
+          });
+          // Refresh draft events
+          refetchEvents();
+          break;
+        case "CANCELLED_BY_STAFF":
+          toast.warning("Sự kiện đã bị hủy", {
+            description: payload.message || `Sự kiện "${payload.eventTitle}" đã bị Staff hủy`,
+          });
+          // Refresh events
+          refetchEvents();
+          break;
+        case "RESTORED_BY_STAFF":
+          toast.success("Sự kiện đã được khôi phục", {
+            description: payload.message || `Sự kiện "${payload.eventTitle}" đã được Staff khôi phục`,
+          });
+          // Refresh events
+          refetchEvents();
+          break;
+        case "AUTO_APPROVED":
+          toast.success("Sự kiện đã được tự động duyệt", {
+            description: payload.message || `Sự kiện "${payload.eventTitle}" đã được tự động duyệt do đổi sang loại MEETING`,
+          });
+          // Refresh events
+          refetchEvents();
+          break;
+        case "PUBLISHED":
+          console.log("[EventCalendar] Received PUBLISHED event from user queue:", payload);
+          toast.info("Sự kiện mới đã được công bố", {
+            description: payload.message || `Sự kiện "${payload.eventTitle}" đã được công bố`,
+          });
+          // Refresh events - ensure it's called
+          console.log("[EventCalendar] Calling refetchEvents after PUBLISHED event from user queue");
+          refetchEvents().catch((err) => {
+            console.error("[EventCalendar] Error refetching events:", err);
+          });
+          break;
+      }
+    });
+
+    // Subscribe to system role (for STAFF)
+    let unsubscribeSystemRoleStaff: (() => void) | null = null;
+    if (roleUpper === "STAFF") {
+      unsubscribeSystemRoleStaff = subscribeToSystemRole("STAFF", (msg) => {
+        if (msg.type !== "EVENT") return;
+
+        const payload = msg.payload as EventWebSocketPayload;
+
+        if (msg.action === "REQUEST_SUBMITTED") {
+          toast.info("Yêu cầu tạo sự kiện mới", {
+            description: payload.message || `Có yêu cầu tạo sự kiện "${payload.eventTitle}" chờ duyệt`,
+          });
+          // Refresh pending requests
+          getPendingRequests(clubId && clubId > 0 ? clubId : undefined)
+            .then((list) => setPendingRequests(list))
+            .catch(() => {});
+        }
+      });
+    }
+
+    // Subscribe to system roles for event publication (for STUDENT/TEAM_OFFICER/CLUB_OFFICER)
+    // Chỉ subscribe nếu không phải STAFF
+    let unsubscribeSystemRoleStudent: (() => void) | null = null;
+    let unsubscribeSystemRoleTeamOfficer: (() => void) | null = null;
+    let unsubscribeSystemRoleClubOfficer: (() => void) | null = null;
+    
+    if (roleUpper !== "STAFF" && roleUpper !== "ADMIN") {
+      const handleEventPublished = (msg: any) => {
+        if (msg.type !== "EVENT") return;
+
+        const payload = msg.payload as EventWebSocketPayload;
+
+        if (msg.action === "PUBLISHED") {
+          console.log("[EventCalendar] Received PUBLISHED event:", payload);
+          toast.info("Sự kiện mới đã được công bố", {
+            description: payload.message || `Sự kiện "${payload.eventTitle}" đã được công bố`,
+          });
+          // Refresh events - ensure it's called
+          console.log("[EventCalendar] Calling refetchEvents after PUBLISHED event");
+          refetchEvents().catch((err) => {
+            console.error("[EventCalendar] Error refetching events:", err);
+          });
+        }
+      };
+
+      // Subscribe to STUDENT role
+      unsubscribeSystemRoleStudent = subscribeToSystemRole("STUDENT", handleEventPublished);
+      
+      // Subscribe to TEAM_OFFICER role
+      unsubscribeSystemRoleTeamOfficer = subscribeToSystemRole("TEAM_OFFICER", handleEventPublished);
+      
+      // Subscribe to CLUB_OFFICER role
+      unsubscribeSystemRoleClubOfficer = subscribeToSystemRole("CLUB_OFFICER", handleEventPublished);
+    }
+
+    // Subscribe to club (for Club Officers)
+    // Check systemRole in clubRoleList instead of global systemRole
+    let unsubscribeClub: (() => void) | null = null;
+    if (clubId && clubId > 0) {
+      const clubRole = authService.getClubRole(clubId);
+      const systemRoleInClub = clubRole?.systemRole?.toUpperCase();
+      const canSubscribeToClub = systemRoleInClub && ["CLUB_OFFICER", "TEAM_OFFICER"].includes(systemRoleInClub);
+      
+      if (canSubscribeToClub) {
+        console.log(`[EventCalendar] Subscribing to club ${clubId} for role ${systemRoleInClub}`);
+        unsubscribeClub = subscribeToClub(clubId, (msg) => {
+          console.log(`[EventCalendar] Received message from club ${clubId}:`, msg);
+          if (msg.type !== "EVENT") return;
+
+          const payload = msg.payload as EventWebSocketPayload;
+
+          switch (msg.action) {
+            case "REQUEST_SUBMITTED":
+              toast.info("Yêu cầu tạo sự kiện mới", {
+                description: payload.message || `Có yêu cầu tạo sự kiện "${payload.eventTitle}" chờ duyệt`,
+              });
+              // Refresh pending requests
+              getPendingRequests(clubId && clubId > 0 ? clubId : undefined)
+                .then((list) => {
+                  console.log("[EventCalendar] Refreshed pending requests:", list);
+                  setPendingRequests(list);
+                })
+                .catch((err) => {
+                  console.error("[EventCalendar] Error refreshing pending requests:", err);
+                });
+              break;
+            case "CANCELLED_BY_STAFF":
+              console.log("[EventCalendar] Received CANCELLED_BY_STAFF event from club topic:", payload);
+              toast.warning("Sự kiện đã bị hủy", {
+                description: payload.message || `Sự kiện "${payload.eventTitle}" đã bị Staff hủy`,
+              });
+              // Refresh events
+              console.log("[EventCalendar] Calling refetchEvents after CANCELLED_BY_STAFF event from club topic");
+              refetchEvents()
+                .then(() => {
+                  console.log("[EventCalendar] Successfully refetched events after CANCELLED_BY_STAFF");
+                })
+                .catch((err) => {
+                  console.error("[EventCalendar] Error refetching events:", err);
+                });
+              break;
+            case "RESTORED_BY_STAFF":
+              console.log("[EventCalendar] Received RESTORED_BY_STAFF event from club topic:", payload);
+              toast.success("Sự kiện đã được khôi phục", {
+                description: payload.message || `Sự kiện "${payload.eventTitle}" đã được Staff khôi phục`,
+              });
+              // Refresh events
+              console.log("[EventCalendar] Calling refetchEvents after RESTORED_BY_STAFF event from club topic");
+              refetchEvents()
+                .then(() => {
+                  console.log("[EventCalendar] Successfully refetched events after RESTORED_BY_STAFF");
+                })
+                .catch((err) => {
+                  console.error("[EventCalendar] Error refetching events:", err);
+                });
+              break;
+          }
+        });
+      } else {
+        console.log(`[EventCalendar] Cannot subscribe to club ${clubId}: systemRoleInClub=${systemRoleInClub}`);
+      }
+    }
+
+    return () => {
+      unsubscribeUser();
+      if (unsubscribeSystemRoleStaff) unsubscribeSystemRoleStaff();
+      if (unsubscribeSystemRoleStudent) unsubscribeSystemRoleStudent();
+      if (unsubscribeSystemRoleTeamOfficer) unsubscribeSystemRoleTeamOfficer();
+      if (unsubscribeSystemRoleClubOfficer) unsubscribeSystemRoleClubOfficer();
+      if (unsubscribeClub) unsubscribeClub();
+    };
+  }, [isConnected, clubId, subscribeToUserQueue, subscribeToSystemRole, subscribeToClub, refetchEvents, getPendingRequests]);
 
   const determineEventStatus = (
     startDate: Date,
@@ -618,9 +889,15 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
 
   const handleDayClick = (day: number) => {
     const user = authService.getCurrentUser();
-    const canCreate =
-      !!user &&
-      ["STAFF", "CLUB_OFFICER", "TEAM_OFFICER"].includes(user.systemRole);
+    if (!user) return;
+    
+    // Check permission: STAFF hoặc có systemRole CLUB_OFFICER/TEAM_OFFICER trong club hiện tại
+    const isStaff = user.systemRole === "STAFF";
+    const clubRole = clubId ? authService.getClubRole(clubId) : null;
+    const systemRoleInClub = clubRole?.systemRole?.toUpperCase();
+    const canCreate = isStaff || 
+      (clubId && systemRoleInClub && ["CLUB_OFFICER", "TEAM_OFFICER"].includes(systemRoleInClub));
+    
     if (!canCreate) return;
     const start = new Date(
       currentDate.getFullYear(),
@@ -695,6 +972,7 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
             onEventClick={handleEventClick}
             getStatusColor={getStatusColor}
             getEventsForDate={getEventsForDate}
+            clubId={clubId as number | undefined}
           />
         </div>
 

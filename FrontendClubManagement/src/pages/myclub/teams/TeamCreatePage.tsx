@@ -116,7 +116,9 @@ function MemberSelector({
               size={18}
             />
             <Input
-              placeholder={loading ? "Đang tải danh sách..." : "Tìm kiếm theo tên..."}
+              placeholder={
+                loading ? "Đang tải danh sách..." : "Tìm kiếm theo tên..."
+              }
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               onFocus={handleFocus}
@@ -134,7 +136,9 @@ function MemberSelector({
                   key={member.id}
                   className="p-3 hover:bg-orange-50 cursor-pointer flex items-center justify-between group border-b last:border-b-0"
                 >
-                  <span className="text-gray-900 font-medium">{member.name}</span>
+                  <span className="text-gray-900 font-medium">
+                    {member.name}
+                  </span>
                   <Button
                     type="button"
                     size="sm"
@@ -188,17 +192,19 @@ export default function TeamCreatePage() {
   };
 
   const handleSetLeader = (m: Member) => {
-    if (deputy?.id === m.id) setDeputy(null); // không cho 1 người giữ 2 vai
-    setLeader((cur) => (cur?.id === m.id ? null : m)); // toggle
+    if (deputy?.id === m.id) setDeputy(null);
+    setLeader((cur) => (cur?.id === m.id ? null : m));
   };
 
   const handleSetDeputy = (m: Member) => {
     if (leader?.id === m.id) setLeader(null);
-    setDeputy((cur) => (cur?.id === m.id ? null : m)); // toggle
+    setDeputy((cur) => (cur?.id === m.id ? null : m));
   };
 
   const memberUserIds = useMemo(() => {
-    const exclude = new Set([leader?.id, deputy?.id].filter(Boolean) as string[]);
+    const exclude = new Set(
+      [leader?.id, deputy?.id].filter(Boolean) as string[]
+    );
     return selectedMembers
       .map((m) => m.id)
       .filter((id) => !exclude.has(id))
@@ -206,30 +212,28 @@ export default function TeamCreatePage() {
   }, [selectedMembers, leader, deputy]);
 
   // Validate "tên phòng ban có nghĩa" giống BE (client-side)
-  function validateMeaningfulTeamNameClient(trimmedName: string): string | undefined {
+  function validateMeaningfulTeamNameClient(
+    trimmedName: string
+  ): string | undefined {
     if (trimmedName.length < 3) {
       return "Tên phòng ban phải có ít nhất 3 ký tự.";
     }
 
-    // Phải có ít nhất 1 chữ cái (unicode – hỗ trợ tiếng Việt)
     const hasLetter = /[\p{L}]/u.test(trimmedName);
     if (!hasLetter) {
       return "Tên phòng ban phải chứa ít nhất một chữ cái.";
     }
 
-    // Không cho tên chỉ toàn số
     const allDigits = /^\d+$/.test(trimmedName);
     if (allDigits) {
       return "Tên phòng ban không được chỉ gồm chữ số.";
     }
 
-    // Không cho tên toàn 1 ký tự lặp (aaa, 1111,…)
     const compact = trimmedName.replace(/\s+/g, "");
     if (compact.length >= 3 && new Set(compact).size === 1) {
       return "Tên phòng ban không hợp lệ. Vui lòng nhập tên có nghĩa hơn.";
     }
 
-    // Hạn chế quá nhiều ký tự đặc biệt
     let specialCount = 0;
     for (const ch of trimmedName) {
       if (!/[0-9\p{L}\s]/u.test(ch)) {
@@ -250,7 +254,6 @@ export default function TeamCreatePage() {
     const trimmedDesc = description.trim();
     const trimmedLink = linkGroupChat.trim();
 
-    // Validate tên
     if (!trimmedName) {
       newErrors.teamName = "Vui lòng nhập tên phòng ban.";
     } else {
@@ -260,17 +263,14 @@ export default function TeamCreatePage() {
       }
     }
 
-    // Validate mô tả
     if (!trimmedDesc) {
       newErrors.description = "Vui lòng nhập mô tả phòng ban.";
     } else if (trimmedDesc.length < 10) {
       newErrors.description = "Mô tả cần ít nhất 10 ký tự để mô tả rõ hơn.";
     }
 
-    // Validate link
     if (trimmedLink) {
       try {
-        // Nếu có nhập thì phải là URL hợp lệ
         new URL(trimmedLink);
       } catch {
         newErrors.linkGroupChat =
@@ -287,7 +287,6 @@ export default function TeamCreatePage() {
     setErrors((prev) => ({ ...prev, general: undefined }));
 
     if (!validateForm()) {
-      // có lỗi → không gọi API
       return;
     }
 
@@ -295,7 +294,7 @@ export default function TeamCreatePage() {
       clubId: numericClubId,
       teamName: teamName.trim(),
       description: description.trim() || undefined,
-      linkGroupChat: linkGroupChat.trim() || undefined, // vẫn cho null
+      linkGroupChat: linkGroupChat.trim() || undefined,
       leaderUserId: leader ? parseInt(leader.id, 10) : undefined,
       viceLeaderUserId: deputy ? parseInt(deputy.id, 10) : undefined,
       memberUserIds: memberUserIds.length ? memberUserIds : undefined,
@@ -306,10 +305,8 @@ export default function TeamCreatePage() {
       const result = await createTeam(payload);
       navigate(`/myclub/${clubId}/teams/${result.id}`);
     } catch (err: any) {
-      const msg =
-        err?.message || "Không thể tạo phòng ban. Vui lòng thử lại.";
+      const msg = err?.message || "Không thể tạo phòng ban. Vui lòng thử lại.";
 
-      // Nếu backend trả thông báo có chữ "Tên ban" → show ngay dưới ô tên
       if (msg.toLowerCase().includes("tên ban")) {
         setErrors((prev) => ({
           ...prev,
@@ -330,7 +327,7 @@ export default function TeamCreatePage() {
   return (
     <form
       onSubmit={handleSubmit}
-      className="space-y-6 px-4 md:px-6 pt-0 pb-6 w-full mx-auto"
+      className="space-y-4 px-4 md:px-6 pt-0 pb-6 w-full mx-auto"
     >
       {/* Header tổng thể */}
       <div className="mb-2">
@@ -339,13 +336,14 @@ export default function TeamCreatePage() {
           Tạo phòng ban mới
         </h1>
         <p className="text-sm text-gray-500 mt-1">
-          Thiết lập thông tin cơ bản và phân công nhân sự cho phòng ban trong CLB.
+          Thiết lập thông tin cơ bản và phân công nhân sự cho phòng ban trong
+          CLB.
         </p>
       </div>
 
       {/* Thông tin cơ bản */}
-      <Card className="rounded-2xl overflow-hidden shadow-md bg-gradient-to-r from-orange-500 to-orange-600 text-white">
-        <CardHeader className="p-6">
+      <Card className="rounded-2xl shadow-md bg-white overflow-hidden">
+        <CardHeader className="p-6 bg-gradient-to-r from-orange-500 to-orange-600 text-white">
           <CardTitle className="w-full text-white">
             Tên & thông tin phòng ban
           </CardTitle>
@@ -353,7 +351,7 @@ export default function TeamCreatePage() {
             Đây là thông tin sẽ hiển thị cho toàn bộ thành viên.
           </CardDescription>
         </CardHeader>
-        <CardContent className="pt-6 space-y-4 bg-white">
+        <CardContent className="p-0 px-6 pb-6 pt-4 space-y-4 bg-white">
           <div className="space-y-2">
             <Label htmlFor="team-name" className="text-gray-800 font-semibold">
               Tên phòng ban <span className="text-red-500">*</span>
@@ -373,7 +371,10 @@ export default function TeamCreatePage() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="description" className="text-gray-800 font-semibold">
+            <Label
+              htmlFor="description"
+              className="text-gray-800 font-semibold"
+            >
               Mô tả <span className="text-red-500">*</span>
             </Label>
             <Textarea
@@ -418,14 +419,14 @@ export default function TeamCreatePage() {
       </Card>
 
       {/* Chọn thành viên */}
-      <Card className="rounded-2xl overflow-hidden shadow-md bg-gradient-to-r from-orange-500 to-orange-600 text-white">
-        <CardHeader className="p-6">
+      <Card className="rounded-2xl shadow-md bg-white overflow-visible">
+        <CardHeader className="p-6 bg-gradient-to-r from-orange-500 to-orange-600 text-white">
           <CardTitle className="w-full text-white">Chọn thành viên</CardTitle>
           <CardDescription className="text-orange-50/90 w-full">
             Thêm thành viên vào phòng ban để phân công vai trò (không bắt buộc).
           </CardDescription>
         </CardHeader>
-        <CardContent className="pt-6 bg-white">
+        <CardContent className="p-0 px-6 pb-6 pt-4 bg-white">
           <MemberSelector
             clubId={numericClubId}
             selectedIds={selectedMembers.map((m) => m.id)}
@@ -440,12 +441,17 @@ export default function TeamCreatePage() {
           <CardHeader className="bg-orange-50 rounded-t-lg border-b border-orange-100 p-4">
             <CardTitle className="text-lg flex items-center justify-between w-full">
               <span>Danh sách thành viên ({selectedMembers.length})</span>
-              <span className="text-xs font-normal text-orange-700 bg-orange-100 px-2 py-1 rounded-full">
-                Chọn Trưởng ban / Phó ban
-              </span>
+              <div className="flex flex-col items-end text-right">
+                <span className="text-xs font-normal text-orange-700 bg-orange-100 px-2 py-1 rounded-full">
+                  Chọn Trưởng ban / Phó ban
+                </span>
+                <span className="text-[11px] text-gray-500 mt-1">
+                  Nếu không, thành viên sẽ mặc định là thành viên bình thường
+                </span>
+              </div>
             </CardTitle>
           </CardHeader>
-          <CardContent className="pt-6">
+          <CardContent className="pt-4 pb-4 px-4">
             <div className="space-y-3">
               {selectedMembers.map((m) => {
                 const isLeader = leader?.id === m.id;
@@ -496,35 +502,6 @@ export default function TeamCreatePage() {
                 );
               })}
             </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Tóm tắt phân công */}
-      {(leader || deputy) && (
-        <Card className="rounded-2xl overflow-hidden shadow-sm bg-orange-50">
-          <CardHeader className="p-4">
-            <CardTitle className="text-base text-orange-800">
-              Tóm tắt phân công
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {leader && (
-              <p className="text-sm text-gray-700">
-                <span className="font-semibold text-orange-700">
-                  Trưởng ban:
-                </span>{" "}
-                {leader.name}
-              </p>
-            )}
-            {deputy && (
-              <p className="text-sm text-gray-700">
-                <span className="font-semibold text-amber-700">
-                  Phó ban:
-                </span>{" "}
-                {deputy.name}
-              </p>
-            )}
           </CardContent>
         </Card>
       )}

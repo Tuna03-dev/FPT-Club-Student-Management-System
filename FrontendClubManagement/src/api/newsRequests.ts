@@ -3,7 +3,6 @@ import { axiosClient } from "./axiosClient";
 import type {
   NewsRequest,
   RequestStatus,
-  PagedList,
   ApproveNewsRequest,
   RejectNewsRequest,
   UpdateNewsRequestPayload,
@@ -13,7 +12,7 @@ const BASE = "/news/requests";
 
 export const requestsApi = {
   // ===== Query/List =====
-  search: (params?: {
+  search: async (params?: {
     clubId?: number;
     teamId?: number;
     status?: RequestStatus | string;
@@ -21,11 +20,13 @@ export const requestsApi = {
     createdByUserId?: number;
     page?: number;
     size?: number;
-  }) => axiosClient.get<PagedList<NewsRequest>>(BASE, { params }),
+  }) => {
+    const api: any = await axiosClient.get(BASE, { params });
+    return api.data; // { total, data, page, size, count }
+  },
 
   // ===== Detail =====
-  getDetail: (id: number) =>
-    axiosClient.get<NewsRequest>(`${BASE}/${id}`),
+  getDetail: (id: number) => axiosClient.get<NewsRequest>(`${BASE}/${id}`),
 
   // ===== Create / Update / Cancel =====
   create: (body: {
@@ -40,19 +41,27 @@ export const requestsApi = {
   update: (id: number, payload: UpdateNewsRequestPayload) =>
     axiosClient.put<NewsRequest>(`${BASE}/${id}`, payload),
 
-  cancel: (id: number) =>
-    axiosClient.put<void>(`${BASE}/${id}/cancel`),
+  cancel: (id: number) => axiosClient.put<void>(`${BASE}/${id}/cancel`),
 
   // ===== Club actions =====
   clubApproveAndSubmit: (id: number, note?: string) =>
-    axiosClient.put<NewsRequest>(`${BASE}/${id}/club/approve-submit`, note ? { note } : {}),
+    axiosClient.put<NewsRequest>(
+      `${BASE}/${id}/club/approve-submit`,
+      note ? { note } : {}
+    ),
 
   clubPresidentReject: (id: number, body: RejectNewsRequest) =>
-    axiosClient.put<NewsRequest>(`${BASE}/${id}/club/president-reject`, body),
+    axiosClient.put<NewsRequest>(
+      `${BASE}/${id}/club/president-reject`,
+      body
+    ),
 
   // ===== Staff actions =====
   staffApprovePublish: (id: number, body?: ApproveNewsRequest) =>
-    axiosClient.put<NewsRequest>(`${BASE}/${id}/staff/approve-publish`, body ?? {}),
+    axiosClient.put<NewsRequest>(
+      `${BASE}/${id}/staff/approve-publish`,
+      body ?? {}
+    ),
 
   staffReject: (id: number, body: RejectNewsRequest) =>
     axiosClient.put<NewsRequest>(`${BASE}/${id}/staff/reject`, body),

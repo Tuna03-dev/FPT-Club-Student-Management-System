@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -48,6 +48,7 @@ import {
   type ClubCreationStepResponse,
   type WorkflowHistoryResponse,
 } from "@/api/clubCreation";
+import { useWebSocket, type ClubCreationWebSocketPayload } from "@/hooks/useWebSocket";
 
 interface ClubCreationRequest {
   id: string;
@@ -235,6 +236,10 @@ export default function ClubCreationManagement() {
   const [proposalRequestNote, setProposalRequestNote] = useState("");
   const [proposalRequestTarget, setProposalRequestTarget] = useState<ClubCreationRequest | null>(null);
 
+  // WebSocket connection
+  const token = localStorage.getItem("accessToken") || null;
+  const { isConnected, subscribeToUserQueue, subscribeToSystemRole } = useWebSocket(token);
+
   // Load workflow steps
   const loadWorkflowSteps = async () => {
     try {
@@ -249,19 +254,113 @@ export default function ClubCreationManagement() {
   };
 
   // Load pending requests
-  const loadPendingRequests = async () => {
-    setIsLoading(true);
+  const loadPendingRequests = useCallback(async () => {
     try {
+      // Đảm bảo workflowSteps đã được load
+      let steps = workflowSteps;
+      if (steps.length === 0) {
+        steps = await clubCreationApi.getClubCreationSteps();
+        setWorkflowSteps(steps);
+      }
+      
       const response = await clubCreationStaffApi.getPendingRequests(0, 20);
-      setClubRequests(response.content.map((req) => convertToClubCreationRequest(req, workflowSteps)));
+      setClubRequests(response.content.map((req) => convertToClubCreationRequest(req, steps)));
     } catch (error: any) {
       toast.error("Không thể tải danh sách yêu cầu", {
         description: error.message || "Đã xảy ra lỗi",
       });
-    } finally {
-      setIsLoading(false);
     }
-  };
+  }, [workflowSteps]);
+
+  // 🔔 WebSocket: Real-time updates for Club Creation (Staff)
+  useEffect(() => {
+    if (!isConnected) return;
+
+    // Subscribe to user queue (for assigned requests)
+    const unsubscribeUser = subscribeToUserQueue((msg) => {
+      if (msg.type !== "CLUB_CREATION") return;
+
+      const payload = msg.payload as ClubCreationWebSocketPayload;
+      const requestId = payload.requestId;
+
+      // Show toast notification based on action
+      switch (msg.action) {
+        case "REQUEST_SUBMITTED":
+          toast.info("Yêu cầu mới đã được gửi", {
+            description: `Sinh viên ${payload.creatorName} đã gửi yêu cầu thành lập CLB "${payload.clubName}"`,
+          });
+          // Refresh request list (luôn refresh để cập nhật UI)
+          if (activeTab === "pending") {
+            loadPendingRequests();
+          }
+          break;
+        case "PROPOSAL_SUBMITTED":
+          toast.info("Đề án mới đã được nộp", {
+            description: payload.proposalTitle 
+              ? `Đề án "${payload.proposalTitle}" đã được nộp cho yêu cầu "${payload.clubName}"`
+              : payload.message,
+          });
+          // Refresh request list để hiển thị nút duyệt (luôn refresh, không cần check activeTab)
+          loadPendingRequests();
+          // Refresh detail if dialog is open
+          if (isDetailDialogOpen && selectedRequest && parseInt(selectedRequest.id) === requestId) {
+            loadRequestDetail(requestId);
+          }
+          break;
+        case "DEFENSE_SCHEDULE_PROPOSED":
+          toast.info("Lịch bảo vệ mới đã được đề xuất", {
+            description: payload.defenseDate
+              ? `Lịch bảo vệ: ${new Date(payload.defenseDate).toLocaleString("vi-VN")} - ${payload.location || "Chưa có địa điểm"}`
+              : payload.message,
+          });
+          // Refresh request list để hiển thị nút duyệt (luôn refresh, không cần check activeTab)
+          loadPendingRequests();
+          // Refresh detail if dialog is open
+          if (isDetailDialogOpen && selectedRequest && parseInt(selectedRequest.id) === requestId) {
+            loadRequestDetail(requestId);
+          }
+          break;
+        case "FINAL_FORM_SUBMITTED":
+          toast.info("Form cuối đã được nộp", {
+            description: payload.finalFormTitle
+              ? `Form cuối "${payload.finalFormTitle}" đã được nộp cho yêu cầu "${payload.clubName}"`
+              : payload.message,
+          });
+          // Refresh request list để hiển thị nút duyệt (luôn refresh, không cần check activeTab)
+          loadPendingRequests();
+          // Refresh detail if dialog is open
+          if (isDetailDialogOpen && selectedRequest && parseInt(selectedRequest.id) === requestId) {
+            loadRequestDetail(requestId);
+          }
+          break;
+        default:
+          // Handle other actions silently
+          break;
+      }
+    });
+
+    // Subscribe to STAFF role broadcast (for new requests)
+    const unsubscribeStaff = subscribeToSystemRole("STAFF", (msg) => {
+      if (msg.type !== "CLUB_CREATION") return;
+
+      const payload = msg.payload as ClubCreationWebSocketPayload;
+
+      if (msg.action === "REQUEST_SUBMITTED") {
+        toast.info("Yêu cầu mới đã được gửi", {
+          description: `Sinh viên ${payload.creatorName} đã gửi yêu cầu thành lập CLB "${payload.clubName}"`,
+        });
+        // Refresh request list if on pending tab
+        if (activeTab === "pending") {
+          loadPendingRequests();
+        }
+      }
+    });
+
+    return () => {
+      unsubscribeUser?.();
+      unsubscribeStaff?.();
+    };
+  }, [isConnected, activeTab, isDetailDialogOpen, selectedRequest, subscribeToUserQueue, subscribeToSystemRole, loadPendingRequests]);
 
   useEffect(() => {
     loadWorkflowSteps();

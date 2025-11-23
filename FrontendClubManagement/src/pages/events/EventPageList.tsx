@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useState, useRef } from "react"
 import { EventCard } from "../../components/features/event/EventCard"
 import { EventCardSkeleton } from "../../components/features/event/EventCardSkeleton"
 import { EventFilters } from "../../components/features/event/EventFilter"
@@ -8,6 +8,9 @@ import { Calendar, Search } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { computeEventStatus, getAllEventTypes, getAllClubs, getAllEventsByFilter, type EventStatusFilter, type EventTypeDto, type ClubDto, type EventData } from "@/service/EventService"
+import { useWebSocket, type EventWebSocketPayload } from "@/hooks/useWebSocket"
+import { toast } from "sonner"
+import { authService } from "@/services/authService"
 
 export function EventsPage() {
   const [searchQuery, setSearchQuery] = useState("")
@@ -17,6 +20,7 @@ export function EventsPage() {
   const [eventTypes, setEventTypes] = useState<EventTypeDto[]>([])
   const [clubs, setClubs] = useState<ClubDto[]>([])
   const [events, setEvents] = useState<EventData[]>([])
+  const [allFilteredEvents, setAllFilteredEvents] = useState<EventData[]>([]) // Store all filtered events when searching
   const [loading, setLoading] = useState<boolean>(false)
   const [error, setError] = useState<string>("")
   const [currentPage, setCurrentPage] = useState(1)
@@ -48,7 +52,18 @@ export function EventsPage() {
     }
   }, [])
 
-  // Fetch events when keyword, type, club, or page changes (server-side filtering & paging already applied on BE)
+  // Use ref to track if filters just changed to prevent pagination effect from running
+  const filtersJustChangedRef = useRef(false)
+  const [refreshTrigger, setRefreshTrigger] = useState(0) // Trigger to force refresh
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1)
+    filtersJustChangedRef.current = true
+  }, [searchQuery, selectedTypeId, selectedClubId, selectedStatus])
+
+  // Fetch events when filters change
+  // Backend filters AFTER pagination, so we need to fetch all pages when searching
   useEffect(() => {
     let mounted = true
     const controller = new AbortController()
@@ -56,23 +71,104 @@ export function EventsPage() {
     const fetchData = async () => {
       setLoading(true)
       setError("")
-      try {
-        const res = await getAllEventsByFilter({
-          keyword: searchQuery || undefined,
+      
+      const hasKeyword = !!searchQuery
+      
+      // If searching, fetch all pages and filter client-side
+      // Otherwise, just fetch page 1
+      if (hasKeyword) {
+        try {
+          // Fetch all pages to find all matching results
+          const allResults: EventData[] = []
+          let page = 1
+          let hasMore = true
+          let totalFromServer = 0
+          
+          while (hasMore && mounted) {
+            const res = await getAllEventsByFilter({
+              keyword: searchQuery || undefined,
+              eventTypeId: selectedTypeId !== "all" ? Number(selectedTypeId) : undefined,
+              clubId: selectedClubId !== "all" ? Number(selectedClubId) : undefined,
+              page: page,
+              size: 12,
+            })
+            
+            totalFromServer = res.total
+            const filtered = res.data || []
+            
+            // Add filtered results (even if empty, we need to check all pages)
+            if (filtered.length > 0) {
+              allResults.push(...filtered)
+            }
+            
+            // Check if there are more pages to fetch
+            // Continue fetching even if current page has no results
+            const totalPages = Math.ceil(totalFromServer / 12)
+            hasMore = page < totalPages
+            page++
+            
+            // Safety limit: don't fetch more than 50 pages
+            if (page > 50) break
+          }
+          
+          if (mounted) {
+            // Store all filtered results for client-side pagination
+            setAllFilteredEvents(allResults)
+            
+            // Paginate the filtered results client-side
+            const pageSize = 12
+            const totalFiltered = allResults.length
+            const totalPagesFiltered = Math.ceil(totalFiltered / pageSize)
+            const startIndex = (1 - 1) * pageSize
+            const endIndex = startIndex + pageSize
+            const paginatedResults = allResults.slice(startIndex, endIndex)
+            
+            setEvents(paginatedResults)
+            setTotalPages(totalPagesFiltered > 0 ? totalPagesFiltered : 1)
+            setCurrentPage(1)
+            filtersJustChangedRef.current = false
+          }
+        } catch (e) {
+          console.error("Error fetching events:", e)
+          if (mounted) setError("Không thể tải danh sách sự kiện")
+          filtersJustChangedRef.current = false
+        } finally {
+          if (mounted) setLoading(false)
+        }
+      } else {
+        // No keyword, normal pagination
+        const requestParams = {
+          keyword: undefined,
           eventTypeId: selectedTypeId !== "all" ? Number(selectedTypeId) : undefined,
           clubId: selectedClubId !== "all" ? Number(selectedClubId) : undefined,
-          page: currentPage,
+          page: 1,
           size: 12,
-        })
-        if (mounted) {
-          setEvents(res.data)
-          setTotalPages(Math.ceil(res.total / 12))
         }
-      } catch (e) {
-        console.error("Error fetching events:", e)
-        if (mounted) setError("Không thể tải danh sách sự kiện")
-      } finally {
-        if (mounted) setLoading(false)
+        
+        try {
+          const res = await getAllEventsByFilter(requestParams)
+          if (mounted) {
+            setEvents(res.data)
+            setAllFilteredEvents([]) // Clear when no keyword search
+            const hasFilters = selectedTypeId !== "all" || selectedClubId !== "all"
+            let actualTotal = res.total
+            
+            if (hasFilters && res.count !== undefined && res.count !== null && res.count > 0) {
+              actualTotal = res.count
+            }
+            
+            const serverTotalPages = actualTotal > 0 ? Math.ceil(actualTotal / 12) : 1
+            setTotalPages(serverTotalPages)
+            setCurrentPage(1)
+            filtersJustChangedRef.current = false
+          }
+        } catch (e) {
+          console.error("Error fetching events:", e)
+          if (mounted) setError("Không thể tải danh sách sự kiện")
+          filtersJustChangedRef.current = false
+        } finally {
+          if (mounted) setLoading(false)
+        }
       }
     }
 
@@ -82,12 +178,72 @@ export function EventsPage() {
       controller.abort()
       clearTimeout(debounce)
     }
-  }, [searchQuery, selectedTypeId, selectedClubId, currentPage])
+  }, [searchQuery, selectedTypeId, selectedClubId, selectedStatus, refreshTrigger])
 
-  // Reset to page 1 when filters change
+  // Handle pagination - use client-side pagination if searching, otherwise server-side
   useEffect(() => {
-    setCurrentPage(1)
-  }, [searchQuery, selectedTypeId, selectedClubId, selectedStatus])
+    // Skip if filters just changed (handled by filter effect above)
+    if (filtersJustChangedRef.current) return
+    // Skip if we're on page 1 (already handled by filter effect above)
+    if (currentPage === 1) return
+
+    const hasKeyword = !!searchQuery
+    
+    // If searching, use client-side pagination from allFilteredEvents
+    if (hasKeyword && allFilteredEvents.length > 0) {
+      const pageSize = 12
+      const startIndex = (currentPage - 1) * pageSize
+      const endIndex = startIndex + pageSize
+      const paginatedResults = allFilteredEvents.slice(startIndex, endIndex)
+      setEvents(paginatedResults)
+      return
+    }
+
+    // Otherwise, fetch from server
+    let mounted = true
+    const controller = new AbortController()
+
+    const fetchData = async () => {
+      setLoading(true)
+      setError("")
+      
+      const requestParams = {
+        keyword: undefined,
+        eventTypeId: selectedTypeId !== "all" ? Number(selectedTypeId) : undefined,
+        clubId: selectedClubId !== "all" ? Number(selectedClubId) : undefined,
+        page: currentPage,
+        size: 12,
+      }
+      
+      try {
+        const res = await getAllEventsByFilter(requestParams)
+        if (mounted) {
+          setEvents(res.data)
+          const hasFilters = selectedTypeId !== "all" || selectedClubId !== "all"
+          let actualTotal = res.total
+          
+          if (hasFilters && res.count !== undefined && res.count !== null && res.count > 0) {
+            actualTotal = res.count
+          }
+          
+          const serverTotalPages = actualTotal > 0 ? Math.ceil(actualTotal / 12) : 1
+          setTotalPages(serverTotalPages)
+        }
+      } catch (e) {
+        console.error("Error fetching events:", e)
+        if (mounted) setError("Không thể tải danh sách sự kiện")
+      } finally {
+        if (mounted) setLoading(false)
+      }
+    }
+
+    fetchData()
+
+    return () => {
+      mounted = false
+      controller.abort()
+    }
+  }, [currentPage, searchQuery, selectedTypeId, selectedClubId, allFilteredEvents])
 
   const filteredEvents = useMemo(() => {
     if (selectedStatus === "all") return events
@@ -99,6 +255,59 @@ export function EventsPage() {
     setCurrentPage(page)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
+
+  // WebSocket connection for real-time event updates
+  const token = localStorage.getItem("accessToken") || null;
+  const { isConnected, subscribeToSystemRole, subscribeToUserQueue } = useWebSocket(token);
+
+  // 🔔 WebSocket: Subscribe to STUDENT/TEAM_OFFICER/CLUB_OFFICER roles for event publication notifications
+  useEffect(() => {
+    if (!isConnected) return;
+
+    const user = authService.getCurrentUser();
+    if (!user) return;
+    
+    const roleUpper = user.systemRole
+      ? String(user.systemRole).trim().toUpperCase()
+      : "";
+    
+    // Only subscribe if user is not STAFF (STUDENT, TEAM_OFFICER, CLUB_OFFICER)
+    if (roleUpper === "STAFF" || roleUpper === "ADMIN") return;
+
+    const handleEventPublished = (msg: any) => {
+      if (msg.type !== "EVENT") return;
+
+      const payload = msg.payload as EventWebSocketPayload;
+
+      if (msg.action === "PUBLISHED") {
+        toast.info("Sự kiện mới đã được công bố", {
+          description: payload.message || `Sự kiện "${payload.eventTitle}" đã được công bố`,
+        });
+        
+        // Refresh events list by triggering refresh
+        setRefreshTrigger((prev) => prev + 1);
+      }
+    };
+
+    // Subscribe to STUDENT role
+    const unsubscribeStudent = subscribeToSystemRole("STUDENT", handleEventPublished);
+    
+    // Subscribe to TEAM_OFFICER role
+    const unsubscribeTeamOfficer = subscribeToSystemRole("TEAM_OFFICER", handleEventPublished);
+    
+    // Subscribe to CLUB_OFFICER role
+    const unsubscribeClubOfficer = subscribeToSystemRole("CLUB_OFFICER", handleEventPublished);
+
+    // Also subscribe to user queue for personal notifications
+    const unsubscribeUser = subscribeToUserQueue(handleEventPublished);
+
+    return () => {
+      unsubscribeStudent();
+      unsubscribeTeamOfficer();
+      unsubscribeClubOfficer();
+      unsubscribeUser();
+    };
+  }, [isConnected, subscribeToSystemRole, subscribeToUserQueue]);
 
   return (
     <div className="min-h-screen bg-background">

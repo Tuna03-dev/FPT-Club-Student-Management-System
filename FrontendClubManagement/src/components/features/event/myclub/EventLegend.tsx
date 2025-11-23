@@ -2,9 +2,17 @@
 import { Card } from "@/components/ui/card"
 import { authService } from "@/services/authService"
 
-export function EventLegend() {
+interface EventLegendProps {
+  clubId?: number
+}
+
+export function EventLegend({ clubId }: EventLegendProps) {
   const user = authService.getCurrentUser()
-  const showPending = !!user && ["CLUB_OFFICER", "TEAM_OFFICER"].includes(user.systemRole)
+  const isStaff = user?.systemRole === "STAFF"
+  // Check systemRole in clubRoleList instead of global systemRole
+  const clubRole = clubId ? authService.getClubRole(clubId) : null
+  const systemRoleInClub = clubRole?.systemRole?.toUpperCase()
+  const showPending = isStaff || (clubId && systemRoleInClub && ["CLUB_OFFICER", "TEAM_OFFICER"].includes(systemRoleInClub))
 
   return (
     <Card className="p-6 shadow-lg">

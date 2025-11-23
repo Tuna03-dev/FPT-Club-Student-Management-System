@@ -26,27 +26,29 @@ export function EventCard({ event }: EventCardProps) {
 
   return (
     <Card className="overflow-hidden hover:shadow-lg transition-all duration-300 border-border group">
-      <div className="relative h-48 overflow-hidden bg-muted">
-        <img
-          src={imageUrl}
-          alt={event.title}
-          className="object-cover w-full h-48 group-hover:scale-105 transition-transform duration-300"
-        />
-        {event.eventTypeName && (
-          <div className="absolute top-3 right-3">
-            <Badge variant="secondary" className="bg-primary/10 text-primary border-primary/20">
-              {event.eventTypeName}
-            </Badge>
-          </div>
-        )}
-        {event.clubName && (
-          <div className="absolute top-3 left-3">
-            <Badge variant="secondary" className="bg-muted/80 text-foreground border-border">
-              {event.clubName}
-            </Badge>
-          </div>
-        )}
-      </div>
+      <Link to={`/events/${event.id}`} className="block">
+        <div className="relative h-48 overflow-hidden bg-muted cursor-pointer">
+          <img
+            src={imageUrl}
+            alt={event.title}
+            className="object-cover w-full h-48 group-hover:scale-105 transition-transform duration-300"
+          />
+          {event.eventTypeName && (
+            <div className="absolute top-3 right-3">
+              <Badge variant="secondary" className="bg-primary/10 text-primary border-primary/20">
+                {event.eventTypeName}
+              </Badge>
+            </div>
+          )}
+          {event.clubName && (
+            <div className="absolute top-3 left-3">
+              <Badge variant="secondary" className="bg-muted/80 text-foreground border-border">
+                {event.clubName}
+              </Badge>
+            </div>
+          )}
+        </div>
+      </Link>
 
       <CardContent className="p-5">
         <div className="flex items-start gap-3 mb-3">
@@ -57,9 +59,11 @@ export function EventCard({ event }: EventCardProps) {
             <span className="text-xl font-bold text-primary">{start.getDate()}</span>
           </div>
           <div className="flex-1 min-w-0">
-            <h3 className="font-bold text-lg text-foreground mb-1 line-clamp-2 group-hover:text-primary transition-colors">
-              {event.title}
-            </h3>
+            <Link to={`/events/${event.id}`} className="block">
+              <h3 className="font-bold text-lg text-foreground mb-1 line-clamp-2 group-hover:text-primary transition-colors cursor-pointer hover:underline">
+                {event.title}
+              </h3>
+            </Link>
           </div>
         </div>
 

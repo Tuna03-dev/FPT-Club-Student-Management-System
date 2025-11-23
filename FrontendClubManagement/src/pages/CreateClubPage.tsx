@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
+import { useWebSocket, type ClubCreationWebSocketPayload } from "@/hooks/useWebSocket";
 import {
   ClubRequestForm,
   type ClubRequestFormData,
@@ -167,6 +168,112 @@ const CreateClubPage = () => {
   const [isFinalFormHistoryLoading, setIsFinalFormHistoryLoading] = useState(false);
   const [clubCategories, setClubCategories] = useState<ClubCategory[]>([]);
   const [isEditCategoriesLoading, setIsEditCategoriesLoading] = useState(false);
+
+  // WebSocket connection
+  const token = localStorage.getItem("accessToken") || null;
+  const { isConnected, subscribeToUserQueue } = useWebSocket(token);
+
+  // 🔔 WebSocket: Real-time updates for Club Creation
+  useEffect(() => {
+    if (!isConnected) return;
+
+    const unsubscribe = subscribeToUserQueue((msg) => {
+      if (msg.type !== "CLUB_CREATION") return;
+
+      const payload = msg.payload as ClubCreationWebSocketPayload;
+      const requestId = payload.requestId;
+
+      // Update request list
+      loadRequests();
+
+      // Show toast notification based on action
+      switch (msg.action) {
+        case "REQUEST_ASSIGNED":
+          toast.info("Yêu cầu của bạn đã được nhận", {
+            description: `Staff ${payload.assignedStaffName} đã nhận yêu cầu. Hạn xác nhận: ${payload.deadline ? new Date(payload.deadline).toLocaleString("vi-VN") : "N/A"}`,
+          });
+          break;
+        case "CONTACT_CONFIRMED":
+          toast.success("Liên hệ đã được xác nhận", {
+            description: payload.message || "Staff đã xác nhận liên hệ với bạn",
+          });
+          break;
+        case "CONTACT_REJECTED":
+          toast.error("Yêu cầu bị từ chối", {
+            description: payload.reason || payload.message || "Yêu cầu của bạn đã bị từ chối",
+          });
+          break;
+        case "PROPOSAL_REQUIRED":
+          toast.warning("Yêu cầu nộp đề án", {
+            description: payload.comment || payload.message || "Staff yêu cầu bạn nộp đề án chi tiết",
+          });
+          break;
+        case "PROPOSAL_APPROVED":
+          toast.success("Đề án đã được duyệt", {
+            description: payload.proposalTitle ? `Đề án "${payload.proposalTitle}" đã được duyệt` : payload.message,
+          });
+          break;
+        case "PROPOSAL_REJECTED":
+          toast.error("Đề án bị từ chối", {
+            description: payload.reason || payload.message || "Đề án của bạn đã bị từ chối",
+          });
+          break;
+        case "DEFENSE_SCHEDULE_APPROVED":
+          toast.success("Lịch bảo vệ đã được duyệt", {
+            description: payload.defenseDate 
+              ? `Lịch bảo vệ: ${new Date(payload.defenseDate).toLocaleString("vi-VN")} - ${payload.location || "Chưa có địa điểm"}`
+              : payload.message,
+          });
+          break;
+        case "DEFENSE_SCHEDULE_REJECTED":
+          toast.warning("Lịch bảo vệ bị từ chối", {
+            description: payload.reason || payload.message || "Vui lòng đề xuất lại lịch bảo vệ",
+          });
+          break;
+        case "DEFENSE_COMPLETED":
+          if (payload.defenseResult === "PASSED") {
+            toast.success("🎉 Bảo vệ thành công!", {
+              description: payload.feedback || "Chúc mừng bạn đã vượt qua bảo vệ",
+            });
+          } else {
+            toast.error("Bảo vệ không đạt", {
+              description: payload.feedback || payload.message || "Rất tiếc, bạn chưa vượt qua bảo vệ",
+            });
+          }
+          break;
+        case "FINAL_FORM_SUBMITTED":
+          // This is sent to staff, not student
+          break;
+        case "CLUB_CREATED":
+          toast.success("🎉 Chúc mừng! CLB đã được thành lập", {
+            description: payload.clubName 
+              ? `CLB "${payload.clubName}" đã được thành lập thành công!`
+              : payload.message,
+            duration: 10000,
+          });
+          // Navigate to club page if clubId is available
+          if (payload.clubId) {
+            setTimeout(() => {
+              window.location.href = `/myclub/${payload.clubId}`;
+            }, 2000);
+          }
+          break;
+        default:
+          // Handle other actions silently or with generic message
+          if (payload.message) {
+            toast.info(payload.message);
+          }
+      }
+
+      // If dialog is open and showing this request, refresh detail data
+      if (isDialogOpen && selectedRequest && parseInt(selectedRequest.id) === requestId) {
+        loadRequestDetailData(requestId);
+        loadWorkflowHistory(requestId);
+      }
+    });
+
+    return () => unsubscribe?.();
+  }, [isConnected, isDialogOpen, selectedRequest, subscribeToUserQueue]);
 
   useEffect(() => {
     const fetchCategories = async () => {
