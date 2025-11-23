@@ -100,7 +100,9 @@ public class FeeServiceImpl implements FeeService {
                 .map(fee -> {
                     FeeDetailResponse response = feeMapper.toFeeDetailResponse(fee);
 
+                    // 🔧 FIX: Only count SUCCESS transactions, not PENDING or FAILED
                     int paidMembers = fee.getIncomeTransactions().stream()
+                            .filter(t -> t.getStatus() == TransactionStatus.SUCCESS)
                             .map(IncomeTransaction::getUser)
                             .collect(Collectors.toSet())
                             .size();
@@ -141,7 +143,9 @@ public class FeeServiceImpl implements FeeService {
                 .map(fee -> {
                     FeeDetailResponse response = feeMapper.toFeeDetailResponse(fee);
 
+                    // 🔧 FIX: Only count SUCCESS transactions, not PENDING or FAILED
                     int paidMembers = fee.getIncomeTransactions().stream()
+                            .filter(t -> t.getStatus() == TransactionStatus.SUCCESS)
                             .map(IncomeTransaction::getUser)
                             .collect(Collectors.toSet())
                             .size();
@@ -724,6 +728,11 @@ public class FeeServiceImpl implements FeeService {
 
     /**
      * Get all members who have paid a specific fee with pagination and search
+     *
+     * Fixed issues:
+     * 1. Deduplicate users - Only show latest transaction per user
+     * 2. Improved semester/role info logic
+     * 3. Better handling of edge cases
      */
     @Override
     @Transactional
@@ -738,15 +747,24 @@ public class FeeServiceImpl implements FeeService {
         List<IncomeTransaction> transactions = incomeTransactionRepository
                 .findByFee_IdAndStatus(feeId, TransactionStatus.SUCCESS);
 
+        // 🔧 FIX 1: Deduplicate by userId - Keep only the LATEST transaction per user
+        // This handles the case where a user might have multiple successful transactions (should not happen, but defensive)
+        java.util.Map<Long, IncomeTransaction> latestTransactionPerUser = new java.util.LinkedHashMap<>();
+        transactions.stream()
+                .sorted((t1, t2) -> t2.getTransactionDate().compareTo(t1.getTransactionDate())) // Latest first
+                .forEach(t -> latestTransactionPerUser.putIfAbsent(t.getUser().getId(), t));
+
+        List<IncomeTransaction> uniqueTransactions = new java.util.ArrayList<>(latestTransactionPerUser.values());
+
         // Normalize search term
         final String normalizedSearch = (searchTerm != null && !searchTerm.trim().isEmpty())
                 ? searchTerm.trim()
                 : null;
 
         // Filter by search term if provided
-        List<IncomeTransaction> filteredTransactions = transactions;
+        List<IncomeTransaction> filteredTransactions = uniqueTransactions;
         if (normalizedSearch != null) {
-            filteredTransactions = transactions.stream()
+            filteredTransactions = uniqueTransactions.stream()
                     .filter(t -> com.sep490.backendclubmanagement.util.VietnameseTextNormalizer.matchesAny(
                             normalizedSearch,
                             t.getUser().getFullName(),
@@ -776,7 +794,7 @@ public class FeeServiceImpl implements FeeService {
                 .map(transaction -> {
                     User user = transaction.getUser();
 
-                    // Get member info in current semester if available
+                    // Get member info
                     ClubMemberShip membership = clubMemberShipRepository
                             .findByClubIdAndUserId(fee.getClub().getId(), user.getId());
 
@@ -784,16 +802,42 @@ public class FeeServiceImpl implements FeeService {
                     String roleName = null;
                     String teamName = null;
 
-                    if (membership != null && fee.getSemester() != null) {
-                        // Get role info for this semester
-                        List<RoleMemberShip> roleMembers = roleMemberShipRepository
-                                .findByClubMemberShipIdAndSemesterId(membership.getId(), fee.getSemester().getId());
+                    // 🔧 FIX 2: Improved semester/role info logic
+                    if (membership != null) {
+                        // Case 1: Fee has semester (MEMBERSHIP fee) - Get role for that semester
+                        if (fee.getSemester() != null) {
+                            List<RoleMemberShip> roleMembers = roleMemberShipRepository
+                                    .findByClubMemberShipIdAndSemesterId(membership.getId(), fee.getSemester().getId());
 
-                        if (!roleMembers.isEmpty()) {
-                            RoleMemberShip rm = roleMembers.get(0);
-                            semesterName = fee.getSemester().getSemesterName();
-                            roleName = rm.getClubRole() != null ? rm.getClubRole().getRoleName() : null;
-                            teamName = rm.getTeam() != null ? rm.getTeam().getTeamName() : null;
+                            if (!roleMembers.isEmpty()) {
+                                RoleMemberShip rm = roleMembers.get(0);
+                                semesterName = fee.getSemester().getSemesterName();
+                                roleName = rm.getClubRole() != null ? rm.getClubRole().getRoleName() : null;
+                                teamName = rm.getTeam() != null ? rm.getTeam().getTeamName() : null;
+                            } else {
+                                // User has membership but no role in this semester
+                                semesterName = fee.getSemester().getSemesterName();
+                                roleName = null;
+                                teamName = null;
+                            }
+                        }
+                        // Case 2: Fee has no semester (OTHER fee types) - Try to get current semester role
+                        else {
+                            // Find current semester
+                            Semester currentSemester = semesterRepository.findByIsCurrentTrue()
+                                    .orElse(null);
+
+                            if (currentSemester != null) {
+                                List<RoleMemberShip> roleMembers = roleMemberShipRepository
+                                        .findByClubMemberShipIdAndSemesterId(membership.getId(), currentSemester.getId());
+
+                                if (!roleMembers.isEmpty()) {
+                                    RoleMemberShip rm = roleMembers.get(0);
+                                    semesterName = currentSemester.getSemesterName();
+                                    roleName = rm.getClubRole() != null ? rm.getClubRole().getRoleName() : null;
+                                    teamName = rm.getTeam() != null ? rm.getTeam().getTeamName() : null;
+                                }
+                            }
                         }
                     }
 

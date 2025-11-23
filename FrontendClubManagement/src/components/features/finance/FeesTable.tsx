@@ -161,6 +161,7 @@ export function FeesTable({
   const [paidMembersPage, setPaidMembersPage] = useState<number>(0);
   const [paidMembersTotalPages, setPaidMembersTotalPages] = useState<number>(0);
   const [paidMembersTotalElements, setPaidMembersTotalElements] = useState<number>(0);
+  const [paidMembersSearch, setPaidMembersSearch] = useState<string>("");
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [expiredFilter, setExpiredFilter] = useState<string>("all");
   const prevSearchRef = useRef<{ search: string; filter: string }>({ search: "", filter: "all" });
@@ -591,12 +592,16 @@ export function FeesTable({
     }
   }, [onReloadFees]);
 
-  const handleViewPaidMembers = useCallback(async (fee: Fee, page: number = 0) => {
+  const handleViewPaidMembers = useCallback(async (fee: Fee, page: number = 0, search?: string) => {
     setSelectedFeeForMembers(fee);
     setIsPaidMembersOpen(true);
     setLoadingPaidMembers(true);
     try {
-      const response = await feeService.getPaidMembers(clubId, Number(fee.id), { page, size: 10 });
+      const response = await feeService.getPaidMembers(clubId, Number(fee.id), { 
+        page, 
+        size: 10,
+        search: search || undefined 
+      });
       if (response.code === 200 && response.data) {
         setPaidMembers(response.data.content);
         setPaidMembersPage(response.data.pageNumber);
@@ -609,6 +614,18 @@ export function FeesTable({
       setLoadingPaidMembers(false);
     }
   }, [clubId]);
+
+  // Debounce search for paid members
+  useEffect(() => {
+    if (!isPaidMembersOpen || !selectedFeeForMembers) return;
+
+    const timer = setTimeout(() => {
+      handleViewPaidMembers(selectedFeeForMembers, 0, paidMembersSearch);
+    }, 500);
+
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paidMembersSearch]);
 
   const handleDeleteClick = useCallback((feeId: number) => {
     setDeleteFeeId(feeId);
@@ -1473,7 +1490,18 @@ export function FeesTable({
               </p>
             )}
           </DialogHeader>
-          <div className="mt-4 overflow-auto max-h-[calc(85vh-180px)]">
+          
+          {/* Search box for paid members */}
+          <div className="px-6">
+            <Input
+              placeholder="Tìm kiếm theo tên, MSSV, email..."
+              value={paidMembersSearch}
+              onChange={(e) => setPaidMembersSearch(e.target.value)}
+              className="w-full"
+            />
+          </div>
+
+          <div className="mt-4 overflow-auto max-h-[calc(85vh-240px)] px-6">
             {loadingPaidMembers ? (
               <div className="space-y-3">
                 {[...Array(5)].map((_, idx) => (
@@ -1489,7 +1517,11 @@ export function FeesTable({
             ) : paidMembers.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 <Users className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                <p>Chưa có thành viên nào đóng phí</p>
+                <p>
+                  {paidMembersSearch 
+                    ? `Không tìm thấy thành viên với từ khóa "${paidMembersSearch}"`
+                    : "Chưa có thành viên nào đóng phí"}
+                </p>
               </div>
             ) : (
               <>
@@ -1529,7 +1561,7 @@ export function FeesTable({
                       <PaginationContent>
                         <PaginationItem>
                           <PaginationPrevious
-                            onClick={() => selectedFeeForMembers && handleViewPaidMembers(selectedFeeForMembers, Math.max(0, paidMembersPage - 1))}
+                            onClick={() => selectedFeeForMembers && handleViewPaidMembers(selectedFeeForMembers, Math.max(0, paidMembersPage - 1), paidMembersSearch)}
                             className={paidMembersPage <= 0 ? "pointer-events-none opacity-50" : "cursor-pointer"}
                           />
                         </PaginationItem>
@@ -1544,7 +1576,7 @@ export function FeesTable({
                           return (
                             <PaginationItem key={pageNum}>
                               <PaginationLink
-                                onClick={() => selectedFeeForMembers && handleViewPaidMembers(selectedFeeForMembers, pageNum)}
+                                onClick={() => selectedFeeForMembers && handleViewPaidMembers(selectedFeeForMembers, pageNum, paidMembersSearch)}
                                 isActive={paidMembersPage === pageNum}
                                 className="cursor-pointer"
                               >
@@ -1555,7 +1587,7 @@ export function FeesTable({
                         })}
                         <PaginationItem>
                           <PaginationNext
-                            onClick={() => selectedFeeForMembers && handleViewPaidMembers(selectedFeeForMembers, paidMembersPage < paidMembersTotalPages - 1 ? paidMembersPage + 1 : paidMembersPage)}
+                            onClick={() => selectedFeeForMembers && handleViewPaidMembers(selectedFeeForMembers, paidMembersPage < paidMembersTotalPages - 1 ? paidMembersPage + 1 : paidMembersPage, paidMembersSearch)}
                             className={paidMembersPage >= paidMembersTotalPages - 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
                           />
                         </PaginationItem>

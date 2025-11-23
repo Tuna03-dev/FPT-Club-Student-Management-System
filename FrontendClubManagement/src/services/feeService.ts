@@ -77,7 +77,7 @@ export const feeService = {
   async getPaidMembers(
     clubId: number,
     feeId: number,
-    params: { page?: number; size?: number } = {}
+    params: { page?: number; size?: number; search?: string } = {}
   ): Promise<ApiResponse<PageResponse<{
     userId: number;
     fullName: string;
