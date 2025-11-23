@@ -18,6 +18,7 @@ import {
   Shield,
   Building2,
   PlusCircle,
+  FileSignature,
 } from "lucide-react";
 import useMyClubs from "@/hooks/useMyClubs";
 import { toast } from "sonner";
@@ -198,6 +199,14 @@ const Header: React.FC = () => {
                       >
                         <PlusCircle className="mr-2 h-4 w-4 text-orange-500" />
                         Đăng ký thành lập CLB
+                      </DropdownMenuItem>
+
+                      <DropdownMenuItem
+                        onClick={() => navigate("/myRecruitmentApplications")}
+                        className="cursor-pointer text-[14px] text-gray-700"
+                      >
+                        <FileSignature className="mr-2 h-4 w-4 text-orange-500" />
+                        Đơn ứng tuyển của tôi
                       </DropdownMenuItem>
 
                       {isStaff && (

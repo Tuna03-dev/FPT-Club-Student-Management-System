@@ -115,7 +115,13 @@ export async function getRecruitmentsByClubId(
   clubId: number,
   params: RecruitmentFilterRequest = {}
 ): Promise<PagedResponse<RecruitmentData>> {
-  const { status, keyword, page = 0, size = 10, sort = "startDate,desc" } = params;
+  const {
+    status,
+    keyword,
+    page = 0,
+    size = 10,
+    sort = "startDate,desc",
+  } = params;
 
   const queryParams = new URLSearchParams();
   if (status) queryParams.append("status", status);
@@ -144,7 +150,13 @@ export async function getApplicationsByRecruitmentId(
   recruitmentId: number,
   params: ApplicationFilterRequest = {}
 ): Promise<PagedResponse<RecruitmentApplicationData>> {
-  const { status, keyword, page = 0, size = 10, sort = "submittedDate,desc" } = params;
+  const {
+    status,
+    keyword,
+    page = 0,
+    size = 10,
+    sort = "submittedDate,desc",
+  } = params;
 
   const queryParams = new URLSearchParams();
   if (status) queryParams.append("status", status);
@@ -253,10 +265,17 @@ export async function submitApplication(
 export async function getMyApplications(
   params: ApplicationFilterRequest = {}
 ): Promise<PagedResponse<RecruitmentApplicationData>> {
-  const { status, page = 0, size = 10, sort = "submittedDate,desc" } = params;
+  const {
+    status,
+    keyword,
+    page = 0,
+    size = 10,
+    sort = "submittedDate,desc",
+  } = params;
 
   const queryParams = new URLSearchParams();
   if (status) queryParams.append("status", status);
+  if (keyword && keyword.trim()) queryParams.append("keyword", keyword.trim());
   queryParams.append("page", page.toString());
   queryParams.append("size", size.toString());
   queryParams.append("sort", sort);
@@ -308,4 +327,3 @@ export async function updateApplicationStatus(
   if (!res.data) throw new Error("Failed to update application status");
   return res.data;
 }
-
