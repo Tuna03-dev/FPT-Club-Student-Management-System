@@ -26,6 +26,15 @@ import { CheckCircle, Clock, Edit, Plus, Trash2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import Skeleton from "@/components/common/Skeleton";
 import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -109,6 +118,11 @@ interface TransactionsTableProps {
   setIsAddOpen: (open: boolean) => void;
   loading?: boolean;
   fees?: Fee[]; // Danh sách khoản phí để chọn (cho Income transactions)
+  // Pagination
+  currentPage?: number;
+  totalPages?: number;
+  totalElements?: number;
+  onPageChange?: (page: number) => void;
 }
 
 export function TransactionsTable({
@@ -123,6 +137,10 @@ export function TransactionsTable({
   setIsAddOpen,
   loading = false,
   fees = [],
+  currentPage = 0,
+  totalPages = 1,
+  totalElements = 0,
+  onPageChange,
 }: TransactionsTableProps) {
   const [feeSearch, setFeeSearch] = React.useState("");
 
@@ -671,6 +689,89 @@ export function TransactionsTable({
               )}
             </TableBody>
           </Table>
+
+          {/* Pagination Summary */}
+          {!loading && transactions.length > 0 && (
+            <div className="mt-6 flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="text-sm text-muted-foreground">
+                  Trang{" "}
+                  <span className="font-semibold text-primary">
+                    {currentPage + 1}
+                  </span>{" "}
+                  / <span className="font-medium">{totalPages}</span>
+                </div>
+                <div className="hidden sm:flex items-center px-3 py-1 rounded-full bg-primary/10 text-primary font-semibold text-sm">
+                  {totalElements} giao dịch
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Pagination Controls */}
+          {totalPages > 1 && onPageChange && (
+            <div className="mt-4 flex justify-center">
+              <Pagination>
+                <PaginationContent>
+                  <PaginationItem>
+                    <PaginationPrevious
+                      onClick={() => onPageChange(Math.max(0, currentPage - 1))}
+                      className={
+                        currentPage === 0
+                          ? "pointer-events-none opacity-50"
+                          : "cursor-pointer"
+                      }
+                    />
+                  </PaginationItem>
+
+                  {Array.from({ length: totalPages }, (_, i) => i).map(
+                    (pageNum) => {
+                      if (
+                        pageNum === 0 ||
+                        pageNum === totalPages - 1 ||
+                        (pageNum >= currentPage - 1 && pageNum <= currentPage + 1)
+                      ) {
+                        return (
+                          <PaginationItem key={pageNum}>
+                            <PaginationLink
+                              onClick={() => onPageChange(pageNum)}
+                              isActive={currentPage === pageNum}
+                              className="cursor-pointer"
+                            >
+                              {pageNum + 1}
+                            </PaginationLink>
+                          </PaginationItem>
+                        );
+                      } else if (
+                        pageNum === currentPage - 2 ||
+                        pageNum === currentPage + 2
+                      ) {
+                        return (
+                          <PaginationItem key={pageNum}>
+                            <PaginationEllipsis />
+                          </PaginationItem>
+                        );
+                      }
+                      return null;
+                    }
+                  )}
+
+                  <PaginationItem>
+                    <PaginationNext
+                      onClick={() =>
+                        onPageChange(Math.min(totalPages - 1, currentPage + 1))
+                      }
+                      className={
+                        currentPage >= totalPages - 1
+                          ? "pointer-events-none opacity-50"
+                          : "cursor-pointer"
+                      }
+                    />
+                  </PaginationItem>
+                </PaginationContent>
+              </Pagination>
+            </div>
+          )}
         </CardContent>
       </Card>
     </>
