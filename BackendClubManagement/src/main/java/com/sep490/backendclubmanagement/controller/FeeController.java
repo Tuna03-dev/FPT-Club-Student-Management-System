@@ -4,7 +4,6 @@ import com.sep490.backendclubmanagement.dto.ApiResponse;
 import com.sep490.backendclubmanagement.dto.request.CreateFeeRequest;
 import com.sep490.backendclubmanagement.dto.request.UpdateFeeRequest;
 import com.sep490.backendclubmanagement.dto.response.FeeDetailResponse;
-import com.sep490.backendclubmanagement.dto.response.FeeResponse;
 import com.sep490.backendclubmanagement.dto.response.PageResponse;
 import com.sep490.backendclubmanagement.dto.response.PayOSCreatePaymentResponse;
 import com.sep490.backendclubmanagement.exception.AppException;
@@ -32,14 +31,23 @@ public class FeeController {
     @PreAuthorize(SecurityConfig.AUTHORITY_ALL_ROLES)
     public ApiResponse<PageResponse<FeeDetailResponse>> getFees(
             @PathVariable Long clubId,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) Boolean isExpired,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size
     ) {
         Pageable pageable = PageRequest.of(page, size, Sort.by(
-                Sort.Order.desc("isDraft"),
                 Sort.Order.desc("createdAt")
         ));
-        PageResponse<FeeDetailResponse> responses = feeService.getFeesByClubId(clubId, pageable);
+
+        // If search or filter is provided, use search method, otherwise use simple getFeesByClubId
+        PageResponse<FeeDetailResponse> responses;
+        if ((search != null && !search.trim().isEmpty()) || isExpired != null) {
+            responses = feeService.searchFees(clubId, search, isExpired, pageable);
+        } else {
+            responses = feeService.getFeesByClubId(clubId, pageable);
+        }
+
         return ApiResponse.success(responses);
     }
 
@@ -136,6 +144,25 @@ public class FeeController {
         try {
             FeeDetailResponse feeDto = feeService.publishFee(feeId);
             return ApiResponse.success(feeDto);
+        } catch (AppException ex) {
+            return ApiResponse.error(ex.getErrorCode(), ex.getMessage(), null);
+        }
+    }
+
+    @GetMapping("/{feeId}/paid-members")
+    @PreAuthorize(SecurityConfig.AUTHORITY_ALL_ROLES)
+    public ApiResponse<PageResponse<com.sep490.backendclubmanagement.dto.response.FeePaidMemberResponse>> getPaidMembers(
+            @PathVariable Long clubId,
+            @PathVariable Long feeId,
+            @RequestParam(required = false) String search,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size
+    ) {
+        try {
+            Pageable pageable = PageRequest.of(page, size);
+            PageResponse<com.sep490.backendclubmanagement.dto.response.FeePaidMemberResponse> response =
+                    feeService.getPaidMembersByFee(feeId, search, pageable);
+            return ApiResponse.success(response);
         } catch (AppException ex) {
             return ApiResponse.error(ex.getErrorCode(), ex.getMessage(), null);
         }

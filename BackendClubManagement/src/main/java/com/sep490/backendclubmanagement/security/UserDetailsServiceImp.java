@@ -49,7 +49,7 @@ public class UserDetailsServiceImp implements UserDetailsService {
         }
 
         log.debug("User loaded successfully: {} with role: {}", username, systemRole);
-        
+
         return new org.springframework.security.core.userdetails.User(
                 user.getEmail(),
                 "N/A",

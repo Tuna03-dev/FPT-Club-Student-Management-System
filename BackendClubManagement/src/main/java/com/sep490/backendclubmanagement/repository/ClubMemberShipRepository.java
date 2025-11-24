@@ -100,6 +100,84 @@ public interface ClubMemberShipRepository extends JpaRepository<ClubMemberShip, 
             @Param("clubId") Long clubId,
             @Param("searchTerm") String searchTerm
     );
+
+    /**
+     * Optimized query với JOIN FETCH để tránh N+1 query problem
+     * Xử lý tất cả filters trong database thay vì trong Java
+     *
+     * Logic kiểm tra member còn active trong semester (giống logic ban đầu):
+     * - Nếu có semesterId: Chỉ check joinDate/endDate để xác định member có active trong kì đó
+     *   + joinDate <= semester.endDate (joined before or during semester)
+     *   + endDate IS NULL OR endDate >= semester.startDate (not left before semester starts)
+     * - Nếu không có semesterId: Check cms.status theo parameter status
+     *
+     * Search: Không dùng COLLATE (JPQL không hỗ trợ)
+     *         Search không dấu được xử lý trong service layer bằng code
+     */
+    @Query("""
+        SELECT DISTINCT cms 
+        FROM ClubMemberShip cms
+        LEFT JOIN FETCH cms.user u
+        LEFT JOIN FETCH cms.roleMemberships rm
+        LEFT JOIN FETCH rm.semester s
+        LEFT JOIN FETCH rm.clubRole cr
+        LEFT JOIN FETCH rm.team t
+        WHERE cms.club.id = :clubId
+        AND (
+            (:semesterId IS NOT NULL AND 
+             cms.joinDate <= (SELECT sem.endDate FROM Semester sem WHERE sem.id = :semesterId) AND
+             (cms.endDate IS NULL OR cms.endDate >= (SELECT sem.startDate FROM Semester sem WHERE sem.id = :semesterId)))
+            OR
+            (:semesterId IS NULL AND (:status IS NULL OR cms.status = :status))
+        )
+        AND (:roleId IS NULL OR 
+             EXISTS (SELECT 1 FROM RoleMemberShip rm2 
+                     WHERE rm2.clubMemberShip = cms 
+                     AND rm2.clubRole.id = :roleId
+                     AND (:semesterId IS NULL OR rm2.semester.id = :semesterId)))
+        AND (:isActive IS NULL OR
+             (:isActive = true AND 
+              EXISTS (SELECT 1 FROM RoleMemberShip rm3 
+                      WHERE rm3.clubMemberShip = cms 
+                      AND rm3.isActive = true
+                      AND (:semesterId IS NULL OR rm3.semester.id = :semesterId)
+                      AND (:roleId IS NULL OR rm3.clubRole.id = :roleId))) OR
+             (:isActive = false AND 
+              NOT EXISTS (SELECT 1 FROM RoleMemberShip rm4 
+                          WHERE rm4.clubMemberShip = cms 
+                          AND rm4.isActive = true
+                          AND (:semesterId IS NULL OR rm4.semester.id = :semesterId))))
+        ORDER BY u.fullName ASC
+    """)
+    org.springframework.data.domain.Page<ClubMemberShip> findMembersWithFiltersOptimized(
+            @Param("clubId") Long clubId,
+            @Param("status") ClubMemberShipStatus status,
+            @Param("semesterId") Long semesterId,
+            @Param("roleId") Long roleId,
+            @Param("isActive") Boolean isActive,
+            org.springframework.data.domain.Pageable pageable
+    );
+
+    /**
+     * Optimized query for left members với sorting by end_date DESC, full_name ASC
+     * Search: Search không dấu được xử lý trong service layer bằng code
+     */
+    @Query("""
+        SELECT DISTINCT cms 
+        FROM ClubMemberShip cms
+        LEFT JOIN FETCH cms.user u
+        LEFT JOIN FETCH cms.roleMemberships rm
+        LEFT JOIN FETCH rm.semester s
+        LEFT JOIN FETCH rm.clubRole cr
+        LEFT JOIN FETCH rm.team t
+        WHERE cms.club.id = :clubId
+        AND cms.status = 'LEFT'
+        ORDER BY cms.endDate DESC NULLS LAST, u.fullName ASC
+    """)
+    org.springframework.data.domain.Page<ClubMemberShip> findLeftMembersOptimized(
+            @Param("clubId") Long clubId,
+            org.springframework.data.domain.Pageable pageable
+    );
     // Kiểm tra xem user đã là thành viên active của club chưa
     boolean existsByUserIdAndClubIdAndStatus(Long userId, Long clubId, ClubMemberShipStatus status);
 

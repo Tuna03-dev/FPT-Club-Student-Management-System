@@ -12,9 +12,8 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import com.sep490.backendclubmanagement.dto.request.CreateFeeRequest;
-import com.sep490.backendclubmanagement.service.FeeService;
-import jakarta.validation.Valid;
+
+import com.sep490.backendclubmanagement.service.FeeServiceImpl;
 
 @RestController
 @RequestMapping("/api/management")
@@ -23,7 +22,7 @@ public class ClubManagementController {
 
     private final ClubManagementService clubManagementService;
     private final ClubTeamVisibilityService clubTeamVisibilityService;
-    private final FeeService feeService;
+    private final FeeServiceImpl feeServiceImpl;
 
     private boolean isAuthenticated() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();

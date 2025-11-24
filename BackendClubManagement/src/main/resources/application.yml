@@ -39,6 +39,23 @@ spring:
         format_sql: true
     database-platform: org.hibernate.dialect.MySQL8Dialect
 
+  # Email Configuration
+  mail:
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
+
 host:
   front-end: ${HOST_FRONT_END:http://localhost:5173}
 

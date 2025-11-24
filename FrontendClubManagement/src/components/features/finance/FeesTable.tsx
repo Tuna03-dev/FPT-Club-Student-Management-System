@@ -1,5 +1,5 @@
 // src/components/finance/FeesTable.tsx
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -20,7 +20,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Edit, Plus, Trash2, HelpCircle, Coins, Send } from "lucide-react";
+import { Edit, Plus, Trash2, HelpCircle, Coins, Send, Users } from "lucide-react";
 import { toast } from "sonner";
 import type {
   Fee,
@@ -28,7 +28,7 @@ import type {
   UpdateFeeRequest,
   FeeType,
 } from "@/types/fee";
-import { useMemo, useState, useCallback, useEffect } from "react";
+import { useMemo, useState, useCallback, useEffect, useRef } from "react";
 import feeService from "@/services/feeService";
 import { clubService, type SemesterDTO } from "@/services/clubService";
 import { Switch } from "@/components/ui/switch";
@@ -54,6 +54,7 @@ import {
   PaginationPrevious,
   PaginationEllipsis,
 } from "@/components/ui/pagination";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 interface FeesTableProps {
   fees: Fee[];
@@ -64,7 +65,7 @@ interface FeesTableProps {
   setIsAddOpen: (open: boolean) => void;
   onFeeCreated?: (fee: Fee) => void;
   clubId: number;
-  onReloadFees?: (page?: number) => Promise<void> | void;
+  onReloadFees?: (page?: number, search?: string, isExpired?: boolean) => Promise<void> | void;
   pageNumber: number;
   pageSize: number;
   totalPages: number;
@@ -144,6 +145,26 @@ export function FeesTable({
   const [publishingFeeId, setPublishingFeeId] = useState<number | null>(null);
   const [semesters, setSemesters] = useState<SemesterDTO[]>([]);
   const [loadingSemesters, setLoadingSemesters] = useState<boolean>(false);
+  const [isPaidMembersOpen, setIsPaidMembersOpen] = useState<boolean>(false);
+  const [selectedFeeForMembers, setSelectedFeeForMembers] = useState<Fee | null>(null);
+  const [paidMembers, setPaidMembers] = useState<Array<{
+    userId: number;
+    fullName: string;
+    email: string;
+    studentCode: string;
+    avatarUrl: string;
+    paidDate: string;
+    transactionId: number;
+    amount: number;
+  }>>([]);
+  const [loadingPaidMembers, setLoadingPaidMembers] = useState<boolean>(false);
+  const [paidMembersPage, setPaidMembersPage] = useState<number>(0);
+  const [paidMembersTotalPages, setPaidMembersTotalPages] = useState<number>(0);
+  const [paidMembersTotalElements, setPaidMembersTotalElements] = useState<number>(0);
+  const [paidMembersSearch, setPaidMembersSearch] = useState<string>("");
+  const [searchTerm, setSearchTerm] = useState<string>("");
+  const [expiredFilter, setExpiredFilter] = useState<string>("all");
+  const prevSearchRef = useRef<{ search: string; filter: string }>({ search: "", filter: "all" });
 
   // Load semesters when component mounts
   useEffect(() => {
@@ -269,14 +290,29 @@ export function FeesTable({
     });
   }, [form]);
 
-  const refreshFees = useCallback(
-    async (page?: number) => {
+  // Auto search on change with debounce
+  useEffect(() => {
+    // Chỉ trigger search khi có thay đổi thực sự
+    const hasChanged = 
+      prevSearchRef.current.search !== searchTerm || 
+      prevSearchRef.current.filter !== expiredFilter;
+    
+    if (!hasChanged) {
+      return;
+    }
+
+    const timer = setTimeout(() => {
       if (onReloadFees) {
-        await onReloadFees(page);
+        const isExpired = expiredFilter === "all" ? undefined : expiredFilter === "expired";
+        onReloadFees(0, searchTerm || undefined, isExpired);
+        // Cập nhật giá trị đã search
+        prevSearchRef.current = { search: searchTerm, filter: expiredFilter };
       }
-    },
-    [onReloadFees]
-  );
+    }, 500);
+
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchTerm, expiredFilter]);
 
   const handleCreateFee = useCallback(
     async (values: FormValues, publishImmediately: boolean) => {
@@ -296,8 +332,11 @@ export function FeesTable({
         const createdFee = apiRes?.data;
         if (createdFee) {
           const targetPage = publishImmediately ? 0 : pageNumber;
+          const isExpired = expiredFilter === "all" ? undefined : expiredFilter === "expired";
           try {
-            await refreshFees(targetPage);
+            if (onReloadFees) {
+              await onReloadFees(targetPage, searchTerm || undefined, isExpired);
+            }
           } catch {
             onFeeCreated?.(createdFee);
           }
@@ -321,7 +360,7 @@ export function FeesTable({
         setSubmitting(false);
       }
     },
-    [clubId, onFeeCreated, pageNumber, refreshFees, resetForm, setIsAddOpen]
+    [clubId, onFeeCreated, pageNumber, onReloadFees, resetForm, setIsAddOpen, searchTerm, expiredFilter]
   );
 
   const editSchema = useMemo(
@@ -383,9 +422,8 @@ export function FeesTable({
         )
         .refine(
           (data) => {
-            // Use backend's hasEverExpired flag for validation
-            // If hasEverExpired = true, skip amount validation (field is disabled anyway)
-            if (editingFee?.hasEverExpired === true) return true;
+            // If anyone has paid, skip amount validation (field is disabled anyway)
+            if ((editingFee?.paidMembers ?? 0) > 0) return true;
 
             // Otherwise, validate amount >= 2000
             return data.amount >= 2000;
@@ -427,9 +465,8 @@ export function FeesTable({
 
   const handleEditClick = useCallback(
     (fee: Fee) => {
-      // Use backend's hasEverExpired flag - once true, amount is locked permanently
-      // This prevents bypass by changing dueDate then amount
-      const isAmountLocked = fee.hasEverExpired === true;
+      // Lock amount if anyone has paid this fee
+      const isAmountLocked = (fee.paidMembers ?? 0) > 0;
       setIsAmountLockedInEdit(isAmountLocked);
 
       setEditingFee(fee);
@@ -451,11 +488,11 @@ export function FeesTable({
     async (values: EditFormValues) => {
       if (!editingFee) return;
 
-      // Security check: Prevent amount change if hasEverExpired = true
+      // Security check: Prevent amount change if anyone has paid
       // Backend validates this, but we check client-side for better UX
       if (isAmountLockedInEdit && values.amount !== editingFee.amount) {
         toast.error(
-          "⚠️ Không thể thay đổi số tiền! Khoản phí này đã từng hết hạn nên số tiền đã bị khóa để đảm bảo tính nhất quán của dữ liệu tài chính.",
+          "⚠️ Không thể thay đổi số tiền! Khoản phí này đã có thành viên đóng tiền nên số tiền đã bị khóa để đảm bảo tính nhất quán của dữ liệu tài chính.",
           { duration: 5000 }
         );
         return;
@@ -479,8 +516,11 @@ export function FeesTable({
         );
         const updatedFee = apiRes?.data;
         if (updatedFee) {
+          const isExpired = expiredFilter === "all" ? undefined : expiredFilter === "expired";
           try {
-            await refreshFees(pageNumber);
+            if (onReloadFees) {
+              await onReloadFees(pageNumber, searchTerm || undefined, isExpired);
+            }
           } catch {
             onFeeCreated?.(updatedFee);
           }
@@ -509,7 +549,9 @@ export function FeesTable({
       isAmountLockedInEdit,
       onFeeCreated,
       pageNumber,
-      refreshFees,
+      onReloadFees,
+      searchTerm,
+      expiredFilter,
     ]
   );
 
@@ -518,7 +560,10 @@ export function FeesTable({
       setPublishingFeeId(feeId);
       try {
         await feeService.publishFee(clubId, feeId);
-        await refreshFees(pageNumber);
+        const isExpired = expiredFilter === "all" ? undefined : expiredFilter === "expired";
+        if (onReloadFees) {
+          await onReloadFees(pageNumber, searchTerm || undefined, isExpired);
+        }
         toast.success("Đã kích hoạt khoản phí!");
         if (options?.closeEdit) {
           setIsEditOpen(false);
@@ -536,8 +581,51 @@ export function FeesTable({
         setPublishingFeeId(null);
       }
     },
-    [clubId, editForm, pageNumber, refreshFees]
+    [clubId, editForm, pageNumber, onReloadFees, searchTerm, expiredFilter]
   );
+
+  const handleClearSearch = useCallback(() => {
+    setSearchTerm("");
+    setExpiredFilter("all");
+    if (onReloadFees) {
+      onReloadFees(0, undefined, undefined);
+    }
+  }, [onReloadFees]);
+
+  const handleViewPaidMembers = useCallback(async (fee: Fee, page: number = 0, search?: string) => {
+    setSelectedFeeForMembers(fee);
+    setIsPaidMembersOpen(true);
+    setLoadingPaidMembers(true);
+    try {
+      const response = await feeService.getPaidMembers(clubId, Number(fee.id), { 
+        page, 
+        size: 10,
+        search: search || undefined 
+      });
+      if (response.code === 200 && response.data) {
+        setPaidMembers(response.data.content);
+        setPaidMembersPage(response.data.pageNumber);
+        setPaidMembersTotalPages(response.data.totalPages);
+        setPaidMembersTotalElements(response.data.totalElements);
+      }
+    } catch {
+      toast.error("Không thể tải danh sách thành viên đã đóng phí");
+    } finally {
+      setLoadingPaidMembers(false);
+    }
+  }, [clubId]);
+
+  // Debounce search for paid members
+  useEffect(() => {
+    if (!isPaidMembersOpen || !selectedFeeForMembers) return;
+
+    const timer = setTimeout(() => {
+      handleViewPaidMembers(selectedFeeForMembers, 0, paidMembersSearch);
+    }, 500);
+
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paidMembersSearch]);
 
   const handleDeleteClick = useCallback((feeId: number) => {
     setDeleteFeeId(feeId);
@@ -549,8 +637,11 @@ export function FeesTable({
     setDeleteLoading(true);
     try {
       await feeService.deleteFee(clubId, deleteFeeId);
+      const isExpired = expiredFilter === "all" ? undefined : expiredFilter === "expired";
       try {
-        await refreshFees(pageNumber);
+        if (onReloadFees) {
+          await onReloadFees(pageNumber, searchTerm || undefined, isExpired);
+        }
       } catch {
         onDeleteFee?.(String(deleteFeeId));
       }
@@ -566,7 +657,7 @@ export function FeesTable({
     } finally {
       setDeleteLoading(false);
     }
-  }, [clubId, deleteFeeId, onDeleteFee, pageNumber, refreshFees]);
+  }, [clubId, deleteFeeId, onDeleteFee, pageNumber, onReloadFees, searchTerm, expiredFilter]);
 
   const getFeeToDelete = useCallback(() => {
     if (deleteFeeId === null) return null;
@@ -694,20 +785,21 @@ export function FeesTable({
 
   return (
     <Card>
-      <CardHeader className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div>
-          <CardTitle>Quản lý học phí & phí thành viên</CardTitle>
-          <p className="text-sm text-muted-foreground mt-1">
-            Tạo và theo dõi các khoản phí, bao gồm bản nháp và đã kích hoạt
-          </p>
-        </div>
-        <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={onAddFee} className="w-full md:w-auto">
-              <Plus className="w-4 h-4 mr-2" /> Tạo khoản phí
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-md w-full">
+      <CardHeader>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-2xl font-bold tracking-tight">Quản lý học phí & phí thành viên</h2>
+            <p className="text-sm text-muted-foreground mt-1">
+              Tạo và theo dõi các khoản phí, bao gồm bản nháp và đã kích hoạt
+            </p>
+          </div>
+          <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+            <DialogTrigger asChild>
+              <Button onClick={onAddFee} className="shrink-0">
+                <Plus className="w-4 h-4 mr-2" /> Tạo khoản phí
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-md w-full">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <Coins className="w-6 h-6 text-primary" /> Tạo khoản phí mới
@@ -936,6 +1028,31 @@ export function FeesTable({
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        </div>
+
+        {/* Search and Filter Section */}
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-start mt-4">
+            <Input
+              placeholder="Tìm kiếm theo tên hoặc mô tả..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full sm:w-80"
+            />
+            <select
+              value={expiredFilter}
+              onChange={(e) => setExpiredFilter(e.target.value)}
+              className="border rounded-md px-3 py-2 text-sm bg-background shrink-0 w-full sm:w-auto h-10"
+            >
+              <option value="all">Tất cả</option>
+              <option value="active">Còn hạn</option>
+              <option value="expired">Đã hết hạn</option>
+            </select>
+            {(searchTerm || expiredFilter !== "all") && (
+              <Button onClick={handleClearSearch} variant="outline" size="sm" className="shrink-0 w-full sm:w-auto">
+                Xóa bộ lọc
+              </Button>
+            )}
+        </div>
       </CardHeader>
       <CardContent>
         {isLoading ? (
@@ -1025,6 +1142,16 @@ export function FeesTable({
                     <TableCell>{getFeeTypeBadge(fee.feeType)}</TableCell>
                     <TableCell>
                       <div className="flex flex-wrap items-center justify-end gap-2">
+                        {(fee.paidMembers ?? 0) > 0 && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleViewPaidMembers(fee)}
+                            title="Xem danh sách đã đóng phí"
+                          >
+                            <Users className="w-4 h-4 mr-1" /> Xem DS
+                          </Button>
+                        )}
                         <Button
                           size="sm"
                           variant="ghost"
@@ -1093,7 +1220,7 @@ export function FeesTable({
             <span className="text-xs text-muted-foreground flex items-center gap-1">
               <HelpCircle className="w-3 h-3" />
               {isAmountLockedInEdit
-                ? "Phí đã từng hết hạn - Chỉ có thể chỉnh sửa thông tin khác"
+                ? "Phí đã có người đóng - Chỉ có thể chỉnh sửa thông tin khác"
                 : "Cập nhật thông tin khoản phí"}
             </span>
           </DialogHeader>
@@ -1157,7 +1284,7 @@ export function FeesTable({
                             ⚠️ Không thể chỉnh sửa số tiền
                           </p>
                           <p className="text-amber-700 dark:text-amber-500 mt-1">
-                            Khoản phí này đã từng hết hạn. Bạn có thể gia hạn
+                            Khoản phí này đã có thành viên đóng tiền. Bạn có thể gia hạn
                             thêm thời gian nhưng không thể thay đổi số tiền để
                             đảm bảo tính nhất quán của dữ liệu tài chính.
                           </p>
@@ -1183,7 +1310,7 @@ export function FeesTable({
                       </FormControl>
                       <FormMessage />
                       <div className="text-xs text-muted-foreground">
-                        Mặc định +7 ngày, không thể chọn ngày trong quá khứ
+                        Không thể chọn ngày trong quá khứ
                       </div>
                     </FormItem>
                   )}
@@ -1344,6 +1471,139 @@ export function FeesTable({
               type="submit"
             >
               {submitting ? "Đang cập nhật..." : "Lưu thay đổi"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Paid Members Dialog */}
+      <Dialog open={isPaidMembersOpen} onOpenChange={setIsPaidMembersOpen}>
+        <DialogContent className="max-w-4xl max-h-[85vh]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Users className="w-5 h-5 text-primary" />
+              Danh sách thành viên đã đóng phí
+            </DialogTitle>
+            {selectedFeeForMembers && (
+              <p className="text-sm text-muted-foreground">
+                {selectedFeeForMembers.title} - {formatCurrency(selectedFeeForMembers.amount)}
+              </p>
+            )}
+          </DialogHeader>
+          
+          {/* Search box for paid members */}
+          <div className="px-6">
+            <Input
+              placeholder="Tìm kiếm theo tên, MSSV, email..."
+              value={paidMembersSearch}
+              onChange={(e) => setPaidMembersSearch(e.target.value)}
+              className="w-full"
+            />
+          </div>
+
+          <div className="mt-4 overflow-auto max-h-[calc(85vh-240px)] px-6">
+            {loadingPaidMembers ? (
+              <div className="space-y-3">
+                {[...Array(5)].map((_, idx) => (
+                  <div key={idx} className="flex items-center gap-3">
+                    <Skeleton className="h-10 w-10 rounded-full" />
+                    <div className="flex-1 space-y-2">
+                      <Skeleton className="h-4 w-3/4" />
+                      <Skeleton className="h-3 w-1/2" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : paidMembers.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <Users className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                <p>
+                  {paidMembersSearch 
+                    ? `Không tìm thấy thành viên với từ khóa "${paidMembersSearch}"`
+                    : "Chưa có thành viên nào đóng phí"}
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="border rounded-lg overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-[30%]">Thành viên</TableHead>
+                        <TableHead className="w-[20%]">MSSV</TableHead>
+                        <TableHead className="w-[30%]">Email</TableHead>
+                        <TableHead className="w-[20%]">Ngày đóng</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {paidMembers.map((member) => (
+                        <TableRow key={member.userId}>
+                          <TableCell>
+                            <div className="flex items-center gap-3">
+                              <Avatar className="h-8 w-8">
+                                <AvatarImage src={member.avatarUrl} alt={member.fullName} />
+                                <AvatarFallback>{member.fullName.charAt(0)}</AvatarFallback>
+                              </Avatar>
+                              <span className="font-medium">{member.fullName}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell>{member.studentCode}</TableCell>
+                          <TableCell className="text-sm text-muted-foreground truncate max-w-[200px]" title={member.email}>{member.email}</TableCell>
+                          <TableCell>{new Date(member.paidDate).toLocaleDateString('vi-VN')}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+                {paidMembersTotalPages > 1 && (
+                  <div className="mt-4">
+                    <Pagination>
+                      <PaginationContent>
+                        <PaginationItem>
+                          <PaginationPrevious
+                            onClick={() => selectedFeeForMembers && handleViewPaidMembers(selectedFeeForMembers, Math.max(0, paidMembersPage - 1), paidMembersSearch)}
+                            className={paidMembersPage <= 0 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                          />
+                        </PaginationItem>
+                        {Array.from({ length: Math.min(5, paidMembersTotalPages) }, (_, i) => {
+                          let pageNum = i;
+                          if (paidMembersTotalPages > 5) {
+                            if (paidMembersPage <= 2) pageNum = i;
+                            else if (paidMembersPage >= paidMembersTotalPages - 3) pageNum = paidMembersTotalPages - 5 + i;
+                            else pageNum = paidMembersPage - 2 + i;
+                          }
+                          if (pageNum < 0 || pageNum >= paidMembersTotalPages) return null;
+                          return (
+                            <PaginationItem key={pageNum}>
+                              <PaginationLink
+                                onClick={() => selectedFeeForMembers && handleViewPaidMembers(selectedFeeForMembers, pageNum, paidMembersSearch)}
+                                isActive={paidMembersPage === pageNum}
+                                className="cursor-pointer"
+                              >
+                                {pageNum + 1}
+                              </PaginationLink>
+                            </PaginationItem>
+                          );
+                        })}
+                        <PaginationItem>
+                          <PaginationNext
+                            onClick={() => selectedFeeForMembers && handleViewPaidMembers(selectedFeeForMembers, paidMembersPage < paidMembersTotalPages - 1 ? paidMembersPage + 1 : paidMembersPage, paidMembersSearch)}
+                            className={paidMembersPage >= paidMembersTotalPages - 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                          />
+                        </PaginationItem>
+                      </PaginationContent>
+                    </Pagination>
+                    <div className="text-center text-sm text-muted-foreground mt-2">
+                      Trang {paidMembersPage + 1} / {paidMembersTotalPages} ({paidMembersTotalElements} thành viên)
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsPaidMembersOpen(false)}>
+              Đóng
             </Button>
           </DialogFooter>
         </DialogContent>
