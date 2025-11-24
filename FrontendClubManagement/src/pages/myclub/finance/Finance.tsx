@@ -3,12 +3,14 @@ import { useEffect, useState, useCallback } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useParams } from "react-router-dom";
 import { toast } from "sonner";
+import { useDebounce } from "@/hooks/useDebounce";
 import { payosService } from "@/services/payosService";
 import { SummaryCards } from "@/components/features/finance/SummaryCards";
 import {
   TransactionsTable,
   type Transaction,
 } from "@/components/features/finance/TransactionsTable";
+import { TransactionFiltersComponent, type TransactionFilters } from "@/components/features/finance/TransactionFilters";
 import { FeesTable } from "@/components/features/finance/FeesTable";
 import { PayOSIntegration } from "@/components/features/finance/PayOsIntegration";
 import { CreateTransactionDialog } from "@/components/features/finance/CreateTransactionDialog";
@@ -117,6 +119,37 @@ export default function Finance() {
     useState<FinanceSummaryResponse | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
 
+  // Filter states for Income
+  const [incomeFilters, setIncomeFilters] = useState<TransactionFilters>({
+    search: "",
+    status: "all",
+    fromDate: "",
+    toDate: "",
+    minAmount: "",
+    maxAmount: "",
+    source: "all",
+    feeId: "all",
+  });
+  const debouncedIncomeSearch = useDebounce(incomeFilters.search, 500);
+
+  // Filter states for Outcome
+  const [outcomeFilters, setOutcomeFilters] = useState<TransactionFilters>({
+    search: "",
+    status: "all",
+    fromDate: "",
+    toDate: "",
+    minAmount: "",
+    maxAmount: "",
+    category: "all",
+  });
+  const debouncedOutcomeSearch = useDebounce(outcomeFilters.search, 500);
+
+  // Pagination metadata
+  const [incomeTotalPages, setIncomeTotalPages] = useState(1);
+  const [incomeTotalElements, setIncomeTotalElements] = useState(0);
+  const [outcomeTotalPages, setOutcomeTotalPages] = useState(1);
+  const [outcomeTotalElements, setOutcomeTotalElements] = useState(0);
+
   const fetchFinanceSummary = useCallback(async () => {
     if (!Number.isFinite(numericClubId) || numericClubId <= 0) return;
     try {
@@ -138,14 +171,28 @@ export default function Finance() {
       if (!Number.isFinite(numericClubId) || numericClubId <= 0) return;
       try {
         setIncomeLoading(true);
+        const params: Record<string, string | number> = { page, size: PAGE_SIZE };
+        
+        // Apply filters
+        if (debouncedIncomeSearch) params.search = debouncedIncomeSearch;
+        if (incomeFilters.status && incomeFilters.status !== "all") params.status = incomeFilters.status;
+        if (incomeFilters.fromDate) params.fromDate = incomeFilters.fromDate;
+        if (incomeFilters.toDate) params.toDate = incomeFilters.toDate;
+        if (incomeFilters.minAmount) params.minAmount = Number(incomeFilters.minAmount);
+        if (incomeFilters.maxAmount) params.maxAmount = Number(incomeFilters.maxAmount);
+        if (incomeFilters.source && incomeFilters.source !== "all") params.source = incomeFilters.source;
+        if (incomeFilters.feeId && incomeFilters.feeId !== "all") params.feeId = Number(incomeFilters.feeId);
+
         const res = await transactionService.getIncomeTransactions(
           numericClubId,
-          { page, size: PAGE_SIZE }
+          params
         );
         if (res.code === 200 && res.data) {
           const transactions = res.data.content.map(convertIncomeToTransaction);
           setIncomeTransactions(transactions);
           setIncomePage(res.data.pageNumber ?? page);
+          setIncomeTotalPages(res.data.totalPages ?? 1);
+          setIncomeTotalElements(res.data.totalElements ?? 0);
         }
       } catch (e) {
         console.error("Failed to fetch income transactions", e);
@@ -155,7 +202,7 @@ export default function Finance() {
         setIncomeLoading(false);
       }
     },
-    [numericClubId]
+    [numericClubId, debouncedIncomeSearch, incomeFilters]
   );
 
   const fetchOutcomeTransactions = useCallback(
@@ -163,9 +210,20 @@ export default function Finance() {
       if (!Number.isFinite(numericClubId) || numericClubId <= 0) return;
       try {
         setOutcomeLoading(true);
+        const params: Record<string, string | number> = { page, size: PAGE_SIZE };
+        
+        // Apply filters
+        if (debouncedOutcomeSearch) params.search = debouncedOutcomeSearch;
+        if (outcomeFilters.status && outcomeFilters.status !== "all") params.status = outcomeFilters.status;
+        if (outcomeFilters.fromDate) params.fromDate = outcomeFilters.fromDate;
+        if (outcomeFilters.toDate) params.toDate = outcomeFilters.toDate;
+        if (outcomeFilters.minAmount) params.minAmount = Number(outcomeFilters.minAmount);
+        if (outcomeFilters.maxAmount) params.maxAmount = Number(outcomeFilters.maxAmount);
+        if (outcomeFilters.category && outcomeFilters.category !== "all") params.category = outcomeFilters.category;
+
         const res = await transactionService.getOutcomeTransactions(
           numericClubId,
-          { page, size: PAGE_SIZE }
+          params
         );
         if (res.code === 200 && res.data) {
           const transactions = res.data.content.map(
@@ -173,6 +231,8 @@ export default function Finance() {
           );
           setOutcomeTransactions(transactions);
           setOutcomePage(res.data.pageNumber ?? page);
+          setOutcomeTotalPages(res.data.totalPages ?? 1);
+          setOutcomeTotalElements(res.data.totalElements ?? 0);
         }
       } catch (e) {
         console.error("Failed to fetch outcome transactions", e);
@@ -182,7 +242,7 @@ export default function Finance() {
         setOutcomeLoading(false);
       }
     },
-    [numericClubId]
+    [numericClubId, debouncedOutcomeSearch, outcomeFilters]
   );
 
   const fetchFees = useCallback(
@@ -273,6 +333,15 @@ export default function Finance() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
 
+  // Reload income transactions when filters change
+  useEffect(() => {
+    if (loadedTabs.has('income')) {
+      setIncomePage(0);
+      void fetchIncomeTransactions(0);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedIncomeSearch, incomeFilters.status, incomeFilters.fromDate, incomeFilters.toDate, incomeFilters.minAmount, incomeFilters.maxAmount, incomeFilters.source, incomeFilters.feeId]);
+
   // Load outcome transactions khi chuyển sang tab outcome
   useEffect(() => {
     if (activeTab === 'outcome' && !loadedTabs.has('outcome')) {
@@ -281,6 +350,15 @@ export default function Finance() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
+
+  // Reload outcome transactions when filters change
+  useEffect(() => {
+    if (loadedTabs.has('outcome')) {
+      setOutcomePage(0);
+      void fetchOutcomeTransactions(0);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedOutcomeSearch, outcomeFilters.status, outcomeFilters.fromDate, outcomeFilters.toDate, outcomeFilters.minAmount, outcomeFilters.maxAmount, outcomeFilters.category]);
 
   // Load fees khi chuyển sang tab fees
   useEffect(() => {
@@ -507,6 +585,12 @@ export default function Finance() {
           </TabsList>
 
           <TabsContent value="income" className="space-y-4">
+            <TransactionFiltersComponent
+              filters={incomeFilters}
+              onFiltersChange={setIncomeFilters}
+              transactionType="INCOME"
+              fees={feesPage?.content ?? []}
+            />
             <TransactionsTable
               transactions={incomeTransactions}
               transactionType="INCOME"
@@ -531,10 +615,19 @@ export default function Finance() {
               setIsAddOpen={setIsAddTransactionOpen}
               loading={incomeLoading}
               fees={feesPage?.content ?? []}
+              currentPage={incomePage}
+              totalPages={incomeTotalPages}
+              totalElements={incomeTotalElements}
+              onPageChange={(page) => void fetchIncomeTransactions(page)}
             />
           </TabsContent>
 
           <TabsContent value="outcome" className="space-y-4">
+            <TransactionFiltersComponent
+              filters={outcomeFilters}
+              onFiltersChange={setOutcomeFilters}
+              transactionType="OUTCOME"
+            />
             <TransactionsTable
               transactions={outcomeTransactions}
               transactionType="OUTCOME"
@@ -558,6 +651,10 @@ export default function Finance() {
               isAddOpen={isAddTransactionOpen}
               setIsAddOpen={setIsAddTransactionOpen}
               loading={outcomeLoading}
+              currentPage={outcomePage}
+              totalPages={outcomeTotalPages}
+              totalElements={outcomeTotalElements}
+              onPageChange={(page) => void fetchOutcomeTransactions(page)}
             />
           </TabsContent>
 
