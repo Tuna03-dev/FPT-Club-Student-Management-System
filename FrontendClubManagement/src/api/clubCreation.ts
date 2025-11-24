@@ -6,6 +6,7 @@ export type RequestEstablishmentStatus =
   | "SUBMITTED"
   | "CONTACT_CONFIRMATION_PENDING"
   | "CONTACT_CONFIRMED"
+  | "NAME_REVISION_REQUIRED"
   | "CONTACT_REJECTED"
   | "PROPOSAL_REQUIRED"
   | "PROPOSAL_SUBMITTED"
@@ -98,6 +99,14 @@ export interface ClubProposalResponse {
 export interface SubmitProposalRequest {
   title: string;
   fileUrl?: string;
+  comment?: string;
+}
+
+export interface RenameClubPayload {
+  newClubName: string;
+}
+
+export interface RequestNameRevisionPayload {
   comment?: string;
 }
 
@@ -451,6 +460,19 @@ export const clubCreationApi = {
     if (res.code !== 200) throw new Error(res.message || "Failed to fetch workflow history");
     return res.data!;
   },
+
+  // Submit name revision
+  submitNameRevision: async (
+    requestId: number,
+    data: RenameClubPayload
+  ): Promise<RequestEstablishmentResponse> => {
+    const res = await axiosClient.put<RequestEstablishmentResponse>(
+      `/club-creation/requests/${requestId}/rename`,
+      data
+    );
+    if (res.code !== 200) throw new Error(res.message || "Failed to update club name");
+    return res.data!;
+  },
 };
 
 // ===== Staff APIs =====
@@ -689,6 +711,22 @@ export const clubCreationStaffApi = {
       params: { page, size },
     });
     if (res.code !== 200) throw new Error(res.message || "Failed to fetch workflow history");
+    return res.data!;
+  },
+
+  // Request name revision
+  requestNameRevision: async (
+    requestId: number,
+    data?: RequestNameRevisionPayload
+  ): Promise<RequestEstablishmentResponse> => {
+    const payload = data?.comment?.trim()
+      ? { comment: data.comment.trim() }
+      : {};
+    const res = await axiosClient.post<RequestEstablishmentResponse>(
+      `/staff/club-creation/requests/${requestId}/request-name-revision`,
+      payload
+    );
+    if (res.code !== 200) throw new Error(res.message || "Failed to request name revision");
     return res.data!;
   },
 };

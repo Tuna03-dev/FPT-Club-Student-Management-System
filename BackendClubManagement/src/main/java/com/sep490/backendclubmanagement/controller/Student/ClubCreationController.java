@@ -3,6 +3,7 @@ package com.sep490.backendclubmanagement.controller.Student;
 import com.sep490.backendclubmanagement.dto.ApiResponse;
 import com.sep490.backendclubmanagement.dto.request.CreateRequestEstablishmentRequest;
 import com.sep490.backendclubmanagement.dto.request.ProposeDefenseScheduleRequest;
+import com.sep490.backendclubmanagement.dto.request.RenameClubRequest;
 import com.sep490.backendclubmanagement.dto.request.SubmitFinalFormRequest;
 import com.sep490.backendclubmanagement.dto.request.SubmitProposalRequest;
 import com.sep490.backendclubmanagement.dto.request.UpdateRequestEstablishmentRequest;
@@ -282,6 +283,20 @@ public class ClubCreationController {
     public ResponseEntity<ApiResponse<List<ClubCreationStepResponse>>> getAllSteps() throws AppException {
         List<ClubCreationStepResponse> steps = requestEstablishmentService.getAllSteps();
         return ResponseEntity.ok(ApiResponse.success(steps));
+    }
+
+    /**
+     * Sinh viên cập nhật lại tên CLB theo yêu cầu của staff
+     * PUT /api/club-creation/requests/{requestId}/rename
+     */
+    @PutMapping("/{requestId}/rename")
+    public ResponseEntity<ApiResponse<RequestEstablishmentResponse>> submitNameRevision(
+            @PathVariable Long requestId,
+            @Valid @RequestBody RenameClubRequest request
+    ) throws AppException {
+        Long userId = SecurityUtils.getCurrentUserId();
+        RequestEstablishmentResponse response = requestEstablishmentService.submitNameRevision(requestId, userId, request);
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
 }
 
