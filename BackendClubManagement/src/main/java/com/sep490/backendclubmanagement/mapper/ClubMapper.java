@@ -22,10 +22,10 @@ public interface ClubMapper {
     @Mapping(target = "presidents", ignore = true)
     ClubDetailData toClubDetailData(Club club);
 
-    @Mapping(source = "user.fullName", target = "fullName")
-    @Mapping(source = "user.email", target = "email")
-    @Mapping(source = "user.avatarUrl", target = "avatarUrl")
-    ClubPresidentData toPresidentData(ClubMemberShip membership);
+//    @Mapping(source = "user.fullName", target = "fullName")
+//    @Mapping(source = "user.email", target = "email")
+//    @Mapping(source = "user.avatarUrl", target = "avatarUrl")
+//    ClubPresidentData toPresidentData(ClubMemberShip membership);
 
     @Mapping(source = "campus.campusName", target = "campusName")
     @Mapping(source = "campus.id", target = "campusId")
