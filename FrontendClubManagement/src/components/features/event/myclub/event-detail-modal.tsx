@@ -5,7 +5,7 @@ import { ChevronLeft, ChevronRight, X, Calendar, MapPin, Users, ClipboardCheck, 
 import { useNavigate, useParams } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { UpdateEventForm, type UpdateEventFormData } from "./update-event-form"
@@ -58,6 +58,7 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
   const [eventClubId, setEventClubId] = useState<number | null>(null)
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false)
   const [cancelReason, setCancelReason] = useState("")
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   
   // Get clubId from props or URL params
   const currentClubId = clubId || (params.clubId ? parseInt(params.clubId as string, 10) : undefined)
@@ -372,19 +373,8 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
               <Button
                 className="flex-1 bg-rose-600 hover:bg-rose-700 text-white h-10 text-sm gap-2"
                 disabled={isDeleting}
-                onClick={async () => {
-                  try {
-                    setIsDeleting(true)
-                    await deleteEvent(Number(event.id))
-                    toast.success("Đã xóa sự kiện thành công")
-                    onDeleted?.(event.id)
-                    onClose()
-                  } catch (error: unknown) {
-                    console.error("Error deleting event:", error)
-                    toast.error(getErrorMessage(error, "Không thể xóa sự kiện. Vui lòng thử lại."))
-                  } finally {
-                    setIsDeleting(false)
-                  }
+                onClick={() => {
+                  setDeleteDialogOpen(true)
                 }}
               >
                 {isDeleting ? (
@@ -431,19 +421,8 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
                   <Button
                     className="flex-1 bg-rose-600 hover:bg-rose-700 text-white h-10 text-sm gap-2"
                     disabled={isDeleting}
-                    onClick={async () => {
-                      try {
-                        setIsDeleting(true)
-                        await deleteEvent(Number(event.id))
-                        toast.success("Đã xóa sự kiện thành công")
-                        onDeleted?.(event.id)
-                        onClose()
-                      } catch (error: unknown) {
-                        console.error("Error deleting event:", error)
-                        toast.error(getErrorMessage(error, "Không thể xóa sự kiện. Vui lòng thử lại."))
-                      } finally {
-                        setIsDeleting(false)
-                      }
+                    onClick={() => {
+                      setDeleteDialogOpen(true)
                     }}
                   >
                     {isDeleting ? (
@@ -650,6 +629,56 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
               }}
             >
               Xác nhận hủy
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirm Dialog xóa sự kiện */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Xác nhận xóa sự kiện</DialogTitle>
+            <DialogDescription>
+              Bạn có chắc chắn muốn xóa sự kiện "{event.title}"? Hành động này không thể hoàn tác.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setDeleteDialogOpen(false)
+              }}
+            >
+              Hủy
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={isDeleting}
+              onClick={async () => {
+                try {
+                  setIsDeleting(true)
+                  await deleteEvent(Number(event.id))
+                  toast.success("Đã xóa sự kiện thành công")
+                  onDeleted?.(event.id)
+                  setDeleteDialogOpen(false)
+                  onClose()
+                } catch (error: unknown) {
+                  console.error("Error deleting event:", error)
+                  toast.error(getErrorMessage(error, "Không thể xóa sự kiện. Vui lòng thử lại."))
+                } finally {
+                  setIsDeleting(false)
+                }
+              }}
+            >
+              {isDeleting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                  Đang xóa...
+                </>
+              ) : (
+                "Xác nhận xóa"
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

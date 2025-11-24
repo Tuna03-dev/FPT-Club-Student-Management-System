@@ -188,7 +188,9 @@ export function UpdateEventForm({ initial, onSubmit, onSuccess }: UpdateEventFor
           </SelectTrigger>
           <SelectContent>
             {eventTypes.map((type) => (
-              <SelectItem key={type.id} value={type.id}>{type.name}</SelectItem>
+              <SelectItem key={type.id} value={type.id}>
+                {type.name.toUpperCase() === "MEETING" ? `${type.name} (Sự kiện nội bộ)` : type.name}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>

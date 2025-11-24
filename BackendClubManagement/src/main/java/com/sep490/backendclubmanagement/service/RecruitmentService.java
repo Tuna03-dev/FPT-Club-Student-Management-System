@@ -204,30 +204,16 @@ public class RecruitmentService implements RecruitmentServiceInterface {
         // Check permission: must be CLUB_PRESIDENT and a member of the club
         checkClubPresidentPermission(userId, recruitment.getClub().getId());
         
-        Page<RecruitmentApplication> page;
-        
-        // If keyword is provided, use search query
-        if (keyword != null && !keyword.trim().isEmpty()) {
-            String trimmedKeyword = keyword.trim();
-            page = (status == null)
-                    ? applicationRepository.searchByRecruitmentIdAndKeyword(recruitmentId, trimmedKeyword, pageable)
-                    : applicationRepository.searchByRecruitmentIdAndStatusAndKeyword(recruitmentId, status, trimmedKeyword, pageable);
-        } else {
-            // Otherwise use normal query
-            page = (status == null)
-                    ? applicationRepository.findByRecruitment_Id(recruitmentId, pageable)
-                    : applicationRepository.findByRecruitment_IdAndStatus(recruitmentId, status, pageable);
-        }
-        
+        // Use single dynamic query that handles all parameter combinations
+        Page<RecruitmentApplication> page = applicationRepository.findApplicationsByRecruitment(recruitmentId, status, keyword, pageable);
         Page<RecruitmentApplicationData> dataPage = page.map(recruitmentApplicationMapper::toDto);
         return PagedResponse.of(dataPage);
     }
 
     @Override
-    public PagedResponse<RecruitmentApplicationData> listMyApplications(Long applicantId, RecruitmentApplicationStatus status, Pageable pageable) {
-        Page<RecruitmentApplication> page = (status == null)
-                ? applicationRepository.findByApplicant_Id(applicantId, pageable)
-                : applicationRepository.findByApplicant_IdAndStatus(applicantId, status, pageable);
+    public PagedResponse<RecruitmentApplicationData> listMyApplications(Long applicantId, RecruitmentApplicationStatus status, String keyword, Pageable pageable) {
+        // Use single dynamic query that handles all parameter combinations
+        Page<RecruitmentApplication> page = applicationRepository.findMyApplications(applicantId, status, keyword, pageable);
         Page<RecruitmentApplicationData> dataPage = page.map(recruitmentApplicationMapper::toDto);
         return PagedResponse.of(dataPage);
     }
@@ -619,6 +605,14 @@ public class RecruitmentService implements RecruitmentServiceInterface {
         }
     }
 
+    /**
+     * Close expired recruitments whose endDate is before the provided time.
+     * Returns the number of recruitments updated.
+     */
+    @Transactional
+    public int closeExpiredRecruitments(java.time.LocalDateTime now) {
+        // Only close recruitments that are currently OPEN
+        return recruitmentRepository.closeExpiredRecruitments(RecruitmentStatus.CLOSED, RecruitmentStatus.OPEN, now);
+    }
+
 }
-
-

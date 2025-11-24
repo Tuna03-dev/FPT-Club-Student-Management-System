@@ -20,6 +20,7 @@ import {
   Phone,
   Eye,
   Download,
+  Info,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -148,6 +149,20 @@ export function ClubRequestDialog({
         </DialogHeader>
 
         <div className="space-y-6">
+          {request.rawStatus === "NAME_REVISION_REQUIRED" && (
+            <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
+              <Info className="h-5 w-5 text-amber-600 mt-0.5" />
+              <div>
+                <p className="text-sm font-semibold text-amber-900">
+                  Staff yêu cầu bạn cập nhật lại tên CLB
+                </p>
+                <p className="text-sm text-amber-800">
+                  Hãy cập nhật tên CLB để tiếp tục quy trình xét duyệt. Bạn có thể thao tác
+                  bằng nút &quot;Cập nhật tên CLB&quot; ở danh sách yêu cầu.
+                </p>
+              </div>
+            </div>
+          )}
           {/* Progress Overview - Clickable to toggle workflow timeline */}
           <div 
             className="space-y-3 cursor-pointer hover:bg-gray-50 p-3 rounded-lg transition-colors"

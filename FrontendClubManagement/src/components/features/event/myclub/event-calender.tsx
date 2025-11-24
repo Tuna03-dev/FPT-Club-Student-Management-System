@@ -384,8 +384,16 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
     (async () => {
       try {
         const types = await getAllEventTypes();
+        const user = authService.getCurrentUser();
+        const isStaff = user?.systemRole === "STAFF";
+        
+        // Filter MEETING ra khỏi danh sách cho STAFF
+        const filteredTypes = isStaff 
+          ? types.filter((t) => t.typeName.toUpperCase() !== "MEETING")
+          : types;
+        
         setEventTypes(
-          types.map((t) => ({ id: String(t.id), name: t.typeName }))
+          filteredTypes.map((t) => ({ id: String(t.id), name: t.typeName }))
         );
       } catch (e: unknown) {
         console.error("Error fetching event types:", e);

@@ -7,6 +7,7 @@ import com.sep490.backendclubmanagement.dto.request.RejectContactRequest;
 import com.sep490.backendclubmanagement.dto.request.RequestProposalRequest;
 import com.sep490.backendclubmanagement.dto.request.RejectDefenseScheduleRequest;
 import com.sep490.backendclubmanagement.dto.request.RejectProposalRequest;
+import com.sep490.backendclubmanagement.dto.request.RequestNameRevisionRequest;
 import com.sep490.backendclubmanagement.dto.response.ClubCreationFinalFormResponse;
 import com.sep490.backendclubmanagement.dto.response.ClubProposalResponse;
 import com.sep490.backendclubmanagement.dto.response.DefenseScheduleResponse;
@@ -370,6 +371,23 @@ public class ClubCreationStaffController {
         }
         Page<WorkflowHistoryResponse> histories = requestEstablishmentService.getWorkflowHistory(requestId, pageable);
         return ResponseEntity.ok(ApiResponse.success(histories));
+    }
+
+    /**
+     * Staff yêu cầu sinh viên chỉnh sửa tên CLB
+     * POST /api/staff/club-creation/requests/{requestId}/request-name-revision
+     */
+    @PostMapping("/{requestId}/request-name-revision")
+    public ResponseEntity<ApiResponse<RequestEstablishmentResponse>> requestNameRevision(
+            @PathVariable Long requestId,
+            @RequestBody(required = false) RequestNameRevisionRequest request
+    ) throws AppException {
+        Long staffId = SecurityUtils.getCurrentUserId();
+        if (!roleService.isStaff(staffId)) {
+            throw new ForbiddenException("Chỉ STAFF mới có quyền truy cập");
+        }
+        RequestEstablishmentResponse response = requestEstablishmentService.requestNameRevision(requestId, staffId, request);
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
 }
 

@@ -42,10 +42,7 @@ public class SecurityConfig {
     private final String[] PUBLIC_URL = {
             "/api/auth/google",
             "/api/auth/refreshToken",
-            "/api/v1/auth/**",
             "/api/v1/public/**",
-            "/oauth2/**",
-            "/login/**",
             "/api/homepage",
             "/test/**",
             "/posts/**",
@@ -67,7 +64,11 @@ public class SecurityConfig {
             "/ws/**",
             "/api/test/**",
             "/api/admin-departments/**",
-            "/api/profile/**"
+            "/api/profile/**",
+            "/api/recruitments/clubs/{id}/open",
+            "api/news/clubs/{clubId}/published",
+            "/api/events/clubs/{clubId}/published",
+            "/api/clubs/{id}/teams/dto"
 
     };
 
