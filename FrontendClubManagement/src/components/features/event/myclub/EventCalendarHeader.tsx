@@ -8,6 +8,7 @@ interface EventCalendarHeaderProps {
   onPrevMonth: () => void
   onNextMonth: () => void
   onCreateEvent: () => void
+  clubId?: number
 }
 
 const monthNames = [
@@ -30,9 +31,19 @@ export function EventCalendarHeader({
   onPrevMonth,
   onNextMonth,
   onCreateEvent,
+  clubId,
 }: EventCalendarHeaderProps) {
   const user = authService.getCurrentUser()
-  const canCreate = !!user && ["STAFF", "CLUB_OFFICER", "TEAM_OFFICER"].includes(user.systemRole)
+  if (!user) {
+    return null
+  }
+  
+  // Check permission: STAFF hoặc có systemRole CLUB_OFFICER/TEAM_OFFICER trong club hiện tại
+  const isStaff = user.systemRole === "STAFF"
+  const clubRole = clubId ? authService.getClubRole(clubId) : null
+  const systemRoleInClub = clubRole?.systemRole?.toUpperCase()
+  const canCreate = isStaff || 
+    (clubId && systemRoleInClub && ["CLUB_OFFICER", "TEAM_OFFICER"].includes(systemRoleInClub))
 
   return (
     <div className="flex items-center justify-between mb-6">

@@ -36,7 +36,7 @@ public class ClubDetailData {
     // Statistics
     private Long totalMembers;
     private Long totalEvents;
-    private Long totalPosts;
+    private Long totalNews;
     
     // Recruitment info
     private Boolean isRecruiting; // Câu lạc bộ đang mở đợt tuyển

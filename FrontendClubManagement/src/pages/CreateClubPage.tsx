@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
+import { useWebSocket, type ClubCreationWebSocketPayload } from "@/hooks/useWebSocket";
 import {
   ClubRequestForm,
   type ClubRequestFormData,
@@ -47,6 +48,7 @@ const mapStatusToFE = (status: string): ClubRequest["status"] => {
     SUBMITTED: "pending_review",
     CONTACT_CONFIRMATION_PENDING: "under_review",
     CONTACT_CONFIRMED: "under_review",
+    NAME_REVISION_REQUIRED: "revision_required",
     CONTACT_REJECTED: "rejected",
     PROPOSAL_REQUIRED: "pending_documents",
     PROPOSAL_SUBMITTED: "documents_submitted",
@@ -72,6 +74,7 @@ const getStepCodeFromStatus = (status: string): string | null => {
     SUBMITTED: "REQUEST_SUBMITTED",
     CONTACT_CONFIRMATION_PENDING: "REQUEST_REVIEW",
     CONTACT_CONFIRMED: "REQUEST_REVIEW",
+    NAME_REVISION_REQUIRED: "REQUEST_REVIEW",
     PROPOSAL_REQUIRED: "PROPOSAL_REQUIRED", // Staff đã yêu cầu, đang chờ sinh viên nộp
     PROPOSAL_SUBMITTED: "PROPOSAL_SUBMITTED",
     PROPOSAL_APPROVED: "PROPOSAL_REVIEW", // Staff đã duyệt đề án
@@ -118,7 +121,7 @@ const convertToClubRequest = (
     rawStatus: response.status,
     status: mapStatusToFE(response.status),
     currentStep: getCurrentStep(response.status, steps),
-    totalSteps: steps.length,
+    totalSteps: steps.length > 0 ? steps.length : 1,
     reviewer: response.assignedStaffFullName,
   };
 };
@@ -143,6 +146,10 @@ const CreateClubPage = () => {
   const [defenseSchedule, setDefenseSchedule] = useState<import("@/api/clubCreation").DefenseScheduleResponse | null>(null);
   const [selectedProposal, setSelectedProposal] = useState<import("@/api/clubCreation").ClubProposalResponse | null>(null);
   const [isProposalDetailDialogOpen, setIsProposalDetailDialogOpen] = useState(false);
+  const [isNameRevisionDialogOpen, setIsNameRevisionDialogOpen] = useState(false);
+  const [nameRevisionRequestId, setNameRevisionRequestId] = useState<number | null>(null);
+  const [nameRevisionValue, setNameRevisionValue] = useState("");
+  const [nameRevisionError, setNameRevisionError] = useState("");
 
   // Proposal form state
   const [proposalTitle, setProposalTitle] = useState("");
@@ -167,6 +174,117 @@ const CreateClubPage = () => {
   const [isFinalFormHistoryLoading, setIsFinalFormHistoryLoading] = useState(false);
   const [clubCategories, setClubCategories] = useState<ClubCategory[]>([]);
   const [isEditCategoriesLoading, setIsEditCategoriesLoading] = useState(false);
+
+  // WebSocket connection
+  const token = localStorage.getItem("accessToken") || null;
+  const { isConnected, subscribeToUserQueue } = useWebSocket(token);
+
+  // 🔔 WebSocket: Real-time updates for Club Creation
+  useEffect(() => {
+    if (!isConnected) return;
+
+    const unsubscribe = subscribeToUserQueue((msg) => {
+      if (msg.type !== "CLUB_CREATION") return;
+
+      const payload = msg.payload as ClubCreationWebSocketPayload;
+      const requestId = payload.requestId;
+
+      // Update request list
+      loadRequests();
+
+      // Show toast notification based on action
+      switch (msg.action) {
+        case "REQUEST_ASSIGNED":
+          toast.info("Yêu cầu của bạn đã được nhận", {
+            description: `Staff ${payload.assignedStaffName} đã nhận yêu cầu. Hạn xác nhận: ${payload.deadline ? new Date(payload.deadline).toLocaleString("vi-VN") : "N/A"}`,
+          });
+          break;
+        case "CONTACT_CONFIRMED":
+          toast.success("Liên hệ đã được xác nhận", {
+            description: payload.message || "Staff đã xác nhận liên hệ với bạn",
+          });
+          break;
+        case "CONTACT_REJECTED":
+          toast.error("Yêu cầu bị từ chối", {
+            description: payload.reason || payload.message || "Yêu cầu của bạn đã bị từ chối",
+          });
+          break;
+        case "PROPOSAL_REQUIRED":
+          toast.warning("Yêu cầu nộp đề án", {
+            description: payload.comment || payload.message || "Staff yêu cầu bạn nộp đề án chi tiết",
+          });
+          break;
+        case "NAME_REVISION_REQUIRED":
+          toast.warning("Cần cập nhật tên CLB", {
+            description: payload.comment || payload.message || "Staff yêu cầu bạn chỉnh sửa tên CLB",
+          });
+          break;
+        case "PROPOSAL_APPROVED":
+          toast.success("Đề án đã được duyệt", {
+            description: payload.proposalTitle ? `Đề án "${payload.proposalTitle}" đã được duyệt` : payload.message,
+          });
+          break;
+        case "PROPOSAL_REJECTED":
+          toast.error("Đề án bị từ chối", {
+            description: payload.reason || payload.message || "Đề án của bạn đã bị từ chối",
+          });
+          break;
+        case "DEFENSE_SCHEDULE_APPROVED":
+          toast.success("Lịch bảo vệ đã được duyệt", {
+            description: payload.defenseDate 
+              ? `Lịch bảo vệ: ${new Date(payload.defenseDate).toLocaleString("vi-VN")} - ${payload.location || "Chưa có địa điểm"}`
+              : payload.message,
+          });
+          break;
+        case "DEFENSE_SCHEDULE_REJECTED":
+          toast.warning("Lịch bảo vệ bị từ chối", {
+            description: payload.reason || payload.message || "Vui lòng đề xuất lại lịch bảo vệ",
+          });
+          break;
+        case "DEFENSE_COMPLETED":
+          if (payload.defenseResult === "PASSED") {
+            toast.success("🎉 Bảo vệ thành công!", {
+              description: payload.feedback || "Chúc mừng bạn đã vượt qua bảo vệ",
+            });
+          } else {
+            toast.error("Bảo vệ không đạt", {
+              description: payload.feedback || payload.message || "Rất tiếc, bạn chưa vượt qua bảo vệ",
+            });
+          }
+          break;
+        case "FINAL_FORM_SUBMITTED":
+          // This is sent to staff, not student
+          break;
+        case "CLUB_CREATED":
+          toast.success("🎉 Chúc mừng! CLB đã được thành lập", {
+            description: payload.clubName 
+              ? `CLB "${payload.clubName}" đã được thành lập thành công!`
+              : payload.message,
+            duration: 10000,
+          });
+          // Navigate to club page if clubId is available
+          if (payload.clubId) {
+            setTimeout(() => {
+              window.location.href = `/myclub/${payload.clubId}`;
+            }, 2000);
+          }
+          break;
+        default:
+          // Handle other actions silently or with generic message
+          if (payload.message) {
+            toast.info(payload.message);
+          }
+      }
+
+      // If dialog is open and showing this request, refresh detail data
+      if (isDialogOpen && selectedRequest && parseInt(selectedRequest.id) === requestId) {
+        loadRequestDetailData(requestId);
+        loadWorkflowHistory(requestId);
+      }
+    });
+
+    return () => unsubscribe?.();
+  }, [isConnected, isDialogOpen, selectedRequest, subscribeToUserQueue]);
 
   useEffect(() => {
     const fetchCategories = async () => {
@@ -234,9 +352,15 @@ const CreateClubPage = () => {
   const loadRequests = async () => {
     setIsLoading(true);
     try {
+      let steps = workflowSteps;
+      if (steps.length === 0) {
+        steps = await clubCreationApi.getClubCreationSteps();
+        setWorkflowSteps(steps);
+      }
+
       const requests = await clubCreationApi.getMyRequests(0, 100);
       if (Array.isArray(requests)) {
-        setClubRequests(requests.map((req) => convertToClubRequest(req, workflowSteps)));
+        setClubRequests(requests.map((req) => convertToClubRequest(req, steps)));
       } else {
         console.error("Invalid response format:", requests);
         toast.error("Dữ liệu trả về không đúng định dạng");
@@ -308,6 +432,20 @@ const CreateClubPage = () => {
 
   // Handle form submission (create request)
   const handleFormSubmit = async (formData: ClubRequestFormData) => {
+    const phoneRegex = /^(0|\+84)[0-9]{9}$/;
+    const emailRegex = /^\S+@\S+\.\S+$/;
+    if (!formData.email || !emailRegex.test(formData.email.trim())) {
+      toast.error("Email không hợp lệ", {
+        description: "Vui lòng nhập đúng định dạng email.",
+      });
+      return;
+    }
+    if (!formData.phone || !phoneRegex.test(formData.phone.trim())) {
+      toast.error("Số điện thoại không hợp lệ", {
+        description: "Vui lòng nhập số gồm 10 chữ số bắt đầu bằng 0 hoặc +84.",
+      });
+      return;
+    }
     try {
       setIsLoading(true);
       await clubCreationApi.createRequest({
@@ -329,8 +467,49 @@ const CreateClubPage = () => {
       await loadRequests();
       setActiveTab("pending");
     } catch (error: any) {
+      const apiMessage =
+        error?.response?.data?.message ||
+        error?.response?.data?.error ||
+        error?.message;
       toast.error("Không thể tạo yêu cầu", {
-        description: error.message || "Đã xảy ra lỗi",
+        description: apiMessage || "Đã xảy ra lỗi",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const openNameRevisionDialog = (request: ClubRequest) => {
+    setNameRevisionRequestId(parseInt(request.id));
+    setNameRevisionValue(request.clubName);
+    setNameRevisionError("");
+    setIsNameRevisionDialogOpen(true);
+  };
+
+  const handleSubmitNameRevision = async () => {
+    if (!nameRevisionRequestId) return;
+    const trimmedName = nameRevisionValue.trim();
+    if (!trimmedName) {
+      setNameRevisionError("Tên CLB không được để trống");
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      await clubCreationApi.submitNameRevision(nameRevisionRequestId, {
+        newClubName: trimmedName,
+      });
+      toast.success("Đã cập nhật tên CLB thành công!");
+      setIsNameRevisionDialogOpen(false);
+      setNameRevisionRequestId(null);
+      await loadRequests();
+    } catch (error: any) {
+      toast.error("Không thể cập nhật tên CLB", {
+        description:
+          error?.response?.data?.message ||
+          error?.response?.data?.error ||
+          error?.message ||
+          "Đã xảy ra lỗi",
       });
     } finally {
       setIsLoading(false);
@@ -709,6 +888,16 @@ const CreateClubPage = () => {
                             >
                               <FileText className="mr-2 h-4 w-4" />
                               Nộp đề án
+                            </Button>
+                          )}
+                          {request.rawStatus === "NAME_REVISION_REQUIRED" && (
+                            <Button
+                              size="sm"
+                              className="flex-1"
+                              onClick={() => openNameRevisionDialog(request)}
+                            >
+                              <Edit className="mr-2 h-4 w-4" />
+                              Cập nhật tên CLB
                             </Button>
                           )}
                           {request.rawStatus === "PROPOSAL_SUBMITTED" && (
@@ -1353,6 +1542,55 @@ const CreateClubPage = () => {
                 ? "Cập nhật form cuối"
                 : "Nộp form cuối"}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Name revision dialog */}
+      <Dialog
+        open={isNameRevisionDialogOpen}
+        onOpenChange={(open) => {
+          setIsNameRevisionDialogOpen(open);
+          if (!open) {
+            setNameRevisionRequestId(null);
+            setNameRevisionError("");
+          }
+        }}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Cập nhật tên câu lạc bộ</DialogTitle>
+            <DialogDescription>
+              Staff đã yêu cầu bạn cập nhật tên CLB để tiếp tục quy trình xét duyệt.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-2">
+              <Label htmlFor="nameRevision">Tên CLB mới</Label>
+              <Input
+                id="nameRevision"
+                value={nameRevisionValue}
+                onChange={(e) => {
+                  setNameRevisionValue(e.target.value);
+                  if (nameRevisionError) {
+                    setNameRevisionError("");
+                  }
+                }}
+                placeholder="Nhập tên CLB đầy đủ"
+              />
+              {nameRevisionError && (
+                <p className="text-sm text-destructive">{nameRevisionError}</p>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Tên CLB phải duy nhất trong hệ thống và không vượt quá 100 ký tự.
+            </p>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setIsNameRevisionDialogOpen(false)}>
+              Hủy
+            </Button>
+            <Button onClick={handleSubmitNameRevision}>Gửi tên mới</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

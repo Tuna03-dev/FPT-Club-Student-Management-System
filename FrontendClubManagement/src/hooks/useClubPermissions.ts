@@ -11,16 +11,6 @@ export interface ClubPermissions {
   user: UserInfo | null;
 }
 
-/**
- * Hook to check if user has permissions to manage club
- * Requires:
- * - User must be an ACTIVE member of the club
- * - User must have CLUB_OFFICER club role in the current semester
- * - User must have CLUB_PRESIDENT club role in the current semester
- *
- * Sử dụng role data từ localStorage (clubRoleList) để check quyền nhanh hơn
- * Kiểm tra cả clubRole (tên tiếng Việt) và systemRole (mã hệ thống) để đảm bảo tính nhất quán
- */
 export function useClubPermissions(
   clubId: number | undefined
 ): ClubPermissions {

@@ -6,7 +6,7 @@ import type { PageResponse } from "@/types";
 export const feeService = {
   async getFees(
     clubId: number,
-    params: { page?: number; size?: number } = {}
+    params: { page?: number; size?: number; search?: string; isExpired?: boolean } = {}
   ): Promise<ApiResponse<PageResponse<Fee>>> {
     const url = `/clubs/${clubId}/fees`;
     return axiosClient.get<PageResponse<Fee>>(url, { params });
@@ -72,6 +72,24 @@ export const feeService = {
   async publishFee(clubId: number, feeId: number): Promise<ApiResponse<Fee>> {
     const url = `/clubs/${clubId}/fees/${feeId}/publish`;
     return axiosClient.patch<Fee>(url, {});
+  },
+
+  async getPaidMembers(
+    clubId: number,
+    feeId: number,
+    params: { page?: number; size?: number; search?: string } = {}
+  ): Promise<ApiResponse<PageResponse<{
+    userId: number;
+    fullName: string;
+    email: string;
+    studentCode: string;
+    avatarUrl: string;
+    paidDate: string;
+    transactionId: number;
+    amount: number;
+  }>>> {
+    const url = `/clubs/${clubId}/fees/${feeId}/paid-members`;
+    return axiosClient.get(url, { params });
   }
 };
 

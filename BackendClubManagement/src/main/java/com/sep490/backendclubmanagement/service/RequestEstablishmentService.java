@@ -8,6 +8,8 @@ import com.sep490.backendclubmanagement.dto.request.RequestProposalRequest;
 import com.sep490.backendclubmanagement.dto.request.RejectContactRequest;
 import com.sep490.backendclubmanagement.dto.request.RejectDefenseScheduleRequest;
 import com.sep490.backendclubmanagement.dto.request.RejectProposalRequest;
+import com.sep490.backendclubmanagement.dto.request.RenameClubRequest;
+import com.sep490.backendclubmanagement.dto.request.RequestNameRevisionRequest;
 import com.sep490.backendclubmanagement.dto.request.SubmitFinalFormRequest;
 import com.sep490.backendclubmanagement.dto.request.SubmitProposalRequest;
 import com.sep490.backendclubmanagement.dto.request.UpdateRequestEstablishmentRequest;
@@ -17,6 +19,7 @@ import com.sep490.backendclubmanagement.dto.response.ClubProposalResponse;
 import com.sep490.backendclubmanagement.dto.response.DefenseScheduleResponse;
 import com.sep490.backendclubmanagement.dto.response.RequestEstablishmentResponse;
 import com.sep490.backendclubmanagement.dto.response.WorkflowHistoryResponse;
+import com.sep490.backendclubmanagement.dto.websocket.ClubCreationWebSocketPayload;
 import com.sep490.backendclubmanagement.entity.*;
 import com.sep490.backendclubmanagement.exception.AppException;
 import com.sep490.backendclubmanagement.exception.ErrorCode;
@@ -70,17 +73,34 @@ public class RequestEstablishmentService {
     private final SemesterRepository semesterRepository;
     private final ClubCategoryRepository clubCategoryRepository;
     private final ClubCreationStepRepository clubCreationStepRepository;
+    private final WebSocketService webSocketService;
+    private final NotificationService notificationService;
 
     @Transactional
     public RequestEstablishmentResponse createRequest(Long userId, CreateRequestEstablishmentRequest request) throws AppException {
-        if (request.getClubName() == null || request.getClubName().trim().isEmpty()) {
+        String clubName = request.getClubName() != null ? request.getClubName().trim() : null;
+        String clubCategory = request.getClubCategory() != null ? request.getClubCategory().trim() : null;
+        String clubCode = request.getClubCode() != null && !request.getClubCode().trim().isEmpty()
+                ? request.getClubCode().trim()
+                : null;
+
+        if (clubName == null || clubName.isEmpty()) {
             throw new AppException(ErrorCode.INVALID_INPUT, "Tên CLB không được để trống");
         }
-        if (request.getClubCategory() == null || request.getClubCategory().trim().isEmpty()) {
+        if (clubCategory == null || clubCategory.isEmpty()) {
             throw new AppException(ErrorCode.INVALID_INPUT, "Danh mục CLB không được để trống");
         }
         if (request.getExpectedMemberCount() == null || request.getExpectedMemberCount() <= 0) {
             throw new AppException(ErrorCode.INVALID_INPUT, "Số lượng thành viên dự kiến phải lớn hơn 0");
+        }
+
+        validateClubNameUniqueness(clubName, null);
+
+        if (clubCode != null) {
+            if (clubRepository.existsByClubCodeIgnoreCase(clubCode)
+                    || requestEstablishmentRepository.existsByClubCodeIgnoreCase(clubCode)) {
+                throw new AppException(ErrorCode.INVALID_INPUT, "Mã CLB này đã tồn tại trong hệ thống");
+            }
         }
 
         User creator = userRepository.findById(userId)
@@ -91,9 +111,9 @@ public class RequestEstablishmentService {
                 : RequestEstablishmentStatus.SUBMITTED;
 
         RequestEstablishment requestEstablishment = RequestEstablishment.builder()
-                .clubName(request.getClubName().trim())
-                .clubCategory(request.getClubCategory().trim())
-                .clubCode(request.getClubCode() != null ? request.getClubCode().trim() : null)
+                .clubName(clubName)
+                .clubCategory(clubCategory)
+                .clubCode(clubCode)
                 .expectedMemberCount(request.getExpectedMemberCount())
                 .activityObjectives(request.getActivityObjectives())
                 .expectedActivities(request.getExpectedActivities())
@@ -246,6 +266,54 @@ public class RequestEstablishmentService {
                     requestEstablishment.getId(), e.getMessage(), e);
         }
 
+        // 🔔 WebSocket: Broadcast to STAFF role
+        try {
+            ClubCreationWebSocketPayload payload = ClubCreationWebSocketPayload.builder()
+                    .requestId(requestEstablishment.getId())
+                    .clubName(requestEstablishment.getClubName())
+                    .status(requestEstablishment.getStatus())
+                    .creatorId(requestEstablishment.getCreatedBy().getId())
+                    .creatorName(requestEstablishment.getCreatedBy().getFullName())
+                    .creatorEmail(requestEstablishment.getCreatedBy().getEmail())
+                    .message("Yêu cầu thành lập CLB mới đã được gửi")
+                    .build();
+
+            webSocketService.broadcastToSystemRole("STAFF", "CLUB_CREATION", "REQUEST_SUBMITTED", payload);
+            log.info("Sent WebSocket notification to STAFF for request submission: {}", requestEstablishment.getId());
+        } catch (Exception e) {
+            log.error("Failed to send WebSocket notification for request submission: {}", e.getMessage(), e);
+        }
+
+        // 🔔 Notification: Gửi cho tất cả STAFF
+        try {
+            List<User> staffUsers = userRepository.findBySystemRole_RoleNameIgnoreCase("STAFF");
+            if (!staffUsers.isEmpty()) {
+                String title = "Yêu cầu thành lập CLB mới";
+                String message = String.format("Sinh viên %s đã gửi yêu cầu thành lập CLB: %s",
+                        requestEstablishment.getCreatedBy().getFullName(),
+                        requestEstablishment.getClubName());
+                String actionUrl = "/staff/club-creation/requests/" + requestEstablishment.getId();
+
+                List<Long> staffIds = staffUsers.stream().map(User::getId).toList();
+                notificationService.sendToUsers(
+                        staffIds,
+                        userId,
+                        title,
+                        message,
+                        NotificationType.CLUB_CREATION_REQUEST_SUBMITTED,
+                        NotificationPriority.HIGH,
+                        actionUrl,
+                        null, // relatedClubId
+                        null, // relatedNewsId
+                        null, // relatedTeamId
+                        requestEstablishment.getId() // relatedRequestId
+                );
+                log.info("Sent notification to {} staff members for request submission: {}", staffIds.size(), requestEstablishment.getId());
+            }
+        } catch (Exception e) {
+            log.error("Failed to send notification for request submission: {}", e.getMessage(), e);
+        }
+
         return mapToResponse(requestEstablishment);
     }
 
@@ -257,6 +325,7 @@ public class RequestEstablishmentService {
                 RequestEstablishmentStatus.SUBMITTED,
                 RequestEstablishmentStatus.CONTACT_CONFIRMATION_PENDING,
                 RequestEstablishmentStatus.CONTACT_CONFIRMED,
+                RequestEstablishmentStatus.NAME_REVISION_REQUIRED,
                 RequestEstablishmentStatus.PROPOSAL_REQUIRED,
                 RequestEstablishmentStatus.PROPOSAL_SUBMITTED,
                 RequestEstablishmentStatus.PROPOSAL_REJECTED,
@@ -338,6 +407,59 @@ public class RequestEstablishmentService {
             log.error("Failed to create workflow history, but continuing: {}", e.getMessage());
         }
 
+        // 🔔 WebSocket: Gửi cho student (creator)
+        try {
+            User staff = requestEstablishment.getAssignedStaff();
+            ClubCreationWebSocketPayload payload = ClubCreationWebSocketPayload.builder()
+                    .requestId(requestEstablishment.getId())
+                    .clubName(requestEstablishment.getClubName())
+                    .status(requestEstablishment.getStatus())
+                    .assignedStaffId(staff != null ? staff.getId() : null)
+                    .assignedStaffName(staff != null ? staff.getFullName() : null)
+                    .assignedStaffEmail(staff != null ? staff.getEmail() : null)
+                    .deadline(requestEstablishment.getConfirmationDeadline())
+                    .message("Staff đã nhận yêu cầu của bạn. Hạn xác nhận: " + requestEstablishment.getConfirmationDeadline())
+                    .build();
+
+            webSocketService.sendToUser(
+                    requestEstablishment.getCreatedBy().getEmail(),
+                    "CLUB_CREATION",
+                    "REQUEST_ASSIGNED",
+                    payload
+            );
+            log.info("Sent WebSocket notification to student for request assignment: {}", requestEstablishment.getId());
+        } catch (Exception e) {
+            log.error("Failed to send WebSocket notification for request assignment: {}", e.getMessage(), e);
+        }
+
+        // 🔔 Notification: Gửi cho student
+        try {
+            String title = "Yêu cầu của bạn đã được nhận";
+            String message = String.format("Staff %s đã nhận yêu cầu thành lập CLB \"%s\". Hạn xác nhận: %s",
+                    requestEstablishment.getAssignedStaff() != null ? requestEstablishment.getAssignedStaff().getFullName() : "Staff",
+                    requestEstablishment.getClubName(),
+                    requestEstablishment.getConfirmationDeadline() != null ? requestEstablishment.getConfirmationDeadline().toString() : "N/A");
+            String actionUrl = "/club-creation/requests/" + requestEstablishment.getId();
+
+            notificationService.sendToUser(
+                    requestEstablishment.getCreatedBy().getId(),
+                    staffId,
+                    title,
+                    message,
+                    NotificationType.CLUB_CREATION_REQUEST_ASSIGNED,
+                    NotificationPriority.NORMAL,
+                    actionUrl,
+                    null, // relatedClubId
+                    null, // relatedNewsId
+                    null, // relatedTeamId
+                    requestEstablishment.getId(), // relatedRequestId
+                    null  // relatedEventId
+            );
+            log.info("Sent notification to student for request assignment: {}", requestEstablishment.getId());
+        } catch (Exception e) {
+            log.error("Failed to send notification for request assignment: {}", e.getMessage(), e);
+        }
+
         log.info("Received request establishment {} by staff: {}", requestId, staffId);
 
         return mapToResponse(requestEstablishment);
@@ -374,6 +496,48 @@ public class RequestEstablishmentService {
             log.error("Failed to create workflow history, but continuing: {}", e.getMessage());
         }
 
+        // 🔔 WebSocket: Gửi cho student
+        try {
+            User staff = requestEstablishment.getAssignedStaff();
+            ClubCreationWebSocketPayload payload = ClubCreationWebSocketPayload.builder()
+                    .requestId(requestEstablishment.getId())
+                    .clubName(requestEstablishment.getClubName())
+                    .status(requestEstablishment.getStatus())
+                    .assignedStaffId(staff != null ? staff.getId() : null)
+                    .assignedStaffName(staff != null ? staff.getFullName() : null)
+                    .message("Staff đã xác nhận liên hệ với bạn")
+                    .build();
+
+            webSocketService.sendToUser(
+                    requestEstablishment.getCreatedBy().getEmail(),
+                    "CLUB_CREATION",
+                    "CONTACT_CONFIRMED",
+                    payload
+            );
+        } catch (Exception e) {
+            log.error("Failed to send WebSocket notification for contact confirmation: {}", e.getMessage(), e);
+        }
+
+        // 🔔 Notification: Gửi cho student
+        try {
+            String title = "Liên hệ đã được xác nhận";
+            String message = String.format("Staff đã xác nhận liên hệ cho yêu cầu thành lập CLB \"%s\"", requestEstablishment.getClubName());
+            String actionUrl = "/club-creation/requests/" + requestEstablishment.getId();
+
+            notificationService.sendToUser(
+                    requestEstablishment.getCreatedBy().getId(),
+                    staffId,
+                    title,
+                    message,
+                    NotificationType.CLUB_CREATION_CONTACT_CONFIRMED,
+                    NotificationPriority.NORMAL,
+                    actionUrl,
+                    null, null, null, requestEstablishment.getId(), null
+            );
+        } catch (Exception e) {
+            log.error("Failed to send notification for contact confirmation: {}", e.getMessage(), e);
+        }
+
         return mapToResponse(requestEstablishment);
     }
 
@@ -407,6 +571,51 @@ public class RequestEstablishmentService {
         log.info("Rejected contact for request establishment {} by staff: {}, reason: {}", 
                 requestId, staffId, request.getReason());
 
+        // 🔔 WebSocket: Gửi cho student
+        try {
+            User staff = requestEstablishment.getAssignedStaff();
+            ClubCreationWebSocketPayload payload = ClubCreationWebSocketPayload.builder()
+                    .requestId(requestEstablishment.getId())
+                    .clubName(requestEstablishment.getClubName())
+                    .status(requestEstablishment.getStatus())
+                    .assignedStaffId(staff != null ? staff.getId() : null)
+                    .assignedStaffName(staff != null ? staff.getFullName() : null)
+                    .reason(request.getReason())
+                    .message("Yêu cầu của bạn đã bị từ chối. Lý do: " + (request.getReason() != null ? request.getReason() : "Không có lý do"))
+                    .build();
+
+            webSocketService.sendToUser(
+                    requestEstablishment.getCreatedBy().getEmail(),
+                    "CLUB_CREATION",
+                    "CONTACT_REJECTED",
+                    payload
+            );
+        } catch (Exception e) {
+            log.error("Failed to send WebSocket notification for contact rejection: {}", e.getMessage(), e);
+        }
+
+        // 🔔 Notification: Gửi cho student (HIGH priority)
+        try {
+            String title = "Yêu cầu thành lập CLB bị từ chối";
+            String message = String.format("Yêu cầu thành lập CLB \"%s\" đã bị từ chối. Lý do: %s",
+                    requestEstablishment.getClubName(),
+                    request.getReason() != null ? request.getReason() : "Không có lý do");
+            String actionUrl = "/club-creation/requests/" + requestEstablishment.getId();
+
+            notificationService.sendToUser(
+                    requestEstablishment.getCreatedBy().getId(),
+                    staffId,
+                    title,
+                    message,
+                    NotificationType.CLUB_CREATION_CONTACT_REJECTED,
+                    NotificationPriority.HIGH,
+                    actionUrl,
+                    null, null, null, requestEstablishment.getId(), null
+            );
+        } catch (Exception e) {
+            log.error("Failed to send notification for contact rejection: {}", e.getMessage(), e);
+        }
+
         return mapToResponse(requestEstablishment);
     }
 
@@ -439,6 +648,56 @@ public class RequestEstablishmentService {
             workflowHistoryService.createWorkflowHistory(requestEstablishment.getId(), staffId, "PROPOSAL_REQUIRED", comment);
         } catch (Exception e) {
             log.error("Failed to create workflow history, but continuing: {}", e.getMessage());
+        }
+
+        // 🔔 WebSocket: Gửi cho student
+        try {
+            User staff = requestEstablishment.getAssignedStaff();
+            String commentText = (request != null && request.getComment() != null && !request.getComment().trim().isEmpty())
+                    ? request.getComment().trim()
+                    : "Staff đã yêu cầu bạn nộp đề án chi tiết";
+            ClubCreationWebSocketPayload payload = ClubCreationWebSocketPayload.builder()
+                    .requestId(requestEstablishment.getId())
+                    .clubName(requestEstablishment.getClubName())
+                    .status(requestEstablishment.getStatus())
+                    .assignedStaffId(staff != null ? staff.getId() : null)
+                    .assignedStaffName(staff != null ? staff.getFullName() : null)
+                    .comment(commentText)
+                    .message(commentText)
+                    .build();
+
+            webSocketService.sendToUser(
+                    requestEstablishment.getCreatedBy().getEmail(),
+                    "CLUB_CREATION",
+                    "PROPOSAL_REQUIRED",
+                    payload
+            );
+        } catch (Exception e) {
+            log.error("Failed to send WebSocket notification for proposal request: {}", e.getMessage(), e);
+        }
+
+        // 🔔 Notification: Gửi cho student
+        try {
+            String commentText = (request != null && request.getComment() != null && !request.getComment().trim().isEmpty())
+                    ? request.getComment().trim()
+                    : "Staff đã yêu cầu bạn nộp đề án chi tiết";
+            String title = "Yêu cầu nộp đề án";
+            String message = String.format("Staff yêu cầu bạn nộp đề án chi tiết cho yêu cầu thành lập CLB \"%s\". %s",
+                    requestEstablishment.getClubName(), commentText);
+            String actionUrl = "/club-creation/requests/" + requestEstablishment.getId() + "/proposal";
+
+            notificationService.sendToUser(
+                    requestEstablishment.getCreatedBy().getId(),
+                    staffId,
+                    title,
+                    message,
+                    NotificationType.CLUB_CREATION_PROPOSAL_REQUIRED,
+                    NotificationPriority.NORMAL,
+                    actionUrl,
+                    null, null, null, requestEstablishment.getId(), null
+            );
+        } catch (Exception e) {
+            log.error("Failed to send notification for proposal request: {}", e.getMessage(), e);
         }
 
         return mapToResponse(requestEstablishment);
@@ -538,6 +797,58 @@ public class RequestEstablishmentService {
         }
 
         log.info("Submitted proposal for request establishment {} by user: {}", requestId, userId);
+
+        // 🔔 WebSocket: Gửi cho assigned staff
+        try {
+            User staff = requestEstablishment.getAssignedStaff();
+            if (staff != null) {
+                ClubCreationWebSocketPayload payload = ClubCreationWebSocketPayload.builder()
+                        .requestId(requestEstablishment.getId())
+                        .clubName(requestEstablishment.getClubName())
+                        .status(requestEstablishment.getStatus())
+                        .proposalId(proposal.getId())
+                        .proposalTitle(proposal.getTitle())
+                        .creatorId(requestEstablishment.getCreatedBy().getId())
+                        .creatorName(requestEstablishment.getCreatedBy().getFullName())
+                        .message("Sinh viên đã nộp đề án: " + proposal.getTitle())
+                        .build();
+
+                webSocketService.sendToUser(
+                        staff.getEmail(),
+                        "CLUB_CREATION",
+                        "PROPOSAL_SUBMITTED",
+                        payload
+                );
+            }
+        } catch (Exception e) {
+            log.error("Failed to send WebSocket notification for proposal submission: {}", e.getMessage(), e);
+        }
+
+        // 🔔 Notification: Gửi cho assigned staff
+        try {
+            User staff = requestEstablishment.getAssignedStaff();
+            if (staff != null) {
+                String title = "Đề án mới đã được nộp";
+                String message = String.format("Sinh viên %s đã nộp đề án \"%s\" cho yêu cầu thành lập CLB \"%s\"",
+                        requestEstablishment.getCreatedBy().getFullName(),
+                        proposal.getTitle(),
+                        requestEstablishment.getClubName());
+                String actionUrl = "/staff/club-creation/requests/" + requestEstablishment.getId() + "/proposals";
+
+                notificationService.sendToUser(
+                        staff.getId(),
+                        userId,
+                        title,
+                        message,
+                        NotificationType.CLUB_CREATION_PROPOSAL_SUBMITTED,
+                        NotificationPriority.NORMAL,
+                        actionUrl,
+                        null, null, null, requestEstablishment.getId(), null
+                );
+            }
+        } catch (Exception e) {
+            log.error("Failed to send notification for proposal submission: {}", e.getMessage(), e);
+        }
 
         return mapToResponse(requestEstablishment);
     }
@@ -710,6 +1021,52 @@ public class RequestEstablishmentService {
 
         log.info("Approved proposal for request establishment {} by staff: {}", requestId, staffId);
 
+        // 🔔 WebSocket: Gửi cho student
+        try {
+            User staff = requestEstablishment.getAssignedStaff();
+            ClubCreationWebSocketPayload payload = ClubCreationWebSocketPayload.builder()
+                    .requestId(requestEstablishment.getId())
+                    .clubName(requestEstablishment.getClubName())
+                    .status(requestEstablishment.getStatus())
+                    .proposalId(proposal.getId())
+                    .proposalTitle(proposal.getTitle())
+                    .assignedStaffId(staff != null ? staff.getId() : null)
+                    .assignedStaffName(staff != null ? staff.getFullName() : null)
+                    .message("Đề án của bạn đã được duyệt: " + proposal.getTitle())
+                    .build();
+
+            webSocketService.sendToUser(
+                    requestEstablishment.getCreatedBy().getEmail(),
+                    "CLUB_CREATION",
+                    "PROPOSAL_APPROVED",
+                    payload
+            );
+        } catch (Exception e) {
+            log.error("Failed to send WebSocket notification for proposal approval: {}", e.getMessage(), e);
+        }
+
+        // 🔔 Notification: Gửi cho student
+        try {
+            String title = "Đề án của bạn đã được duyệt";
+            String message = String.format("Đề án \"%s\" cho yêu cầu thành lập CLB \"%s\" đã được staff duyệt",
+                    proposal.getTitle(),
+                    requestEstablishment.getClubName());
+            String actionUrl = "/club-creation/requests/" + requestEstablishment.getId();
+
+            notificationService.sendToUser(
+                    requestEstablishment.getCreatedBy().getId(),
+                    staffId,
+                    title,
+                    message,
+                    NotificationType.CLUB_CREATION_PROPOSAL_APPROVED,
+                    NotificationPriority.NORMAL,
+                    actionUrl,
+                    null, null, null, requestEstablishment.getId(), null
+            );
+        } catch (Exception e) {
+            log.error("Failed to send notification for proposal approval: {}", e.getMessage(), e);
+        }
+
         return mapToResponse(requestEstablishment);
     }
 
@@ -759,6 +1116,54 @@ public class RequestEstablishmentService {
 
         log.info("Rejected proposal for request establishment {} by staff: {}, reason: {}", 
                 requestId, staffId, request.getReason());
+
+        // 🔔 WebSocket: Gửi cho student
+        try {
+            User staff = requestEstablishment.getAssignedStaff();
+            ClubCreationWebSocketPayload payload = ClubCreationWebSocketPayload.builder()
+                    .requestId(requestEstablishment.getId())
+                    .clubName(requestEstablishment.getClubName())
+                    .status(requestEstablishment.getStatus())
+                    .proposalId(proposal.getId())
+                    .proposalTitle(proposal.getTitle())
+                    .assignedStaffId(staff != null ? staff.getId() : null)
+                    .assignedStaffName(staff != null ? staff.getFullName() : null)
+                    .reason(request.getReason())
+                    .message("Đề án của bạn đã bị từ chối. Lý do: " + (request.getReason() != null ? request.getReason() : "Không có lý do"))
+                    .build();
+
+            webSocketService.sendToUser(
+                    requestEstablishment.getCreatedBy().getEmail(),
+                    "CLUB_CREATION",
+                    "PROPOSAL_REJECTED",
+                    payload
+            );
+        } catch (Exception e) {
+            log.error("Failed to send WebSocket notification for proposal rejection: {}", e.getMessage(), e);
+        }
+
+        // 🔔 Notification: Gửi cho student (HIGH priority)
+        try {
+            String title = "Đề án của bạn đã bị từ chối";
+            String message = String.format("Đề án \"%s\" cho yêu cầu thành lập CLB \"%s\" đã bị từ chối. Lý do: %s",
+                    proposal.getTitle(),
+                    requestEstablishment.getClubName(),
+                    request.getReason() != null ? request.getReason() : "Không có lý do");
+            String actionUrl = "/club-creation/requests/" + requestEstablishment.getId() + "/proposal";
+
+            notificationService.sendToUser(
+                    requestEstablishment.getCreatedBy().getId(),
+                    staffId,
+                    title,
+                    message,
+                    NotificationType.CLUB_CREATION_PROPOSAL_REJECTED,
+                    NotificationPriority.HIGH,
+                    actionUrl,
+                    null, null, null, requestEstablishment.getId(), null
+            );
+        } catch (Exception e) {
+            log.error("Failed to send notification for proposal rejection: {}", e.getMessage(), e);
+        }
 
         return mapToResponse(requestEstablishment);
     }
@@ -839,6 +1244,61 @@ public class RequestEstablishmentService {
         }
 
         log.info("Proposed defense schedule for request establishment {} by user: {}", requestId, userId);
+
+        // 🔔 WebSocket: Gửi cho assigned staff
+        try {
+            User staff = requestEstablishment.getAssignedStaff();
+            if (staff != null) {
+                ClubCreationWebSocketPayload payload = ClubCreationWebSocketPayload.builder()
+                        .requestId(requestEstablishment.getId())
+                        .clubName(requestEstablishment.getClubName())
+                        .status(requestEstablishment.getStatus())
+                        .defenseScheduleId(schedule.getId())
+                        .defenseDate(schedule.getDefenseDate())
+                        .defenseEndDate(schedule.getDefenseEndDate())
+                        .location(schedule.getLocation())
+                        .meetingLink(schedule.getMeetingLink())
+                        .creatorId(requestEstablishment.getCreatedBy().getId())
+                        .creatorName(requestEstablishment.getCreatedBy().getFullName())
+                        .message("Sinh viên đã đề xuất lịch bảo vệ: " + schedule.getDefenseDate())
+                        .build();
+
+                webSocketService.sendToUser(
+                        staff.getEmail(),
+                        "CLUB_CREATION",
+                        "DEFENSE_SCHEDULE_PROPOSED",
+                        payload
+                );
+            }
+        } catch (Exception e) {
+            log.error("Failed to send WebSocket notification for defense schedule proposal: {}", e.getMessage(), e);
+        }
+
+        // 🔔 Notification: Gửi cho assigned staff
+        try {
+            User staff = requestEstablishment.getAssignedStaff();
+            if (staff != null) {
+                String title = "Lịch bảo vệ mới đã được đề xuất";
+                String message = String.format("Sinh viên %s đã đề xuất lịch bảo vệ cho yêu cầu thành lập CLB \"%s\". Thời gian: %s",
+                        requestEstablishment.getCreatedBy().getFullName(),
+                        requestEstablishment.getClubName(),
+                        schedule.getDefenseDate());
+                String actionUrl = "/staff/club-creation/requests/" + requestEstablishment.getId() + "/defense-schedule";
+
+                notificationService.sendToUser(
+                        staff.getId(),
+                        userId,
+                        title,
+                        message,
+                        NotificationType.CLUB_CREATION_DEFENSE_SCHEDULE_PROPOSED,
+                        NotificationPriority.NORMAL,
+                        actionUrl,
+                        null, null, null, requestEstablishment.getId(), null
+                );
+            }
+        } catch (Exception e) {
+            log.error("Failed to send notification for defense schedule proposal: {}", e.getMessage(), e);
+        }
 
         return mapToDefenseScheduleResponse(schedule);
     }
@@ -1029,6 +1489,56 @@ public class RequestEstablishmentService {
 
         log.info("Approved defense schedule for request establishment {} by staff: {}", requestId, staffId);
 
+        // 🔔 WebSocket: Gửi cho student (HIGH priority)
+        try {
+            User staff = requestEstablishment.getAssignedStaff();
+            ClubCreationWebSocketPayload payload = ClubCreationWebSocketPayload.builder()
+                    .requestId(requestEstablishment.getId())
+                    .clubName(requestEstablishment.getClubName())
+                    .status(requestEstablishment.getStatus())
+                    .defenseScheduleId(schedule.getId())
+                    .defenseDate(schedule.getDefenseDate())
+                    .defenseEndDate(schedule.getDefenseEndDate())
+                    .location(schedule.getLocation())
+                    .meetingLink(schedule.getMeetingLink())
+                    .assignedStaffId(staff != null ? staff.getId() : null)
+                    .assignedStaffName(staff != null ? staff.getFullName() : null)
+                    .message("Lịch bảo vệ của bạn đã được duyệt: " + schedule.getDefenseDate())
+                    .build();
+
+            webSocketService.sendToUser(
+                    requestEstablishment.getCreatedBy().getEmail(),
+                    "CLUB_CREATION",
+                    "DEFENSE_SCHEDULE_APPROVED",
+                    payload
+            );
+        } catch (Exception e) {
+            log.error("Failed to send WebSocket notification for defense schedule approval: {}", e.getMessage(), e);
+        }
+
+        // 🔔 Notification: Gửi cho student (HIGH priority)
+        try {
+            String title = "Lịch bảo vệ của bạn đã được duyệt";
+            String message = String.format("Lịch bảo vệ cho yêu cầu thành lập CLB \"%s\" đã được duyệt. Thời gian: %s, Địa điểm: %s",
+                    requestEstablishment.getClubName(),
+                    schedule.getDefenseDate(),
+                    schedule.getLocation() != null ? schedule.getLocation() : "Chưa có");
+            String actionUrl = "/club-creation/requests/" + requestEstablishment.getId() + "/defense-schedule";
+
+            notificationService.sendToUser(
+                    requestEstablishment.getCreatedBy().getId(),
+                    staffId,
+                    title,
+                    message,
+                    NotificationType.CLUB_CREATION_DEFENSE_SCHEDULE_APPROVED,
+                    NotificationPriority.HIGH,
+                    actionUrl,
+                    null, null, null, requestEstablishment.getId(), null
+            );
+        } catch (Exception e) {
+            log.error("Failed to send notification for defense schedule approval: {}", e.getMessage(), e);
+        }
+
         return mapToResponse(requestEstablishment);
     }
 
@@ -1075,6 +1585,53 @@ public class RequestEstablishmentService {
 
         log.info("Rejected defense schedule for request establishment {} by staff: {}, reason: {}", 
                 requestId, staffId, request.getReason());
+
+        // 🔔 WebSocket: Gửi cho student
+        try {
+            User staff = requestEstablishment.getAssignedStaff();
+            ClubCreationWebSocketPayload payload = ClubCreationWebSocketPayload.builder()
+                    .requestId(requestEstablishment.getId())
+                    .clubName(requestEstablishment.getClubName())
+                    .status(requestEstablishment.getStatus())
+                    .defenseScheduleId(schedule.getId())
+                    .defenseDate(schedule.getDefenseDate())
+                    .assignedStaffId(staff != null ? staff.getId() : null)
+                    .assignedStaffName(staff != null ? staff.getFullName() : null)
+                    .reason(request.getReason())
+                    .message("Lịch bảo vệ của bạn đã bị từ chối. Lý do: " + (request.getReason() != null ? request.getReason() : "Không có lý do"))
+                    .build();
+
+            webSocketService.sendToUser(
+                    requestEstablishment.getCreatedBy().getEmail(),
+                    "CLUB_CREATION",
+                    "DEFENSE_SCHEDULE_REJECTED",
+                    payload
+            );
+        } catch (Exception e) {
+            log.error("Failed to send WebSocket notification for defense schedule rejection: {}", e.getMessage(), e);
+        }
+
+        // 🔔 Notification: Gửi cho student
+        try {
+            String title = "Lịch bảo vệ của bạn đã bị từ chối";
+            String message = String.format("Lịch bảo vệ cho yêu cầu thành lập CLB \"%s\" đã bị từ chối. Lý do: %s",
+                    requestEstablishment.getClubName(),
+                    request.getReason() != null ? request.getReason() : "Không có lý do");
+            String actionUrl = "/club-creation/requests/" + requestEstablishment.getId() + "/defense-schedule";
+
+            notificationService.sendToUser(
+                    requestEstablishment.getCreatedBy().getId(),
+                    staffId,
+                    title,
+                    message,
+                    NotificationType.CLUB_CREATION_DEFENSE_SCHEDULE_REJECTED,
+                    NotificationPriority.NORMAL,
+                    actionUrl,
+                    null, null, null, requestEstablishment.getId(), null
+            );
+        } catch (Exception e) {
+            log.error("Failed to send notification for defense schedule rejection: {}", e.getMessage(), e);
+        }
 
         return mapToResponse(requestEstablishment);
     }
@@ -1148,6 +1705,59 @@ public class RequestEstablishmentService {
 
         log.info("Completed defense for request establishment {} by staff: {}, result: {}", 
                 requestId, staffId, request.getResult());
+
+        // 🔔 WebSocket: Gửi cho student (HIGH priority)
+        try {
+            User staff = requestEstablishment.getAssignedStaff();
+            ClubCreationWebSocketPayload payload = ClubCreationWebSocketPayload.builder()
+                    .requestId(requestEstablishment.getId())
+                    .clubName(requestEstablishment.getClubName())
+                    .status(requestEstablishment.getStatus())
+                    .defenseScheduleId(schedule.getId())
+                    .defenseDate(schedule.getDefenseDate())
+                    .defenseResult(request.getResult() != null ? request.getResult().name() : null)
+                    .feedback(request.getFeedback())
+                    .assignedStaffId(staff != null ? staff.getId() : null)
+                    .assignedStaffName(staff != null ? staff.getFullName() : null)
+                    .message("Kết quả bảo vệ: " + request.getResult() + (request.getFeedback() != null ? ". " + request.getFeedback() : ""))
+                    .build();
+
+            webSocketService.sendToUser(
+                    requestEstablishment.getCreatedBy().getEmail(),
+                    "CLUB_CREATION",
+                    "DEFENSE_COMPLETED",
+                    payload
+            );
+        } catch (Exception e) {
+            log.error("Failed to send WebSocket notification for defense completion: {}", e.getMessage(), e);
+        }
+
+        // 🔔 Notification: Gửi cho student (HIGH priority)
+        try {
+            String title = request.getResult() == DefenseScheduleStatus.PASSED 
+                    ? "Bảo vệ thành công!" 
+                    : "Bảo vệ không đạt";
+            String message = String.format("Kết quả bảo vệ cho yêu cầu thành lập CLB \"%s\": %s",
+                    requestEstablishment.getClubName(),
+                    request.getResult() == DefenseScheduleStatus.PASSED ? "ĐẠT" : "KHÔNG ĐẠT");
+            if (request.getFeedback() != null && !request.getFeedback().trim().isEmpty()) {
+                message += ". Feedback: " + request.getFeedback();
+            }
+            String actionUrl = "/club-creation/requests/" + requestEstablishment.getId();
+
+            notificationService.sendToUser(
+                    requestEstablishment.getCreatedBy().getId(),
+                    staffId,
+                    title,
+                    message,
+                    NotificationType.CLUB_CREATION_DEFENSE_COMPLETED,
+                    NotificationPriority.HIGH,
+                    actionUrl,
+                    null, null, null, requestEstablishment.getId(), null
+            );
+        } catch (Exception e) {
+            log.error("Failed to send notification for defense completion: {}", e.getMessage(), e);
+        }
 
         return mapToResponse(requestEstablishment);
     }
@@ -1257,6 +1867,58 @@ public class RequestEstablishmentService {
         }
 
         log.info("Submitted final form for request establishment {} by user: {}", requestId, userId);
+
+        // 🔔 WebSocket: Gửi cho assigned staff
+        try {
+            User staff = requestEstablishment.getAssignedStaff();
+            if (staff != null) {
+                ClubCreationWebSocketPayload payload = ClubCreationWebSocketPayload.builder()
+                        .requestId(requestEstablishment.getId())
+                        .clubName(requestEstablishment.getClubName())
+                        .status(requestEstablishment.getStatus())
+                        .finalFormId(finalForm.getId())
+                        .finalFormTitle(request.getTitle())
+                        .creatorId(requestEstablishment.getCreatedBy().getId())
+                        .creatorName(requestEstablishment.getCreatedBy().getFullName())
+                        .message("Sinh viên đã nộp form cuối: " + request.getTitle())
+                        .build();
+
+                webSocketService.sendToUser(
+                        staff.getEmail(),
+                        "CLUB_CREATION",
+                        "FINAL_FORM_SUBMITTED",
+                        payload
+                );
+            }
+        } catch (Exception e) {
+            log.error("Failed to send WebSocket notification for final form submission: {}", e.getMessage(), e);
+        }
+
+        // 🔔 Notification: Gửi cho assigned staff
+        try {
+            User staff = requestEstablishment.getAssignedStaff();
+            if (staff != null) {
+                String title = "Form cuối đã được nộp";
+                String message = String.format("Sinh viên %s đã nộp form cuối \"%s\" cho yêu cầu thành lập CLB \"%s\"",
+                        requestEstablishment.getCreatedBy().getFullName(),
+                        request.getTitle(),
+                        requestEstablishment.getClubName());
+                String actionUrl = "/staff/club-creation/requests/" + requestEstablishment.getId() + "/final-forms";
+
+                notificationService.sendToUser(
+                        staff.getId(),
+                        userId,
+                        title,
+                        message,
+                        NotificationType.CLUB_CREATION_FINAL_FORM_SUBMITTED,
+                        NotificationPriority.NORMAL,
+                        actionUrl,
+                        null, null, null, requestEstablishment.getId(), null
+                );
+            }
+        } catch (Exception e) {
+            log.error("Failed to send notification for final form submission: {}", e.getMessage(), e);
+        }
 
         return mapToFinalFormResponse(finalForm);
     }
@@ -1370,6 +2032,57 @@ public class RequestEstablishmentService {
         }
 
         log.info("Approved final form and created club {} for request {}", club.getId(), requestId);
+
+        // 🔔 WebSocket: Gửi cho student (creator) - HIGH priority
+        try {
+            ClubCreationWebSocketPayload payload = ClubCreationWebSocketPayload.builder()
+                    .requestId(requestEstablishment.getId())
+                    .clubName(requestEstablishment.getClubName())
+                    .clubCode(club.getClubCode())
+                    .status(requestEstablishment.getStatus())
+                    .clubId(club.getId())
+                    .finalFormId(latestFinalForm.getId())
+                    .finalFormTitle(latestFinalForm.getFormData() != null ? latestFinalForm.getFormData() : "Form cuối")
+                    .assignedStaffId(staff != null ? staff.getId() : null)
+                    .assignedStaffName(staff != null ? staff.getFullName() : null)
+                    .message("Chúc mừng! CLB \"" + requestEstablishment.getClubName() + "\" đã được thành lập thành công!")
+                    .build();
+
+            webSocketService.sendToUser(
+                    requestEstablishment.getCreatedBy().getEmail(),
+                    "CLUB_CREATION",
+                    "CLUB_CREATED",
+                    payload
+            );
+        } catch (Exception e) {
+            log.error("Failed to send WebSocket notification for club creation: {}", e.getMessage(), e);
+        }
+
+        // 🔔 Notification: Gửi cho student (creator) - HIGH priority
+        try {
+            String title = "🎉 Chúc mừng! CLB của bạn đã được thành lập";
+            String message = String.format("CLB \"%s\" đã được thành lập thành công! Bạn đã trở thành Chủ nhiệm CLB.",
+                    requestEstablishment.getClubName());
+            String actionUrl = "/myclub/" + club.getId();
+
+            notificationService.sendToUser(
+                    requestEstablishment.getCreatedBy().getId(),
+                    staffId,
+                    title,
+                    message,
+                    NotificationType.CLUB_CREATION_CLUB_CREATED,
+                    NotificationPriority.HIGH,
+                    actionUrl,
+                    club.getId(), // relatedClubId - CLB mới được tạo
+                    null, // relatedNewsId
+                    null, // relatedTeamId
+                    requestEstablishment.getId(), // relatedRequestId
+                    null  // relatedEventId
+            );
+        } catch (Exception e) {
+            log.error("Failed to send notification for club creation: {}", e.getMessage(), e);
+        }
+
         return mapToResponse(requestEstablishment);
     }
 
@@ -1539,6 +2252,185 @@ public class RequestEstablishmentService {
         }
 
         return builder.build();
+    }
+
+    @Transactional
+    public RequestEstablishmentResponse requestNameRevision(Long requestId, Long staffId, RequestNameRevisionRequest request) throws AppException {
+        RequestEstablishment requestEstablishment = requestEstablishmentRepository.findDetailById(requestId)
+                .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND, "Không tìm thấy yêu cầu thành lập CLB"));
+
+        if (requestEstablishment.getAssignedStaff() == null ||
+                !requestEstablishment.getAssignedStaff().getId().equals(staffId)) {
+            throw new AppException(ErrorCode.FORBIDDEN, "Bạn không có quyền yêu cầu chỉnh sửa tên cho yêu cầu này");
+        }
+
+        if (requestEstablishment.getStatus() != RequestEstablishmentStatus.CONTACT_CONFIRMED) {
+            throw new AppException(ErrorCode.INVALID_INPUT, "Chỉ có thể yêu cầu chỉnh sửa tên sau khi đã xác nhận liên hệ");
+        }
+
+        requestEstablishment.setStatus(RequestEstablishmentStatus.NAME_REVISION_REQUIRED);
+        requestEstablishment = requestEstablishmentRepository.save(requestEstablishment);
+        requestEstablishmentRepository.flush();
+
+        String comment = (request != null && request.getComment() != null && !request.getComment().trim().isEmpty())
+                ? request.getComment().trim()
+                : "Staff yêu cầu bạn cập nhật lại tên CLB để rõ ràng hơn";
+
+        try {
+            workflowHistoryService.createWorkflowHistory(
+                    requestEstablishment.getId(),
+                    staffId,
+                    "REQUEST_REVIEW",
+                    comment
+            );
+        } catch (Exception e) {
+            log.error("Failed to create workflow history for name revision request: {}", e.getMessage(), e);
+        }
+
+        try {
+            ClubCreationWebSocketPayload payload = ClubCreationWebSocketPayload.builder()
+                    .requestId(requestEstablishment.getId())
+                    .clubName(requestEstablishment.getClubName())
+                    .status(requestEstablishment.getStatus())
+                    .assignedStaffId(requestEstablishment.getAssignedStaff() != null
+                            ? requestEstablishment.getAssignedStaff().getId()
+                            : null)
+                    .assignedStaffName(requestEstablishment.getAssignedStaff() != null
+                            ? requestEstablishment.getAssignedStaff().getFullName()
+                            : null)
+                    .comment(comment)
+                    .message(comment)
+                    .build();
+
+            webSocketService.sendToUser(
+                    requestEstablishment.getCreatedBy().getEmail(),
+                    "CLUB_CREATION",
+                    "NAME_REVISION_REQUIRED",
+                    payload
+            );
+        } catch (Exception e) {
+            log.error("Failed to send WebSocket notification for name revision request: {}", e.getMessage(), e);
+        }
+
+        try {
+            String title = "Yêu cầu cập nhật tên CLB";
+            String actionUrl = "/club-creation/requests/" + requestEstablishment.getId();
+            notificationService.sendToUser(
+                    requestEstablishment.getCreatedBy().getId(),
+                    staffId,
+                    title,
+                    comment,
+                    NotificationType.CLUB_CREATION_NAME_REVISION_REQUESTED,
+                    NotificationPriority.NORMAL,
+                    actionUrl,
+                    null, null, null,
+                    requestEstablishment.getId(),
+                    null
+            );
+        } catch (Exception e) {
+            log.error("Failed to send notification for name revision request: {}", e.getMessage(), e);
+        }
+
+        return mapToResponse(requestEstablishment);
+    }
+
+    @Transactional
+    public RequestEstablishmentResponse submitNameRevision(Long requestId, Long userId, RenameClubRequest request) throws AppException {
+        RequestEstablishment requestEstablishment = requestEstablishmentRepository.findDetailById(requestId)
+                .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND, "Không tìm thấy yêu cầu thành lập CLB"));
+
+        if (!requestEstablishment.getCreatedBy().getId().equals(userId)) {
+            throw new AppException(ErrorCode.FORBIDDEN, "Bạn không có quyền cập nhật tên CLB cho yêu cầu này");
+        }
+
+        if (requestEstablishment.getStatus() != RequestEstablishmentStatus.NAME_REVISION_REQUIRED) {
+            throw new AppException(ErrorCode.INVALID_INPUT, "Yêu cầu này không cần cập nhật tên");
+        }
+
+        String newClubName = request.getNewClubName().trim();
+        validateClubNameUniqueness(newClubName, requestEstablishment.getId());
+
+        requestEstablishment.setClubName(newClubName);
+        requestEstablishment.setStatus(RequestEstablishmentStatus.CONTACT_CONFIRMED);
+
+        requestEstablishment = requestEstablishmentRepository.save(requestEstablishment);
+        requestEstablishmentRepository.flush();
+
+        try {
+            workflowHistoryService.createWorkflowHistory(
+                    requestEstablishment.getId(),
+                    userId,
+                    "REQUEST_REVIEW",
+                    "Sinh viên đã cập nhật tên CLB thành: " + newClubName
+            );
+        } catch (Exception e) {
+            log.error("Failed to create workflow history for name revision submission: {}", e.getMessage(), e);
+        }
+
+        try {
+            User staff = requestEstablishment.getAssignedStaff();
+            if (staff != null) {
+                ClubCreationWebSocketPayload payload = ClubCreationWebSocketPayload.builder()
+                        .requestId(requestEstablishment.getId())
+                        .clubName(requestEstablishment.getClubName())
+                        .status(requestEstablishment.getStatus())
+                        .assignedStaffId(staff.getId())
+                        .assignedStaffName(staff.getFullName())
+                        .creatorId(requestEstablishment.getCreatedBy().getId())
+                        .creatorName(requestEstablishment.getCreatedBy().getFullName())
+                        .message("Sinh viên đã cập nhật lại tên CLB: " + newClubName)
+                        .build();
+
+                webSocketService.sendToUser(
+                        staff.getEmail(),
+                        "CLUB_CREATION",
+                        "NAME_REVISION_SUBMITTED",
+                        payload
+                );
+            }
+        } catch (Exception e) {
+            log.error("Failed to send WebSocket notification for name revision submission: {}", e.getMessage(), e);
+        }
+
+        try {
+            User staff = requestEstablishment.getAssignedStaff();
+            if (staff != null) {
+                String title = "Sinh viên đã cập nhật tên CLB";
+                String message = String.format("Yêu cầu #%d đã được cập nhật tên thành \"%s\"",
+                        requestEstablishment.getId(), newClubName);
+                String actionUrl = "/staff/club-creation/requests/" + requestEstablishment.getId();
+                notificationService.sendToUser(
+                        staff.getId(),
+                        userId,
+                        title,
+                        message,
+                        NotificationType.CLUB_CREATION_NAME_UPDATED,
+                        NotificationPriority.NORMAL,
+                        actionUrl,
+                        null, null, null,
+                        requestEstablishment.getId(),
+                        null
+                );
+            }
+        } catch (Exception e) {
+            log.error("Failed to send notification for name revision submission: {}", e.getMessage(), e);
+        }
+
+        return mapToResponse(requestEstablishment);
+    }
+
+    private void validateClubNameUniqueness(String clubName, Long currentRequestId) throws AppException {
+        if (clubRepository.existsByClubNameIgnoreCase(clubName)) {
+            throw new AppException(ErrorCode.INVALID_INPUT, "Tên CLB này đã tồn tại trong hệ thống");
+        }
+
+        boolean existsInRequests = currentRequestId == null
+                ? requestEstablishmentRepository.existsByClubNameIgnoreCase(clubName)
+                : requestEstablishmentRepository.existsByClubNameIgnoreCaseAndIdNot(clubName, currentRequestId);
+
+        if (existsInRequests) {
+            throw new AppException(ErrorCode.INVALID_INPUT, "Tên CLB này đã tồn tại trong hệ thống");
+        }
     }
 
     private static final List<DefaultRoleDefinition> DEFAULT_ROLE_DEFINITIONS = List.of(

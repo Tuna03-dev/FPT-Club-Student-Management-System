@@ -18,9 +18,11 @@ import {
   Shield,
   Building2,
   PlusCircle,
+  FileSignature,
 } from "lucide-react";
 import useMyClubs from "@/hooks/useMyClubs";
 import { toast } from "sonner";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 
 const Header: React.FC = () => {
   const [user, setUser] = useState<UserInfo | null>(null);
@@ -131,6 +133,9 @@ const Header: React.FC = () => {
 
           {/* Avatar / Login */}
           <div className="flex items-center gap-3">
+            {isAuthenticated && user && (
+              <NotificationBell />
+            )}
             {isAuthenticated && user ? (
               <DropdownMenu
                 onOpenChange={(open) => {
@@ -198,6 +203,14 @@ const Header: React.FC = () => {
                       >
                         <PlusCircle className="mr-2 h-4 w-4 text-orange-500" />
                         Đăng ký thành lập CLB
+                      </DropdownMenuItem>
+
+                      <DropdownMenuItem
+                        onClick={() => navigate("/myRecruitmentApplications")}
+                        className="cursor-pointer text-[14px] text-gray-700"
+                      >
+                        <FileSignature className="mr-2 h-4 w-4 text-orange-500" />
+                        Đơn ứng tuyển của tôi
                       </DropdownMenuItem>
 
                       {isStaff && (

@@ -22,7 +22,7 @@ public class GlobalExceptionHandler {
 
         return ResponseEntity
                 .status(code.getHttpStatus())
-                .body(ApiResponse.error(code,null));
+                .body(ApiResponse.error(code, ex.getMessage(), null));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -76,6 +76,34 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(403)
                 .body(ApiResponse.error(ErrorCode.FORBIDDEN, ex.getMessage(), null));
+    }
+
+    /**
+     * Handle AuthenticationException thrown from controllers/services
+     * Note: Filter-level authentication failures are handled by JwtAuthenticationEntryPoint
+     */
+    @ExceptionHandler(org.springframework.security.core.AuthenticationException.class)
+    public ResponseEntity<ApiResponse<Void>> handleAuthenticationException(
+            org.springframework.security.core.AuthenticationException ex) {
+        log.warn("Authentication failed: {}", ex.getMessage());
+
+        return ResponseEntity
+                .status(401)
+                .body(ApiResponse.error(ErrorCode.UNAUTHENTICATED, null));
+    }
+
+    /**
+     * Handle AccessDeniedException from Spring Security (e.g., @PreAuthorize failures)
+     * This catches authorization failures at the method level
+     */
+    @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleAccessDeniedException(
+            org.springframework.security.access.AccessDeniedException ex) {
+        log.warn("Access denied: {}", ex.getMessage());
+
+        return ResponseEntity
+                .status(403)
+                .body(ApiResponse.error(ErrorCode.FORBIDDEN, null));
     }
 
 

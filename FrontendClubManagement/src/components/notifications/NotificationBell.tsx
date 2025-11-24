@@ -29,7 +29,7 @@ function timeAgo(date: string) {
 
 export const NotificationBell: React.FC = () => {
   const navigate = useNavigate();
-  const { clubId = "0" } = useParams();
+  const { clubId } = useParams(); // Optional: có thể không có khi dùng trong Header chung
 
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<TabKey>("all");
@@ -115,23 +115,32 @@ export const NotificationBell: React.FC = () => {
     } catch {}
 
     if (n.actionUrl) {
-      // Parse actionUrl: /posts/{postId}/comments/{commentId}
-      const match = n.actionUrl.match(/\/posts\/(\d+)(?:\/comments\/(\d+))?/);
+      // Nếu actionUrl là absolute path (bắt đầu bằng /), navigate trực tiếp
+      if (n.actionUrl.startsWith("/")) {
+        // Parse actionUrl: /posts/{postId}/comments/{commentId}
+        const match = n.actionUrl.match(/\/posts\/(\d+)(?:\/comments\/(\d+))?/);
 
-      if (match) {
-        const postId = match[1];
-        const commentId = match[2];
+        if (match && clubId) {
+          const postId = match[1];
+          const commentId = match[2];
 
-        // Navigate to dashboard with state to scroll to post
-        navigate(`/myclub/${clubId}`, {
-          state: {
-            scrollToPostId: postId,
-            highlightCommentId: commentId,
-          },
-        });
+          // Navigate to dashboard with state to scroll to post
+          navigate(`/myclub/${clubId}`, {
+            state: {
+              scrollToPostId: postId,
+              highlightCommentId: commentId,
+            },
+          });
+        } else {
+          // Navigate trực tiếp với absolute path
+          navigate(n.actionUrl);
+        }
+      } else if (clubId) {
+        // Nếu actionUrl là relative path và có clubId, navigate với clubId
+        navigate(`/myclub/${clubId}${n.actionUrl.startsWith("/") ? n.actionUrl : "/" + n.actionUrl}`);
       } else {
-        // Fallback to original behavior for other URLs
-        navigate(`/myclub/${clubId}${n.actionUrl}`);
+        // Nếu không có clubId, navigate trực tiếp (có thể là trang chung)
+        navigate(n.actionUrl.startsWith("/") ? n.actionUrl : "/" + n.actionUrl);
       }
       setOpen(false);
     }
@@ -166,7 +175,12 @@ export const NotificationBell: React.FC = () => {
           <h3 className="font-semibold text-sm">Thông báo</h3>
           <button
             onClick={() => {
-              navigate(`/myclub/${clubId}/notifications`);
+              if (clubId) {
+                navigate(`/myclub/${clubId}/notifications`);
+              } else {
+                // Nếu không có clubId, có thể navigate đến trang notifications chung hoặc trang đầu tiên
+                navigate("/notifications");
+              }
               setOpen(false);
             }}
             className="text-xs text-primary hover:underline"

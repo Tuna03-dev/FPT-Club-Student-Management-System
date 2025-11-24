@@ -135,4 +135,17 @@ public interface EventRepository extends JpaRepository<Event, Long> {
             ") " +
             "ORDER BY e.id DESC")
     List<EventWithoutReportRequirementDto> findEventsWithoutReportRequirement();
+
+    /**
+     * Lấy danh sách events đã được publish của một câu lạc bộ với phân trang và tìm kiếm
+     */
+    @Query("SELECT e FROM Event e " +
+           "WHERE e.club.id = :clubId " +
+           "AND e.isDraft = false " +
+           "AND (:keyword IS NULL OR :keyword = '' OR " +
+           "LOWER(e.title) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
+           "LOWER(e.description) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
+           "LOWER(e.location) LIKE LOWER(CONCAT('%', :keyword, '%'))) " +
+           "ORDER BY e.startTime DESC")
+    Page<Event> findPublishedEventsByClubId(Long clubId, String keyword, Pageable pageable);
 }

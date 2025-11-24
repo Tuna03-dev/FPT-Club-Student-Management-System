@@ -39,6 +39,7 @@ public class MemberServiceImpl implements MemberService{
     private final ClubRepository clubRepository;
     private final TeamRepository teamRepository;
     private final NotificationService notificationService;
+    private final FapApiService fapApiService;
 
 
     @Override
@@ -51,121 +52,61 @@ public class MemberServiceImpl implements MemberService{
             String searchTerm,
             Pageable pageable) {
 
-        // Get all filtered members
-        List<ClubMemberShip> allMembers = clubMemberShipRepository.findMembersWithFiltersList(
-                clubId, searchTerm);
-
-        // Get semester info if filtering by semester
-        Semester targetSemester = null;
-        if (semesterId != null) {
-            targetSemester = semesterRepository.findById(semesterId).orElse(null);
-        } else {
-            // Lấy kỳ hiện tại
-            targetSemester = semesterRepository.findAll().stream()
+        // 🚀 OPTIMIZED: Lấy semesterId hiện tại nếu không được chỉ định
+        final Long effectiveSemesterId; // Must be final for lambda
+        if (semesterId == null) {
+            // Chỉ query 1 lần để lấy current semester
+            Semester currentSemester = semesterRepository.findAll().stream()
                     .filter(Semester::getIsCurrent)
                     .findFirst()
                     .orElse(null);
+            effectiveSemesterId = currentSemester != null ? currentSemester.getId() : null;
+        } else {
+            effectiveSemesterId = semesterId;
         }
 
-        final Semester semester = targetSemester;
-        final Long effectiveSemesterId = semester != null ? semester.getId() : null;
+        // Normalize search term
+        final String normalizedSearch = (searchTerm != null && !searchTerm.trim().isEmpty())
+                ? searchTerm.trim()
+                : null;
 
-        List<ClubMemberShip> filteredMembers = allMembers.stream()
-                .filter(cms -> {
+        // 🚀 OPTIMIZED: Single query với JOIN FETCH để load tất cả relationships
+        // Search sẽ được filter trong Java (sau query) để support tìm kiếm không dấu
+        org.springframework.data.domain.Page<ClubMemberShip> memberPage =
+                clubMemberShipRepository.findMembersWithFiltersOptimized(
+                        clubId,
+                        status,
+                        effectiveSemesterId,
+                        roleId,
+                        isActive,
+                        pageable
+                );
 
-                    if (semester != null) {
-                        boolean joinedBeforeSemesterEnd = cms.getJoinDate().isBefore(semester.getEndDate())
-                                || cms.getJoinDate().isEqual(semester.getEndDate());
+        // 🔍 SEARCH FILTER: Filter theo searchTerm trong Java với accent-insensitive
+        List<ClubMemberShip> filteredMembers = memberPage.getContent();
+        if (normalizedSearch != null) {
+            filteredMembers = filteredMembers.stream()
+                    .filter(cms -> com.sep490.backendclubmanagement.util.VietnameseTextNormalizer.matchesAny(
+                            normalizedSearch,
+                            cms.getUser().getFullName(),
+                            cms.getUser().getStudentCode()
+                    ))
+                    .toList();
+        }
 
-                        boolean notLeftBeforeSemesterStart = cms.getEndDate() == null
-                                || cms.getEndDate().isAfter(semester.getStartDate())
-                                || cms.getEndDate().isEqual(semester.getStartDate());
-
-                        if (!joinedBeforeSemesterEnd || !notLeftBeforeSemesterStart) {
-                            return false;
-                        }
-                    }
-
-
-                    if (roleId != null || isActive != null) {
-                        List<RoleMemberShip> relevantRoleMemberships = cms.getRoleMemberships().stream()
-                                .filter(rm -> {
-
-                                    if (semester != null && rm.getSemester() != null
-                                            && !rm.getSemester().getId().equals(semester.getId())) {
-                                        return false;
-                                    }
-                                    return true;
-                                })
-                                .toList();
-
-
-                        if (Boolean.FALSE.equals(isActive)) {
-                            return relevantRoleMemberships.isEmpty();
-                        }
-
-                        if (Boolean.TRUE.equals(isActive)) {
-                            return relevantRoleMemberships.stream()
-                                    .anyMatch(rm -> Boolean.TRUE.equals(rm.getIsActive()) &&
-                                            (roleId == null || (rm.getClubRole() != null &&
-                                                    rm.getClubRole().getId().equals(roleId))));
-                        }
-
-                        // ✅ Nếu chỉ filter theo roleId (isActive = null)
-                        if (roleId != null) {
-                            return relevantRoleMemberships.stream()
-                                    .anyMatch(rm -> rm.getClubRole() != null &&
-                                            rm.getClubRole().getId().equals(roleId));
-                        }
-                    }
-
-                    // 3️⃣ Không có filter role/active → pass qua
-                    return true;
-                })
-                .toList();
-
-
-        log.info("Filtered members: {}", filteredMembers.size());
-
-        // Sort manually based on status
-        List<ClubMemberShip> sortedMembers = filteredMembers.stream()
-                .sorted((m1, m2) -> {
-                    if (status == ClubMemberShipStatus.ACTIVE) {
-                        // Sort by role level for active members
-                        Integer roleLevel1 = getRoleLevelForSorting(m1, effectiveSemesterId, roleId, isActive);
-                        Integer roleLevel2 = getRoleLevelForSorting(m2, effectiveSemesterId, roleId, isActive);
-
-                        int roleComparison = roleLevel1.compareTo(roleLevel2);
-                        if (roleComparison != 0) {
-                            return roleComparison;
-                        }
-                    }
-                    // Secondary sort by full name
-                    return m1.getUser().getFullName().compareTo(m2.getUser().getFullName());
-                })
-                .toList();
-
-        // Manual pagination
-        int totalElements = sortedMembers.size();
-        int totalPages = (int) Math.ceil((double) totalElements / pageable.getPageSize());
-        int startIndex = pageable.getPageNumber() * pageable.getPageSize();
-        int endIndex = Math.min(startIndex + pageable.getPageSize(), totalElements);
-
-        List<ClubMemberShip> pageContent = startIndex < totalElements ?
-                sortedMembers.subList(startIndex, endIndex) : List.of();
-
-        List<MemberResponse> memberResponses = pageContent.stream()
-                .map(cms -> mapToMemberResponse(cms, semesterId))
+        // 🚀 OPTIMIZED: Map các entities đã được JOIN FETCH loaded
+        List<MemberResponse> memberResponses = filteredMembers.stream()
+                .map(cms -> mapToMemberResponse(cms, effectiveSemesterId))
                 .toList();
 
         return PageResponse.<MemberResponse>builder()
                 .content(memberResponses)
-                .pageNumber(pageable.getPageNumber())
-                .pageSize(pageable.getPageSize())
-                .totalElements(totalElements)
-                .totalPages(totalPages)
-                .hasNext(pageable.getPageNumber() < totalPages - 1)
-                .hasPrevious(pageable.getPageNumber() > 0)
+                .pageNumber(memberPage.getNumber())
+                .pageSize(memberPage.getSize())
+                .totalElements(memberPage.getTotalElements())
+                .totalPages(memberPage.getTotalPages())
+                .hasNext(memberPage.hasNext())
+                .hasPrevious(memberPage.hasPrevious())
                 .build();
     }
 
@@ -175,53 +116,43 @@ public class MemberServiceImpl implements MemberService{
             String searchTerm,
             Pageable pageable) {
 
-        // Get all left members with basic filters
-        List<ClubMemberShip> allLeftMembers = clubMemberShipRepository.findMembersWithFiltersList(
-                clubId, String.valueOf(ClubMemberShipStatus.LEFT), searchTerm);
+        // Normalize search term
+        final String normalizedSearch = (searchTerm != null && !searchTerm.trim().isEmpty())
+                ? searchTerm.trim()
+                : null;
 
-        log.info("Filtered left members: {}", allLeftMembers.size());
+        // 🚀 OPTIMIZED: Single query với JOIN FETCH để load tất cả relationships
+        org.springframework.data.domain.Page<ClubMemberShip> memberPage =
+                clubMemberShipRepository.findLeftMembersOptimized(
+                        clubId,
+                        pageable
+                );
 
-        // Sort by end date (most recent departures first), then by name
-        List<ClubMemberShip> sortedMembers = allLeftMembers.stream()
-                .sorted((m1, m2) -> {
-                    // Primary sort by end date (most recent first)
-                    if (m1.getEndDate() != null && m2.getEndDate() != null) {
-                        int dateComparison = m2.getEndDate().compareTo(m1.getEndDate());
-                        if (dateComparison != 0) {
-                            return dateComparison;
-                        }
-                    } else if (m1.getEndDate() != null) {
-                        return -1; // m1 has end date, m2 doesn't
-                    } else if (m2.getEndDate() != null) {
-                        return 1; // m2 has end date, m1 doesn't
-                    }
-                    
-                    // Secondary sort by full name
-                    return m1.getUser().getFullName().compareTo(m2.getUser().getFullName());
-                })
-                .toList();
+        // 🔍 SEARCH FILTER: Filter theo searchTerm trong Java với accent-insensitive
+        List<ClubMemberShip> filteredMembers = memberPage.getContent();
+        if (normalizedSearch != null) {
+            filteredMembers = filteredMembers.stream()
+                    .filter(cms -> com.sep490.backendclubmanagement.util.VietnameseTextNormalizer.matchesAny(
+                            normalizedSearch,
+                            cms.getUser().getFullName(),
+                            cms.getUser().getStudentCode()
+                    ))
+                    .toList();
+        }
 
-        // Manual pagination
-        int totalElements = sortedMembers.size();
-        int totalPages = (int) Math.ceil((double) totalElements / pageable.getPageSize());
-        int startIndex = pageable.getPageNumber() * pageable.getPageSize();
-        int endIndex = Math.min(startIndex + pageable.getPageSize(), totalElements);
-
-        List<ClubMemberShip> pageContent = startIndex < totalElements ?
-                sortedMembers.subList(startIndex, endIndex) : List.of();
-
-        List<MemberResponse> memberResponses = pageContent.stream()
+        // 🚀 OPTIMIZED: Map các entities đã được JOIN FETCH loaded
+        List<MemberResponse> memberResponses = filteredMembers.stream()
                 .map(cms -> mapToMemberResponse(cms, null)) // No specific semester for left members
                 .toList();
 
         return PageResponse.<MemberResponse>builder()
                 .content(memberResponses)
-                .pageNumber(pageable.getPageNumber())
-                .pageSize(pageable.getPageSize())
-                .totalElements(totalElements)
-                .totalPages(totalPages)
-                .hasNext(pageable.getPageNumber() < totalPages - 1)
-                .hasPrevious(pageable.getPageNumber() > 0)
+                .pageNumber(memberPage.getNumber())
+                .pageSize(memberPage.getSize())
+                .totalElements(memberPage.getTotalElements())
+                .totalPages(memberPage.getTotalPages())
+                .hasNext(memberPage.hasNext())
+                .hasPrevious(memberPage.hasPrevious())
                 .build();
     }
 
@@ -432,52 +363,6 @@ public class MemberServiceImpl implements MemberService{
         }
     }
 
-    private Integer getRoleLevelForSorting(ClubMemberShip clubMemberShip, Long effectiveSemesterId, Long roleId, Boolean isActive) {
-        // Get all role memberships for the specific semester
-        List<RoleMemberShip> relevantRoleMemberships = clubMemberShip.getRoleMemberships().stream()
-                .filter(rm -> {
-                    // If filtering by semester, only check roles in that semester
-                    if (effectiveSemesterId != null && rm.getSemester() != null
-                            && !rm.getSemester().getId().equals(effectiveSemesterId)) {
-                        return false;
-                    }
-                    return true;
-                })
-                .toList();
-
-        // If isActive=false, return a high number (999) since they have no roles
-        // Note: When isActive=false, we ignore roleId filter since member has no roles
-        if (isActive != null && !isActive) {
-            return relevantRoleMemberships.isEmpty() ? 999 : 1000;
-        }
-
-        // If isActive=true, find the minimum role level among active roles
-        if (isActive != null && isActive) {
-            return relevantRoleMemberships.stream()
-                    .filter(rm -> Boolean.TRUE.equals(rm.getIsActive()))
-                    .filter(rm -> rm.getClubRole() != null)
-                    .filter(rm -> roleId == null || rm.getClubRole().getId().equals(roleId))
-                    .map(rm -> rm.getClubRole().getRoleLevel())
-                    .min(Integer::compareTo)
-                    .orElse(999);
-        }
-
-        // If only filtering by roleId (isActive is null)
-        if (roleId != null) {
-            return relevantRoleMemberships.stream()
-                    .filter(rm -> rm.getClubRole() != null && rm.getClubRole().getId().equals(roleId))
-                    .map(rm -> rm.getClubRole().getRoleLevel())
-                    .min(Integer::compareTo)
-                    .orElse(999);
-        }
-
-        // No filters, return minimum role level
-        return relevantRoleMemberships.stream()
-                .filter(rm -> rm.getClubRole() != null)
-                .map(rm -> rm.getClubRole().getRoleLevel())
-                .min(Integer::compareTo)
-                .orElse(999);
-    }
 
     private MemberResponse mapToMemberResponse(ClubMemberShip clubMemberShip, Long querySemesterId) {
         User user = clubMemberShip.getUser();
@@ -745,6 +630,14 @@ public class MemberServiceImpl implements MemberService{
                         throw new IllegalArgumentException("semester_code is empty");
                     }
 
+                    // ✅ VALIDATE EMAIL với FAP API
+                    if (email != null && !email.isEmpty()) {
+                        var profile = fapApiService.findProfileByEmail(email);
+                        if (profile.isEmpty()) {
+                            throw new IllegalArgumentException("Email " + email + " is not in allowed users list");
+                        }
+                    }
+
                     // Find or create user
                     User user = userRepository.findByStudentCode(studentCode).orElse(null);
                     boolean userCreated = false;
@@ -767,6 +660,11 @@ public class MemberServiceImpl implements MemberService{
                             changed = true;
                         }
                         if (email != null && !email.isEmpty() && !email.equals(user.getEmail())) {
+                            // ✅ VALIDATE EMAIL trước khi update
+                            var profile = fapApiService.findProfileByEmail(email);
+                            if (profile.isEmpty()) {
+                                throw new IllegalArgumentException("Email " + email + " is not in allowed users list");
+                            }
                             user.setEmail(email);
                             changed = true;
                         }
