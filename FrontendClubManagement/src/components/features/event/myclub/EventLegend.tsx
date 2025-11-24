@@ -1,4 +1,5 @@
 "use client"
+import { Video } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { authService } from "@/services/authService"
 
@@ -36,6 +37,10 @@ export function EventLegend({ clubId }: EventLegendProps) {
             <span className="text-sm text-foreground">Chờ duyệt</span>
           </div>
         )}
+        <div className="flex items-center gap-3">
+          <Video className="w-4 h-4 text-black dark:text-white flex-shrink-0" />
+          <span className="text-sm text-foreground">Sự kiện nội bộ của CLB</span>
+        </div>
       </div>
     </Card>
   )

@@ -1,9 +1,18 @@
 "use client"
+import { useState } from "react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
 import { authService } from "@/services/authService"
 import { getStaffCancelledEvents, restoreCancelledEventByStaff, deleteCancelledEventByStaff } from "@/service/EventService"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from "@/components/ui/dialog"
 
 interface Event {
   id: string
@@ -41,6 +50,11 @@ export function CancelledEventsCard({
 }: CancelledEventsCardProps) {
   const user = authService.getCurrentUser()
   const isStaff = !!user && user.systemRole === "STAFF"
+  
+  // State cho confirm dialog xóa
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [deletingEventId, setDeletingEventId] = useState<string | null>(null)
+  const [deletingEventTitle, setDeletingEventTitle] = useState<string>("")
 
   if (!isStaff) return null
 
@@ -122,16 +136,10 @@ export function CancelledEventsCard({
                   size="sm"
                   variant="secondary"
                   className="bg-rose-50 text-rose-600 hover:bg-rose-100"
-                  onClick={async () => {
-                    try {
-                      await deleteCancelledEventByStaff(Number(ev.id))
-                      toast.success("Đã xóa sự kiện")
-                      setCancelledEvents((items ?? []).filter((x: Event) => x.id !== ev.id))
-                      await onRefetch()
-                    } catch (e: unknown) {
-                      console.error(e)
-                      toast.error(getErrorMessage(e, "Không thể xóa sự kiện"))
-                    }
+                  onClick={() => {
+                    setDeletingEventId(ev.id)
+                    setDeletingEventTitle(ev.title)
+                    setDeleteDialogOpen(true)
                   }}
                 >
                   Xóa
@@ -141,6 +149,51 @@ export function CancelledEventsCard({
           ))}
         </div>
       )}
+      
+      {/* Confirm Dialog xóa sự kiện */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Xác nhận xóa sự kiện</DialogTitle>
+            <DialogDescription>
+              Bạn có chắc chắn muốn xóa sự kiện "{deletingEventTitle}"? Hành động này không thể hoàn tác.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setDeleteDialogOpen(false)
+                setDeletingEventId(null)
+                setDeletingEventTitle("")
+              }}
+            >
+              Hủy
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={async () => {
+                if (deletingEventId) {
+                  try {
+                    await deleteCancelledEventByStaff(Number(deletingEventId))
+                    toast.success("Đã xóa sự kiện")
+                    setCancelledEvents((items ?? []).filter((x: Event) => x.id !== deletingEventId))
+                    await onRefetch()
+                    setDeleteDialogOpen(false)
+                    setDeletingEventId(null)
+                    setDeletingEventTitle("")
+                  } catch (e: unknown) {
+                    console.error(e)
+                    toast.error(getErrorMessage(e, "Không thể xóa sự kiện"))
+                  }
+                }
+              }}
+            >
+              Xác nhận xóa
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   )
 }

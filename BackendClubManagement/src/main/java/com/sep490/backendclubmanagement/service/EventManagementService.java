@@ -50,9 +50,19 @@ public class EventManagementService {
             throw new ForbiddenException("Bạn không có quyền tạo sự kiện cho câu lạc bộ này.");
         }
 
+        // Kiểm tra thời gian bắt đầu phải >= thời gian hiện tại
+        if (request.getStartTime() != null && request.getStartTime().isBefore(LocalDateTime.now())) {
+            throw new ForbiddenException("Thời gian bắt đầu phải lớn hơn hoặc bằng thời gian hiện tại");
+        }
+
         boolean isClubPresident = request.getClubId() != null && roleService.isClubPresident(userId, request.getClubId());
         boolean isClubOfficer = request.getClubId() != null && roleService.isClubOfficer(userId, request.getClubId());
         boolean isMeeting = eventType != null && "MEETING".equalsIgnoreCase(eventType.getTypeName());
+        
+        // STAFF không được tạo sự kiện MEETING
+        if (isStaff && isMeeting) {
+            throw new ForbiddenException("STAFF không được tạo sự kiện loại MEETING");
+        }
         
         Club club = null;
         if (!isStaff) {
@@ -340,6 +350,15 @@ public class EventManagementService {
             throw new ForbiddenException("Request không ở trạng thái PENDING_CLUB");
         }
         
+        Event event = requestEvent.getEvent();
+        
+        // Kiểm tra thời gian bắt đầu: không cho duyệt nếu sự kiện đã bắt đầu
+        if (request.getStatus() == RequestStatus.APPROVED_CLUB && event != null) {
+            if (event.getStartTime().isBefore(LocalDateTime.now())) {
+                throw new ForbiddenException("Sự kiện đã bắt đầu, không thể duyệt");
+            }
+        }
+        
         if (request.getStatus() == RequestStatus.APPROVED_CLUB) {
             requestEvent.setStatus(RequestStatus.PENDING_UNIVERSITY);
         } else {
@@ -350,7 +369,6 @@ public class EventManagementService {
         requestEventRepository.save(requestEvent);
         requestEventRepository.flush();
         
-        Event event = requestEvent.getEvent();
         Club club = event != null ? event.getClub() : null;
         User creator = requestEvent.getCreatedBy();
         User approver = getUserById(userId); // Người duyệt (Club Officer)
@@ -550,8 +568,16 @@ public class EventManagementService {
             throw new ForbiddenException("Request không ở trạng thái PENDING_UNIVERSITY");
         }
         
+        Event event = requestEvent.getEvent();
+        
+        // Kiểm tra thời gian bắt đầu: không cho duyệt nếu sự kiện đã bắt đầu
+        if (request.getStatus() == RequestStatus.APPROVED_UNIVERSITY && event != null) {
+            if (event.getStartTime().isBefore(LocalDateTime.now())) {
+                throw new ForbiddenException("Sự kiện đã bắt đầu, không thể duyệt");
+            }
+        }
+        
         if (request.getStatus() == RequestStatus.APPROVED_UNIVERSITY) {
-            Event event = requestEvent.getEvent();
             event.setIsDraft(false);
             eventRepository.save(event);
             
@@ -564,7 +590,6 @@ public class EventManagementService {
         requestEventRepository.save(requestEvent);
         requestEventRepository.flush();
         
-        Event event = requestEvent.getEvent();
         Club club = event != null ? event.getClub() : null;
         User creator = requestEvent.getCreatedBy();
         User approver = getUserById(userId); // Người duyệt (Staff)
@@ -1087,29 +1112,49 @@ public class EventManagementService {
         
         // Xác định status hợp lệ theo role và clubId
         List<RequestStatus> allowedStatuses;
+        boolean isClubPresident = false;
+        boolean isClubOfficer = false;
+        
         if (clubId != null && clubId > 0) {
             // Check role theo clubId
-            if (roleService.isClubPresident(userId, clubId)) {
+            isClubPresident = roleService.isClubPresident(userId, clubId);
+            isClubOfficer = roleService.isClubOfficer(userId, clubId);
+            
+            if (isClubPresident) {
                 allowedStatuses = List.of(RequestStatus.PENDING_UNIVERSITY);
-            } else if (roleService.isClubOfficer(userId, clubId)) {
+            } else if (isClubOfficer) {
                 allowedStatuses = List.of(RequestStatus.PENDING_CLUB);
             } else {
                 throw new ForbiddenException("Bạn không có quyền xóa sự kiện này");
             }
         } else {
             // Event toàn trường hoặc không có club - check global role
-            if (roleService.isClubPresident(userId)) {
+            isClubPresident = roleService.isClubPresident(userId);
+            isClubOfficer = roleService.isClubOfficer(userId);
+            
+            if (isClubPresident) {
                 allowedStatuses = List.of(RequestStatus.PENDING_UNIVERSITY);
-            } else if (roleService.isClubOfficer(userId)) {
+            } else if (isClubOfficer) {
                 allowedStatuses = List.of(RequestStatus.PENDING_CLUB);
             } else {
                 throw new ForbiddenException("Bạn không có quyền xóa sự kiện này");
             }
         }
 
-        RequestEvent requestEvent = requestEventRepository
-                .findByEventIdAndCreatorWithEventAndStatusIn(eventId, userId, allowedStatuses)
-                .orElseThrow(() -> new NotFoundException("Không tìm thấy sự kiện nháp của bạn hoặc trạng thái không phù hợp"));
+        RequestEvent requestEvent;
+        
+        // CLUB_OFFICER (isClubPresident): Có thể xóa tất cả draft events của club với status PENDING_UNIVERSITY
+        // (không chỉ events do họ tạo, mà cả events do TEAM_OFFICER tạo và đã được họ duyệt)
+        if (isClubPresident && clubId != null && clubId > 0 && allowedStatuses.contains(RequestStatus.PENDING_UNIVERSITY)) {
+            requestEvent = requestEventRepository
+                    .findByEventIdAndStatusesAndClubIdWithAll(eventId, allowedStatuses, clubId)
+                    .orElseThrow(() -> new NotFoundException("Không tìm thấy sự kiện nháp hoặc trạng thái không phù hợp"));
+        } else {
+            // TEAM_OFFICER: Chỉ có thể xóa events do chính họ tạo
+            requestEvent = requestEventRepository
+                    .findByEventIdAndCreatorWithEventAndStatusIn(eventId, userId, allowedStatuses)
+                    .orElseThrow(() -> new NotFoundException("Không tìm thấy sự kiện nháp của bạn hoặc trạng thái không phù hợp"));
+        }
 
         if (requestEvent.getEvent() == null) {
             throw new NotFoundException("Event không tồn tại");
