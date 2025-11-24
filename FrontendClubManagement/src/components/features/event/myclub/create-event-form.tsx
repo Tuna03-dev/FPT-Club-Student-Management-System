@@ -145,7 +145,16 @@ export function CreateEventForm({ eventTypes, onSubmit, onSuccess, initialStartT
       return
     }
 
-    if (new Date(formData.startTime) >= new Date(formData.endTime)) {
+    const startTime = new Date(formData.startTime)
+    const endTime = new Date(formData.endTime)
+    const now = new Date()
+
+    if (startTime < now) {
+      setError("Thời gian bắt đầu phải lớn hơn hoặc bằng thời gian hiện tại")
+      return
+    }
+
+    if (startTime >= endTime) {
       setError("Thời gian kết thúc phải sau thời gian bắt đầu")
       return
     }
@@ -246,7 +255,7 @@ export function CreateEventForm({ eventTypes, onSubmit, onSuccess, initialStartT
           <SelectContent>
             {eventTypes.map((type) => (
               <SelectItem key={type.id} value={type.id}>
-                {type.name}
+                {type.name.toUpperCase() === "MEETING" ? `${type.name} (Sự kiện nội bộ)` : type.name}
               </SelectItem>
             ))}
           </SelectContent>

@@ -8,6 +8,8 @@ import com.sep490.backendclubmanagement.dto.request.RequestProposalRequest;
 import com.sep490.backendclubmanagement.dto.request.RejectContactRequest;
 import com.sep490.backendclubmanagement.dto.request.RejectDefenseScheduleRequest;
 import com.sep490.backendclubmanagement.dto.request.RejectProposalRequest;
+import com.sep490.backendclubmanagement.dto.request.RenameClubRequest;
+import com.sep490.backendclubmanagement.dto.request.RequestNameRevisionRequest;
 import com.sep490.backendclubmanagement.dto.request.SubmitFinalFormRequest;
 import com.sep490.backendclubmanagement.dto.request.SubmitProposalRequest;
 import com.sep490.backendclubmanagement.dto.request.UpdateRequestEstablishmentRequest;
@@ -76,14 +78,29 @@ public class RequestEstablishmentService {
 
     @Transactional
     public RequestEstablishmentResponse createRequest(Long userId, CreateRequestEstablishmentRequest request) throws AppException {
-        if (request.getClubName() == null || request.getClubName().trim().isEmpty()) {
+        String clubName = request.getClubName() != null ? request.getClubName().trim() : null;
+        String clubCategory = request.getClubCategory() != null ? request.getClubCategory().trim() : null;
+        String clubCode = request.getClubCode() != null && !request.getClubCode().trim().isEmpty()
+                ? request.getClubCode().trim()
+                : null;
+
+        if (clubName == null || clubName.isEmpty()) {
             throw new AppException(ErrorCode.INVALID_INPUT, "Tên CLB không được để trống");
         }
-        if (request.getClubCategory() == null || request.getClubCategory().trim().isEmpty()) {
+        if (clubCategory == null || clubCategory.isEmpty()) {
             throw new AppException(ErrorCode.INVALID_INPUT, "Danh mục CLB không được để trống");
         }
         if (request.getExpectedMemberCount() == null || request.getExpectedMemberCount() <= 0) {
             throw new AppException(ErrorCode.INVALID_INPUT, "Số lượng thành viên dự kiến phải lớn hơn 0");
+        }
+
+        validateClubNameUniqueness(clubName, null);
+
+        if (clubCode != null) {
+            if (clubRepository.existsByClubCodeIgnoreCase(clubCode)
+                    || requestEstablishmentRepository.existsByClubCodeIgnoreCase(clubCode)) {
+                throw new AppException(ErrorCode.INVALID_INPUT, "Mã CLB này đã tồn tại trong hệ thống");
+            }
         }
 
         User creator = userRepository.findById(userId)
@@ -94,9 +111,9 @@ public class RequestEstablishmentService {
                 : RequestEstablishmentStatus.SUBMITTED;
 
         RequestEstablishment requestEstablishment = RequestEstablishment.builder()
-                .clubName(request.getClubName().trim())
-                .clubCategory(request.getClubCategory().trim())
-                .clubCode(request.getClubCode() != null ? request.getClubCode().trim() : null)
+                .clubName(clubName)
+                .clubCategory(clubCategory)
+                .clubCode(clubCode)
                 .expectedMemberCount(request.getExpectedMemberCount())
                 .activityObjectives(request.getActivityObjectives())
                 .expectedActivities(request.getExpectedActivities())
@@ -308,6 +325,7 @@ public class RequestEstablishmentService {
                 RequestEstablishmentStatus.SUBMITTED,
                 RequestEstablishmentStatus.CONTACT_CONFIRMATION_PENDING,
                 RequestEstablishmentStatus.CONTACT_CONFIRMED,
+                RequestEstablishmentStatus.NAME_REVISION_REQUIRED,
                 RequestEstablishmentStatus.PROPOSAL_REQUIRED,
                 RequestEstablishmentStatus.PROPOSAL_SUBMITTED,
                 RequestEstablishmentStatus.PROPOSAL_REJECTED,
@@ -2234,6 +2252,185 @@ public class RequestEstablishmentService {
         }
 
         return builder.build();
+    }
+
+    @Transactional
+    public RequestEstablishmentResponse requestNameRevision(Long requestId, Long staffId, RequestNameRevisionRequest request) throws AppException {
+        RequestEstablishment requestEstablishment = requestEstablishmentRepository.findDetailById(requestId)
+                .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND, "Không tìm thấy yêu cầu thành lập CLB"));
+
+        if (requestEstablishment.getAssignedStaff() == null ||
+                !requestEstablishment.getAssignedStaff().getId().equals(staffId)) {
+            throw new AppException(ErrorCode.FORBIDDEN, "Bạn không có quyền yêu cầu chỉnh sửa tên cho yêu cầu này");
+        }
+
+        if (requestEstablishment.getStatus() != RequestEstablishmentStatus.CONTACT_CONFIRMED) {
+            throw new AppException(ErrorCode.INVALID_INPUT, "Chỉ có thể yêu cầu chỉnh sửa tên sau khi đã xác nhận liên hệ");
+        }
+
+        requestEstablishment.setStatus(RequestEstablishmentStatus.NAME_REVISION_REQUIRED);
+        requestEstablishment = requestEstablishmentRepository.save(requestEstablishment);
+        requestEstablishmentRepository.flush();
+
+        String comment = (request != null && request.getComment() != null && !request.getComment().trim().isEmpty())
+                ? request.getComment().trim()
+                : "Staff yêu cầu bạn cập nhật lại tên CLB để rõ ràng hơn";
+
+        try {
+            workflowHistoryService.createWorkflowHistory(
+                    requestEstablishment.getId(),
+                    staffId,
+                    "REQUEST_REVIEW",
+                    comment
+            );
+        } catch (Exception e) {
+            log.error("Failed to create workflow history for name revision request: {}", e.getMessage(), e);
+        }
+
+        try {
+            ClubCreationWebSocketPayload payload = ClubCreationWebSocketPayload.builder()
+                    .requestId(requestEstablishment.getId())
+                    .clubName(requestEstablishment.getClubName())
+                    .status(requestEstablishment.getStatus())
+                    .assignedStaffId(requestEstablishment.getAssignedStaff() != null
+                            ? requestEstablishment.getAssignedStaff().getId()
+                            : null)
+                    .assignedStaffName(requestEstablishment.getAssignedStaff() != null
+                            ? requestEstablishment.getAssignedStaff().getFullName()
+                            : null)
+                    .comment(comment)
+                    .message(comment)
+                    .build();
+
+            webSocketService.sendToUser(
+                    requestEstablishment.getCreatedBy().getEmail(),
+                    "CLUB_CREATION",
+                    "NAME_REVISION_REQUIRED",
+                    payload
+            );
+        } catch (Exception e) {
+            log.error("Failed to send WebSocket notification for name revision request: {}", e.getMessage(), e);
+        }
+
+        try {
+            String title = "Yêu cầu cập nhật tên CLB";
+            String actionUrl = "/club-creation/requests/" + requestEstablishment.getId();
+            notificationService.sendToUser(
+                    requestEstablishment.getCreatedBy().getId(),
+                    staffId,
+                    title,
+                    comment,
+                    NotificationType.CLUB_CREATION_NAME_REVISION_REQUESTED,
+                    NotificationPriority.NORMAL,
+                    actionUrl,
+                    null, null, null,
+                    requestEstablishment.getId(),
+                    null
+            );
+        } catch (Exception e) {
+            log.error("Failed to send notification for name revision request: {}", e.getMessage(), e);
+        }
+
+        return mapToResponse(requestEstablishment);
+    }
+
+    @Transactional
+    public RequestEstablishmentResponse submitNameRevision(Long requestId, Long userId, RenameClubRequest request) throws AppException {
+        RequestEstablishment requestEstablishment = requestEstablishmentRepository.findDetailById(requestId)
+                .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND, "Không tìm thấy yêu cầu thành lập CLB"));
+
+        if (!requestEstablishment.getCreatedBy().getId().equals(userId)) {
+            throw new AppException(ErrorCode.FORBIDDEN, "Bạn không có quyền cập nhật tên CLB cho yêu cầu này");
+        }
+
+        if (requestEstablishment.getStatus() != RequestEstablishmentStatus.NAME_REVISION_REQUIRED) {
+            throw new AppException(ErrorCode.INVALID_INPUT, "Yêu cầu này không cần cập nhật tên");
+        }
+
+        String newClubName = request.getNewClubName().trim();
+        validateClubNameUniqueness(newClubName, requestEstablishment.getId());
+
+        requestEstablishment.setClubName(newClubName);
+        requestEstablishment.setStatus(RequestEstablishmentStatus.CONTACT_CONFIRMED);
+
+        requestEstablishment = requestEstablishmentRepository.save(requestEstablishment);
+        requestEstablishmentRepository.flush();
+
+        try {
+            workflowHistoryService.createWorkflowHistory(
+                    requestEstablishment.getId(),
+                    userId,
+                    "REQUEST_REVIEW",
+                    "Sinh viên đã cập nhật tên CLB thành: " + newClubName
+            );
+        } catch (Exception e) {
+            log.error("Failed to create workflow history for name revision submission: {}", e.getMessage(), e);
+        }
+
+        try {
+            User staff = requestEstablishment.getAssignedStaff();
+            if (staff != null) {
+                ClubCreationWebSocketPayload payload = ClubCreationWebSocketPayload.builder()
+                        .requestId(requestEstablishment.getId())
+                        .clubName(requestEstablishment.getClubName())
+                        .status(requestEstablishment.getStatus())
+                        .assignedStaffId(staff.getId())
+                        .assignedStaffName(staff.getFullName())
+                        .creatorId(requestEstablishment.getCreatedBy().getId())
+                        .creatorName(requestEstablishment.getCreatedBy().getFullName())
+                        .message("Sinh viên đã cập nhật lại tên CLB: " + newClubName)
+                        .build();
+
+                webSocketService.sendToUser(
+                        staff.getEmail(),
+                        "CLUB_CREATION",
+                        "NAME_REVISION_SUBMITTED",
+                        payload
+                );
+            }
+        } catch (Exception e) {
+            log.error("Failed to send WebSocket notification for name revision submission: {}", e.getMessage(), e);
+        }
+
+        try {
+            User staff = requestEstablishment.getAssignedStaff();
+            if (staff != null) {
+                String title = "Sinh viên đã cập nhật tên CLB";
+                String message = String.format("Yêu cầu #%d đã được cập nhật tên thành \"%s\"",
+                        requestEstablishment.getId(), newClubName);
+                String actionUrl = "/staff/club-creation/requests/" + requestEstablishment.getId();
+                notificationService.sendToUser(
+                        staff.getId(),
+                        userId,
+                        title,
+                        message,
+                        NotificationType.CLUB_CREATION_NAME_UPDATED,
+                        NotificationPriority.NORMAL,
+                        actionUrl,
+                        null, null, null,
+                        requestEstablishment.getId(),
+                        null
+                );
+            }
+        } catch (Exception e) {
+            log.error("Failed to send notification for name revision submission: {}", e.getMessage(), e);
+        }
+
+        return mapToResponse(requestEstablishment);
+    }
+
+    private void validateClubNameUniqueness(String clubName, Long currentRequestId) throws AppException {
+        if (clubRepository.existsByClubNameIgnoreCase(clubName)) {
+            throw new AppException(ErrorCode.INVALID_INPUT, "Tên CLB này đã tồn tại trong hệ thống");
+        }
+
+        boolean existsInRequests = currentRequestId == null
+                ? requestEstablishmentRepository.existsByClubNameIgnoreCase(clubName)
+                : requestEstablishmentRepository.existsByClubNameIgnoreCaseAndIdNot(clubName, currentRequestId);
+
+        if (existsInRequests) {
+            throw new AppException(ErrorCode.INVALID_INPUT, "Tên CLB này đã tồn tại trong hệ thống");
+        }
     }
 
     private static final List<DefaultRoleDefinition> DEFAULT_ROLE_DEFINITIONS = List.of(

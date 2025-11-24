@@ -88,6 +88,9 @@ export function PendingRequestsCard({
           )
         );
         toast.success("Đã từ chối sự kiện");
+        await onRefetch();
+        // Refresh lại trang sau khi từ chối
+        window.location.reload();
       } else {
         await approveByClub(requestEventId, false, reason || undefined);
         const refreshed = await getPendingRequests(clubId && clubId > 0 ? clubId : undefined);
@@ -221,12 +224,18 @@ export function PendingRequestsCard({
                     </div>
                   );
                 })()}
-                {showActions && (
+                {showActions && (() => {
+                  // Kiểm tra xem sự kiện đã bắt đầu chưa
+                  const isEventStarted = req.event ? new Date(req.event.startTime) < new Date() : false;
+                  
+                  return (
                   <div className="flex gap-3">
                     <Button
                       size="sm"
                       variant="secondary"
                       className="bg-emerald-50 text-emerald-600 hover:bg-emerald-100"
+                      disabled={isEventStarted}
+                      title={isEventStarted ? "Sự kiện đã bắt đầu, không thể duyệt" : ""}
                       onClick={async (e) => {
                         e.stopPropagation();
                         const userNow = authService.getCurrentUser();
@@ -240,6 +249,9 @@ export function PendingRequestsCard({
                               )
                             );
                             toast.success("Đã duyệt sự kiện thành công");
+                            await onRefetch();
+                            // Refresh lại trang sau khi duyệt
+                            window.location.reload();
                           } else {
                             // Check systemRole in clubRoleList instead of global systemRole
                             const clubRole = clubId ? authService.getClubRole(clubId) : null;
@@ -285,7 +297,8 @@ export function PendingRequestsCard({
                       ✗ Từ chối
                     </Button>
                   </div>
-                )}
+                  );
+                })()}
               </div>
             );
           })}
