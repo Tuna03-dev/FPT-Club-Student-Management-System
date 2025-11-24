@@ -1,6 +1,5 @@
 package com.sep490.backendclubmanagement.repository;
 
-import com.sep490.backendclubmanagement.dto.request.ClubFilterRequest;
 import com.sep490.backendclubmanagement.dto.response.FeaturedClubDTO;
 import com.sep490.backendclubmanagement.entity.Club;
 import com.sep490.backendclubmanagement.entity.ClubMemberShip;
@@ -25,7 +24,7 @@ public interface ClubRepository extends JpaRepository<Club, Long> {
             c.id, c.clubName, c.logoUrl, c.description
         )
         FROM Club c
-        WHERE c.isFeatured = true   
+        WHERE c.isFeatured = true
     """)
     List<FeaturedClubDTO> findFeaturedClubs();
     Optional<Club> findByClubCode(String clubCode);
@@ -56,21 +55,19 @@ public interface ClubRepository extends JpaRepository<Club, Long> {
     @Query("SELECT c FROM Club c WHERE c.clubWallet IS NULL AND c.deletedAt IS NULL")
     List<Club> findClubsWithoutWallet();
 
-    // 🔹 Count total events for a club
-    @Query("SELECT COUNT(e.id) FROM Event e WHERE e.club.id = :clubId")
+    // 🔹 Count total events for a club (only published events)
+    @Query("SELECT COUNT(e.id) FROM Event e WHERE e.club.id = :clubId AND e.isDraft = false")
     Long countEventsByClubId(@Param("clubId") Long clubId);
 
-    // 🔹 Count total news for a club
-    @Query("SELECT COUNT(n.id) FROM News n WHERE n.club.id = :clubId")
+    // 🔹 Count total news for a club (only published news)
+    @Query("SELECT COUNT(n.id) FROM News n WHERE n.club.id = :clubId AND n.isDraft = false")
     Long countNewsByClubId(@Param("clubId") Long clubId);
 
     // 🔹 Check if club has active recruitment
     @Query("SELECT CASE WHEN COUNT(r) > 0 THEN true ELSE false END " +
             "FROM Recruitment r " +
             "WHERE r.club.id = :clubId " +
-            "AND r.status = 'OPEN' " +
-            "AND r.startDate <= CURRENT_TIMESTAMP " +
-            "AND r.endDate >= CURRENT_TIMESTAMP")
+            "AND r.status = 'OPEN' ")
     Boolean hasActiveRecruitment(@Param("clubId") Long clubId);
 
     // 🔹 Tìm ID của các CLB có nhiều event nhất

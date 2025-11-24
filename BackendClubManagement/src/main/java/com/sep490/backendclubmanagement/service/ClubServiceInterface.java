@@ -112,3 +112,4 @@ public interface ClubServiceInterface {
     ClubDetailData updateClubInfo(Long clubId, UpdateClubInfoRequest request, Long userId) throws AppException;
 }
 
+

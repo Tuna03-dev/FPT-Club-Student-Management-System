@@ -83,6 +83,22 @@ public class NewsService {
     }
 
     /**
+     * Lấy danh sách tin tức đã được publish của một câu lạc bộ với phân trang và tìm kiếm
+     */
+    public com.sep490.backendclubmanagement.dto.response.PagedResponse<NewsData> getPublishedNewsByClubId(
+            Long clubId, String keyword, org.springframework.data.domain.Pageable pageable) {
+        org.springframework.data.domain.Page<News> newsPage = newsRepository.findPublishedNewsByClubId(clubId, keyword, pageable);
+
+        org.springframework.data.domain.Page<NewsData> dataPage = newsPage.map(news -> {
+            NewsData dto = newsMapper.toDto(news);
+            dto.setClubId(news.getClub() != null ? news.getClub().getId() : null);
+            return dto;
+        });
+
+        return com.sep490.backendclubmanagement.dto.response.PagedResponse.of(dataPage);
+    }
+
+    /**
      * Normalize Vietnamese text by removing diacritics (accents)
      * Example: "đọc sách" -> "doc sach"
      */
@@ -94,3 +110,5 @@ public class NewsService {
         return normalized.toLowerCase();
     }
 }
+
+

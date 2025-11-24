@@ -138,6 +138,34 @@ export async function getRecruitmentsByClubId(
   return res.data;
 }
 
+// Get open recruitments by club ID
+export async function getOpenRecruitmentsByClubId(
+  clubId: number,
+  params: RecruitmentFilterRequest = {}
+): Promise<PagedResponse<RecruitmentData>> {
+  const {
+    status = "OPEN",
+    keyword,
+    page = 0,
+    size = 10,
+    sort = "startDate,desc",
+  } = params;
+
+  const queryParams = new URLSearchParams();
+  if (status) queryParams.append("status", status);
+  if (keyword && keyword.trim()) queryParams.append("keyword", keyword.trim());
+  queryParams.append("page", page.toString());
+  queryParams.append("size", size.toString());
+  queryParams.append("sort", sort);
+
+  const res = await axiosClient.get<PagedResponse<RecruitmentData>>(
+    `/recruitments/clubs/${clubId}/open?${queryParams.toString()}`
+  );
+
+  if (!res.data) throw new Error("Empty response");
+  return res.data;
+}
+
 // Get recruitment by ID
 export async function getRecruitmentById(id: number): Promise<RecruitmentData> {
   const res = await axiosClient.get<RecruitmentData>(`/recruitments/${id}`);

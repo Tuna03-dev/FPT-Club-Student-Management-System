@@ -16,6 +16,9 @@ import com.sep490.backendclubmanagement.service.RoleService;
 import com.sep490.backendclubmanagement.util.SecurityUtils;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 
@@ -256,5 +259,30 @@ public class EventController {
     @GetMapping("/without-report-requirement")
     public ApiResponse<List<EventWithoutReportRequirementDto>> getEventsWithoutReportRequirement() {
         return ApiResponse.success(eventService.getEventsWithoutReportRequirement());
+    }
+
+    /**
+     * Lấy danh sách events đã được publish của một câu lạc bộ với phân trang và tìm kiếm
+     */
+    @GetMapping("/clubs/{clubId}/published")
+    public ApiResponse<PagedResponse<EventData>> getPublishedEventsByClubId(
+            @PathVariable Long clubId,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "startTime,desc") String sort) {
+        Pageable pageable = createPageable(page, size, sort);
+        return ApiResponse.success(eventService.getPublishedEventsByClubId(clubId, keyword, pageable));
+    }
+
+    /**
+     * Helper method to create Pageable from sort string
+     */
+    private Pageable createPageable(int page, int size, String sortStr) {
+        String[] sortParams = sortStr.split(",");
+        String property = sortParams[0];
+        Sort.Direction direction = sortParams.length > 1 && sortParams[1].equalsIgnoreCase("asc")
+                ? Sort.Direction.ASC : Sort.Direction.DESC;
+        return PageRequest.of(page, size, Sort.by(direction, property));
     }
 }

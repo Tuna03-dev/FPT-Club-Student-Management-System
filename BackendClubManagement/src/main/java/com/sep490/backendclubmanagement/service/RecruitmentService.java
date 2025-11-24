@@ -605,6 +605,14 @@ public class RecruitmentService implements RecruitmentServiceInterface {
         }
     }
 
+    /**
+     * Close expired recruitments whose endDate is before the provided time.
+     * Returns the number of recruitments updated.
+     */
+    @Transactional
+    public int closeExpiredRecruitments(java.time.LocalDateTime now) {
+        // Only close recruitments that are currently OPEN
+        return recruitmentRepository.closeExpiredRecruitments(RecruitmentStatus.CLOSED, RecruitmentStatus.OPEN, now);
+    }
+
 }
-
-
