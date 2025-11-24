@@ -5,7 +5,6 @@ import com.sep490.backendclubmanagement.dto.request.UpdateClubInfoRequest;
 import com.sep490.backendclubmanagement.dto.response.ClubDetailData;
 import com.sep490.backendclubmanagement.dto.response.ClubDto;
 import com.sep490.backendclubmanagement.exception.AppException;
-import com.sep490.backendclubmanagement.security.SecurityConfig;
 import com.sep490.backendclubmanagement.service.ClubServiceInterface;
 import com.sep490.backendclubmanagement.util.SecurityUtils;
 import jakarta.validation.Valid;
@@ -29,7 +28,6 @@ public class ClubController {
      * @return Club detail data
      */
     @GetMapping("/{id}")
-    @PreAuthorize(SecurityConfig.AUTHORITY_ALL_ROLES)
     public ResponseEntity<ApiResponse<ClubDetailData>> getClubDetail(@PathVariable Long id) throws AppException {
         ClubDetailData data = clubService.getClubDetail(id);
         return ResponseEntity.ok(ApiResponse.success(data));
@@ -41,7 +39,6 @@ public class ClubController {
      * @return Club detail data
      */
     @GetMapping("/code/{clubCode}")
-    @PreAuthorize(SecurityConfig.AUTHORITY_ALL_ROLES)
     public ResponseEntity<ApiResponse<ClubDetailData>> getClubDetailByCode(@PathVariable String clubCode) throws AppException {
         ClubDetailData data = clubService.getClubDetailByCode(clubCode);
         return ResponseEntity.ok(ApiResponse.success(data));
@@ -52,7 +49,6 @@ public class ClubController {
      * @return List of clubs with id and clubName
      */
     @GetMapping
-    @PreAuthorize(SecurityConfig.AUTHORITY_ALL_ROLES)
     public ResponseEntity<ApiResponse<List<ClubDto>>> getAllClubs() {
         List<ClubDto> clubs = clubService.getAllClubs();
         return ResponseEntity.ok(ApiResponse.success(clubs));
@@ -60,12 +56,12 @@ public class ClubController {
 
     /**
      * Get club information for club members to view
-     * Only accessible by active members of the club
+     * Only accessible by active members of the club or ADMIN/STAFF
      * @param id Club ID
      * @return Club detail data
      */
     @GetMapping("/{id}/club-info")
-    @PreAuthorize(SecurityConfig.AUTHORITY_ALL_ROLES)
+    @PreAuthorize("@clubSecurity.isMemberOfClub(#id)")
     public ResponseEntity<ApiResponse<ClubDetailData>> getClubInfo(
             @PathVariable Long id) throws AppException {
         Long userId = SecurityUtils.getCurrentUserId();
@@ -74,13 +70,13 @@ public class ClubController {
     }
 
     /**
-     * Update club information (Club Officer only - roleLevel <= 2)
+     * Only club officers can update club information
      * @param id Club ID
      * @param request Update request with club information
      * @return Updated club detail data
      */
     @PutMapping("/{id}/officer-update")
-    @PreAuthorize(SecurityConfig.AUTHORITY_ALL_ROLES)
+    @PreAuthorize("@clubSecurity.isClubOfficerInClub(#id)")
     public ResponseEntity<ApiResponse<ClubDetailData>> updateClubInfo(
             @PathVariable Long id,
             @Valid @RequestBody UpdateClubInfoRequest request) throws AppException {
