@@ -74,5 +74,6 @@ public interface RequestEstablishmentRepository extends JpaRepository<RequestEst
     );
 
     boolean existsByClubCodeIgnoreCase(String clubCode);
+    boolean existsByClubNameIgnoreCase(String clubName);
 }
 

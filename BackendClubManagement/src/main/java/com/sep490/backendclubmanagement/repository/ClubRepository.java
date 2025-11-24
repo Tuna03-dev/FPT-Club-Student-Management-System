@@ -30,6 +30,8 @@ public interface ClubRepository extends JpaRepository<Club, Long> {
     List<FeaturedClubDTO> findFeaturedClubs();
     Optional<Club> findByClubCode(String clubCode);
     Optional<Club> findByClubName(String clubName);
+    boolean existsByClubNameIgnoreCase(String clubName);
+    boolean existsByClubCodeIgnoreCase(String clubCode);
 
     // 🔹 Reset toàn bộ CLB về không nổi bật
     @Modifying

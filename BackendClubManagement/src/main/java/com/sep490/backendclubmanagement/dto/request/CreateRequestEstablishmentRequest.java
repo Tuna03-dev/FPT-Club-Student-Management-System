@@ -1,7 +1,9 @@
 package com.sep490.backendclubmanagement.dto.request;
 
+import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
 import lombok.Getter;
 import lombok.Setter;
@@ -29,9 +31,11 @@ public class CreateRequestEstablishmentRequest {
     private String clubCode; // Mã CLB
 
     @NotBlank(message = "Email liên hệ không được để trống")
+    @Email(message = "Email không hợp lệ")
     private String email; // Email liên hệ
 
     @NotBlank(message = "Số điện thoại không được để trống")
+    @Pattern(regexp = "^(0|\\+84)[0-9]{9}$", message = "Số điện thoại phải có 10 số và bắt đầu bằng 0 hoặc +84")
     private String phone; // Số điện thoại liên hệ
 
     private String facebookLink; // Link Facebook (optional)

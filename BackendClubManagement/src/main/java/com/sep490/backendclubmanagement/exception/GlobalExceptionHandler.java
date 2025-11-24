@@ -22,7 +22,7 @@ public class GlobalExceptionHandler {
 
         return ResponseEntity
                 .status(code.getHttpStatus())
-                .body(ApiResponse.error(code,null));
+                .body(ApiResponse.error(code, ex.getMessage(), null));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

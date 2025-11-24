@@ -76,14 +76,32 @@ public class RequestEstablishmentService {
 
     @Transactional
     public RequestEstablishmentResponse createRequest(Long userId, CreateRequestEstablishmentRequest request) throws AppException {
-        if (request.getClubName() == null || request.getClubName().trim().isEmpty()) {
+        String clubName = request.getClubName() != null ? request.getClubName().trim() : null;
+        String clubCategory = request.getClubCategory() != null ? request.getClubCategory().trim() : null;
+        String clubCode = request.getClubCode() != null && !request.getClubCode().trim().isEmpty()
+                ? request.getClubCode().trim()
+                : null;
+
+        if (clubName == null || clubName.isEmpty()) {
             throw new AppException(ErrorCode.INVALID_INPUT, "Tên CLB không được để trống");
         }
-        if (request.getClubCategory() == null || request.getClubCategory().trim().isEmpty()) {
+        if (clubCategory == null || clubCategory.isEmpty()) {
             throw new AppException(ErrorCode.INVALID_INPUT, "Danh mục CLB không được để trống");
         }
         if (request.getExpectedMemberCount() == null || request.getExpectedMemberCount() <= 0) {
             throw new AppException(ErrorCode.INVALID_INPUT, "Số lượng thành viên dự kiến phải lớn hơn 0");
+        }
+
+        if (clubRepository.existsByClubNameIgnoreCase(clubName)
+                || requestEstablishmentRepository.existsByClubNameIgnoreCase(clubName)) {
+            throw new AppException(ErrorCode.INVALID_INPUT, "Tên CLB này đã tồn tại trong hệ thống");
+        }
+
+        if (clubCode != null) {
+            if (clubRepository.existsByClubCodeIgnoreCase(clubCode)
+                    || requestEstablishmentRepository.existsByClubCodeIgnoreCase(clubCode)) {
+                throw new AppException(ErrorCode.INVALID_INPUT, "Mã CLB này đã tồn tại trong hệ thống");
+            }
         }
 
         User creator = userRepository.findById(userId)
@@ -94,9 +112,9 @@ public class RequestEstablishmentService {
                 : RequestEstablishmentStatus.SUBMITTED;
 
         RequestEstablishment requestEstablishment = RequestEstablishment.builder()
-                .clubName(request.getClubName().trim())
-                .clubCategory(request.getClubCategory().trim())
-                .clubCode(request.getClubCode() != null ? request.getClubCode().trim() : null)
+                .clubName(clubName)
+                .clubCategory(clubCategory)
+                .clubCode(clubCode)
                 .expectedMemberCount(request.getExpectedMemberCount())
                 .activityObjectives(request.getActivityObjectives())
                 .expectedActivities(request.getExpectedActivities())

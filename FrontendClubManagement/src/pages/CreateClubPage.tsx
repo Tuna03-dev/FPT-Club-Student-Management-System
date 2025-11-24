@@ -415,6 +415,20 @@ const CreateClubPage = () => {
 
   // Handle form submission (create request)
   const handleFormSubmit = async (formData: ClubRequestFormData) => {
+    const phoneRegex = /^(0|\+84)[0-9]{9}$/;
+    const emailRegex = /^\S+@\S+\.\S+$/;
+    if (!formData.email || !emailRegex.test(formData.email.trim())) {
+      toast.error("Email không hợp lệ", {
+        description: "Vui lòng nhập đúng định dạng email.",
+      });
+      return;
+    }
+    if (!formData.phone || !phoneRegex.test(formData.phone.trim())) {
+      toast.error("Số điện thoại không hợp lệ", {
+        description: "Vui lòng nhập số gồm 10 chữ số bắt đầu bằng 0 hoặc +84.",
+      });
+      return;
+    }
     try {
       setIsLoading(true);
       await clubCreationApi.createRequest({
@@ -436,8 +450,12 @@ const CreateClubPage = () => {
       await loadRequests();
       setActiveTab("pending");
     } catch (error: any) {
+      const apiMessage =
+        error?.response?.data?.message ||
+        error?.response?.data?.error ||
+        error?.message;
       toast.error("Không thể tạo yêu cầu", {
-        description: error.message || "Đã xảy ra lỗi",
+        description: apiMessage || "Đã xảy ra lỗi",
       });
     } finally {
       setIsLoading(false);
