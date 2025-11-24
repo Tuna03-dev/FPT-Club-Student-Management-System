@@ -17,7 +17,7 @@ public interface ClubMapper {
     @Mapping(source = "clubCategory.categoryName", target = "categoryName")
     @Mapping(target = "totalMembers", ignore = true)
     @Mapping(target = "totalEvents", ignore = true)
-    @Mapping(target = "totalPosts", ignore = true)
+    @Mapping(target = "totalNews", ignore = true)
     @Mapping(target = "isRecruiting", ignore = true)
     @Mapping(target = "presidents", ignore = true)
     ClubDetailData toClubDetailData(Club club);
