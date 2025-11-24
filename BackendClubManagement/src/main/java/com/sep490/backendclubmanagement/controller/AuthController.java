@@ -118,10 +118,14 @@ public class AuthController {
         authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(httpRequest));
         SecurityContextHolder.getContext().setAuthentication(authToken);
 
+        // Lấy club roles của user
+        List<com.sep490.backendclubmanagement.dto.response.ClubRoleInfo> clubRoleList =
+                clubManagementService.getUserClubRoles(user.getId());
+
         Map<String, Object> extraClaims = new HashMap<>();
         extraClaims.put("fullName", user.getFullName());
         extraClaims.put("avatarUrl", user.getAvatarUrl());
-        extraClaims.put("systemRole", user.getSystemRole().getRoleName());
+        extraClaims.put("clubRoles", clubRoleList);
 
         String accessToken = jwtUtil.generateAccessToken(extraClaims, securityUser);
         String refreshToken = jwtUtil.generateRefreshToken(securityUser);
@@ -145,14 +149,10 @@ public class AuthController {
             httpResponse.addCookie(refreshTokenCookie);
             log.info("Refresh token cookie set for user: {}", user.getEmail());
         } catch (Exception e) {
-            log.error("Failed to set refresh token cookie for user: {}", user.getEmail(), e);
-        }
+                log.error("Failed to set refresh token cookie for user: {}", user.getEmail(), e);
+            }
 
-        // Lấy club roles của user
-        List<com.sep490.backendclubmanagement.dto.response.ClubRoleInfo> clubRoleList = 
-                clubManagementService.getUserClubRoles(user.getId());
-
-        AuthenticationResponse.UserInfo userInfo = AuthenticationResponse.UserInfo.builder()
+            AuthenticationResponse.UserInfo userInfo = AuthenticationResponse.UserInfo.builder()
                 .id(user.getId())
                 .email(user.getEmail())
                 .fullName(user.getFullName())
@@ -241,10 +241,15 @@ public class AuthController {
             authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
             SecurityContextHolder.getContext().setAuthentication(authToken);
 
+            // Lấy club roles của user
+            List<com.sep490.backendclubmanagement.dto.response.ClubRoleInfo> clubRoleList =
+                    clubManagementService.getUserClubRoles(user.getId());
+
             Map<String, Object> extraClaims = new HashMap<>();
             extraClaims.put("fullName", user.getFullName());
             extraClaims.put("avatarUrl", user.getAvatarUrl());
             extraClaims.put("systemRole", systemRole);
+            extraClaims.put("clubRoles", clubRoleList);
 
             String newAccessToken = jwtUtil.generateAccessToken(extraClaims, securityUser);
             String newRefreshToken = jwtUtil.generateRefreshToken(securityUser);
@@ -274,9 +279,6 @@ public class AuthController {
                 log.error("Failed to set new refresh token cookie for user: {}", email, e);
             }
 
-            // Lấy club roles của user
-            List<com.sep490.backendclubmanagement.dto.response.ClubRoleInfo> clubRoleList = 
-                    clubManagementService.getUserClubRoles(user.getId());
 
             AuthenticationResponse.UserInfo userInfo = AuthenticationResponse.UserInfo.builder()
                     .id(user.getId())

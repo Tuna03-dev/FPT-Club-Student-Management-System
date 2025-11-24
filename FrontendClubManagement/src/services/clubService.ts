@@ -75,7 +75,7 @@ export interface ClubDetailData {
   // Statistics
   totalMembers: number;
   totalEvents: number;
-  totalPosts: number;
+  totalNews: number;
 
   // Recruitment info
   isRecruiting: boolean; // Câu lạc bộ đang mở đợt tuyển (Backend tự động set)
@@ -141,6 +141,11 @@ export const clubService = {
 
   async getTeams(clubId: number): Promise<ApiResponse<TeamDTO[]>> {
     const url = `/clubs/${clubId}/teams`;
+    return axiosClient.get<TeamDTO[]>(url);
+  },
+
+  async getTeamsInClubDetail(clubId: number): Promise<ApiResponse<TeamDTO[]>> {
+    const url = `/clubs/${clubId}/teams/dto`;
     return axiosClient.get<TeamDTO[]>(url);
   },
 };
