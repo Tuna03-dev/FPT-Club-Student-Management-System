@@ -109,7 +109,9 @@ export const memberService = {
     clubId: number
   ): Promise<ApiResponse<SimpleMemberResponse[]>> {
     const url = `/clubs/${clubId}/members/all-active`;
-    return axiosClient.get<SimpleMemberResponse[]>(url);
+    return axiosClient.get<SimpleMemberResponse[]>(url, {
+      timeout: 15000, // 15 seconds
+    });
   },
 
   async getMembers(
@@ -128,7 +130,9 @@ export const memberService = {
     query.set("size", String(params.size ?? 10));
 
     const url = `/clubs/${clubId}/members?${query.toString()}`;
-    return axiosClient.get<PageResponse<MemberResponseDTO>>(url);
+    return axiosClient.get<PageResponse<MemberResponseDTO>>(url, {
+      timeout: 15000, // 15 seconds
+    });
   },
 
   async getLeftMembers(
@@ -145,7 +149,9 @@ export const memberService = {
     query.set("size", String(params.size ?? 10));
 
     const url = `/clubs/${clubId}/members/left?${query.toString()}`;
-    return axiosClient.get<PageResponse<MemberResponseDTO>>(url);
+    return axiosClient.get<PageResponse<MemberResponseDTO>>(url, {
+      timeout: 15000, // 15 seconds
+    });
   },
   async changeRole(
     clubId: number,

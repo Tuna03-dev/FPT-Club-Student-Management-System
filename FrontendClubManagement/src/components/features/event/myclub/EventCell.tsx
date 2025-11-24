@@ -1,4 +1,5 @@
 "use client"
+import { Video } from "lucide-react"
 import type { CalendarEvent } from "./EventCalendarGrid"
 
 interface EventCellProps {
@@ -64,7 +65,7 @@ export function EventCell({
                   ? String(event.eventTypeName).trim().toUpperCase()
                   : ""
                 if (t === "MEETING") {
-                  return <span className="align-middle">📷</span>
+                  return <Video className="w-3 h-3 align-middle flex-shrink-0 text-black dark:text-white" />
                 }
                 return null
               })()}

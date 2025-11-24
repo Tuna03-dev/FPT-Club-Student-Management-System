@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import useMyClubs from "@/hooks/useMyClubs";
 import { toast } from "sonner";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 
 const Header: React.FC = () => {
   const [user, setUser] = useState<UserInfo | null>(null);
@@ -132,6 +133,9 @@ const Header: React.FC = () => {
 
           {/* Avatar / Login */}
           <div className="flex items-center gap-3">
+            {isAuthenticated && user && (
+              <NotificationBell />
+            )}
             {isAuthenticated && user ? (
               <DropdownMenu
                 onOpenChange={(open) => {

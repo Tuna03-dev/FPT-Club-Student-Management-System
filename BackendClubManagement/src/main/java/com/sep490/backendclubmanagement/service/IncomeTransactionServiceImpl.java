@@ -110,6 +110,29 @@ public class IncomeTransactionServiceImpl implements IncomeTransactionService {
         User createdBy = userRepository.findById(currentUserId)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
 
+        // 🔒 DUPLICATE PAYMENT CHECK: Ngăn chặn 1 người đóng cùng 1 khoản phí 2 lần
+        if (request.getFeeId() != null && request.getUserId() != null) {
+            // Kiểm tra xem user đã thanh toán thành công fee này chưa
+            boolean alreadyPaid = incomeTransactionRepository.existsByUser_IdAndFee_IdAndStatus(
+                    request.getUserId(),
+                    request.getFeeId(),
+                    TransactionStatus.SUCCESS
+            );
+
+            if (alreadyPaid) {
+                User user = userRepository.findById(request.getUserId())
+                        .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+                Fee fee = feeRepository.findById(request.getFeeId())
+                        .orElseThrow(() -> new AppException(ErrorCode.FEE_NOT_FOUND));
+
+                log.warn("[Duplicate Payment] User {} đã thanh toán khoản phí {} trước đó. Từ chối tạo giao dịch mới.",
+                        user.getFullName(), fee.getTitle());
+
+                throw new AppException(ErrorCode.VALIDATION_ERROR,
+                        String.format("Người dùng %s đã thanh toán khoản phí '%s' trước đó. Không thể thanh toán lại.",
+                                user.getFullName(), fee.getTitle()));
+            }
+        }
 
         boolean isClubOfficer = roleMemberShipRepository.existsClubAdmin(currentUserId, clubId);
         TransactionStatus initialStatus = isClubOfficer ? TransactionStatus.SUCCESS : TransactionStatus.PENDING;

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -36,6 +36,8 @@ import {
   Circle,
   Send,
   Download,
+  Edit,
+  Info,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -48,6 +50,7 @@ import {
   type ClubCreationStepResponse,
   type WorkflowHistoryResponse,
 } from "@/api/clubCreation";
+import { useWebSocket, type ClubCreationWebSocketPayload } from "@/hooks/useWebSocket";
 
 interface ClubCreationRequest {
   id: string;
@@ -86,6 +89,10 @@ const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
   CONTACT_CONFIRMED: {
     label: "Đã xác nhận liên hệ",
     color: "bg-green-100 text-green-800",
+  },
+  NAME_REVISION_REQUIRED: {
+    label: "Chờ cập nhật tên",
+    color: "bg-orange-100 text-orange-800",
   },
   CONTACT_REJECTED: {
     label: "Từ chối liên hệ",
@@ -143,6 +150,7 @@ const getStepCodeFromStatus = (status: string): string | null => {
     SUBMITTED: "REQUEST_SUBMITTED",
     CONTACT_CONFIRMATION_PENDING: "REQUEST_REVIEW",
     CONTACT_CONFIRMED: "REQUEST_REVIEW",
+  NAME_REVISION_REQUIRED: "REQUEST_REVIEW",
     PROPOSAL_REQUIRED: "PROPOSAL_REQUIRED",
     PROPOSAL_SUBMITTED: "PROPOSAL_SUBMITTED",
     PROPOSAL_APPROVED: "PROPOSAL_REVIEW",
@@ -234,6 +242,12 @@ export default function ClubCreationManagement() {
   const [isRequestProposalDialogOpen, setIsRequestProposalDialogOpen] = useState(false);
   const [proposalRequestNote, setProposalRequestNote] = useState("");
   const [proposalRequestTarget, setProposalRequestTarget] = useState<ClubCreationRequest | null>(null);
+  const [isNameRevisionDialogOpen, setIsNameRevisionDialogOpen] = useState(false);
+  const [nameRevisionComment, setNameRevisionComment] = useState("");
+
+  // WebSocket connection
+  const token = localStorage.getItem("accessToken") || null;
+  const { isConnected, subscribeToUserQueue, subscribeToSystemRole } = useWebSocket(token);
 
   // Load workflow steps
   const loadWorkflowSteps = async () => {
@@ -249,19 +263,122 @@ export default function ClubCreationManagement() {
   };
 
   // Load pending requests
-  const loadPendingRequests = async () => {
-    setIsLoading(true);
+  const loadPendingRequests = useCallback(async () => {
     try {
+      // Đảm bảo workflowSteps đã được load
+      let steps = workflowSteps;
+      if (steps.length === 0) {
+        steps = await clubCreationApi.getClubCreationSteps();
+        setWorkflowSteps(steps);
+      }
+      
       const response = await clubCreationStaffApi.getPendingRequests(0, 20);
-      setClubRequests(response.content.map((req) => convertToClubCreationRequest(req, workflowSteps)));
+      setClubRequests(response.content.map((req) => convertToClubCreationRequest(req, steps)));
     } catch (error: any) {
       toast.error("Không thể tải danh sách yêu cầu", {
         description: error.message || "Đã xảy ra lỗi",
       });
-    } finally {
-      setIsLoading(false);
     }
-  };
+  }, [workflowSteps]);
+
+  // 🔔 WebSocket: Real-time updates for Club Creation (Staff)
+  useEffect(() => {
+    if (!isConnected) return;
+
+    // Subscribe to user queue (for assigned requests)
+    const unsubscribeUser = subscribeToUserQueue((msg) => {
+      if (msg.type !== "CLUB_CREATION") return;
+
+      const payload = msg.payload as ClubCreationWebSocketPayload;
+      const requestId = payload.requestId;
+
+      // Show toast notification based on action
+      switch (msg.action) {
+        case "REQUEST_SUBMITTED":
+          toast.info("Yêu cầu mới đã được gửi", {
+            description: `Sinh viên ${payload.creatorName} đã gửi yêu cầu thành lập CLB "${payload.clubName}"`,
+          });
+          // Refresh request list (luôn refresh để cập nhật UI)
+          if (activeTab === "pending") {
+            loadPendingRequests();
+          }
+          break;
+        case "PROPOSAL_SUBMITTED":
+          toast.info("Đề án mới đã được nộp", {
+            description: payload.proposalTitle 
+              ? `Đề án "${payload.proposalTitle}" đã được nộp cho yêu cầu "${payload.clubName}"`
+              : payload.message,
+          });
+          // Refresh request list để hiển thị nút duyệt (luôn refresh, không cần check activeTab)
+          loadPendingRequests();
+          // Refresh detail if dialog is open
+          if (isDetailDialogOpen && selectedRequest && parseInt(selectedRequest.id) === requestId) {
+            loadRequestDetail(requestId);
+          }
+          break;
+        case "DEFENSE_SCHEDULE_PROPOSED":
+          toast.info("Lịch bảo vệ mới đã được đề xuất", {
+            description: payload.defenseDate
+              ? `Lịch bảo vệ: ${new Date(payload.defenseDate).toLocaleString("vi-VN")} - ${payload.location || "Chưa có địa điểm"}`
+              : payload.message,
+          });
+          // Refresh request list để hiển thị nút duyệt (luôn refresh, không cần check activeTab)
+          loadPendingRequests();
+          // Refresh detail if dialog is open
+          if (isDetailDialogOpen && selectedRequest && parseInt(selectedRequest.id) === requestId) {
+            loadRequestDetail(requestId);
+          }
+          break;
+        case "FINAL_FORM_SUBMITTED":
+          toast.info("Form cuối đã được nộp", {
+            description: payload.finalFormTitle
+              ? `Form cuối "${payload.finalFormTitle}" đã được nộp cho yêu cầu "${payload.clubName}"`
+              : payload.message,
+          });
+          // Refresh request list để hiển thị nút duyệt (luôn refresh, không cần check activeTab)
+          loadPendingRequests();
+          // Refresh detail if dialog is open
+          if (isDetailDialogOpen && selectedRequest && parseInt(selectedRequest.id) === requestId) {
+            loadRequestDetail(requestId);
+          }
+          break;
+        case "NAME_REVISION_SUBMITTED":
+          toast.info("Sinh viên đã cập nhật tên CLB", {
+            description: payload.message || `Yêu cầu "${payload.clubName}" đã được cập nhật tên mới.`,
+          });
+          loadPendingRequests();
+          if (isDetailDialogOpen && selectedRequest && parseInt(selectedRequest.id) === requestId) {
+            loadRequestDetail(requestId);
+          }
+          break;
+        default:
+          // Handle other actions silently
+          break;
+      }
+    });
+
+    // Subscribe to STAFF role broadcast (for new requests)
+    const unsubscribeStaff = subscribeToSystemRole("STAFF", (msg) => {
+      if (msg.type !== "CLUB_CREATION") return;
+
+      const payload = msg.payload as ClubCreationWebSocketPayload;
+
+      if (msg.action === "REQUEST_SUBMITTED") {
+        toast.info("Yêu cầu mới đã được gửi", {
+          description: `Sinh viên ${payload.creatorName} đã gửi yêu cầu thành lập CLB "${payload.clubName}"`,
+        });
+        // Refresh request list if on pending tab
+        if (activeTab === "pending") {
+          loadPendingRequests();
+        }
+      }
+    });
+
+    return () => {
+      unsubscribeUser?.();
+      unsubscribeStaff?.();
+    };
+  }, [isConnected, activeTab, isDetailDialogOpen, selectedRequest, subscribeToUserQueue, subscribeToSystemRole, loadPendingRequests]);
 
   useEffect(() => {
     loadWorkflowSteps();
@@ -601,6 +718,36 @@ export default function ClubCreationManagement() {
     }
   };
 
+  const openNameRevisionDialog = (request: ClubCreationRequest) => {
+    setSelectedRequest(request);
+    setNameRevisionComment("");
+    setIsNameRevisionDialogOpen(true);
+  };
+
+  const handleSubmitNameRevisionRequest = async () => {
+    if (!selectedRequest) return;
+    const requestId = parseInt(selectedRequest.id);
+
+    try {
+      setIsLoading(true);
+      const payload = nameRevisionComment.trim()
+        ? { comment: nameRevisionComment.trim() }
+        : undefined;
+      await clubCreationStaffApi.requestNameRevision(requestId, payload);
+      toast.success("Đã yêu cầu sinh viên cập nhật tên CLB");
+      setIsNameRevisionDialogOpen(false);
+      setNameRevisionComment("");
+      await loadPendingRequests();
+      await loadRequestDetail(requestId);
+    } catch (error: any) {
+      toast.error("Không thể yêu cầu chỉnh sửa tên", {
+        description: error.message || "Đã xảy ra lỗi",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // Filter requests by status
   // Pending: Chưa được staff xử lý (SUBMITTED, CONTACT_CONFIRMATION_PENDING)
   const pendingRequests = clubRequests.filter(
@@ -612,6 +759,7 @@ export default function ClubCreationManagement() {
   const approvedRequests = clubRequests.filter(
     (r) =>
       r.status === "CONTACT_CONFIRMED" ||
+      r.status === "NAME_REVISION_REQUIRED" ||
       r.status === "PROPOSAL_REQUIRED" ||
       r.status === "PROPOSAL_SUBMITTED" ||
       r.status === "PROPOSAL_REJECTED" ||
@@ -1045,6 +1193,22 @@ export default function ClubCreationManagement() {
                 )}
 
                 <Separator />
+
+                {selectedRequest.status === "NAME_REVISION_REQUIRED" && (
+                  <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                    <Info className="h-5 w-5 text-amber-600 mt-0.5" />
+                    <div>
+                      <p className="text-sm font-semibold text-amber-900">
+                        Đang chờ sinh viên cập nhật lại tên CLB
+                      </p>
+                      <p className="text-sm text-amber-800">
+                        Sau khi sinh viên chỉnh sửa tên, bạn có thể tiếp tục yêu cầu nộp đề án.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {selectedRequest.status === "NAME_REVISION_REQUIRED" && <Separator />}
 
                 {/* Club Information */}
                 {requestDetail && (
@@ -1492,12 +1656,21 @@ export default function ClubCreationManagement() {
                       </>
                     )}
                     {selectedRequest.status === "CONTACT_CONFIRMED" && (
-                      <Button
-                        onClick={() => openRequestProposalDialog(selectedRequest)}
-                      >
-                        <Send className="mr-2 h-4 w-4" />
-                        Yêu cầu đề án
-                      </Button>
+                      <>
+                        <Button
+                          variant="outline"
+                          onClick={() => openNameRevisionDialog(selectedRequest)}
+                        >
+                          <Edit className="mr-2 h-4 w-4" />
+                          Yêu cầu chỉnh sửa tên
+                        </Button>
+                        <Button
+                          onClick={() => openRequestProposalDialog(selectedRequest)}
+                        >
+                          <Send className="mr-2 h-4 w-4" />
+                          Yêu cầu đề án
+                        </Button>
+                      </>
                     )}
                     {selectedRequest.status === "PROPOSAL_SUBMITTED" && (
                       <>
@@ -1656,6 +1829,49 @@ export default function ClubCreationManagement() {
               Hủy
             </Button>
             <Button onClick={handleSubmitProposalRequest} disabled={isLoading}>
+              Gửi yêu cầu
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Name Revision Request Dialog */}
+      <Dialog
+        open={isNameRevisionDialogOpen}
+        onOpenChange={(open) => {
+          setIsNameRevisionDialogOpen(open);
+          if (!open) {
+            setNameRevisionComment("");
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Yêu cầu sinh viên chỉnh sửa tên CLB</DialogTitle>
+            <DialogDescription>
+              {selectedRequest?.clubName} - {selectedRequest?.clubCode}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2">
+            <Label htmlFor="nameRevisionComment">Ghi chú cho sinh viên (tùy chọn)</Label>
+            <Textarea
+              id="nameRevisionComment"
+              placeholder="Ví dụ: Vui lòng ghi rõ chuyên ngành hoặc viết đầy đủ tên CLB..."
+              value={nameRevisionComment}
+              onChange={(e) => setNameRevisionComment(e.target.value)}
+              rows={4}
+            />
+            <p className="text-xs text-muted-foreground">
+              Ghi chú sẽ được hiển thị trong lịch sử quy trình và gửi qua thông báo cho sinh viên.
+            </p>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsNameRevisionDialogOpen(false)}>
+              Hủy
+            </Button>
+            <Button onClick={handleSubmitNameRevisionRequest} disabled={isLoading}>
               Gửi yêu cầu
             </Button>
           </DialogFooter>

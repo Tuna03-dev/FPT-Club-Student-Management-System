@@ -5,7 +5,9 @@ import { ChevronLeft, ChevronRight, X, Calendar, MapPin, Users, ClipboardCheck, 
 import { useNavigate, useParams } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import { UpdateEventForm, type UpdateEventFormData } from "./update-event-form"
 import { updateEvent, deleteEvent, getEventById, registerForEvent, cancelEventRegistration, getRegistrationStatus, cancelClubEventByStaff, publishEventByStaff, type UpdateEventPayload } from "@/service/EventService"
 import { authService } from "@/services/authService"
@@ -54,13 +56,19 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
   const [clubName, setClubName] = useState<string | null>(null)
   const [eventTypeName, setEventTypeName] = useState<string | null>(null)
   const [eventClubId, setEventClubId] = useState<number | null>(null)
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false)
+  const [cancelReason, setCancelReason] = useState("")
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   
   // Get clubId from props or URL params
   const currentClubId = clubId || (params.clubId ? parseInt(params.clubId as string, 10) : undefined)
   const user = authService.getCurrentUser()
-  const isClubPresident = user?.systemRole === "CLUB_OFFICER"
-  const isClubOfficer = user?.systemRole === "TEAM_OFFICER"
   const isStaff = user?.systemRole === "STAFF"
+  // Check systemRole in clubRoleList instead of global systemRole
+  const clubRole = currentClubId ? authService.getClubRole(currentClubId) : null
+  const systemRoleInClub = clubRole?.systemRole?.toUpperCase()
+  const isClubPresident = currentClubId && systemRoleInClub === "CLUB_OFFICER"
+  const isClubOfficer = currentClubId && systemRoleInClub === "TEAM_OFFICER"
   const canMarkAttendance = isClubPresident || isClubOfficer
   const canManageMeeting = canMarkAttendance // FE: lãnh đạo CLB có quyền quản lý MEETING
 
@@ -365,19 +373,8 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
               <Button
                 className="flex-1 bg-rose-600 hover:bg-rose-700 text-white h-10 text-sm gap-2"
                 disabled={isDeleting}
-                onClick={async () => {
-                  try {
-                    setIsDeleting(true)
-                    await deleteEvent(Number(event.id))
-                    toast.success("Đã xóa sự kiện thành công")
-                    onDeleted?.(event.id)
-                    onClose()
-                  } catch (error: unknown) {
-                    console.error("Error deleting event:", error)
-                    toast.error(getErrorMessage(error, "Không thể xóa sự kiện. Vui lòng thử lại."))
-                  } finally {
-                    setIsDeleting(false)
-                  }
+                onClick={() => {
+                  setDeleteDialogOpen(true)
                 }}
               >
                 {isDeleting ? (
@@ -424,19 +421,8 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
                   <Button
                     className="flex-1 bg-rose-600 hover:bg-rose-700 text-white h-10 text-sm gap-2"
                     disabled={isDeleting}
-                    onClick={async () => {
-                      try {
-                        setIsDeleting(true)
-                        await deleteEvent(Number(event.id))
-                        toast.success("Đã xóa sự kiện thành công")
-                        onDeleted?.(event.id)
-                        onClose()
-                      } catch (error: unknown) {
-                        console.error("Error deleting event:", error)
-                        toast.error(getErrorMessage(error, "Không thể xóa sự kiện. Vui lòng thử lại."))
-                      } finally {
-                        setIsDeleting(false)
-                      }
+                    onClick={() => {
+                      setDeleteDialogOpen(true)
                     }}
                   >
                     {isDeleting ? (
@@ -457,19 +443,9 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
               {isStaff && eventClubId != null && isEventUpcoming && (
                     <Button
                       className="flex-1 bg-amber-500 hover:bg-amber-600 text-white h-10 text-sm gap-2"
-                      onClick={async () => {
-                        try {
-                          await cancelClubEventByStaff(Number(event.id))
-                      toast.success("Đã hủy sự kiện (đưa về nháp)")
-                          // Thông báo cho calendar refetch lại dữ liệu
-                          try {
-                            window.dispatchEvent(new CustomEvent('events:refetch'))
-                          } catch { /* empty */ }
-                          onClose()
-                        } catch (error: unknown) {
-                          console.error("Cancel event failed:", error)
-                          toast.error(getErrorMessage(error, "Không thể hủy sự kiện. Vui lòng thử lại."))
-                        }
+                      onClick={() => {
+                        setCancelReason("");
+                        setCancelDialogOpen(true);
                       }}
                     >
                       Hủy sự kiện
@@ -597,6 +573,114 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
             }}
             onSuccess={() => setOpenUpdate(false)}
           />
+        </DialogContent>
+      </Dialog>
+      
+      {/* Dialog nhập lý do hủy sự kiện (chỉ cho STAFF) */}
+      <Dialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Hủy sự kiện</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="cancel-reason">Lý do hủy *</Label>
+              <Textarea
+                id="cancel-reason"
+                placeholder="Nhập lý do hủy sự kiện..."
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                rows={4}
+                className="mt-2"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setCancelDialogOpen(false);
+                setCancelReason("");
+              }}
+            >
+              Hủy
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={async () => {
+                if (!cancelReason.trim()) {
+                  toast.error("Vui lòng nhập lý do hủy");
+                  return;
+                }
+                try {
+                  await cancelClubEventByStaff(Number(event.id), cancelReason.trim());
+                  toast.success("Đã hủy sự kiện (đưa về nháp)");
+                  // Thông báo cho calendar refetch lại dữ liệu
+                  try {
+                    window.dispatchEvent(new CustomEvent('events:refetch'));
+                  } catch { /* empty */ }
+                  setCancelDialogOpen(false);
+                  setCancelReason("");
+                  onClose();
+                } catch (error: unknown) {
+                  console.error("Cancel event failed:", error);
+                  toast.error(getErrorMessage(error, "Không thể hủy sự kiện. Vui lòng thử lại."));
+                }
+              }}
+            >
+              Xác nhận hủy
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirm Dialog xóa sự kiện */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Xác nhận xóa sự kiện</DialogTitle>
+            <DialogDescription>
+              Bạn có chắc chắn muốn xóa sự kiện "{event.title}"? Hành động này không thể hoàn tác.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setDeleteDialogOpen(false)
+              }}
+            >
+              Hủy
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={isDeleting}
+              onClick={async () => {
+                try {
+                  setIsDeleting(true)
+                  await deleteEvent(Number(event.id))
+                  toast.success("Đã xóa sự kiện thành công")
+                  onDeleted?.(event.id)
+                  setDeleteDialogOpen(false)
+                  onClose()
+                } catch (error: unknown) {
+                  console.error("Error deleting event:", error)
+                  toast.error(getErrorMessage(error, "Không thể xóa sự kiện. Vui lòng thử lại."))
+                } finally {
+                  setIsDeleting(false)
+                }
+              }}
+            >
+              {isDeleting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                  Đang xóa...
+                </>
+              ) : (
+                "Xác nhận xóa"
+              )}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

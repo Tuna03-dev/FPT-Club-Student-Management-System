@@ -111,9 +111,10 @@ public class EventController {
      * Lấy danh sách request chờ duyệt
      */
     @GetMapping("/pending-requests")
-    public ApiResponse<List<PendingRequestDto>> getPendingRequests() {
+    public ApiResponse<List<PendingRequestDto>> getPendingRequests(
+            @RequestParam(value = "clubId", required = false) Long clubId) {
         Long userId = SecurityUtils.getCurrentUserId();
-        return ApiResponse.success(eventManagementService.getPendingRequests(userId));
+        return ApiResponse.success(eventManagementService.getPendingRequests(userId, clubId));
     }
 
     /**
