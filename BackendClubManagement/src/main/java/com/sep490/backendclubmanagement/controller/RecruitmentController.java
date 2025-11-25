@@ -8,13 +8,16 @@ import com.sep490.backendclubmanagement.entity.RecruitmentStatus;
 import com.sep490.backendclubmanagement.entity.User;
 import com.sep490.backendclubmanagement.exception.AppException;
 import com.sep490.backendclubmanagement.exception.ErrorCode;
-import com.sep490.backendclubmanagement.service.RecruitmentService;
+import com.sep490.backendclubmanagement.security.ClubSecurity;
+import com.sep490.backendclubmanagement.service.RecruitmentServiceInterface;
 import com.sep490.backendclubmanagement.service.UserService;
+import com.sep490.backendclubmanagement.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.bind.annotation.*;
@@ -26,10 +29,12 @@ import org.springframework.web.multipart.MultipartFile;
 @RequiredArgsConstructor
 public class RecruitmentController {
 
-    private final RecruitmentService recruitmentService;
+    private final RecruitmentServiceInterface recruitmentService;
     private final UserService userService;
+    private final ClubSecurity clubSecurity;
 
     @GetMapping("/clubs/{clubId}")
+    @PreAuthorize("@clubSecurity.isMemberOfClub(#clubId)")
     public ResponseEntity<ApiResponse<PagedResponse<RecruitmentData>>> listRecruitments(
             @PathVariable Long clubId,
             @RequestParam(required = false) RecruitmentStatus status,
@@ -37,25 +42,30 @@ public class RecruitmentController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(defaultValue = "startDate,desc") String sort
-    ) {
+    ) throws AppException {
+        Long userId = SecurityUtils.getCurrentUserId();
         Pageable pageable = PageRequest.of(page, size, parseSort(sort));
-        PagedResponse<RecruitmentData> data = recruitmentService.listRecruitments(clubId, status, keyword, pageable);
+        PagedResponse<RecruitmentData> data = recruitmentService.listRecruitments(userId,clubId, status, keyword, pageable);
         return ResponseEntity.ok(ApiResponse.success(data));
     }
 
     @GetMapping("/clubs/{clubId}/open")
-    public ResponseEntity<ApiResponse<PagedResponse<RecruitmentData>>> listOpenRecruitments(
+    public ResponseEntity<ApiResponse<PagedResponse<RecruitmentData>>> listOpenRecruitments (
             @PathVariable Long clubId,
             @RequestParam(required = false) String keyword,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(defaultValue = "startDate,desc") String sort
-    ) {
+    ) throws AppException {
         Pageable pageable = PageRequest.of(page, size, parseSort(sort));
-        PagedResponse<RecruitmentData> data = recruitmentService.listRecruitments(clubId, RecruitmentStatus.OPEN, keyword, pageable);
+        PagedResponse<RecruitmentData> data = recruitmentService.listRecruitmentsForGuest(clubId, RecruitmentStatus.OPEN, pageable);
         return ResponseEntity.ok(ApiResponse.success(data));
     }
 
+    /**
+     * Get recruitment detail by ID
+     * Public endpoint - accessible by anyone to view recruitment form
+     */
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<RecruitmentData>> getRecruitment(@PathVariable Long id) throws AppException {
         RecruitmentData data = recruitmentService.getRecruitment(id);
@@ -63,100 +73,106 @@ public class RecruitmentController {
     }
 
     @PostMapping("/clubs/{clubId}")
+    @PreAuthorize("@clubSecurity.isClubOfficerInClub(#clubId)")
     public ResponseEntity<ApiResponse<RecruitmentData>> createRecruitment(
-            Authentication authentication,
             @PathVariable Long clubId,
             @RequestBody RecruitmentCreateRequest request
     ) throws AppException {
-        // Get current user from authentication
-        String email = authentication.getName();
-        User currentUser = userService.findByEmail(email)
-                .orElseThrow(() -> new AppException(ErrorCode.UNAUTHORIZED));
+        Long userId = SecurityUtils.getCurrentUserId();
         
-        RecruitmentData data = recruitmentService.createRecruitment(currentUser.getId(), clubId, request);
+        RecruitmentData data = recruitmentService.createRecruitment(userId, clubId, request);
         return ResponseEntity.ok(ApiResponse.success(data));
     }
 
+    /**
+     * Update recruitment
+     * Must be club officer of the recruitment's club
+     */
     @PutMapping("/{id}")
+    @PreAuthorize("@clubSecurity.isClubOfficerForRecruitment(#id)")
     public ResponseEntity<ApiResponse<RecruitmentData>> updateRecruitment(
-            Authentication authentication,
             @PathVariable Long id,
             @RequestBody RecruitmentUpdateRequest request
     ) throws AppException {
-        // Get current user from authentication
-        String email = authentication.getName();
-        User currentUser = userService.findByEmail(email)
-                .orElseThrow(() -> new AppException(ErrorCode.UNAUTHORIZED));
-        
-        RecruitmentData data = recruitmentService.updateRecruitment(currentUser.getId(), id, request);
+        Long userId = SecurityUtils.getCurrentUserId();
+
+        RecruitmentData data = recruitmentService.updateRecruitment(userId, id, request);
         return ResponseEntity.ok(ApiResponse.success(data));
     }
 
+    /**
+     * Change recruitment status
+     * Must be club officer of the recruitment's club
+     */
     @PatchMapping("/{id}/status")
+    @PreAuthorize("@clubSecurity.isClubOfficerForRecruitment(#id)")
     public ResponseEntity<ApiResponse<Void>> changeStatus(
-            Authentication authentication,
             @PathVariable Long id,
             @RequestParam RecruitmentStatus status
     ) throws AppException {
-        // Get current user from authentication
-        String email = authentication.getName();
-        User currentUser = userService.findByEmail(email)
-                .orElseThrow(() -> new AppException(ErrorCode.UNAUTHORIZED));
-        
-        recruitmentService.changeRecruitmentStatus(currentUser.getId(), id, status);
+
+        Long userId = SecurityUtils.getCurrentUserId();
+        recruitmentService.changeRecruitmentStatus(userId, id, status);
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 
+    /**
+     * Delete recruitment
+     * Must be club officer of the recruitment's club
+     */
     @DeleteMapping("/{id}")
     public ResponseEntity<ApiResponse<Void>> deleteRecruitment(
             Authentication authentication,
             @PathVariable Long id
     ) throws AppException {
-        // Get current user from authentication
-        String email = authentication.getName();
-        User currentUser = userService.findByEmail(email)
-                .orElseThrow(() -> new AppException(ErrorCode.UNAUTHORIZED));
-        
-        recruitmentService.deleteRecruitment(currentUser.getId(), id);
+        // Check authorization: user must be club officer of the recruitment's club
+        if (!clubSecurity.isClubOfficerForRecruitment(id)) {
+            throw new AppException(ErrorCode.INSUFFICIENT_PERMISSIONS);
+        }
+        Long userId = SecurityUtils.getCurrentUserId();
+        recruitmentService.deleteRecruitment(userId, id);
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 
     
-    // Submit application
+    /**
+     * Submit application to recruitment
+     * Any authenticated user can submit application
+     */
     @PostMapping(path = "/applications/submit", consumes = "multipart/form-data")
     public ResponseEntity<ApiResponse<RecruitmentApplicationData>> submit(
-            Authentication authentication,
             @RequestPart("request") ApplicationSubmitRequest request,
             @RequestParam MultiValueMap<String, MultipartFile> allFiles
     ) throws AppException {
-        // Get current user from authentication
-        String email = authentication.getName();
-        User currentUser = userService.findByEmail(email)
-                .orElseThrow(() -> new AppException(ErrorCode.UNAUTHORIZED));
+        Long userId = SecurityUtils.getCurrentUserId();
         
-        RecruitmentApplicationData data = recruitmentService.submitApplication(currentUser.getId(), request, allFiles);
+        RecruitmentApplicationData data = recruitmentService.submitApplication(userId, request, allFiles);
         return ResponseEntity.ok(ApiResponse.success(data));
     }
 
-    // Review application
+    /**
+     * Review application (approve/reject)
+     * Must be club officer of the application's recruitment's club
+     * Note: Authorization is checked inside method because applicationId is in request body
+     */
     @PostMapping("/applications/review")
+    @PreAuthorize("clubSecurity.isClubOfficerForApplication(#request.applicationId)")
     public ResponseEntity<ApiResponse<RecruitmentApplicationData>> review(
-            Authentication authentication,
             @RequestBody ApplicationReviewRequest request
     ) throws AppException {
-        // Get current user from authentication
-        String email = authentication.getName();
-        User currentUser = userService.findByEmail(email)
-                .orElseThrow(() -> new AppException(ErrorCode.UNAUTHORIZED));
+        Long userId = SecurityUtils.getCurrentUserId();
         
-        RecruitmentApplicationData data = recruitmentService.reviewApplication(currentUser.getId(), request);
+        RecruitmentApplicationData data = recruitmentService.reviewApplication(userId, request);
         return ResponseEntity.ok(ApiResponse.success(data));
     }
 
-    // List applications for a recruitment
+    /**
+     * List applications for a recruitment
+     * Must be club officer - detailed permission check done in service layer
+     */
     @GetMapping("/{recruitmentId}/applications")
+    @PreAuthorize("@clubSecurity.isClubOfficerForRecruitment(#recruitmentId)")
     public ResponseEntity<ApiResponse<PagedResponse<RecruitmentApplicationData>>> listApplications(
-            Authentication authentication,
             @PathVariable Long recruitmentId,
             @RequestParam(required = false) RecruitmentApplicationStatus status,
             @RequestParam(required = false) String keyword,
@@ -164,63 +180,57 @@ public class RecruitmentController {
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(defaultValue = "submittedDate,desc") String sort
     ) throws AppException {
-        // Get current user from authentication
-        String email = authentication.getName();
-        User currentUser = userService.findByEmail(email)
-                .orElseThrow(() -> new AppException(ErrorCode.UNAUTHORIZED));
+        Long userId = SecurityUtils.getCurrentUserId();
         
         Pageable pageable = PageRequest.of(page, size, parseSort(sort));
-        PagedResponse<RecruitmentApplicationData> data = recruitmentService.listApplications(currentUser.getId(), recruitmentId, status, keyword, pageable);
+        PagedResponse<RecruitmentApplicationData> data = recruitmentService.listApplications(userId, recruitmentId, status, keyword, pageable);
         return ResponseEntity.ok(ApiResponse.success(data));
     }
 
-    // Get application by ID
+    /**
+     * Get application by ID
+     * Must be club officer of the application's recruitment's club
+     */
     @GetMapping("/applications/{applicationId}")
+    @PreAuthorize("@clubSecurity.isClubOfficerForApplication(#applicationId)")
     public ResponseEntity<ApiResponse<RecruitmentApplicationData>> getApplication(
-            Authentication authentication,
             @PathVariable Long applicationId
     ) throws AppException {
-        // Get current user from authentication
-        String email = authentication.getName();
-        User currentUser = userService.findByEmail(email)
-                .orElseThrow(() -> new AppException(ErrorCode.UNAUTHORIZED));
-        
-        RecruitmentApplicationData data = recruitmentService.getApplication(currentUser.getId(), applicationId);
+        Long userId = SecurityUtils.getCurrentUserId();
+        RecruitmentApplicationData data = recruitmentService.getApplication(userId, applicationId);
         return ResponseEntity.ok(ApiResponse.success(data));
     }
 
-    // Get applications for current user
+    /**
+     * Get applications for current user
+     * Any authenticated user can view their own applications
+     */
     @GetMapping("/myApplications")
     public ResponseEntity<ApiResponse<PagedResponse<RecruitmentApplicationData>>> getMyApplications(
-            Authentication authentication,
             @RequestParam(required = false) RecruitmentApplicationStatus status,
             @RequestParam(required = false) String keyword,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(defaultValue = "submittedDate,desc") String sort
     ) throws AppException {
-        // Get current user from authentication
-        String email = authentication.getName();
-        User currentUser = userService.findByEmail(email)
-                .orElseThrow(() -> new AppException(ErrorCode.UNAUTHORIZED));
+        Long userId = SecurityUtils.getCurrentUserId();
         
         Pageable pageable = PageRequest.of(page, size, parseSort(sort));
-        PagedResponse<RecruitmentApplicationData> data = recruitmentService.listMyApplications(currentUser.getId(), status, keyword, pageable);
+        PagedResponse<RecruitmentApplicationData> data = recruitmentService.listMyApplications(userId, status, keyword, pageable);
         return ResponseEntity.ok(ApiResponse.success(data));
     }
 
-    // Get a specific application that the current user submitted
+    /**
+     * Get a specific application that the current user submitted
+     * Any authenticated user can view their own application detail
+     */
     @GetMapping("/myApplications/{applicationId}")
     public ResponseEntity<ApiResponse<RecruitmentApplicationData>> getMyApplication(
-            Authentication authentication,
             @PathVariable Long applicationId
     ) throws AppException {
-        // Get current user from authentication
-        String email = authentication.getName();
-        User currentUser = userService.findByEmail(email)
-                .orElseThrow(() -> new AppException(ErrorCode.UNAUTHORIZED));
+        Long userId = SecurityUtils.getCurrentUserId();
         
-        RecruitmentApplicationData data = recruitmentService.getMyApplication(currentUser.getId(), applicationId);
+        RecruitmentApplicationData data = recruitmentService.getMyApplication(userId, applicationId);
         return ResponseEntity.ok(ApiResponse.success(data));
     }
 

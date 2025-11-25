@@ -10,6 +10,7 @@ import com.sep490.backendclubmanagement.exception.AppException;
 import com.sep490.backendclubmanagement.service.ClubCategoryService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -33,6 +34,7 @@ public class ClubCategoryController {
     /**
      * Lấy danh sách thể loại câu lạc bộ có tìm kiếm và phân trang - Staff Only
      */
+    @PreAuthorize("@clubSecurity.isStaff()")
     @GetMapping("/staff/filter")
     public ApiResponse<PageResponse<ClubCategoryDTO>> getAllClubCategoriesWithFilter(
             @ModelAttribute ClubCategoryFilterRequest request) throws AppException {
@@ -43,6 +45,7 @@ public class ClubCategoryController {
     /**
      * Lấy thông tin chi tiết một thể loại câu lạc bộ - Staff Only
      */
+    @PreAuthorize("@clubSecurity.isStaff()")
     @GetMapping("/staff/{id}")
     public ApiResponse<ClubCategoryDTO> getClubCategoryById(@PathVariable Long id) throws AppException {
         ClubCategoryDTO data = clubCategoryService.getClubCategoryById(id);
@@ -52,6 +55,7 @@ public class ClubCategoryController {
     /**
      * Tạo mới thể loại câu lạc bộ - Staff Only
      */
+    @PreAuthorize("@clubSecurity.isStaff()")
     @PostMapping("/staff")
     public ApiResponse<ClubCategoryDTO> createClubCategory(
             @Valid @RequestBody CreateClubCategoryRequest request) throws AppException {
@@ -62,6 +66,7 @@ public class ClubCategoryController {
     /**
      * Cập nhật thể loại câu lạc bộ - Staff Only
      */
+    @PreAuthorize("@clubSecurity.isStaff()")
     @PutMapping("/staff/{id}")
     public ApiResponse<ClubCategoryDTO> updateClubCategory(
             @PathVariable Long id,
@@ -73,6 +78,7 @@ public class ClubCategoryController {
     /**
      * Xóa thể loại câu lạc bộ - Staff Only
      */
+    @PreAuthorize("@clubSecurity.isStaff()")
     @DeleteMapping("/staff/{id}")
     public ApiResponse<Void> deleteClubCategory(@PathVariable Long id) throws AppException {
         clubCategoryService.deleteClubCategory(id);

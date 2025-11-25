@@ -42,13 +42,19 @@ public class RecruitmentService implements RecruitmentServiceInterface {
     private final ClubRoleRepository clubRoleRepository;
 
     @Override
-    public PagedResponse<RecruitmentData> listRecruitments(Long clubId, RecruitmentStatus status, Pageable pageable) {
+    public PagedResponse<RecruitmentData> listRecruitments(Long userId,Long clubId, RecruitmentStatus status,String keyword, Pageable pageable) throws AppException {
+        checkClubOfficerPermission(userId, clubId);
+        return listRecruitments(clubId, status, keyword, pageable);
+    }
+
+    @Override
+    public PagedResponse<RecruitmentData> listRecruitmentsForGuest(Long clubId, RecruitmentStatus status, Pageable pageable) {
         return listRecruitments(clubId, status, null, pageable);
     }
     
-    public PagedResponse<RecruitmentData> listRecruitments(Long clubId, RecruitmentStatus status, String keyword, Pageable pageable) {
+    public PagedResponse<RecruitmentData> listRecruitments(Long clubId, RecruitmentStatus status, String keyword, Pageable pageable){
         Page<Recruitment> page;
-        
+
         // If keyword is provided, use search query
         if (keyword != null && !keyword.trim().isEmpty()) {
             String trimmedKeyword = keyword.trim();
@@ -93,7 +99,7 @@ public class RecruitmentService implements RecruitmentServiceInterface {
     @Transactional
     public RecruitmentData createRecruitment(Long userId, Long clubId, RecruitmentCreateRequest req) throws AppException {
         // Check permission: must be CLUB_PRESIDENT and a member of the club
-        checkClubPresidentPermission(userId, clubId);
+        checkClubOfficerPermission(userId, clubId);
         
         Recruitment r = recruitmentMapper.toEntity(req, clubId);
         r = recruitmentRepository.save(r);
@@ -128,7 +134,7 @@ public class RecruitmentService implements RecruitmentServiceInterface {
                 .orElseThrow(() -> new AppException(ErrorCode.INTERNAL_SERVER_ERROR));
         
         // Check permission: must be CLUB_PRESIDENT and a member of the club
-        checkClubPresidentPermission(userId, r.getClub().getId());
+        checkClubOfficerPermission(userId, r.getClub().getId());
         
         // Check if recruitment is closed
         if (r.getStatus() == RecruitmentStatus.CLOSED) {
@@ -168,7 +174,7 @@ public class RecruitmentService implements RecruitmentServiceInterface {
                 .orElseThrow(() -> new AppException(ErrorCode.INTERNAL_SERVER_ERROR));
         
         // Check permission: must be CLUB_PRESIDENT and a member of the club
-        checkClubPresidentPermission(userId, r.getClub().getId());
+        checkClubOfficerPermission(userId, r.getClub().getId());
         
         // If new status is OPEN, close all other OPEN recruitments of the club
         if (status == RecruitmentStatus.OPEN) {
@@ -186,15 +192,11 @@ public class RecruitmentService implements RecruitmentServiceInterface {
                 .orElseThrow(() -> new AppException(ErrorCode.INTERNAL_SERVER_ERROR));
         
         // Check permission: must be CLUB_PRESIDENT and a member of the club
-        checkClubPresidentPermission(userId, r.getClub().getId());
+        checkClubOfficerPermission(userId, r.getClub().getId());
         
         recruitmentRepository.deleteById(id);
     }
 
-    @Override
-    public PagedResponse<RecruitmentApplicationData> listApplications(Long userId, Long recruitmentId, RecruitmentApplicationStatus status, Pageable pageable) throws AppException {
-        return listApplications(userId, recruitmentId, status, null, pageable);
-    }
     
     public PagedResponse<RecruitmentApplicationData> listApplications(Long userId, Long recruitmentId, RecruitmentApplicationStatus status, String keyword, Pageable pageable) throws AppException {
         // Get recruitment to determine clubId
@@ -202,7 +204,7 @@ public class RecruitmentService implements RecruitmentServiceInterface {
                 .orElseThrow(() -> new AppException(ErrorCode.INTERNAL_SERVER_ERROR));
         
         // Check permission: must be CLUB_PRESIDENT and a member of the club
-        checkClubPresidentPermission(userId, recruitment.getClub().getId());
+        checkClubOfficerPermission(userId, recruitment.getClub().getId());
         
         // Use single dynamic query that handles all parameter combinations
         Page<RecruitmentApplication> page = applicationRepository.findApplicationsByRecruitment(recruitmentId, status, keyword, pageable);
@@ -218,11 +220,6 @@ public class RecruitmentService implements RecruitmentServiceInterface {
         return PagedResponse.of(dataPage);
     }
 
-    @Override
-    @Transactional
-    public RecruitmentApplicationData submitApplication(Long applicantId, ApplicationSubmitRequest req) throws AppException {
-        return submitApplication(applicantId, req, null);
-    }
 
     /**
      * Submit application with file upload support
@@ -350,7 +347,7 @@ public class RecruitmentService implements RecruitmentServiceInterface {
         
         // Check permission: must be CLUB_PRESIDENT and a member of the club
         Long clubId = app.getRecruitment().getClub().getId();
-        checkClubPresidentPermission(userId, clubId);
+        checkClubOfficerPermission(userId, clubId);
         
         List<RecruitmentFormAnswer> answers = answerRepository.findByApplication_Id(applicationId);
         app.setAnswers(new HashSet<>(answers));
@@ -382,7 +379,7 @@ public class RecruitmentService implements RecruitmentServiceInterface {
         
         // Check permission: must be CLUB_PRESIDENT and a member of the club
         Long clubId = app.getRecruitment().getClub().getId();
-        checkClubPresidentPermission(userId, clubId);
+        checkClubOfficerPermission(userId, clubId);
         
         app.setStatus(req.status);
         app.setReviewNotes(req.reviewNotes);
@@ -590,7 +587,7 @@ public class RecruitmentService implements RecruitmentServiceInterface {
      * Check if user has permission to manage recruitment of the club
      * Requirement: must be an ACTIVE member of the club AND have club role CLUB_PRESIDENT in the current semester
      */
-    private void checkClubPresidentPermission(Long userId, Long clubId) throws AppException {
+    private void checkClubOfficerPermission(Long userId, Long clubId) throws AppException {
         // Get current semester
         Semester currentSemester = semesterRepository.findCurrentSemester()
                 .orElseThrow(() -> new AppException(ErrorCode.INTERNAL_SERVER_ERROR));

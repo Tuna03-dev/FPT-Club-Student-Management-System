@@ -1,6 +1,5 @@
 package com.sep490.backendclubmanagement.controller;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sep490.backendclubmanagement.dto.ApiResponse;
 import com.sep490.backendclubmanagement.dto.request.AssignTeamToReportRequirementRequest;
 import com.sep490.backendclubmanagement.dto.request.ClubReportRequirementFilterRequest;
@@ -19,6 +18,7 @@ import com.sep490.backendclubmanagement.service.ReportServiceInterface;
 import com.sep490.backendclubmanagement.util.SecurityUtils;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -30,11 +30,11 @@ import java.util.List;
 public class ReportController {
 
     private final ReportServiceInterface reportService;
-    private final ObjectMapper objectMapper;
 
     /**
      * Get all reports with filters and pagination (for staff only)
      */
+    @PreAuthorize("@clubSecurity.isStaff()")
     @PostMapping("/staff/filter")
     public ApiResponse<PageResponse<ReportListItemResponse>> getAllReports(
             @RequestBody @Valid ReportFilterRequest request
@@ -47,6 +47,7 @@ public class ReportController {
     /**
      * Get report detail by ID (for staff only)
      */
+    @PreAuthorize("@clubSecurity.isStaff()")
     @GetMapping("/staff/{id}")
     public ApiResponse<ReportDetailResponse> getReportDetail(@PathVariable Long id) {
         Long userId = SecurityUtils.getCurrentUserId();
@@ -57,6 +58,7 @@ public class ReportController {
     /**
      * Review (approve/reject) a report (for staff only)
      */
+    @PreAuthorize("@clubSecurity.isStaff()")
     @PostMapping("/staff/review")
     public ApiResponse<Void> reviewReport(@RequestBody @Valid ReportReviewRequest request) {
         Long userId = SecurityUtils.getCurrentUserId();
@@ -67,6 +69,7 @@ public class ReportController {
     /**
      * Get all report requirements with filters and pagination (for staff only)
      */
+    @PreAuthorize("@clubSecurity.isStaff()")
     @PostMapping("/staff/requirements/filter")
     public ApiResponse<PageResponse<ReportRequirementResponse>> getAllReportRequirements(
             @RequestBody @Valid ReportRequirementFilterRequest request
@@ -81,13 +84,13 @@ public class ReportController {
      * Multipart/form-data endpoint
      * File upload is optional. If file is provided, it will be uploaded to Cloudinary.
      */
+    @PreAuthorize("@clubSecurity.isStaff()")
     @PostMapping(value = "/staff/requirements", consumes = "multipart/form-data")
     public ApiResponse<ReportRequirementResponse> createReportRequirement(
-            @RequestPart("request") String requestJson,
+            @RequestPart("request") @Valid CreateReportRequirementRequest request,
             @RequestPart(value = "file", required = false) MultipartFile file
-    ) throws Exception {
+    ) {
         Long userId = SecurityUtils.getCurrentUserId();
-        CreateReportRequirementRequest request = objectMapper.readValue(requestJson, CreateReportRequirementRequest.class);
         ReportRequirementResponse data = reportService.createReportRequirement(request, file, userId);
         return ApiResponse.success(data);
     }
@@ -100,13 +103,13 @@ public class ReportController {
      * If autoSubmit is false and user is club president, the report will be created as draft.
      * Team officer can only create draft reports regardless of autoSubmit flag.
      */
+    @PreAuthorize("clubSecurity.isTeamOfficerOrClubOfficerInClub(#request.clubId)")
     @PostMapping(value = "/club", consumes = "multipart/form-data")
     public ApiResponse<ReportDetailResponse> createReport(
-            @RequestPart("request") String requestJson,
+            @RequestPart("request") @Valid CreateReportRequest request,
             @RequestPart(value = "file", required = false) MultipartFile file
-    ) throws Exception {
+    ) {
         Long userId = SecurityUtils.getCurrentUserId();
-        CreateReportRequest request = objectMapper.readValue(requestJson, CreateReportRequest.class);
         ReportDetailResponse data = reportService.createReportWithFile(request, file, userId);
         return ApiResponse.success(data);
     }
@@ -116,14 +119,14 @@ public class ReportController {
      * Multipart/form-data endpoint
      * File upload is optional. If file is provided, it will be uploaded to Cloudinary.
      */
+    @PreAuthorize("@clubSecurity.isTeamOfficerOrClubOfficerForReport(#reportId)")
     @PutMapping(value = "/club/{reportId}", consumes = "multipart/form-data")
     public ApiResponse<ReportDetailResponse> updateReport(
             @PathVariable Long reportId,
-            @RequestPart("request") String requestJson,
+            @RequestPart("request") @Valid UpdateReportRequest request,
             @RequestPart(value = "file", required = false) MultipartFile file
-    ) throws Exception {
+    ) {
         Long userId = SecurityUtils.getCurrentUserId();
-        UpdateReportRequest request = objectMapper.readValue(requestJson, UpdateReportRequest.class);
         ReportDetailResponse data = reportService.updateReportWithFile(reportId, request, file, userId);
         return ApiResponse.success(data);
     }
@@ -131,6 +134,7 @@ public class ReportController {
     /**
      * Submit a draft report (club president or team officer who is the creator)
      */
+    @PreAuthorize("@clubSecurity.isTeamOfficerOrClubOfficerForReport(#request.reportId)")
     @PostMapping("/club/submit")
     public ApiResponse<ReportDetailResponse> submitReport(
             @RequestBody @Valid SubmitReportRequest request
@@ -143,6 +147,7 @@ public class ReportController {
     /**
      * Get all reports for a club (club president can see all, team officer can see their own)
      */
+    @PreAuthorize("@clubSecurity.isMemberOfClub(#request.clubId)")
     @PostMapping("/club/{clubId}")
     public ApiResponse<PageResponse<ReportListItemResponse>> getClubReports(
             @RequestBody @Valid ReportFilterRequest request
@@ -155,6 +160,7 @@ public class ReportController {
     /**
      * Get my reports for a club
      */
+    @PreAuthorize("@clubSecurity.isMemberOfClub(#request.clubId)")
     @PostMapping("/club/{clubId}/my-reports")
     public ApiResponse<PageResponse<ReportListItemResponse>> getMyReports(
             @RequestBody @Valid ReportFilterRequest request
@@ -167,6 +173,7 @@ public class ReportController {
     /**
      * Get all report requirements for a club with filters and pagination (for CLUB_OFFICER or TEAM_OFFICER)
      */
+    @PreAuthorize("@clubSecurity.isTeamOfficerOrClubOfficerInClub(#clubId)")
     @PostMapping("/club/{clubId}/requirements/officer/filter")
     public ApiResponse<PageResponse<ReportRequirementResponse>> getClubReportRequirementsForOfficerWithFilters(
             @PathVariable Long clubId,
@@ -182,6 +189,7 @@ public class ReportController {
      * Get report of a specific club for a specific report requirement (for CLUB_OFFICER or TEAM_OFFICER)
      * Returns null if club hasn't submitted report yet
      */
+    @PreAuthorize("@clubSecurity.isTeamOfficerOrClubOfficerInClub(#clubId)")
     @GetMapping("/club/{clubId}/requirements/{requirementId}/report")
     public ApiResponse<ReportDetailResponse> getClubReportByRequirementForOfficer(
             @PathVariable Long requirementId,
@@ -195,6 +203,7 @@ public class ReportController {
     /**
      * Get report detail by report ID for club officers (CLUB_OFFICER or TEAM_OFFICER)
      */
+    @PreAuthorize("@clubSecurity.isTeamOfficerOrClubOfficerInClub(#clubId)")
     @GetMapping("/club/{clubId}/reports/{reportId}")
     public ApiResponse<ReportDetailResponse> getClubReportDetail(
             @PathVariable Long clubId,
@@ -208,6 +217,7 @@ public class ReportController {
     /**
      * Get list of clubs that need to submit reports for a specific report requirement (for staff only)
      */
+    @PreAuthorize("@clubSecurity.isStaff()")
     @GetMapping("/staff/requirements/{requirementId}/clubs")
     public ApiResponse<List<ReportRequirementResponse.ClubRequirementInfo>> getClubsByReportRequirement(
             @PathVariable Long requirementId
@@ -221,6 +231,7 @@ public class ReportController {
      * Get report of a specific club for a specific report requirement (for staff only)
      * Returns null if club hasn't submitted report yet
      */
+    @PreAuthorize("@clubSecurity.isStaff()")
     @GetMapping("/staff/requirements/{requirementId}/clubs/{clubId}/report")
     public ApiResponse<ReportDetailResponse> getClubReportByRequirement(
             @PathVariable Long requirementId,
@@ -234,6 +245,7 @@ public class ReportController {
     /**
      * Delete a draft report (only creator can delete their own draft)
      */
+    @PreAuthorize("@clubSecurity.isTeamOfficerOrClubOfficerForReport(#reportId)")
     @DeleteMapping("/club/{reportId}")
     public ApiResponse<Void> deleteReport(@PathVariable Long reportId) {
         Long userId = SecurityUtils.getCurrentUserId();
@@ -246,6 +258,7 @@ public class ReportController {
      * Approve: PENDING_CLUB -> PENDING_UNIVERSITY
      * Reject: PENDING_CLUB -> REJECTED_CLUB
      */
+    @PreAuthorize("@clubSecurity.isTeamOfficerInClub(#request.reportId)")
     @PostMapping(value = "/club/review", consumes = "application/json")
     public ApiResponse<ReportDetailResponse> reviewReportByClub(
             @RequestBody @Valid ReportReviewRequest request
@@ -258,6 +271,7 @@ public class ReportController {
     /**
      * Assign a team to a report requirement (for CLUB_OFFICER only)
      */
+    @PreAuthorize("@clubSecurity.isClubOfficerInClub(#clubId)")
     @PostMapping("/club/{clubId}/requirements/assign-team")
     public ApiResponse<ReportRequirementResponse> assignTeamToReportRequirement(
             @PathVariable Long clubId,
@@ -273,4 +287,3 @@ public class ReportController {
         return ApiResponse.success(data);
     }
 }
-

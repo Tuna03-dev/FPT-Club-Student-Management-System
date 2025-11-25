@@ -31,7 +31,7 @@ export async function createReportRequirement(
   const requestBlob = new Blob([JSON.stringify(request)], {
     type: "application/json",
   });
-  formData.append("request", requestBlob, "request.json");
+  formData.append("request", requestBlob);
 
   // Only append file if provided (file is optional)
   if (file) {
@@ -195,7 +195,7 @@ export async function createReport(
     const requestBlob = new Blob([JSON.stringify(request)], {
       type: "application/json",
     });
-    formData.append("request", requestBlob, "request.json");
+    formData.append("request", requestBlob);
     formData.append("file", file);
 
     const response = await axiosClient.post<ReportDetailResponse>(
@@ -218,7 +218,7 @@ export async function createReport(
     const requestBlob = new Blob([JSON.stringify(request)], {
       type: "application/json",
     });
-    formData.append("request", requestBlob, "request.json");
+    formData.append("request", requestBlob);
 
     const response = await axiosClient.post<ReportDetailResponse>(
       "/reports/club",
@@ -259,7 +259,7 @@ export async function updateReport(
   const requestBlob = new Blob([JSON.stringify(request)], {
     type: "application/json",
   });
-  formData.append("request", requestBlob, "request.json");
+  formData.append("request", requestBlob);
 
   // Only append file if provided (file is optional)
   if (file) {

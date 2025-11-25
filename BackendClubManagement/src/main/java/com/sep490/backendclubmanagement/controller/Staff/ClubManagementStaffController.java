@@ -12,6 +12,7 @@ import com.sep490.backendclubmanagement.util.SecurityUtils;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 /**
@@ -30,6 +31,7 @@ public class ClubManagementStaffController {
      * @param request Filter request containing keyword, campusId, categoryId, status, pagination params
      * @return PageResponse of clubs
      */
+    @PreAuthorize("@clubSecurity.isStaff()")
     @GetMapping
     public ResponseEntity<ApiResponse<PageResponse<ClubManagementResponse>>> getClubs(
             ClubFilterRequest request
@@ -45,6 +47,7 @@ public class ClubManagementStaffController {
      * @param clubId Club ID
      * @return Club detail
      */
+    @PreAuthorize("@clubSecurity.isStaff()")
     @GetMapping("/{clubId}")
     public ResponseEntity<ApiResponse<ClubManagementResponse>> getClubDetail(
             @PathVariable Long clubId
@@ -60,6 +63,7 @@ public class ClubManagementStaffController {
      * @param request Create club request (including presidentEmail)
      * @return Created club
      */
+    @PreAuthorize("@clubSecurity.isStaff()")
     @PostMapping
     public ResponseEntity<ApiResponse<ClubManagementResponse>> createClub(
             @Valid @RequestBody CreateClubRequest request
@@ -76,6 +80,7 @@ public class ClubManagementStaffController {
      * @param request Update club request
      * @return Updated club
      */
+    @PreAuthorize("@clubSecurity.isStaff()")
     @PutMapping("/{clubId}")
     public ResponseEntity<ApiResponse<ClubManagementResponse>> updateClub(
             @PathVariable Long clubId,
@@ -92,6 +97,7 @@ public class ClubManagementStaffController {
      * @param clubId Club ID
      * @return Success message
      */
+    @PreAuthorize("@clubSecurity.isStaff()")
     @PatchMapping("/{clubId}/deactivate")
     public ResponseEntity<ApiResponse<Void>> deactivateClub(
             @PathVariable Long clubId
@@ -107,6 +113,7 @@ public class ClubManagementStaffController {
      * @param clubId Club ID
      * @return Success message
      */
+    @PreAuthorize("@clubSecurity.isStaff()")
     @PatchMapping("/{clubId}/activate")
     public ResponseEntity<ApiResponse<Void>> activateClub(
             @PathVariable Long clubId
