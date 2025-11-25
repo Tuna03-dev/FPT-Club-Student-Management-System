@@ -180,7 +180,7 @@ export function PeriodicReportClubs() {
 
         // Fetch report requirement details
         const requirementsResponse = await getAllReportRequirements({
-          page: 1,
+          page: 0,
           size: 1000, // Get all to find the one we need
         });
 
@@ -679,10 +679,10 @@ export function PeriodicReportClubs() {
                                           reportDetail.submittedDate
                                         ).toLocaleDateString("vi-VN")
                                       : reportDetail.createdAt
-                                      ? new Date(
-                                          reportDetail.createdAt
-                                        ).toLocaleDateString("vi-VN")
-                                      : "",
+                                        ? new Date(
+                                            reportDetail.createdAt
+                                          ).toLocaleDateString("vi-VN")
+                                        : "",
                                     dueDate: reportDetail.reportRequirement
                                       ?.dueDate
                                       ? new Date(

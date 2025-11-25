@@ -1,7 +1,6 @@
 package com.sep490.backendclubmanagement.controller;
 
 import com.sep490.backendclubmanagement.dto.ApiResponse;
-import com.sep490.backendclubmanagement.dto.request.ClubCategoryFilterRequest;
 import com.sep490.backendclubmanagement.dto.request.CreateClubCategoryRequest;
 import com.sep490.backendclubmanagement.dto.request.UpdateClubCategoryRequest;
 import com.sep490.backendclubmanagement.dto.response.ClubCategoryDTO;
@@ -10,6 +9,9 @@ import com.sep490.backendclubmanagement.exception.AppException;
 import com.sep490.backendclubmanagement.service.ClubCategoryService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
@@ -37,8 +39,13 @@ public class ClubCategoryController {
     @PreAuthorize("@clubSecurity.isStaff()")
     @GetMapping("/staff/filter")
     public ApiResponse<PageResponse<ClubCategoryDTO>> getAllClubCategoriesWithFilter(
-            @ModelAttribute ClubCategoryFilterRequest request) throws AppException {
-        PageResponse<ClubCategoryDTO> data = clubCategoryService.getAllClubCategoriesWithFilter(request);
+            @RequestParam(required = false) String keyword,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "id,desc") String sort
+    ) throws AppException {
+        Pageable pageable = PageRequest.of(page, size, parseSort(sort));
+        PageResponse<ClubCategoryDTO> data = clubCategoryService.getAllClubCategoriesWithFilter(keyword, pageable);
         return ApiResponse.success(data);
     }
 
@@ -83,5 +90,13 @@ public class ClubCategoryController {
     public ApiResponse<Void> deleteClubCategory(@PathVariable Long id) throws AppException {
         clubCategoryService.deleteClubCategory(id);
         return ApiResponse.success(null);
+    }
+
+    private Sort parseSort(String sort) {
+        String[] parts = sort.split(",");
+        String prop = parts.length > 0 ? parts[0] : "id";
+        Sort.Direction dir = (parts.length > 1 && parts[1].equalsIgnoreCase("asc"))
+                ? Sort.Direction.ASC : Sort.Direction.DESC;
+        return Sort.by(dir, prop);
     }
 }

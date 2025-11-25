@@ -1,6 +1,5 @@
 package com.sep490.backendclubmanagement.service;
 
-import com.sep490.backendclubmanagement.dto.request.ClubFilterRequest;
 import com.sep490.backendclubmanagement.dto.request.CreateClubRequest;
 import com.sep490.backendclubmanagement.dto.request.UpdateClubInfoRequest;
 import com.sep490.backendclubmanagement.dto.request.UpdateClubRequest;
@@ -18,6 +17,7 @@ import com.sep490.backendclubmanagement.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -130,18 +130,20 @@ public class ClubService implements ClubServiceInterface {
 
     @Override
     @Transactional(readOnly = true)
-    public PageResponse<ClubManagementResponse> getClubsByFilter(ClubFilterRequest request, Long staffId) throws AppException {
+    public PageResponse<ClubManagementResponse> getClubsByFilter(
+            String keyword, Long campusId, Long categoryId, String status,
+            Pageable pageable, Long staffId) throws AppException {
         // Kiểm tra quyền STAFF
         if (!roleService.isStaff(staffId)) {
             throw new AppException(ErrorCode.FORBIDDEN);
         }
 
         Page<Club> page = clubRepository.getAllClubsByFilter(
-                request.getKeyword(),
-                request.getCampusId(),
-                request.getCategoryId(),
-                request.getStatus(),
-                request.getPageable("id,desc")
+                keyword,
+                campusId,
+                categoryId,
+                status,
+                pageable
         );
 
 

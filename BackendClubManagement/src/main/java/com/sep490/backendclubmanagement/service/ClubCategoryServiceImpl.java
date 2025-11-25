@@ -1,6 +1,5 @@
 package com.sep490.backendclubmanagement.service;
 
-import com.sep490.backendclubmanagement.dto.request.ClubCategoryFilterRequest;
 import com.sep490.backendclubmanagement.dto.request.CreateClubCategoryRequest;
 import com.sep490.backendclubmanagement.dto.request.UpdateClubCategoryRequest;
 import com.sep490.backendclubmanagement.dto.response.ClubCategoryDTO;
@@ -40,15 +39,14 @@ public class ClubCategoryServiceImpl implements ClubCategoryService {
 
     @Override
     @Transactional(readOnly = true)
-    public PageResponse<ClubCategoryDTO> getAllClubCategoriesWithFilter(ClubCategoryFilterRequest request) throws AppException {
+    public PageResponse<ClubCategoryDTO> getAllClubCategoriesWithFilter(String keyword, Pageable pageable) throws AppException {
         Long userId = SecurityUtils.getCurrentUserId();
         if (!roleService.isStaff(userId)) {
             throw new ForbiddenException("Chỉ STAFF mới có quyền truy cập");
         }
 
-        Pageable pageable = request.getPageable("id,desc");
         Page<ClubCategory> categoryPage = clubCategoryRepository.findAllWithFilter(
-            request.getKeyword(),
+            keyword,
             pageable
         );
 

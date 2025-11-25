@@ -12,19 +12,11 @@ import com.sep490.backendclubmanagement.dto.response.PageResponse;
 import com.sep490.backendclubmanagement.dto.response.ReportDetailResponse;
 import com.sep490.backendclubmanagement.dto.response.ReportListItemResponse;
 import com.sep490.backendclubmanagement.dto.response.ReportRequirementResponse;
-import com.sep490.backendclubmanagement.entity.Club;
-import com.sep490.backendclubmanagement.entity.ClubMemberShipStatus;
-import com.sep490.backendclubmanagement.entity.ClubReportRequirement;
-import com.sep490.backendclubmanagement.entity.Event;
-import com.sep490.backendclubmanagement.entity.Report;
-import com.sep490.backendclubmanagement.entity.ReportStatus;
-import com.sep490.backendclubmanagement.entity.SubmissionReportRequirement;
+import com.sep490.backendclubmanagement.entity.*;
 import com.sep490.backendclubmanagement.exception.ForbiddenException;
 import com.sep490.backendclubmanagement.exception.NotFoundException;
 import com.sep490.backendclubmanagement.mapper.ReportMapper;
 import com.sep490.backendclubmanagement.mapper.SubmissionReportRequirementMapper;
-import com.sep490.backendclubmanagement.entity.Semester;
-import com.sep490.backendclubmanagement.entity.User;
 import com.sep490.backendclubmanagement.repository.ClubMemberShipRepository;
 import com.sep490.backendclubmanagement.repository.ClubReportRequirementRepository;
 import com.sep490.backendclubmanagement.repository.ClubRepository;
@@ -35,7 +27,6 @@ import com.sep490.backendclubmanagement.repository.SemesterRepository;
 import com.sep490.backendclubmanagement.repository.SubmissionReportRequirementRepository;
 import com.sep490.backendclubmanagement.repository.TeamRepository;
 import com.sep490.backendclubmanagement.repository.UserRepository;
-import com.sep490.backendclubmanagement.entity.Team;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -75,7 +66,9 @@ public class ReportServiceImpl implements ReportServiceInterface {
      * Only returns reports with university-level status: PENDING_UNIVERSITY, APPROVED_UNIVERSITY, REJECTED_UNIVERSITY, RESUBMITTED_UNIVERSITY
      */
     @Override
-    public PageResponse<ReportListItemResponse> getAllReports(ReportFilterRequest request, Long userId) {
+    public PageResponse<ReportListItemResponse> getAllReports(
+            ReportStatus status, Long clubId, Long semesterId, ReportType reportType,
+            String keyword, Pageable pageable, Long userId) {
         // Check staff permission
         if (!roleService.isStaff(userId)) {
             throw new ForbiddenException("Only staff can view report list");
@@ -83,24 +76,23 @@ public class ReportServiceImpl implements ReportServiceInterface {
 
         // Staff can only view university-level reports
         // If status is provided, validate it's a university-level status
-        if (request.getStatus() != null) {
-            if (request.getStatus() != ReportStatus.PENDING_UNIVERSITY
-                    && request.getStatus() != ReportStatus.APPROVED_UNIVERSITY
-                    && request.getStatus() != ReportStatus.REJECTED_UNIVERSITY
-                    && request.getStatus() != ReportStatus.RESUBMITTED_UNIVERSITY) {
+        if (status != null) {
+            if (status != ReportStatus.PENDING_UNIVERSITY
+                    && status != ReportStatus.APPROVED_UNIVERSITY
+                    && status != ReportStatus.REJECTED_UNIVERSITY
+                    && status != ReportStatus.RESUBMITTED_UNIVERSITY) {
                 throw new ForbiddenException(
                         "Staff can only view reports with status: PENDING_UNIVERSITY, APPROVED_UNIVERSITY, REJECTED_UNIVERSITY, or RESUBMITTED_UNIVERSITY"
                 );
             }
         }
 
-        Pageable pageable = request.getPageable("submittedDate,desc");
         Page<Report> reportPage = reportRepository.findAllWithFilters(
-                request.getStatus(),
-                request.getClubId(),
-                request.getSemesterId(),
-                request.getReportType(),
-                request.getKeyword(),
+                status,
+                clubId,
+                semesterId,
+                reportType,
+                keyword,
                 pageable
         );
 
@@ -638,10 +630,12 @@ public class ReportServiceImpl implements ReportServiceInterface {
      * Get all reports for a club (club president can see all)
      */
     @Override
-    public PageResponse<ReportListItemResponse> getClubReports(ReportFilterRequest request, Long userId) {
+    public PageResponse<ReportListItemResponse> getClubReports(
+            Long clubId, ReportStatus status, Long semesterId, ReportType reportType,
+            String keyword, Pageable pageable, Long userId) {
         // Validate club exists
-        Club club = clubRepository.findById(request.getClubId())
-                .orElseThrow(() -> new NotFoundException("Club not found with ID: " + request.getClubId()));
+        Club club = clubRepository.findById(clubId)
+                .orElseThrow(() -> new NotFoundException("Club not found with ID: " + clubId));
 
         // Get current semester
         Semester currentSemester = semesterRepository.findCurrentSemester()
@@ -652,7 +646,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
 
         if (currentSemester != null) {
             isClubOfficer = roleMemberShipRepository.isClubOfficerInCurrentSemester(
-                    userId, request.getClubId(), currentSemester.getId());
+                    userId, clubId, currentSemester.getId());
         }
 
         if (!isClubOfficer) {
@@ -662,13 +656,12 @@ public class ReportServiceImpl implements ReportServiceInterface {
             );
         }
 
-        Pageable pageable = request.getPageable("submittedDate,desc");
         Page<Report> reportPage = reportRepository.findByClubIdWithFilter(
-                request.getStatus(),
-                request.getClubId(),
-                request.getSemesterId(),
-                request.getReportType(),
-                request.getKeyword(),
+                status,
+                clubId,
+                semesterId,
+                reportType,
+                keyword,
                 pageable
         );
 
@@ -692,10 +685,12 @@ public class ReportServiceImpl implements ReportServiceInterface {
      * Get my draft reports for a club
      */
     @Override
-    public PageResponse<ReportListItemResponse> getMyReports(ReportFilterRequest request, Long userId) {
+    public PageResponse<ReportListItemResponse> getMyReports(
+            Long clubId, ReportStatus status, Long semesterId, ReportType reportType,
+            String keyword, Pageable pageable, Long userId) {
         // Validate club exists
-        Club club = clubRepository.findById(request.getClubId())
-                .orElseThrow(() -> new NotFoundException("Club not found with ID: " + request.getClubId()));
+        Club club = clubRepository.findById(clubId)
+                .orElseThrow(() -> new NotFoundException("Club not found with ID: " + clubId));
 
         // Get current semester
         Semester currentSemester = semesterRepository.findCurrentSemester()
@@ -706,7 +701,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
 
         if (currentSemester != null) {
             isClubOfficerOrTeamOfficer = roleMemberShipRepository.isClubOfficerOrTeamOfficerInCurrentSemester(
-                    userId, request.getClubId(), currentSemester.getId());
+                    userId, clubId, currentSemester.getId());
         }
 
         if (!isClubOfficerOrTeamOfficer) {
@@ -716,13 +711,12 @@ public class ReportServiceImpl implements ReportServiceInterface {
             );
         }
 
-        Pageable pageable = request.getPageable("submittedDate,desc");
         Page<Report> reportPage = reportRepository.findByClubIdAndUserIdWithFilter(
-                request.getStatus(),
-                request.getClubId(),
-                request.getSemesterId(),
-                request.getReportType(),
-                request.getKeyword(),
+                status,
+                clubId,
+                semesterId,
+                reportType,
+                keyword,
                 userId,
                 pageable
         );
@@ -748,20 +742,16 @@ public class ReportServiceImpl implements ReportServiceInterface {
      */
     @Override
     public PageResponse<ReportRequirementResponse> getAllReportRequirements(
-            ReportRequirementFilterRequest request,
-            Long userId
-    ) {
+            ReportType reportType, Long clubId, String keyword, Pageable pageable, Long userId) {
         // Check staff permission
         if (!roleService.isStaff(userId)) {
             throw new ForbiddenException("Only staff can view report requirements");
         }
 
-        Pageable pageable = request.getPageable("createdAt,desc");
-        
         Page<SubmissionReportRequirement> requirementPage = submissionReportRequirementRepository.findAllWithFilters(
-                request.getReportType(),
-                request.getClubId(),
-                request.getKeyword(),
+                reportType,
+                clubId,
+                keyword,
                 pageable
         );
 
@@ -901,10 +891,8 @@ public class ReportServiceImpl implements ReportServiceInterface {
      */
     @Override
     public PageResponse<ReportRequirementResponse> getClubReportRequirementsForOfficerWithFilters(
-            ClubReportRequirementFilterRequest request,
-            Long clubId,
-            Long userId
-    ) {
+            Long clubId, String status, Long semesterId, String keyword, Long teamId,
+            Pageable pageable, Long userId) {
         // Validate club exists
         Club club = clubRepository.findById(clubId)
                 .orElseThrow(() -> new NotFoundException("Club not found with ID: " + clubId));
@@ -943,17 +931,17 @@ public class ReportServiceImpl implements ReportServiceInterface {
         }
         
         // Determine filterTeamId:
-        // - If user is team officer, always use their teamId (ignore request.teamId for security)
-        // - If user is club officer, use request.teamId if provided, otherwise null (show all)
-        Long filterTeamId = userTeamId != null ? userTeamId : request.getTeamId();
+        // - If user is team officer, always use their teamId (ignore teamId param for security)
+        // - If user is club officer, use teamId param if provided, otherwise null (show all)
+        Long filterTeamId = userTeamId != null ? userTeamId : teamId;
 
         // Parse status filter
         Boolean filterUnsubmitted = null;
         Boolean filterOverdue = null;
         ReportStatus reportStatus = null;
 
-        if (request.getStatus() != null && !request.getStatus().isEmpty()) {
-            String statusStr = request.getStatus().toUpperCase();
+        if (status != null && !status.isEmpty()) {
+            String statusStr = status.toUpperCase();
             if ("UNSUBMITTED".equals(statusStr)) {
                 filterUnsubmitted = true;
             } else if ("OVERDUE".equals(statusStr)) {
@@ -971,17 +959,14 @@ public class ReportServiceImpl implements ReportServiceInterface {
         // Get current date for overdue filter
         LocalDate currentDate = LocalDate.now();
 
-        // Get pageable
-        Pageable pageable = request.getPageable("createdAt,desc");
-
         // Query with filters
         Page<ClubReportRequirement> requirementPage = clubReportRequirementRepository.findByClubIdWithFilters(
                 clubId,
-                request.getKeyword(),
+                keyword,
                 filterUnsubmitted,
                 filterOverdue,
                 reportStatus,
-                request.getSemesterId(),
+                semesterId,
                 filterTeamId,
                 currentDate,
                 pageable

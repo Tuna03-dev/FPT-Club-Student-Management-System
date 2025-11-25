@@ -1,7 +1,6 @@
 package com.sep490.backendclubmanagement.controller.Staff;
 
 import com.sep490.backendclubmanagement.dto.ApiResponse;
-import com.sep490.backendclubmanagement.dto.request.ClubFilterRequest;
 import com.sep490.backendclubmanagement.dto.request.CreateClubRequest;
 import com.sep490.backendclubmanagement.dto.request.UpdateClubRequest;
 import com.sep490.backendclubmanagement.dto.response.ClubManagementResponse;
@@ -11,6 +10,9 @@ import com.sep490.backendclubmanagement.service.ClubServiceInterface;
 import com.sep490.backendclubmanagement.util.SecurityUtils;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -28,16 +30,30 @@ public class ClubManagementStaffController {
     /**
      * Get clubs with filter, search and pagination
      * GET /api/staff/clubs
-     * @param request Filter request containing keyword, campusId, categoryId, status, pagination params
+     * @param keyword Search by club name or club code
+     * @param campusId Filter by campus ID
+     * @param categoryId Filter by category ID
+     * @param status Filter by status
+     * @param page Page number (default: 0)
+     * @param size Page size (default: 10)
+     * @param sort Sort parameter (default: "createdAt,desc")
      * @return PageResponse of clubs
      */
     @PreAuthorize("@clubSecurity.isStaff()")
     @GetMapping
     public ResponseEntity<ApiResponse<PageResponse<ClubManagementResponse>>> getClubs(
-            ClubFilterRequest request
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) Long campusId,
+            @RequestParam(required = false) Long categoryId,
+            @RequestParam(required = false) String status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "createdAt,desc") String sort
     ) throws AppException {
         Long userId = SecurityUtils.getCurrentUserId();
-        PageResponse<ClubManagementResponse> response = clubService.getClubsByFilter(request, userId);
+        Pageable pageable = PageRequest.of(page, size, parseSort(sort));
+        PageResponse<ClubManagementResponse> response = clubService.getClubsByFilter(
+                keyword, campusId, categoryId, status, pageable, userId);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
@@ -121,6 +137,14 @@ public class ClubManagementStaffController {
         Long userId = SecurityUtils.getCurrentUserId();
         clubService.activateClub(clubId, userId);
         return ResponseEntity.ok(ApiResponse.success());
+    }
+
+    private Sort parseSort(String sort) {
+        String[] parts = sort.split(",");
+        String prop = parts.length > 0 ? parts[0] : "createdAt";
+        Sort.Direction dir = (parts.length > 1 && parts[1].equalsIgnoreCase("asc"))
+                ? Sort.Direction.ASC : Sort.Direction.DESC;
+        return Sort.by(dir, prop);
     }
 }
 

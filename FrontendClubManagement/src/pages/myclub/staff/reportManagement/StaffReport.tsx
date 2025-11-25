@@ -137,9 +137,9 @@ export function StaffReportManagement() {
             )
           : undefined;
       const response = await getAllReportRequirements({
-        page: currentPage,
+        page: currentPage - 1,
         size: pageSize,
-        sort: ["createdAt,desc"],
+        sort: "createdAt,desc",
         reportType: backendType,
         keyword: debouncedSearchQuery || undefined,
       });
@@ -189,9 +189,9 @@ export function StaffReportManagement() {
     setReportListLoading(true);
     try {
       const response = await getAllReports({
-        page: reportListPage,
+        page: reportListPage - 1,
         size: pageSize,
-        sort: ["submittedDate,desc"],
+        sort: "submittedDate,desc",
         status:
           reportStatusFilter && reportStatusFilter !== "ALL"
             ? reportStatusFilter
@@ -387,18 +387,18 @@ export function StaffReportManagement() {
           reportDetail.status === "RESUBMITTED_UNIVERSITY"
             ? "submitted"
             : reportDetail.status === "APPROVED_UNIVERSITY"
-            ? "approved"
-            : reportDetail.status === "REJECTED_UNIVERSITY"
-            ? "rejected"
-            : "submitted",
+              ? "approved"
+              : reportDetail.status === "REJECTED_UNIVERSITY"
+                ? "rejected"
+                : "submitted",
         submittedBy: reportDetail.createdBy?.fullName || "N/A",
         submittedByAvatar: "",
         department: reportDetail.club?.clubName || "",
         createdAt: reportDetail.submittedDate
           ? new Date(reportDetail.submittedDate).toLocaleDateString("vi-VN")
           : reportDetail.createdAt
-          ? new Date(reportDetail.createdAt).toLocaleDateString("vi-VN")
-          : "",
+            ? new Date(reportDetail.createdAt).toLocaleDateString("vi-VN")
+            : "",
         dueDate: reportDetail.reportRequirement?.dueDate
           ? new Date(reportDetail.reportRequirement.dueDate).toLocaleDateString(
               "vi-VN"
@@ -1093,19 +1093,19 @@ export function StaffReportManagement() {
                                   clubReq.status === "PENDING"
                                     ? "bg-yellow-100 text-yellow-700"
                                     : clubReq.status === "SUBMITTED"
-                                    ? "bg-blue-100 text-blue-700"
-                                    : clubReq.status === "APPROVED"
-                                    ? "bg-green-100 text-green-700"
-                                    : "bg-red-100 text-red-700"
+                                      ? "bg-blue-100 text-blue-700"
+                                      : clubReq.status === "APPROVED"
+                                        ? "bg-green-100 text-green-700"
+                                        : "bg-red-100 text-red-700"
                                 }`}
                               >
                                 {clubReq.status === "PENDING"
                                   ? "Chờ nộp"
                                   : clubReq.status === "SUBMITTED"
-                                  ? "Đã nộp"
-                                  : clubReq.status === "APPROVED"
-                                  ? "Đã duyệt"
-                                  : "Từ chối"}
+                                    ? "Đã nộp"
+                                    : clubReq.status === "APPROVED"
+                                      ? "Đã duyệt"
+                                      : "Từ chối"}
                               </div>
                             </div>
                           </div>

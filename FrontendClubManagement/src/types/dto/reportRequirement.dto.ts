@@ -110,7 +110,7 @@ export type FrontendReportType = "periodic" | "post-event" | "other";
 export interface ReportRequirementFilterRequest {
   page?: number;
   size?: number;
-  sort?: string[];
+  sort?: string;
   reportType?: ReportType;
   clubId?: number;
   keyword?: string;
@@ -192,7 +192,7 @@ export interface ReportListItemResponse {
 export interface ReportFilterRequest {
   page?: number;
   size?: number;
-  sort?: string[];
+  sort?: string;
   status?: ReportStatus | string; // Can be ReportStatus enum or string
   clubId?: number;
   semesterId?: number;

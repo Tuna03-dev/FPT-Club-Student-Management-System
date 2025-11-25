@@ -10,7 +10,10 @@ import com.sep490.backendclubmanagement.dto.response.PageResponse;
 import com.sep490.backendclubmanagement.dto.response.ReportDetailResponse;
 import com.sep490.backendclubmanagement.dto.response.ReportListItemResponse;
 import com.sep490.backendclubmanagement.dto.response.ReportRequirementResponse;
+import com.sep490.backendclubmanagement.entity.ReportStatus;
+import com.sep490.backendclubmanagement.entity.ReportType;
 import jakarta.validation.Valid;
+import org.springframework.data.domain.Pageable;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -23,11 +26,18 @@ public interface ReportServiceInterface {
 
     /**
      * Get all reports with filters and pagination (for staff only)
-     * @param request Filter request containing status, clubId, semesterId, reportType, keyword, and pagination
+     * @param status Report status filter
+     * @param clubId Club ID filter
+     * @param semesterId Semester ID filter
+     * @param reportType Report type filter
+     * @param keyword Keyword for searching
+     * @param pageable Pageable object for pagination and sorting
      * @param userId Current user ID
      * @return Page response containing list of reports
      */
-    PageResponse<ReportListItemResponse> getAllReports(ReportFilterRequest request, Long userId);
+    PageResponse<ReportListItemResponse> getAllReports(
+            ReportStatus status, Long clubId, Long semesterId, ReportType reportType,
+            String keyword, Pageable pageable, Long userId);
 
     /**
      * Get report detail by ID (for staff only)
@@ -106,29 +116,44 @@ public interface ReportServiceInterface {
     /**
      * Get all reports for a club (club president can see all, team officer can see their own)
      * @param clubId Club ID
+     * @param status Report status filter
+     * @param semesterId Semester ID filter
+     * @param reportType Report type filter
+     * @param keyword Keyword for searching
+     * @param pageable Pageable object for pagination and sorting
      * @param userId Current user ID
      * @return List of report list item responses
      */
-    PageResponse<ReportListItemResponse> getClubReports(ReportFilterRequest request, Long userId);
+    PageResponse<ReportListItemResponse> getClubReports(
+            Long clubId, ReportStatus status, Long semesterId, ReportType reportType,
+            String keyword, Pageable pageable, Long userId);
 
     /**
      * Get my draft reports for a club
-     * @param request Filter request containing status, clubId, semesterId, reportType, keyword, and pagination
+     * @param clubId Club ID
+     * @param status Report status filter
+     * @param semesterId Semester ID filter
+     * @param reportType Report type filter
+     * @param keyword Keyword for searching
+     * @param pageable Pageable object for pagination and sorting
      * @param userId Current user ID
      * @return List of draft report list item responses
      */
-    PageResponse<ReportListItemResponse> getMyReports(ReportFilterRequest request, Long userId);
+    PageResponse<ReportListItemResponse> getMyReports(
+            Long clubId, ReportStatus status, Long semesterId, ReportType reportType,
+            String keyword, Pageable pageable, Long userId);
 
     /**
      * Get all report requirements with filters and pagination (for staff only)
-     * @param request Filter request containing reportType, clubId, keyword, and pagination
+     * @param reportType Report type filter
+     * @param clubId Club ID filter
+     * @param keyword Keyword for searching
+     * @param pageable Pageable object for pagination and sorting
      * @param userId Current user ID
      * @return Page response containing list of report requirements
      */
     PageResponse<ReportRequirementResponse> getAllReportRequirements(
-            com.sep490.backendclubmanagement.dto.request.ReportRequirementFilterRequest request,
-            Long userId
-    );
+            ReportType reportType, Long clubId, String keyword, Pageable pageable, Long userId);
 
     /**
      * Get list of clubs that need to submit reports for a specific report requirement (for staff only)
@@ -150,16 +175,18 @@ public interface ReportServiceInterface {
 
     /**
      * Get all report requirements for a club with filters and pagination (for CLUB_OFFICER or TEAM_OFFICER)
-     * @param request Filter request containing status, semesterId, keyword, and pagination
      * @param clubId Club ID
+     * @param status Status filter (OVERDUE, UNSUBMITTED, DRAFT, PENDING_CLUB, etc.)
+     * @param semesterId Semester ID filter
+     * @param keyword Keyword for searching
+     * @param teamId Team ID filter
+     * @param pageable Pageable object for pagination and sorting
      * @param userId Current user ID
      * @return Page response containing list of report requirement responses assigned to the club
      */
     PageResponse<ReportRequirementResponse> getClubReportRequirementsForOfficerWithFilters(
-            com.sep490.backendclubmanagement.dto.request.ClubReportRequirementFilterRequest request,
-            Long clubId,
-            Long userId
-    );
+            Long clubId, String status, Long semesterId, String keyword, Long teamId,
+            Pageable pageable, Long userId);
 
     /**
      * Get report of a specific club for a specific report requirement (for CLUB_OFFICER or TEAM_OFFICER)

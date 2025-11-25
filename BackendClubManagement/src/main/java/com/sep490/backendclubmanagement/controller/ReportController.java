@@ -14,10 +14,15 @@ import com.sep490.backendclubmanagement.dto.response.PageResponse;
 import com.sep490.backendclubmanagement.dto.response.ReportDetailResponse;
 import com.sep490.backendclubmanagement.dto.response.ReportListItemResponse;
 import com.sep490.backendclubmanagement.dto.response.ReportRequirementResponse;
+import com.sep490.backendclubmanagement.entity.ReportStatus;
+import com.sep490.backendclubmanagement.entity.ReportType;
 import com.sep490.backendclubmanagement.service.ReportServiceInterface;
 import com.sep490.backendclubmanagement.util.SecurityUtils;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -35,12 +40,21 @@ public class ReportController {
      * Get all reports with filters and pagination (for staff only)
      */
     @PreAuthorize("@clubSecurity.isStaff()")
-    @PostMapping("/staff/filter")
+    @GetMapping("/staff/filter")
     public ApiResponse<PageResponse<ReportListItemResponse>> getAllReports(
-            @RequestBody @Valid ReportFilterRequest request
+            @RequestParam(required = false) ReportStatus status,
+            @RequestParam(required = false) Long clubId,
+            @RequestParam(required = false) Long semesterId,
+            @RequestParam(required = false) ReportType reportType,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "submittedDate,desc") String sort
     ) {
         Long userId = SecurityUtils.getCurrentUserId();
-        PageResponse<ReportListItemResponse> data = reportService.getAllReports(request, userId);
+        Pageable pageable = PageRequest.of(page, size, parseSort(sort));
+        PageResponse<ReportListItemResponse> data = reportService.getAllReports(
+                status, clubId, semesterId, reportType, keyword, pageable, userId);
         return ApiResponse.success(data);
     }
 
@@ -70,12 +84,19 @@ public class ReportController {
      * Get all report requirements with filters and pagination (for staff only)
      */
     @PreAuthorize("@clubSecurity.isStaff()")
-    @PostMapping("/staff/requirements/filter")
+    @GetMapping("/staff/requirements/filter")
     public ApiResponse<PageResponse<ReportRequirementResponse>> getAllReportRequirements(
-            @RequestBody @Valid ReportRequirementFilterRequest request
+            @RequestParam(required = false) ReportType reportType,
+            @RequestParam(required = false) Long clubId,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "createdAt,desc") String sort
     ) {
         Long userId = SecurityUtils.getCurrentUserId();
-        PageResponse<ReportRequirementResponse> data = reportService.getAllReportRequirements(request, userId);
+        Pageable pageable = PageRequest.of(page, size, parseSort(sort));
+        PageResponse<ReportRequirementResponse> data = reportService.getAllReportRequirements(
+                reportType, clubId, keyword, pageable, userId);
         return ApiResponse.success(data);
     }
 
@@ -147,26 +168,44 @@ public class ReportController {
     /**
      * Get all reports for a club (club president can see all, team officer can see their own)
      */
-    @PreAuthorize("@clubSecurity.isMemberOfClub(#request.clubId)")
-    @PostMapping("/club/{clubId}")
+    @PreAuthorize("@clubSecurity.isTeamOfficerOrClubOfficerInClub(#clubId)")
+    @GetMapping("/club/{clubId}")
     public ApiResponse<PageResponse<ReportListItemResponse>> getClubReports(
-            @RequestBody @Valid ReportFilterRequest request
+            @PathVariable Long clubId,
+            @RequestParam(required = false) ReportStatus status,
+            @RequestParam(required = false) Long semesterId,
+            @RequestParam(required = false) ReportType reportType,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "submittedDate,desc") String sort
     ) {
         Long userId = SecurityUtils.getCurrentUserId();
-        PageResponse<ReportListItemResponse> data = reportService.getClubReports(request, userId);
+        Pageable pageable = PageRequest.of(page, size, parseSort(sort));
+        PageResponse<ReportListItemResponse> data = reportService.getClubReports(
+                clubId, status, semesterId, reportType, keyword, pageable, userId);
         return ApiResponse.success(data);
     }
 
     /**
      * Get my reports for a club
      */
-    @PreAuthorize("@clubSecurity.isMemberOfClub(#request.clubId)")
-    @PostMapping("/club/{clubId}/my-reports")
+    @PreAuthorize("@clubSecurity.isTeamOfficerOrClubOfficerInClub(#clubId)")
+    @GetMapping("/club/{clubId}/my-reports")
     public ApiResponse<PageResponse<ReportListItemResponse>> getMyReports(
-            @RequestBody @Valid ReportFilterRequest request
+            @PathVariable Long clubId,
+            @RequestParam(required = false) ReportStatus status,
+            @RequestParam(required = false) Long semesterId,
+            @RequestParam(required = false) ReportType reportType,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "submittedDate,desc") String sort
     ) {
         Long userId = SecurityUtils.getCurrentUserId();
-        PageResponse<ReportListItemResponse> data = reportService.getMyReports(request, userId);
+        Pageable pageable = PageRequest.of(page, size, parseSort(sort));
+        PageResponse<ReportListItemResponse> data = reportService.getMyReports(
+                clubId, status, semesterId, reportType, keyword, pageable, userId);
         return ApiResponse.success(data);
     }
 
@@ -174,14 +213,21 @@ public class ReportController {
      * Get all report requirements for a club with filters and pagination (for CLUB_OFFICER or TEAM_OFFICER)
      */
     @PreAuthorize("@clubSecurity.isTeamOfficerOrClubOfficerInClub(#clubId)")
-    @PostMapping("/club/{clubId}/requirements/officer/filter")
+    @GetMapping("/club/{clubId}/requirements/officer/filter")
     public ApiResponse<PageResponse<ReportRequirementResponse>> getClubReportRequirementsForOfficerWithFilters(
             @PathVariable Long clubId,
-            @RequestBody @Valid ClubReportRequirementFilterRequest request
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) Long semesterId,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) Long teamId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "deadline,desc") String sort
     ) {
         Long userId = SecurityUtils.getCurrentUserId();
+        Pageable pageable = PageRequest.of(page, size, parseSort(sort));
         PageResponse<ReportRequirementResponse> data = reportService.getClubReportRequirementsForOfficerWithFilters(
-                request, clubId, userId);
+                clubId, status, semesterId, keyword, teamId, pageable, userId);
         return ApiResponse.success(data);
     }
 
@@ -285,5 +331,13 @@ public class ReportController {
                 userId
         );
         return ApiResponse.success(data);
+    }
+
+    private Sort parseSort(String sort) {
+        String[] parts = sort.split(",");
+        String prop = parts.length > 0 ? parts[0] : "createdAt";
+        Sort.Direction dir = (parts.length > 1 && parts[1].equalsIgnoreCase("asc"))
+                ? Sort.Direction.ASC : Sort.Direction.DESC;
+        return Sort.by(dir, prop);
     }
 }
