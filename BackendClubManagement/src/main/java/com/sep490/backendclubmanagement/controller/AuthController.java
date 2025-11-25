@@ -97,7 +97,7 @@ public class AuthController {
             } else {
                 // Check if existing user is active
                 if (!user.getIsActive()) {
-                    return ApiResponse.error(ErrorCode.UNAUTHORIZED, null);
+                    return ApiResponse.error(ErrorCode.USER_NOT_ACTIVE, null);
                 }
                 // For existing users, keep their original information (don't update)
                 // Only ensure they have a system role if missing

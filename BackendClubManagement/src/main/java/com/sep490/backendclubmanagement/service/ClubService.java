@@ -472,6 +472,11 @@ public class ClubService implements ClubServiceInterface {
         Club club = clubRepository.findById(clubId)
                 .orElseThrow(() -> new AppException(ErrorCode.CLUB_NOT_FOUND));
 
+        // Check if club is active (only active clubs can update information)
+        if (!"ACTIVE".equalsIgnoreCase(club.getStatus())) {
+            throw new AppException(ErrorCode.CLUB_NOT_ACTIVE);
+        }
+
         // ===== Validate and update clubCode (allow updating clubCode) =====
         if (request.getClubCode() != null) {
             String newCode = request.getClubCode().trim();

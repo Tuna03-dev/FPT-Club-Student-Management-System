@@ -16,6 +16,7 @@ import com.sep490.backendclubmanagement.dto.response.ReportListItemResponse;
 import com.sep490.backendclubmanagement.dto.response.ReportRequirementResponse;
 import com.sep490.backendclubmanagement.entity.ReportStatus;
 import com.sep490.backendclubmanagement.entity.ReportType;
+import com.sep490.backendclubmanagement.exception.AppException;
 import com.sep490.backendclubmanagement.service.ReportServiceInterface;
 import com.sep490.backendclubmanagement.util.SecurityUtils;
 import jakarta.validation.Valid;
@@ -129,7 +130,7 @@ public class ReportController {
     public ApiResponse<ReportDetailResponse> createReport(
             @RequestPart("request") @Valid CreateReportRequest request,
             @RequestPart(value = "file", required = false) MultipartFile file
-    ) {
+    ) throws AppException {
         Long userId = SecurityUtils.getCurrentUserId();
         ReportDetailResponse data = reportService.createReportWithFile(request, file, userId);
         return ApiResponse.success(data);
@@ -146,7 +147,7 @@ public class ReportController {
             @PathVariable Long reportId,
             @RequestPart("request") @Valid UpdateReportRequest request,
             @RequestPart(value = "file", required = false) MultipartFile file
-    ) {
+    ) throws  AppException {
         Long userId = SecurityUtils.getCurrentUserId();
         ReportDetailResponse data = reportService.updateReportWithFile(reportId, request, file, userId);
         return ApiResponse.success(data);
@@ -159,7 +160,7 @@ public class ReportController {
     @PostMapping("/club/submit")
     public ApiResponse<ReportDetailResponse> submitReport(
             @RequestBody @Valid SubmitReportRequest request
-    ) {
+    ) throws AppException {
         Long userId = SecurityUtils.getCurrentUserId();
         ReportDetailResponse data = reportService.submitReport(request, userId);
         return ApiResponse.success(data);
@@ -293,7 +294,7 @@ public class ReportController {
      */
     @PreAuthorize("@clubSecurity.isTeamOfficerOrClubOfficerForReport(#reportId)")
     @DeleteMapping("/club/{reportId}")
-    public ApiResponse<Void> deleteReport(@PathVariable Long reportId) {
+    public ApiResponse<Void> deleteReport(@PathVariable Long reportId) throws  AppException {
         Long userId = SecurityUtils.getCurrentUserId();
         reportService.deleteReport(reportId, userId);
         return ApiResponse.success();
@@ -308,7 +309,7 @@ public class ReportController {
     @PostMapping(value = "/club/review", consumes = "application/json")
     public ApiResponse<ReportDetailResponse> reviewReportByClub(
             @RequestBody @Valid ReportReviewRequest request
-    ) {
+    ) throws AppException {
         Long userId = SecurityUtils.getCurrentUserId();
         ReportDetailResponse data = reportService.reviewReportByClub(request, userId);
         return ApiResponse.success(data);
@@ -322,7 +323,7 @@ public class ReportController {
     public ApiResponse<ReportRequirementResponse> assignTeamToReportRequirement(
             @PathVariable Long clubId,
             @RequestBody @Valid AssignTeamToReportRequirementRequest request
-    ) {
+    ) throws AppException {
         Long userId = SecurityUtils.getCurrentUserId();
         ReportRequirementResponse data = reportService.assignTeamToReportRequirement(
                 request.getClubReportRequirementId(),

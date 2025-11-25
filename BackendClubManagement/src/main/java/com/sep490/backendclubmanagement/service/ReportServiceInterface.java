@@ -12,6 +12,7 @@ import com.sep490.backendclubmanagement.dto.response.ReportListItemResponse;
 import com.sep490.backendclubmanagement.dto.response.ReportRequirementResponse;
 import com.sep490.backendclubmanagement.entity.ReportStatus;
 import com.sep490.backendclubmanagement.entity.ReportType;
+import com.sep490.backendclubmanagement.exception.AppException;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Pageable;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -72,7 +73,7 @@ public interface ReportServiceInterface {
      * @param userId Current user ID
      * @return Created report detail response
      */
-    ReportDetailResponse createReport(CreateReportRequest request, Long userId);
+    ReportDetailResponse createReport(CreateReportRequest request, Long userId) throws  AppException;
 
     /**
      * Create a report with file upload (draft for team officer, can submit for club president)
@@ -84,7 +85,7 @@ public interface ReportServiceInterface {
      * @param userId Current user ID
      * @return Created report detail response
      */
-    ReportDetailResponse createReportWithFile(CreateReportRequest request, MultipartFile file, Long userId);
+    ReportDetailResponse createReportWithFile(CreateReportRequest request, MultipartFile file, Long userId) throws  AppException;
 
     /**
      * Update a draft report
@@ -93,7 +94,7 @@ public interface ReportServiceInterface {
      * @param userId Current user ID
      * @return Updated report detail response
      */
-    ReportDetailResponse updateReport(Long reportId, UpdateReportRequest request, Long userId);
+    ReportDetailResponse updateReport(Long reportId, UpdateReportRequest request, Long userId) throws  AppException;
 
     /**
      * Update a draft report with file upload
@@ -103,7 +104,7 @@ public interface ReportServiceInterface {
      * @param userId Current user ID
      * @return Updated report detail response
      */
-    ReportDetailResponse updateReportWithFile(Long reportId, UpdateReportRequest request, MultipartFile file, Long userId);
+    ReportDetailResponse updateReportWithFile(Long reportId, UpdateReportRequest request, MultipartFile file, Long userId) throws  AppException;
 
     /**
      * Submit a draft report (club president or team officer who is the creator)
@@ -111,7 +112,7 @@ public interface ReportServiceInterface {
      * @param userId Current user ID
      * @return Submitted report detail response
      */
-    ReportDetailResponse submitReport(SubmitReportRequest request, Long userId);
+    ReportDetailResponse submitReport(SubmitReportRequest request, Long userId) throws AppException;
 
     /**
      * Get all reports for a club (club president can see all, team officer can see their own)
@@ -202,7 +203,7 @@ public interface ReportServiceInterface {
      * @param reportId Report ID
      * @param userId Current user ID
      */
-    void deleteReport(Long reportId, Long userId);
+    void deleteReport(Long reportId, Long userId) throws AppException;
 
     /**
      * Review (approve/reject) a report at club level (for club president only)
@@ -212,7 +213,7 @@ public interface ReportServiceInterface {
      * @param userId Current user ID
      * @return Updated report detail response
      */
-    ReportDetailResponse reviewReportByClub(ReportReviewRequest request, Long userId);
+    ReportDetailResponse reviewReportByClub(ReportReviewRequest request, Long userId) throws AppException;
 
     /**
      * Get report detail by report ID for club officers (CLUB_OFFICER or TEAM_OFFICER)
@@ -231,6 +232,6 @@ public interface ReportServiceInterface {
      * @param userId Current user ID
      * @return Updated report requirement response
      */
-    ReportRequirementResponse assignTeamToReportRequirement(Long clubReportRequirementId, Long teamId, Long clubId, Long userId);
+    ReportRequirementResponse assignTeamToReportRequirement(Long clubReportRequirementId, Long teamId, Long clubId, Long userId) throws AppException;
 }
 

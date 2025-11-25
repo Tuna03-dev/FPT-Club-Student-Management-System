@@ -13,6 +13,8 @@ import com.sep490.backendclubmanagement.dto.response.ReportDetailResponse;
 import com.sep490.backendclubmanagement.dto.response.ReportListItemResponse;
 import com.sep490.backendclubmanagement.dto.response.ReportRequirementResponse;
 import com.sep490.backendclubmanagement.entity.*;
+import com.sep490.backendclubmanagement.exception.AppException;
+import com.sep490.backendclubmanagement.exception.ErrorCode;
 import com.sep490.backendclubmanagement.exception.ForbiddenException;
 import com.sep490.backendclubmanagement.exception.NotFoundException;
 import com.sep490.backendclubmanagement.mapper.ReportMapper;
@@ -314,7 +316,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
      */
     @Override
     @Transactional
-    public ReportDetailResponse createReport(CreateReportRequest request, Long userId) {
+    public ReportDetailResponse createReport(CreateReportRequest request, Long userId) throws AppException{
         // Get current semester
         Semester currentSemester = semesterRepository.findCurrentSemester()
                 .orElseThrow(() -> new NotFoundException("Current semester not found"));
@@ -322,6 +324,11 @@ public class ReportServiceImpl implements ReportServiceInterface {
         // Validate club exists
         Club club = clubRepository.findById(request.getClubId())
                 .orElseThrow(() -> new NotFoundException("Club not found with ID: " + request.getClubId()));
+
+        // Check if club is active (only active clubs can create reports)
+        if (!"ACTIVE".equalsIgnoreCase(club.getStatus())) {
+            throw new AppException(ErrorCode.CLUB_NOT_ACTIVE);
+        }
 
         // Validate report requirement exists
         SubmissionReportRequirement reportRequirement = submissionReportRequirementRepository.findById(request.getReportRequirementId())
@@ -425,7 +432,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
      */
     @Override
     @Transactional
-    public ReportDetailResponse createReportWithFile(CreateReportRequest request, MultipartFile file, Long userId) {
+    public ReportDetailResponse createReportWithFile(CreateReportRequest request, MultipartFile file, Long userId) throws AppException {
         // Upload file if provided
         String fileUrl = request.getFileUrl(); // Use provided fileUrl if any
         if (file != null && !file.isEmpty()) {
@@ -452,10 +459,18 @@ public class ReportServiceImpl implements ReportServiceInterface {
      */
     @Override
     @Transactional
-    public ReportDetailResponse updateReport(Long reportId, UpdateReportRequest request, Long userId) {
+    public ReportDetailResponse updateReport(Long reportId, UpdateReportRequest request, Long userId) throws AppException {
         // Get report with relations
         Report report = reportRepository.findByIdWithRelations(reportId)
                 .orElseThrow(() -> new NotFoundException("Report not found with ID: " + reportId));
+
+        // Check if club is active
+        if (report.getClubReportRequirement() != null && report.getClubReportRequirement().getClub() != null) {
+            Club club = report.getClubReportRequirement().getClub();
+            if (!"ACTIVE".equalsIgnoreCase(club.getStatus())) {
+                throw new AppException(ErrorCode.CLUB_NOT_ACTIVE);
+            }
+        }
 
         // Only allow updating draft reports, rejected reports (for resubmission), or pending club reports
         if (report.getStatus() != ReportStatus.DRAFT 
@@ -503,7 +518,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
      */
     @Override
     @Transactional
-    public ReportDetailResponse updateReportWithFile(Long reportId, UpdateReportRequest request, MultipartFile file, Long userId) {
+    public ReportDetailResponse updateReportWithFile(Long reportId, UpdateReportRequest request, MultipartFile file, Long userId) throws AppException{
         // Upload file if provided
         String fileUrl = request.getFileUrl(); // Use provided fileUrl if any
         if (file != null && !file.isEmpty()) {
@@ -531,10 +546,20 @@ public class ReportServiceImpl implements ReportServiceInterface {
      */
     @Override
     @Transactional
-    public ReportDetailResponse submitReport(SubmitReportRequest request, Long userId) {
+    public ReportDetailResponse submitReport(SubmitReportRequest request, Long userId) throws AppException{
         // Get report with relations
         Report report = reportRepository.findByIdWithRelations(request.getReportId())
                 .orElseThrow(() -> new NotFoundException("Report not found with ID: " + request.getReportId()));
+
+        // Check if club is active
+        if (report.getClubReportRequirement() == null || report.getClubReportRequirement().getClub() == null) {
+            throw new NotFoundException("Report must have an associated club");
+        }
+
+        Club club = report.getClubReportRequirement().getClub();
+        if (!"ACTIVE".equalsIgnoreCase(club.getStatus())) {
+            throw new AppException(ErrorCode.CLUB_NOT_ACTIVE);
+        }
 
         // Only allow submitting draft reports or resubmitting rejected reports
         if (report.getStatus() != ReportStatus.DRAFT 
@@ -551,11 +576,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
                 .orElseThrow(() -> new NotFoundException("Current semester not found"));
 
         // Check if user is club president in current semester and active
-        if (report.getClubReportRequirement() == null || report.getClubReportRequirement().getClub() == null) {
-            throw new NotFoundException("Report must have an associated club");
-        }
-
-        Long clubId = report.getClubReportRequirement().getClub().getId();
+        Long clubId = club.getId();
         boolean isClubOfficer = roleMemberShipRepository.isClubOfficerInCurrentSemester(
                 userId, clubId, currentSemester.getId());
         
@@ -1074,10 +1095,18 @@ public class ReportServiceImpl implements ReportServiceInterface {
      */
     @Override
     @Transactional
-    public void deleteReport(Long reportId, Long userId) {
+    public void deleteReport(Long reportId, Long userId) throws AppException {
         // Get report with relations
         Report report = reportRepository.findByIdWithRelations(reportId)
                 .orElseThrow(() -> new NotFoundException("Report not found with ID: " + reportId));
+
+        // Check if club is active
+        if (report.getClubReportRequirement() != null && report.getClubReportRequirement().getClub() != null) {
+            Club club = report.getClubReportRequirement().getClub();
+            if (!"ACTIVE".equalsIgnoreCase(club.getStatus())) {
+                throw new AppException(ErrorCode.CLUB_NOT_ACTIVE);
+            }
+        }
 
         // Only allow deleting draft reports
         if (report.getStatus() != ReportStatus.DRAFT) {
@@ -1160,10 +1189,20 @@ public class ReportServiceImpl implements ReportServiceInterface {
      */
     @Override
     @Transactional
-    public ReportDetailResponse reviewReportByClub(ReportReviewRequest request, Long userId) {
+    public ReportDetailResponse reviewReportByClub(ReportReviewRequest request, Long userId) throws AppException {
         // Get report with relations
         Report report = reportRepository.findByIdWithRelations(request.getReportId())
                 .orElseThrow(() -> new NotFoundException("Report not found with ID: " + request.getReportId()));
+
+        // Check if club is active
+        if (report.getClubReportRequirement() == null || report.getClubReportRequirement().getClub() == null) {
+            throw new NotFoundException("Report must have an associated club");
+        }
+
+        Club club = report.getClubReportRequirement().getClub();
+        if (!"ACTIVE".equalsIgnoreCase(club.getStatus())) {
+            throw new AppException(ErrorCode.CLUB_NOT_ACTIVE);
+        }
 
         // Only allow reviewing reports with status PENDING_CLUB or UPDATED_PENDING_CLUB
         if (report.getStatus() != ReportStatus.PENDING_CLUB
@@ -1180,11 +1219,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
                 .orElseThrow(() -> new NotFoundException("Current semester not found"));
 
         // Check if user is club president in current semester and active
-        if (report.getClubReportRequirement() == null || report.getClubReportRequirement().getClub() == null) {
-            throw new NotFoundException("Report must have an associated club");
-        }
-
-        Long clubId = report.getClubReportRequirement().getClub().getId();
+        Long clubId = club.getId();
         boolean isClubOfficer = roleMemberShipRepository.isClubOfficerInCurrentSemester(
                 userId, clubId, currentSemester.getId());
 
@@ -1261,10 +1296,15 @@ public class ReportServiceImpl implements ReportServiceInterface {
             Long teamId,
             Long clubId,
             Long userId
-    ) {
+    ) throws AppException {
         // Validate club exists
         Club club = clubRepository.findById(clubId)
                 .orElseThrow(() -> new NotFoundException("Club not found with ID: " + clubId));
+
+        // Check if club is active (only active clubs can assign teams)
+        if (!"ACTIVE".equalsIgnoreCase(club.getStatus())) {
+            throw new AppException(ErrorCode.CLUB_NOT_ACTIVE);
+        }
 
         // Get current semester
         Semester currentSemester = semesterRepository.findCurrentSemester()

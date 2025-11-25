@@ -32,7 +32,6 @@ public class RecruitmentService implements RecruitmentServiceInterface {
     private final TeamOptionRepository teamOptionRepository;
     private final TeamRepository teamRepository;
     private final UserRepository userRepository;
-    private final EventRepository eventRepository; // placeholder if needed later
     private final RecruitmentMapper recruitmentMapper;
     private final RecruitmentApplicationMapper recruitmentApplicationMapper;
     private final CloudinaryService cloudinaryService;
@@ -40,6 +39,7 @@ public class RecruitmentService implements RecruitmentServiceInterface {
     private final RoleMemberShipRepository roleMembershipRepository;
     private final SemesterRepository semesterRepository;
     private final ClubRoleRepository clubRoleRepository;
+    private final ClubRepository clubRepository;
 
     @Override
     public PagedResponse<RecruitmentData> listRecruitments(Long userId,Long clubId, RecruitmentStatus status,String keyword, Pageable pageable) throws AppException {
@@ -100,7 +100,15 @@ public class RecruitmentService implements RecruitmentServiceInterface {
     public RecruitmentData createRecruitment(Long userId, Long clubId, RecruitmentCreateRequest req) throws AppException {
         // Check permission: must be CLUB_PRESIDENT and a member of the club
         checkClubOfficerPermission(userId, clubId);
-        
+
+        // Validate club exists and is active
+        Club club = clubRepository.findById(clubId)
+                .orElseThrow(() -> new AppException(ErrorCode.INTERNAL_SERVER_ERROR));
+
+        if (!"ACTIVE".equalsIgnoreCase(club.getStatus())) {
+            throw new AppException(ErrorCode.CLUB_NOT_ACTIVE);
+        }
+
         Recruitment r = recruitmentMapper.toEntity(req, clubId);
         r = recruitmentRepository.save(r);
         
@@ -136,6 +144,11 @@ public class RecruitmentService implements RecruitmentServiceInterface {
         // Check permission: must be CLUB_PRESIDENT and a member of the club
         checkClubOfficerPermission(userId, r.getClub().getId());
         
+        // Check if club is active
+        if (!"ACTIVE".equalsIgnoreCase(r.getClub().getStatus())) {
+            throw new AppException(ErrorCode.CLUB_NOT_ACTIVE);
+        }
+
         // Check if recruitment is closed
         if (r.getStatus() == RecruitmentStatus.CLOSED) {
             throw new AppException(ErrorCode.RECRUITMENT_CLOSED);
@@ -176,6 +189,11 @@ public class RecruitmentService implements RecruitmentServiceInterface {
         // Check permission: must be CLUB_PRESIDENT and a member of the club
         checkClubOfficerPermission(userId, r.getClub().getId());
         
+        // Check if club is active
+        if (!"ACTIVE".equalsIgnoreCase(r.getClub().getStatus())) {
+            throw new AppException(ErrorCode.CLUB_NOT_ACTIVE);
+        }
+
         // If new status is OPEN, close all other OPEN recruitments of the club
         if (status == RecruitmentStatus.OPEN) {
             closeOtherOpenRecruitments(r.getClub().getId(), r.getId());
@@ -194,6 +212,11 @@ public class RecruitmentService implements RecruitmentServiceInterface {
         // Check permission: must be CLUB_PRESIDENT and a member of the club
         checkClubOfficerPermission(userId, r.getClub().getId());
         
+        // Check if club is active
+        if (!"ACTIVE".equalsIgnoreCase(r.getClub().getStatus())) {
+            throw new AppException(ErrorCode.CLUB_NOT_ACTIVE);
+        }
+
         recruitmentRepository.deleteById(id);
     }
 
@@ -233,11 +256,18 @@ public class RecruitmentService implements RecruitmentServiceInterface {
     public RecruitmentApplicationData submitApplication(Long applicantId, ApplicationSubmitRequest req, MultiValueMap<String, MultipartFile> allFiles) throws AppException {
         Recruitment recruitment = recruitmentRepository.findById(req.recruitmentId)
                 .orElseThrow(() -> new AppException(ErrorCode.INTERNAL_SERVER_ERROR));
+
+        // Check if club is active (only active clubs can receive applications)
+        Club club = recruitment.getClub();
+        if (!"ACTIVE".equalsIgnoreCase(club.getStatus())) {
+            throw new AppException(ErrorCode.CLUB_NOT_ACTIVE);
+        }
+
         User applicant = userRepository.findById(applicantId)
                 .orElseThrow(() -> new AppException(ErrorCode.UNAUTHORIZED));
 
         // Check if user is already an active member of the club
-        Long clubId = recruitment.getClub().getId();
+        Long clubId = club.getId();
         boolean isAlreadyMember = clubMemberShipRepository.existsByUserIdAndClubIdAndStatus(
                 applicantId, clubId, ClubMemberShipStatus.ACTIVE);
         if (isAlreadyMember) {
@@ -381,6 +411,12 @@ public class RecruitmentService implements RecruitmentServiceInterface {
         Long clubId = app.getRecruitment().getClub().getId();
         checkClubOfficerPermission(userId, clubId);
         
+        // Check if club is active
+        Club club = app.getRecruitment().getClub();
+        if (!"ACTIVE".equalsIgnoreCase(club.getStatus())) {
+            throw new AppException(ErrorCode.CLUB_NOT_ACTIVE);
+        }
+
         app.setStatus(req.status);
         app.setReviewNotes(req.reviewNotes);
         app.setReviewedDate(LocalDateTime.now());
