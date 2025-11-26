@@ -8,6 +8,9 @@ import com.sep490.backendclubmanagement.entity.TransactionStatus;
 import com.sep490.backendclubmanagement.exception.AppException;
 import org.springframework.data.domain.Pageable;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
+
 public interface IncomeTransactionService {
 
     /**
@@ -20,6 +23,21 @@ public interface IncomeTransactionService {
      */
     PageResponse<IncomeTransactionResponse> getIncomeTransactionsByStatus(
             Long clubId, TransactionStatus status, Pageable pageable) throws AppException;
+
+    /**
+     * Get income transactions with filters
+     */
+    PageResponse<IncomeTransactionResponse> getIncomeTransactionsWithFilters(
+            Long clubId,
+            String search,
+            TransactionStatus status,
+            LocalDate fromDate,
+            LocalDate toDate,
+            BigDecimal minAmount,
+            BigDecimal maxAmount,
+            String source,
+            Long feeId,
+            Pageable pageable) throws AppException;
 
     /**
      * Get income transaction by ID
