@@ -6,7 +6,6 @@ import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
 import com.google.api.client.json.jackson2.JacksonFactory;
 import com.sep490.backendclubmanagement.dto.ApiResponse;
 import com.sep490.backendclubmanagement.dto.request.GoogleLoginRequest;
-import com.sep490.backendclubmanagement.dto.request.RefreshTokenRequest;
 import com.sep490.backendclubmanagement.dto.response.AuthenticationResponse;
 import com.sep490.backendclubmanagement.exception.ErrorCode;
 import com.sep490.backendclubmanagement.entity.SystemRole;
@@ -43,7 +42,7 @@ import java.util.Optional;
 @Slf4j
 public class AuthController {
 
-    private final FapApiService fapApiServiceService;
+    private final FapApiService fapApiService;
     private final JwtUtil jwtUtil;
     private final UserService userService;
     private final SystemRoleService systemRoleService;
@@ -60,7 +59,7 @@ public class AuthController {
             GoogleIdToken.Payload payload = verifyIdToken(request.getIdToken());
             String email = payload.getEmail();
 
-            Optional<Map<String, Object>> profileOpt = fapApiServiceService.findProfileByEmail(email);
+            Optional<Map<String, Object>> profileOpt = fapApiService.findProfileByEmail(email);
             if (profileOpt.isEmpty()) {
                 return ApiResponse.error(ErrorCode.ORG_UNAUTHORIZED, null);
             }
@@ -365,6 +364,98 @@ public class AuthController {
         } catch (Exception e) {
             log.error("Error during logout: {}", e.getMessage(), e);
             return ApiResponse.error(ErrorCode.INTERNAL_SERVER_ERROR, null);
+        }
+    }
+
+    /**
+     * API endpoint để validate JWT token
+     * Kiểm tra token có hợp lệ, chưa hết hạn, chưa bị revoke, và user còn active
+     *
+     * Standard validation endpoint - returns true/false only
+     *
+     * @param authorization Authorization header với Bearer token
+     * @return true nếu token valid, 401 error nếu invalid
+     */
+    @GetMapping("/validate")
+    public ApiResponse<Boolean> validateToken(
+            @RequestHeader(name = "Authorization", required = false) String authorization) {
+        try {
+            // Check authorization header
+            if (authorization == null || !authorization.startsWith("Bearer ")) {
+                log.debug("No valid Authorization header for validation");
+                return ApiResponse.error(ErrorCode.UNAUTHORIZED, "Missing or invalid Authorization header", null);
+            }
+
+            String token = authorization.substring(7);
+
+            // Extract email from token
+            String email;
+            try {
+                email = jwtUtil.extractUsername(token);
+            } catch (Exception e) {
+                log.debug("Failed to extract username from token: {}", e.getMessage());
+                return ApiResponse.error(ErrorCode.UNAUTHORIZED, "Invalid token format", null);
+            }
+
+            if (email == null || email.trim().isEmpty()) {
+                log.debug("Email extracted from token is null or empty");
+                return ApiResponse.error(ErrorCode.UNAUTHORIZED, "Invalid token", null);
+            }
+
+            // Check if token is blacklisted (revoked)
+            try {
+                String jti = jwtUtil.extractJti(token);
+                if (tokenBlacklistService.isRevoked(jti)) {
+                    log.debug("Token has been revoked for user: {}", email);
+                    return ApiResponse.error(ErrorCode.UNAUTHORIZED, "Token has been revoked", null);
+                }
+            } catch (Exception e) {
+                log.warn("Failed to check token blacklist: {}", e.getMessage());
+                // Continue - if blacklist check fails, still validate other aspects
+            }
+
+            // Find user in database
+            Optional<User> userOpt = userService.findByEmail(email);
+            if (userOpt.isEmpty()) {
+                log.debug("User not found for email: {}", email);
+                return ApiResponse.error(ErrorCode.UNAUTHORIZED, "User not found", null);
+            }
+
+            User user = userOpt.get();
+
+            // Check if user is active
+            if (!user.getIsActive()) {
+                log.debug("User is inactive: {}", email);
+                return ApiResponse.error(ErrorCode.UNAUTHORIZED, "User account is inactive", null);
+            }
+
+            // Validate token signature and expiration (without setting SecurityContext)
+            // Just check if token is valid, no need to build UserDetails or set authentication
+            try {
+                // Check if token is expired
+                if (jwtUtil.isTokenExpired(token)) {
+                    log.debug("Token is expired for user: {}", email);
+                    return ApiResponse.error(ErrorCode.UNAUTHORIZED, "Token expired", null);
+                }
+
+                // If we reach here, token is valid:
+                // - Has valid signature (extracted email successfully)
+                // - Not expired
+                // - Not blacklisted
+                // - User exists and is active
+
+            } catch (Exception e) {
+                log.debug("Token validation failed for user {}: {}", email, e.getMessage());
+                return ApiResponse.error(ErrorCode.UNAUTHORIZED, "Invalid token", null);
+            }
+
+            // Token is valid - return simple boolean result
+            log.debug("Token validated successfully for user: {}", email);
+            return ApiResponse.success(true);
+
+        } catch (Exception e) {
+            log.error("Error validating token: {}", e.getMessage(), e);
+            return ApiResponse.error(ErrorCode.INTERNAL_SERVER_ERROR, "Token validation error", null);
         }
     }
 

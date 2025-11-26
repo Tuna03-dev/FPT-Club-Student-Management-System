@@ -8,7 +8,16 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
-import { FileText, Users, Edit2, Plus, Search, Clock, Trash2 } from "lucide-react";
+import {
+  FileText,
+  Users,
+  Edit2,
+  Plus,
+  Search,
+  Clock,
+  Trash2,
+  ExternalLink,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import TeamNewsDrafts from "@/pages/news/TeamNewsDrafts";
@@ -152,7 +161,8 @@ export default function TeamDetailPage() {
 
   const teamName = localTeamInfo?.teamName ?? data?.teamName ?? "";
   const teamDesc = localTeamInfo?.description ?? data?.description ?? "";
-  const teamLink = localTeamInfo?.linkGroupChat ?? (data as any)?.linkGroupChat ?? "";
+  const teamLink =
+    localTeamInfo?.linkGroupChat ?? (data as any)?.linkGroupChat ?? "";
 
   // Posts state
   const [posts, setPosts] = useState<PostWithRelationsData[]>([]);
@@ -387,7 +397,9 @@ export default function TeamDetailPage() {
   }, [editOpen, teamName, teamDesc, teamLink]);
 
   // Validate "tên phòng ban có nghĩa" (client)
-  function validateMeaningfulTeamNameClient(trimmedName: string): string | undefined {
+  function validateMeaningfulTeamNameClient(
+    trimmedName: string
+  ): string | undefined {
     if (trimmedName.length < 3) {
       return "Tên phòng ban phải có ít nhất 3 ký tự.";
     }
@@ -496,8 +508,7 @@ export default function TeamDetailPage() {
       toast.success("Đã xóa phòng ban khỏi CLB.", { duration: 2500 });
       nav(`/myclub/${cId}`);
     } catch (err: any) {
-      const msg =
-        err?.message || "Không thể xóa phòng ban. Vui lòng thử lại.";
+      const msg = err?.message || "Không thể xóa phòng ban. Vui lòng thử lại.";
       toast.error(msg, { duration: 2500 });
     } finally {
       setDeleting(false);
@@ -533,7 +544,16 @@ export default function TeamDetailPage() {
                       {teamDesc || "—"}
                       {teamLink ? (
                         <span className="block text-xs mt-1 opacity-80">
-                          Link nhóm: {teamLink}
+                          Link nhóm:{" "}
+                          <a
+                            href={teamLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="underline underline-offset-2 hover:text-primary-foreground font-medium"
+                          >
+                            Mở nhóm chat
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
                         </span>
                       ) : null}
                     </p>
