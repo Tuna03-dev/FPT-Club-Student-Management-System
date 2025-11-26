@@ -17,10 +17,13 @@ import com.sep490.backendclubmanagement.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -138,14 +141,53 @@ public class ClubService implements ClubServiceInterface {
             throw new AppException(ErrorCode.FORBIDDEN);
         }
 
-        Page<Club> page = clubRepository.getAllClubsByFilter(
-                keyword,
-                campusId,
-                categoryId,
-                status,
-                pageable
-        );
+        Page<Club> page;
 
+        // If keyword is provided, use client-side filtering with Vietnamese normalization
+        if (keyword != null && !keyword.trim().isEmpty()) {
+            String trimmedKeyword = keyword.trim();
+            // Get all clubs without keyword filter
+            page = clubRepository.getAllClubsByFilter(
+                    null,
+                    campusId,
+                    categoryId,
+                    status,
+                    PageRequest.of(0, Integer.MAX_VALUE)
+            );
+
+            // Filter using Vietnamese normalization
+            List<Club> filteredList = page.getContent().stream()
+                    .filter(club -> {
+                        String clubName = normalizeVietnamese(club.getClubName() != null ? club.getClubName() : "");
+                        String clubCode = normalizeVietnamese(club.getClubCode() != null ? club.getClubCode() : "");
+
+                        // Split keyword into individual words for better matching
+                        String[] keywords = trimmedKeyword.split("\\s+");
+                        for (String kw : keywords) {
+                            String normalizedKw = normalizeVietnamese(kw);
+                            if (clubName.contains(normalizedKw) || clubCode.contains(normalizedKw)) {
+                                return true;
+                            }
+                        }
+                        return false;
+                    })
+                    .collect(Collectors.toList());
+
+            // Apply pagination manually
+            int start = (int) pageable.getOffset();
+            int end = Math.min((start + pageable.getPageSize()), filteredList.size());
+            List<Club> paginatedList = start >= filteredList.size() ?
+                    Collections.emptyList() : filteredList.subList(start, end);
+            page = new PageImpl<>(paginatedList, pageable, filteredList.size());
+        } else {
+            page = clubRepository.getAllClubsByFilter(
+                    keyword,
+                    campusId,
+                    categoryId,
+                    status,
+                    pageable
+            );
+        }
 
         List<ClubManagementResponse> content = page.getContent().stream()
                 .map(club -> {
@@ -556,6 +598,14 @@ public class ClubService implements ClubServiceInterface {
 
         // Trả về thông tin club đã cập nhật
         return getClubDetail(clubId);
+    }
+
+    private String normalizeVietnamese(String text) {
+        if (text == null || text.isBlank()) return "";
+        String normalized = text.replace("đ", "d").replace("Đ", "d");
+        normalized = java.text.Normalizer.normalize(normalized, java.text.Normalizer.Form.NFD);
+        normalized = normalized.replaceAll("\\p{InCombiningDiacriticalMarks}+", "");
+        return normalized.toLowerCase();
     }
 }
 

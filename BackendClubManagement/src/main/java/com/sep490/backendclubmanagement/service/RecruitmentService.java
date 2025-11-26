@@ -10,6 +10,8 @@ import com.sep490.backendclubmanagement.mapper.RecruitmentMapper;
 import com.sep490.backendclubmanagement.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,6 +21,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -55,12 +58,38 @@ public class RecruitmentService implements RecruitmentServiceInterface {
     public PagedResponse<RecruitmentData> listRecruitments(Long clubId, RecruitmentStatus status, String keyword, Pageable pageable){
         Page<Recruitment> page;
 
-        // If keyword is provided, use search query
+        // If keyword is provided, use client-side filtering with Vietnamese normalization
         if (keyword != null && !keyword.trim().isEmpty()) {
             String trimmedKeyword = keyword.trim();
+            // Get all recruitments without keyword filter
             page = (status == null)
-                    ? recruitmentRepository.searchByClubIdAndKeyword(clubId, trimmedKeyword, pageable)
-                    : recruitmentRepository.searchByClubIdAndStatusAndKeyword(clubId, status, trimmedKeyword, pageable);
+                    ? recruitmentRepository.findByClub_Id(clubId, PageRequest.of(0, Integer.MAX_VALUE))
+                    : recruitmentRepository.findByClub_IdAndStatus(clubId, status, PageRequest.of(0, Integer.MAX_VALUE));
+
+            // Filter using Vietnamese normalization
+            List<Recruitment> filteredList = page.getContent().stream()
+                    .filter(recruitment -> {
+                        String title = normalizeVietnamese(recruitment.getTitle() != null ? recruitment.getTitle() : "");
+                        String desc = normalizeVietnamese(recruitment.getDescription() != null ? recruitment.getDescription() : "");
+
+                        // Split keyword into individual words for better matching
+                        String[] keywords = trimmedKeyword.split("\\s+");
+                        for (String kw : keywords) {
+                            String normalizedKw = normalizeVietnamese(kw);
+                            if (title.contains(normalizedKw) || desc.contains(normalizedKw)) {
+                                return true;
+                            }
+                        }
+                        return false;
+                    })
+                    .collect(Collectors.toList());
+
+            // Apply pagination manually
+            int start = (int) pageable.getOffset();
+            int end = Math.min((start + pageable.getPageSize()), filteredList.size());
+            List<Recruitment> paginatedList = start >= filteredList.size() ?
+                    Collections.emptyList() : filteredList.subList(start, end);
+            page = new PageImpl<>(paginatedList, pageable, filteredList.size());
         } else {
             // Otherwise use normal query
             page = (status == null)
@@ -229,16 +258,91 @@ public class RecruitmentService implements RecruitmentServiceInterface {
         // Check permission: must be CLUB_PRESIDENT and a member of the club
         checkClubOfficerPermission(userId, recruitment.getClub().getId());
         
-        // Use single dynamic query that handles all parameter combinations
-        Page<RecruitmentApplication> page = applicationRepository.findApplicationsByRecruitment(recruitmentId, status, keyword, pageable);
+        Page<RecruitmentApplication> page;
+
+        // If keyword is provided, use client-side filtering with Vietnamese normalization
+        if (keyword != null && !keyword.trim().isEmpty()) {
+            String trimmedKeyword = keyword.trim();
+            // Get all applications without keyword filter
+            page = (status == null)
+                    ? applicationRepository.findByRecruitment_Id(recruitmentId, PageRequest.of(0, Integer.MAX_VALUE))
+                    : applicationRepository.findByRecruitment_IdAndStatus(recruitmentId, status, PageRequest.of(0, Integer.MAX_VALUE));
+
+            // Filter using Vietnamese normalization
+            List<RecruitmentApplication> filteredList = page.getContent().stream()
+                    .filter(app -> {
+                        String fullName = normalizeVietnamese(app.getApplicant().getFullName() != null ? app.getApplicant().getFullName() : "");
+                        String email = normalizeVietnamese(app.getApplicant().getEmail() != null ? app.getApplicant().getEmail() : "");
+                        String studentCode = normalizeVietnamese(app.getApplicant().getStudentCode() != null ? app.getApplicant().getStudentCode() : "");
+
+                        // Split keyword into individual words for better matching
+                        String[] keywords = trimmedKeyword.split("\\s+");
+                        for (String kw : keywords) {
+                            String normalizedKw = normalizeVietnamese(kw);
+                            if (fullName.contains(normalizedKw) || email.contains(normalizedKw) || studentCode.contains(normalizedKw)) {
+                                return true;
+                            }
+                        }
+                        return false;
+                    })
+                    .collect(Collectors.toList());
+
+            // Apply pagination manually
+            int start = (int) pageable.getOffset();
+            int end = Math.min((start + pageable.getPageSize()), filteredList.size());
+            List<RecruitmentApplication> paginatedList = start >= filteredList.size() ?
+                    Collections.emptyList() : filteredList.subList(start, end);
+            page = new PageImpl<>(paginatedList, pageable, filteredList.size());
+        } else {
+            // Use single dynamic query that handles all parameter combinations
+            page = applicationRepository.findApplicationsByRecruitment(recruitmentId, status, keyword, pageable);
+        }
+
         Page<RecruitmentApplicationData> dataPage = page.map(recruitmentApplicationMapper::toDto);
         return PagedResponse.of(dataPage);
     }
 
     @Override
     public PagedResponse<RecruitmentApplicationData> listMyApplications(Long applicantId, RecruitmentApplicationStatus status, String keyword, Pageable pageable) {
-        // Use single dynamic query that handles all parameter combinations
-        Page<RecruitmentApplication> page = applicationRepository.findMyApplications(applicantId, status, keyword, pageable);
+        Page<RecruitmentApplication> page;
+
+        // If keyword is provided, use client-side filtering with Vietnamese normalization
+        if (keyword != null && !keyword.trim().isEmpty()) {
+            String trimmedKeyword = keyword.trim();
+            // Get all applications without keyword filter
+            page = (status == null)
+                    ? applicationRepository.findMyApplications(applicantId, null, null, PageRequest.of(0, Integer.MAX_VALUE))
+                    : applicationRepository.findMyApplications(applicantId, status, null, PageRequest.of(0, Integer.MAX_VALUE));
+
+            // Filter using Vietnamese normalization
+            List<RecruitmentApplication> filteredList = page.getContent().stream()
+                    .filter(app -> {
+                        String recruitmentTitle = normalizeVietnamese(app.getRecruitment().getTitle() != null ? app.getRecruitment().getTitle() : "");
+                        String clubName = normalizeVietnamese(app.getRecruitment().getClub().getClubName() != null ? app.getRecruitment().getClub().getClubName() : "");
+
+                        // Split keyword into individual words for better matching
+                        String[] keywords = trimmedKeyword.split("\\s+");
+                        for (String kw : keywords) {
+                            String normalizedKw = normalizeVietnamese(kw);
+                            if (recruitmentTitle.contains(normalizedKw) || clubName.contains(normalizedKw)) {
+                                return true;
+                            }
+                        }
+                        return false;
+                    })
+                    .collect(Collectors.toList());
+
+            // Apply pagination manually
+            int start = (int) pageable.getOffset();
+            int end = Math.min((start + pageable.getPageSize()), filteredList.size());
+            List<RecruitmentApplication> paginatedList = start >= filteredList.size() ?
+                    Collections.emptyList() : filteredList.subList(start, end);
+            page = new PageImpl<>(paginatedList, pageable, filteredList.size());
+        } else {
+            // Use single dynamic query that handles all parameter combinations
+            page = applicationRepository.findMyApplications(applicantId, status, keyword, pageable);
+        }
+
         Page<RecruitmentApplicationData> dataPage = page.map(recruitmentApplicationMapper::toDto);
         return PagedResponse.of(dataPage);
     }
@@ -646,6 +750,14 @@ public class RecruitmentService implements RecruitmentServiceInterface {
     public int closeExpiredRecruitments(java.time.LocalDateTime now) {
         // Only close recruitments that are currently OPEN
         return recruitmentRepository.closeExpiredRecruitments(RecruitmentStatus.CLOSED, RecruitmentStatus.OPEN, now);
+    }
+
+    private String normalizeVietnamese(String text) {
+        if (text == null || text.isBlank()) return "";
+        String normalized = text.replace("đ", "d").replace("Đ", "d");
+        normalized = java.text.Normalizer.normalize(normalized, java.text.Normalizer.Form.NFD);
+        normalized = normalized.replaceAll("\\p{InCombiningDiacriticalMarks}+", "");
+        return normalized.toLowerCase();
     }
 
 }

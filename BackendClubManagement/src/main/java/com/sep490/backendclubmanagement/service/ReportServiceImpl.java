@@ -32,6 +32,8 @@ import com.sep490.backendclubmanagement.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -40,8 +42,10 @@ import org.springframework.web.multipart.MultipartFile;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -89,14 +93,55 @@ public class ReportServiceImpl implements ReportServiceInterface {
             }
         }
 
-        Page<Report> reportPage = reportRepository.findAllWithFilters(
-                status,
-                clubId,
-                semesterId,
-                reportType,
-                keyword,
-                pageable
-        );
+        Page<Report> reportPage;
+
+        // If keyword is provided, use client-side filtering with Vietnamese normalization
+        if (keyword != null && !keyword.trim().isEmpty()) {
+            String trimmedKeyword = keyword.trim();
+            // Get all reports without keyword filter
+            reportPage = reportRepository.findAllWithFilters(
+                    status,
+                    clubId,
+                    semesterId,
+                    reportType,
+                    null,
+                    PageRequest.of(0, Integer.MAX_VALUE)
+            );
+
+            // Filter using Vietnamese normalization
+            List<Report> filteredList = reportPage.getContent().stream()
+                    .filter(report -> {
+                        String title = normalizeVietnamese(report.getReportTitle() != null ? report.getReportTitle() : "");
+                        String content = normalizeVietnamese(report.getContent() != null ? report.getContent() : "");
+
+                        // Split keyword into individual words for better matching
+                        String[] keywords = trimmedKeyword.split("\\s+");
+                        for (String kw : keywords) {
+                            String normalizedKw = normalizeVietnamese(kw);
+                            if (title.contains(normalizedKw) || content.contains(normalizedKw)) {
+                                return true;
+                            }
+                        }
+                        return false;
+                    })
+                    .collect(Collectors.toList());
+
+            // Apply pagination manually
+            int start = (int) pageable.getOffset();
+            int end = Math.min((start + pageable.getPageSize()), filteredList.size());
+            List<Report> paginatedList = start >= filteredList.size() ?
+                    Collections.emptyList() : filteredList.subList(start, end);
+            reportPage = new PageImpl<>(paginatedList, pageable, filteredList.size());
+        } else {
+            reportPage = reportRepository.findAllWithFilters(
+                    status,
+                    clubId,
+                    semesterId,
+                    reportType,
+                    keyword,
+                    pageable
+            );
+        }
 
         // Filter to only include university-level reports
         List<Report> filteredReports = reportPage.getContent().stream()
@@ -677,14 +722,55 @@ public class ReportServiceImpl implements ReportServiceInterface {
             );
         }
 
-        Page<Report> reportPage = reportRepository.findByClubIdWithFilter(
-                status,
-                clubId,
-                semesterId,
-                reportType,
-                keyword,
-                pageable
-        );
+        Page<Report> reportPage;
+
+        // If keyword is provided, use client-side filtering with Vietnamese normalization
+        if (keyword != null && !keyword.trim().isEmpty()) {
+            String trimmedKeyword = keyword.trim();
+            // Get all reports without keyword filter
+            reportPage = reportRepository.findByClubIdWithFilter(
+                    status,
+                    clubId,
+                    semesterId,
+                    reportType,
+                    null,
+                    PageRequest.of(0, Integer.MAX_VALUE)
+            );
+
+            // Filter using Vietnamese normalization
+            List<Report> filteredList = reportPage.getContent().stream()
+                    .filter(report -> {
+                        String title = normalizeVietnamese(report.getReportTitle() != null ? report.getReportTitle() : "");
+                        String content = normalizeVietnamese(report.getContent() != null ? report.getContent() : "");
+
+                        // Split keyword into individual words for better matching
+                        String[] keywords = trimmedKeyword.split("\\s+");
+                        for (String kw : keywords) {
+                            String normalizedKw = normalizeVietnamese(kw);
+                            if (title.contains(normalizedKw) || content.contains(normalizedKw)) {
+                                return true;
+                            }
+                        }
+                        return false;
+                    })
+                    .collect(Collectors.toList());
+
+            // Apply pagination manually
+            int start = (int) pageable.getOffset();
+            int end = Math.min((start + pageable.getPageSize()), filteredList.size());
+            List<Report> paginatedList = start >= filteredList.size() ?
+                    Collections.emptyList() : filteredList.subList(start, end);
+            reportPage = new PageImpl<>(paginatedList, pageable, filteredList.size());
+        } else {
+            reportPage = reportRepository.findByClubIdWithFilter(
+                    status,
+                    clubId,
+                    semesterId,
+                    reportType,
+                    keyword,
+                    pageable
+            );
+        }
 
         List<ReportListItemResponse> content = reportPage.getContent().stream()
                 .map(reportMapper::toListItem)
@@ -732,15 +818,57 @@ public class ReportServiceImpl implements ReportServiceInterface {
             );
         }
 
-        Page<Report> reportPage = reportRepository.findByClubIdAndUserIdWithFilter(
-                status,
-                clubId,
-                semesterId,
-                reportType,
-                keyword,
-                userId,
-                pageable
-        );
+        Page<Report> reportPage;
+
+        // If keyword is provided, use client-side filtering with Vietnamese normalization
+        if (keyword != null && !keyword.trim().isEmpty()) {
+            String trimmedKeyword = keyword.trim();
+            // Get all reports without keyword filter
+            reportPage = reportRepository.findByClubIdAndUserIdWithFilter(
+                    status,
+                    clubId,
+                    semesterId,
+                    reportType,
+                    null,
+                    userId,
+                    PageRequest.of(0, Integer.MAX_VALUE)
+            );
+
+            // Filter using Vietnamese normalization
+            List<Report> filteredList = reportPage.getContent().stream()
+                    .filter(report -> {
+                        String title = normalizeVietnamese(report.getReportTitle() != null ? report.getReportTitle() : "");
+                        String content = normalizeVietnamese(report.getContent() != null ? report.getContent() : "");
+
+                        // Split keyword into individual words for better matching
+                        String[] keywords = trimmedKeyword.split("\\s+");
+                        for (String kw : keywords) {
+                            String normalizedKw = normalizeVietnamese(kw);
+                            if (title.contains(normalizedKw) || content.contains(normalizedKw)) {
+                                return true;
+                            }
+                        }
+                        return false;
+                    })
+                    .collect(Collectors.toList());
+
+            // Apply pagination manually
+            int start = (int) pageable.getOffset();
+            int end = Math.min((start + pageable.getPageSize()), filteredList.size());
+            List<Report> paginatedList = start >= filteredList.size() ?
+                    Collections.emptyList() : filteredList.subList(start, end);
+            reportPage = new PageImpl<>(paginatedList, pageable, filteredList.size());
+        } else {
+            reportPage = reportRepository.findByClubIdAndUserIdWithFilter(
+                    status,
+                    clubId,
+                    semesterId,
+                    reportType,
+                    keyword,
+                    userId,
+                    pageable
+            );
+        }
 
         List<ReportListItemResponse> content = reportPage.getContent().stream()
                 .map(reportMapper::toListItem)
@@ -769,12 +897,51 @@ public class ReportServiceImpl implements ReportServiceInterface {
             throw new ForbiddenException("Only staff can view report requirements");
         }
 
-        Page<SubmissionReportRequirement> requirementPage = submissionReportRequirementRepository.findAllWithFilters(
-                reportType,
-                clubId,
-                keyword,
-                pageable
-        );
+        Page<SubmissionReportRequirement> requirementPage;
+
+        // If keyword is provided, use client-side filtering with Vietnamese normalization
+        if (keyword != null && !keyword.trim().isEmpty()) {
+            String trimmedKeyword = keyword.trim();
+            // Get all requirements without keyword filter
+            requirementPage = submissionReportRequirementRepository.findAllWithFilters(
+                    reportType,
+                    clubId,
+                    null,
+                    PageRequest.of(0, Integer.MAX_VALUE)
+            );
+
+            // Filter using Vietnamese normalization
+            List<SubmissionReportRequirement> filteredList = requirementPage.getContent().stream()
+                    .filter(requirement -> {
+                        String title = normalizeVietnamese(requirement.getTitle() != null ? requirement.getTitle() : "");
+                        String description = normalizeVietnamese(requirement.getDescription() != null ? requirement.getDescription() : "");
+
+                        // Split keyword into individual words for better matching
+                        String[] keywords = trimmedKeyword.split("\\s+");
+                        for (String kw : keywords) {
+                            String normalizedKw = normalizeVietnamese(kw);
+                            if (title.contains(normalizedKw) || description.contains(normalizedKw)) {
+                                return true;
+                            }
+                        }
+                        return false;
+                    })
+                    .collect(Collectors.toList());
+
+            // Apply pagination manually
+            int start = (int) pageable.getOffset();
+            int end = Math.min((start + pageable.getPageSize()), filteredList.size());
+            List<SubmissionReportRequirement> paginatedList = start >= filteredList.size() ?
+                    Collections.emptyList() : filteredList.subList(start, end);
+            requirementPage = new PageImpl<>(paginatedList, pageable, filteredList.size());
+        } else {
+            requirementPage = submissionReportRequirementRepository.findAllWithFilters(
+                    reportType,
+                    clubId,
+                    keyword,
+                    pageable
+            );
+        }
 
         // Map to response with club requirements
         Page<ReportRequirementResponse> responsePage = requirementPage.map(requirement -> {
@@ -1402,6 +1569,14 @@ public class ReportServiceImpl implements ReportServiceInterface {
                     "Vui lòng liên hệ nhà trường để được hỗ trợ."
             );
         }
+    }
+
+    private String normalizeVietnamese(String text) {
+        if (text == null || text.isBlank()) return "";
+        String normalized = text.replace("đ", "d").replace("Đ", "d");
+        normalized = java.text.Normalizer.normalize(normalized, java.text.Normalizer.Form.NFD);
+        normalized = normalized.replaceAll("\\p{InCombiningDiacriticalMarks}+", "");
+        return normalized.toLowerCase();
     }
 }
 
