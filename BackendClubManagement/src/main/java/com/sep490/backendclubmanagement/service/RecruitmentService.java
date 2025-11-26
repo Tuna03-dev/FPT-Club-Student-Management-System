@@ -43,6 +43,24 @@ public class RecruitmentService implements RecruitmentServiceInterface {
     private final SemesterRepository semesterRepository;
     private final ClubRoleRepository clubRoleRepository;
     private final ClubRepository clubRepository;
+    private final NotificationService notificationService;
+
+    /**
+     * Get list of Club Officer user IDs in current semester for a specific club
+     * @param clubId Club ID
+     * @return List of user IDs who are Club Officers
+     */
+    private List<Long> getClubOfficersInCurrentSemester(Long clubId) {
+        Semester currentSemester = semesterRepository.findByIsCurrentTrue()
+                .orElse(null);
+
+        if (currentSemester == null) {
+            return Collections.emptyList();
+        }
+
+        return roleMembershipRepository.findClubOfficerUserIdsByClubIdAndSemesterId(
+                clubId, currentSemester.getId());
+    }
 
     @Override
     public PagedResponse<RecruitmentData> listRecruitments(Long userId,Long clubId, RecruitmentStatus status,String keyword, Pageable pageable) throws AppException {
@@ -161,6 +179,40 @@ public class RecruitmentService implements RecruitmentServiceInterface {
         List<TeamOption> teamOptions = teamOptionRepository.findByRecruitment_Id(r.getId());
         r.setTeamOptions(new HashSet<>(teamOptions));
         
+        // Send notification to Club Officers if recruitment status is OPEN
+        if (r.getStatus() == RecruitmentStatus.OPEN) {
+            try {
+                // Get Club Officers in current semester
+                List<Long> officerIds = getClubOfficersInCurrentSemester(clubId);
+                List<Long> recipientIds = officerIds.stream()
+                        .filter(memberId -> !memberId.equals(userId)) // Don't notify the creator
+                        .collect(Collectors.toList());
+
+                if (!recipientIds.isEmpty()) {
+                    String actionUrl = "/recruitments/" + r.getId();
+                    String title = "Đợt tuyển thành viên mới đã mở";
+                    String message = "CLB " + club.getClubName() + " đã mở đợt tuyển thành viên: \"" + r.getTitle() + "\"";
+
+                    notificationService.sendToUsers(
+                            recipientIds,
+                            userId,
+                            title,
+                            message,
+                            NotificationType.RECRUITMENT_OPENED,
+                            NotificationPriority.NORMAL,
+                            actionUrl,
+                            clubId,
+                            null,
+                            null,
+                            null
+                    );
+                }
+            } catch (Exception e) {
+                // Log error but don't fail the operation
+                System.err.println("Failed to send recruitment notification: " + e.getMessage());
+            }
+        }
+
         return recruitmentMapper.toDto(r);
     }
 
@@ -223,6 +275,9 @@ public class RecruitmentService implements RecruitmentServiceInterface {
             throw new AppException(ErrorCode.CLUB_NOT_ACTIVE);
         }
 
+        // Store old status to check if status changed to OPEN
+        RecruitmentStatus oldStatus = r.getStatus();
+
         // If new status is OPEN, close all other OPEN recruitments of the club
         if (status == RecruitmentStatus.OPEN) {
             closeOtherOpenRecruitments(r.getClub().getId(), r.getId());
@@ -230,6 +285,43 @@ public class RecruitmentService implements RecruitmentServiceInterface {
         
         r.setStatus(status);
         recruitmentRepository.save(r);
+
+        // Send notification to Club Officers if status changed to OPEN
+        if (status == RecruitmentStatus.OPEN && oldStatus != RecruitmentStatus.OPEN) {
+            try {
+                Club club = r.getClub();
+                Long clubId = club.getId();
+
+                // Get Club Officers in current semester
+                List<Long> officerIds = getClubOfficersInCurrentSemester(clubId);
+                List<Long> recipientIds = officerIds.stream()
+                        .filter(memberId -> !memberId.equals(userId)) // Don't notify the creator
+                        .collect(Collectors.toList());
+
+                if (!recipientIds.isEmpty()) {
+                    String actionUrl = "/recruitments/" + r.getId();
+                    String title = "Đợt tuyển thành viên mới đã mở";
+                    String message = "CLB " + club.getClubName() + " đã mở đợt tuyển thành viên: \"" + r.getTitle() + "\"";
+
+                    notificationService.sendToUsers(
+                            recipientIds,
+                            userId,
+                            title,
+                            message,
+                            NotificationType.RECRUITMENT_OPENED,
+                            NotificationPriority.NORMAL,
+                            actionUrl,
+                            clubId,
+                            null,
+                            null,
+                            null
+                    );
+                }
+            } catch (Exception e) {
+                // Log error but don't fail the operation
+                System.err.println("Failed to send recruitment status change notification: " + e.getMessage());
+            }
+        }
     }
 
     @Override
@@ -445,7 +537,6 @@ public class RecruitmentService implements RecruitmentServiceInterface {
                     }
                 } catch (NumberFormatException e) {
                     // Invalid questionId format, skip
-                    continue;
                 } catch (Exception e) {
                     throw new AppException(ErrorCode.INTERNAL_SERVER_ERROR);
                 }
@@ -470,6 +561,35 @@ public class RecruitmentService implements RecruitmentServiceInterface {
             answers.add(ans);
         }
         answerRepository.saveAll(answers);
+
+        // Send notification to Club Officers about new application
+        try {
+            List<Long> officerIds = getClubOfficersInCurrentSemester(clubId);
+
+            if (!officerIds.isEmpty()) {
+                String actionUrl = "/recruitments/" + recruitment.getId() + "/applications/" + app.getId();
+                String title = "Có đơn ứng tuyển mới";
+                String message = applicant.getFullName() + " đã nộp đơn ứng tuyển vào đợt tuyển thành viên: \""
+                        + recruitment.getTitle() + "\"";
+
+                notificationService.sendToUsers(
+                        officerIds,
+                        applicantId,
+                        title,
+                        message,
+                        NotificationType.RECRUITMENT_APPLICATION_SUBMITTED,
+                        NotificationPriority.NORMAL,
+                        actionUrl,
+                        clubId,
+                        null,
+                        null,
+                        null
+                );
+            }
+        } catch (Exception e) {
+            // Log error but don't fail the operation
+            System.err.println("Failed to send application submitted notification: " + e.getMessage());
+        }
 
         return getApplicationInternal(app.getId());
     }
@@ -531,6 +651,52 @@ public class RecruitmentService implements RecruitmentServiceInterface {
             addMemberToTeam(app);
         }
         
+        // Send notification to applicant about application review result
+        try {
+            Long applicantId = app.getApplicant().getId();
+            String actionUrl = "/my-applications/" + app.getId();
+            String title = "";
+            String message = "";
+            NotificationType notificationType = null;
+            NotificationPriority priority = NotificationPriority.NORMAL;
+
+            if (req.status == RecruitmentApplicationStatus.ACCEPTED) {
+                title = "Đơn ứng tuyển được chấp nhận";
+                message = "Đơn ứng tuyển của bạn vào đợt tuyển \"" + app.getRecruitment().getTitle()
+                        + "\" đã được chấp nhận. Chào mừng bạn đến với CLB " + club.getClubName() + "!";
+                notificationType = NotificationType.RECRUITMENT_APPLICATION_APPROVED;
+                priority = NotificationPriority.HIGH;
+            } else if (req.status == RecruitmentApplicationStatus.REJECTED) {
+                title = "Đơn ứng tuyển không được chấp nhận";
+                message = "Đơn ứng tuyển của bạn vào đợt tuyển \"" + app.getRecruitment().getTitle()
+                        + "\" không được chấp nhận.";
+                if (req.reviewNotes != null && !req.reviewNotes.trim().isEmpty()) {
+                    message += " Lý do: " + req.reviewNotes;
+                }
+                notificationType = NotificationType.RECRUITMENT_APPLICATION_REJECTED;
+            }
+
+            if (notificationType != null) {
+                notificationService.sendToUser(
+                        applicantId,
+                        userId,
+                        title,
+                        message,
+                        notificationType,
+                        priority,
+                        actionUrl,
+                        clubId,
+                        null,
+                        null,
+                        null,
+                        null
+                );
+            }
+        } catch (Exception e) {
+            // Log error but don't fail the operation
+            System.err.println("Failed to send application review notification: " + e.getMessage());
+        }
+
         return getApplicationInternal(app.getId());
     }
     
@@ -607,7 +773,7 @@ public class RecruitmentService implements RecruitmentServiceInterface {
         // Collect IDs of questions that should be kept
         Set<Long> requestedQuestionIds = reqs.stream()
                 .map(q -> q.id)
-                .filter(id -> id != null)
+                .filter(Objects::nonNull)
                 .collect(java.util.stream.Collectors.toSet());
         
         // Delete questions that are not in the request (orphaned questions)
