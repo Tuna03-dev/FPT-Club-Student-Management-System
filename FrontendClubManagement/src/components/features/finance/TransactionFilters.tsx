@@ -45,26 +45,10 @@ const STATUS_OPTIONS = [
 ];
 
 const INCOME_SOURCES = [
-  { value: "all", label: "Tất cả nguồn" },
-  { value: "PayOS", label: "PayOS (Tự động)" },
-  { value: "Cash", label: "Tiền mặt" },
-  { value: "Bank Transfer", label: "Chuyển khoản" },
-  { value: "Học phí", label: "Học phí" },
-  { value: "Tài trợ", label: "Tài trợ" },
-  { value: "Quyên góp", label: "Quyên góp" },
-  { value: "Doanh thu", label: "Doanh thu" },
-];
-
-const OUTCOME_CATEGORIES = [
-  { value: "all", label: "Tất cả danh mục" },
-  { value: "Event", label: "Sự kiện" },
-  { value: "Equipment", label: "Thiết bị" },
-  { value: "Transportation", label: "Di chuyển" },
-  { value: "Venue", label: "Địa điểm" },
-  { value: "Food", label: "Ăn uống" },
-  { value: "Marketing", label: "Marketing" },
-  { value: "Office", label: "Văn phòng phẩm" },
-  { value: "Other", label: "Khác" },
+  { value: "direct", label: "Đóng trực tiếp" },
+  { value: "bank", label: "Chuyển khoản ngân hàng" },
+  { value: "PayOS", label: "PayOS" },
+  { value: "other", label: "Khác" },
 ];
 
 export function TransactionFiltersComponent({
@@ -73,7 +57,14 @@ export function TransactionFiltersComponent({
   transactionType,
   fees = [],
 }: TransactionFiltersProps) {
+  // Validation for amount range
+  const isAmountRangeInvalid =
+    filters.minAmount && filters.maxAmount && Number(filters.minAmount) > Number(filters.maxAmount);
   const [isExpanded, setIsExpanded] = React.useState(false);
+
+  // Validation for date range
+  const isDateRangeInvalid =
+    filters.fromDate && filters.toDate && filters.toDate < filters.fromDate;
 
   const handleFilterChange = (key: keyof TransactionFilters, value: string) => {
     onFiltersChange({
@@ -202,6 +193,9 @@ export function TransactionFiltersComponent({
                   onChange={(e) => handleFilterChange("toDate", e.target.value)}
                   className="mt-1"
                 />
+                  {isDateRangeInvalid && (
+                    <span className="text-xs text-red-500">Ngày kết thúc không được nhỏ hơn ngày bắt đầu</span>
+                  )}
               </div>
             </div>
 
@@ -230,6 +224,9 @@ export function TransactionFiltersComponent({
                   onChange={(e) => handleFilterChange("maxAmount", e.target.value)}
                   className="mt-1"
                 />
+                  {isAmountRangeInvalid && (
+                    <span className="text-xs text-red-500">Số tiền tối đa phải lớn hơn hoặc bằng số tiền tối thiểu</span>
+                  )}
               </div>
             </div>
 
@@ -280,28 +277,6 @@ export function TransactionFiltersComponent({
                     </SelectContent>
                   </Select>
                 </div>
-              </div>
-            )}
-
-            {/* Outcome Specific Filters */}
-            {transactionType === "OUTCOME" && (
-              <div>
-                <Label htmlFor="category">Danh mục chi tiêu</Label>
-                <Select
-                  value={filters.category || "all"}
-                  onValueChange={(value) => handleFilterChange("category", value)}
-                >
-                  <SelectTrigger id="category" className="mt-1">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {OUTCOME_CATEGORIES.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
               </div>
             )}
 

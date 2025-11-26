@@ -34,24 +34,59 @@ public class IncomeTransactionController {
     private final CloudinaryService cloudinaryService;
 
     /**
-     * Get all income transactions for a club
+     * Get all income transactions for a club with filters
      * GET /api/clubs/{clubId}/transactions/income
+     * 
+     * @param search - Search in code, description, payer name (optional)
+     * @param status - Filter by transaction status (optional)
+     * @param fromDate - Filter from date (yyyy-MM-dd) (optional)
+     * @param toDate - Filter to date (yyyy-MM-dd) (optional)
+     * @param minAmount - Minimum amount filter (optional)
+     * @param maxAmount - Maximum amount filter (optional)
+     * @param source - Filter by income source: direct/bank/PayOS/other (optional)
+     * @param feeId - Filter by fee ID (optional)
      */
     @GetMapping
     public ApiResponse<PageResponse<IncomeTransactionResponse>> getIncomeTransactions(
             @PathVariable Long clubId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
-            @RequestParam(required = false) TransactionStatus status
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) TransactionStatus status,
+            @RequestParam(required = false) String fromDate,
+            @RequestParam(required = false) String toDate,
+            @RequestParam(required = false) java.math.BigDecimal minAmount,
+            @RequestParam(required = false) java.math.BigDecimal maxAmount,
+            @RequestParam(required = false) String source,
+            @RequestParam(required = false) Long feeId
     ) throws AppException {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Order.desc("transactionDate")));
 
-        PageResponse<IncomeTransactionResponse> response;
-        if (status != null) {
-            response = incomeTransactionServiceImpl.getIncomeTransactionsByStatus(clubId, status, pageable);
-        } else {
-            response = incomeTransactionServiceImpl.getIncomeTransactions(clubId, pageable);
+        // Parse dates if provided
+        java.time.LocalDate parsedFromDate = null;
+        java.time.LocalDate parsedToDate = null;
+        
+        if (fromDate != null && !fromDate.isEmpty()) {
+            try {
+                parsedFromDate = java.time.LocalDate.parse(fromDate);
+            } catch (Exception e) {
+                return ApiResponse.error(400, "Invalid fromDate format. Use yyyy-MM-dd");
+            }
         }
+        
+        if (toDate != null && !toDate.isEmpty()) {
+            try {
+                parsedToDate = java.time.LocalDate.parse(toDate);
+            } catch (Exception e) {
+                return ApiResponse.error(400, "Invalid toDate format. Use yyyy-MM-dd");
+            }
+        }
+
+        PageResponse<IncomeTransactionResponse> response = 
+                incomeTransactionServiceImpl.getIncomeTransactionsWithFilters(
+                    clubId, search, status, parsedFromDate, parsedToDate, 
+                    minAmount, maxAmount, source, feeId, pageable
+                );
 
         return ApiResponse.success(response);
     }

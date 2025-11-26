@@ -16,10 +16,14 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import jakarta.persistence.criteria.Predicate;
+import org.springframework.data.jpa.domain.Specification;
 
 @Slf4j
 @Service
@@ -70,6 +74,104 @@ public class OutcomeTransactionServiceImpl implements OutcomeTransactionService 
                 clubWallet.getId(), status, pageable);
 
         List<OutcomeTransactionResponse> content = page.getContent().stream()
+                .map(outcomeTransactionMapper::toResponse)
+                .collect(Collectors.toList());
+
+        return PageResponse.<OutcomeTransactionResponse>builder()
+                .content(content)
+                .pageNumber(page.getNumber())
+                .pageSize(page.getSize())
+                .totalElements(page.getTotalElements())
+                .totalPages(page.getTotalPages())
+                .hasNext(page.hasNext())
+                .hasPrevious(page.hasPrevious())
+                .build();
+    }
+
+    /**
+     * Get outcome transactions with filters
+     * Search uses Vietnamese accent-insensitive matching (VietnameseTextNormalizer)
+     */
+    @Override
+    public PageResponse<OutcomeTransactionResponse> getOutcomeTransactionsWithFilters(
+            Long clubId,
+            String search,
+            TransactionStatus status,
+            LocalDate fromDate,
+            LocalDate toDate,
+            BigDecimal minAmount,
+            BigDecimal maxAmount,
+            String category,
+            Pageable pageable) throws AppException {
+        
+        // Auto-create wallet if not exists
+        ClubWallet clubWallet = clubWalletService.getOrCreateWalletForClub(clubId);
+
+        // Normalize search term for Vietnamese accent-insensitive search
+        final String normalizedSearch = (search != null && !search.trim().isEmpty()) 
+                ? search.trim() 
+                : null;
+
+        // Build dynamic query specification (without text search)
+        Specification<OutcomeTransaction> spec = (root, query, cb) -> {
+            List<Predicate> predicates = new java.util.ArrayList<>();
+
+            // Club wallet filter (required)
+            predicates.add(cb.equal(root.get("clubWallet").get("id"), clubWallet.getId()));
+
+            // Status filter
+            if (status != null) {
+                predicates.add(cb.equal(root.get("status"), status));
+            }
+
+            // Date range filter
+            if (fromDate != null) {
+                predicates.add(cb.greaterThanOrEqualTo(root.get("transactionDate"), fromDate));
+            }
+            if (toDate != null) {
+                predicates.add(cb.lessThanOrEqualTo(root.get("transactionDate"), toDate));
+            }
+
+            // Amount range filter
+            if (minAmount != null) {
+                predicates.add(cb.greaterThanOrEqualTo(root.get("amount"), minAmount));
+            }
+            if (maxAmount != null) {
+                predicates.add(cb.lessThanOrEqualTo(root.get("amount"), maxAmount));
+            }
+
+            // Category filter
+            if (category != null && !category.trim().isEmpty() && !"all".equalsIgnoreCase(category)) {
+                predicates.add(cb.equal(cb.lower(root.get("category")), category.toLowerCase()));
+            }
+
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
+
+        Page<OutcomeTransaction> page = outcomeTransactionRepository.findAll(spec, pageable);
+
+        // 🔍 Apply Vietnamese accent-insensitive search filter in Java
+        List<OutcomeTransaction> filteredTransactions = page.getContent();
+        if (normalizedSearch != null) {
+            filteredTransactions = filteredTransactions.stream()
+                    .filter(transaction -> {
+                        // Build searchable fields
+                        String transactionCode = transaction.getTransactionCode() != null ? transaction.getTransactionCode() : "";
+                        String description = transaction.getDescription() != null ? transaction.getDescription() : "";
+                        String recipient = transaction.getRecipient() != null ? transaction.getRecipient() : "";
+                        
+                        // Use VietnameseTextNormalizer for accent-insensitive search
+                        return com.sep490.backendclubmanagement.util.VietnameseTextNormalizer.matchesAny(
+                                normalizedSearch,
+                                transactionCode,
+                                description,
+                                recipient
+                        );
+                    })
+                    .collect(Collectors.toList());
+        }
+
+        List<OutcomeTransactionResponse> content = filteredTransactions.stream()
                 .map(outcomeTransactionMapper::toResponse)
                 .collect(Collectors.toList());
 
