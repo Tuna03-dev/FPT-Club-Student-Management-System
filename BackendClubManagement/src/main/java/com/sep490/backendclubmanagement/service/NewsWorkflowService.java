@@ -51,7 +51,7 @@ public class NewsWorkflowService {
         boolean isLeadInClub = guard.isLead(me, club.getId());
 
         RequestStatus startStatus;
-        News attachedNews = null;
+        News attachedNews = null;   
         Team team = null;
 
         if (isStaff) {
