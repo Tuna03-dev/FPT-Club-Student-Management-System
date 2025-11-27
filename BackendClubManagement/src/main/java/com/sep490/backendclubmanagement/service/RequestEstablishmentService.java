@@ -737,12 +737,12 @@ public class RequestEstablishmentService {
         // Upload file nếu có
         if (file != null && !file.isEmpty()) {
             try {
-                // Validate file type (Word, Excel, PDF)
+                // Validate file type (Word, Excel, PDF, ZIP)
                 String originalFilename = file.getOriginalFilename();
                 if (originalFilename != null) {
                     String extension = originalFilename.substring(originalFilename.lastIndexOf(".") + 1).toLowerCase();
-                    if (!extension.matches("pdf|doc|docx|xls|xlsx|ppt|pptx")) {
-                        throw new AppException(ErrorCode.INVALID_INPUT, "Chỉ chấp nhận file Word (.doc, .docx), Excel (.xls, .xlsx), PowerPoint (.ppt, .pptx) hoặc PDF (.pdf)");
+                    if (!extension.matches("pdf|doc|docx|xls|xlsx|ppt|pptx|zip")) {
+                        throw new AppException(ErrorCode.INVALID_INPUT, "Chỉ chấp nhận file Word (.doc, .docx), Excel (.xls, .xlsx), PowerPoint (.ppt, .pptx), PDF (.pdf) hoặc ZIP (.zip)");
                     }
                 }
 
@@ -1795,12 +1795,12 @@ public class RequestEstablishmentService {
         // Upload file nếu có
         if (file != null && !file.isEmpty()) {
             try {
-                // Validate file type (Word, Excel, PDF)
+                // Validate file type (Word, Excel, PDF, ZIP)
                 String originalFilename = file.getOriginalFilename();
                 if (originalFilename != null) {
                     String extension = originalFilename.substring(originalFilename.lastIndexOf(".") + 1).toLowerCase();
-                    if (!extension.matches("pdf|doc|docx|xls|xlsx|ppt|pptx")) {
-                        throw new AppException(ErrorCode.INVALID_INPUT, "Chỉ chấp nhận file Word (.doc, .docx), Excel (.xls, .xlsx), PowerPoint (.ppt, .pptx) hoặc PDF (.pdf)");
+                    if (!extension.matches("pdf|doc|docx|xls|xlsx|ppt|pptx|zip")) {
+                        throw new AppException(ErrorCode.INVALID_INPUT, "Chỉ chấp nhận file Word (.doc, .docx), Excel (.xls, .xlsx), PowerPoint (.ppt, .pptx), PDF (.pdf) hoặc ZIP (.zip)");
                     }
                 }
 
