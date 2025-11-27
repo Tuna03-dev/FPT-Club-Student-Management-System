@@ -6,6 +6,8 @@ import com.sep490.backendclubmanagement.service.EmailService;
 import com.sep490.backendclubmanagement.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -46,6 +48,15 @@ public class FeeReminderScheduledJob {
      * - month: * (every month)
      * - day of week: * (every day of week)
      */
+//    @EventListener(ApplicationReadyEvent.class)
+//    @Transactional
+//    public void onApplicationReady() {
+//        log.info("Application ready - running initial fee reminder check");
+//        sendFeeReminders();
+//    }
+
+
+
     @Scheduled(cron = "0 0 9 * * *")
     @Transactional
     public void sendFeeReminders() {
@@ -76,13 +87,14 @@ public class FeeReminderScheduledJob {
         log.info("Checking fees due on: {} ({} days before)", dueDate, daysBeforeDue);
 
         try {
+            LocalDate today = LocalDate.now();
             // Find all published mandatory fees with this due date that haven't expired yet
             List<Fee> fees = feeRepository.findAll().stream()
                     .filter(fee -> !fee.getIsDraft())
-                    .filter(fee -> fee.getIsMandatory())
+                    .filter(Fee::getIsMandatory)
                     .filter(fee -> fee.getDueDate() != null && fee.getDueDate().equals(dueDate))
-                    .filter(fee -> !Boolean.TRUE.equals(fee.getHasEverExpired()))
-                    .collect(Collectors.toList());
+                    .filter(fee -> !fee.getDueDate().isBefore(today))
+                    .toList();
 
             log.info("Found {} mandatory fees due on {}", fees.size(), dueDate);
 
@@ -300,7 +312,7 @@ public class FeeReminderScheduledJob {
         }
         
         // Action URL
-        String actionUrl = getFrontendUrl() + "/clubs/" + fee.getClub().getId() + "/fees/" + fee.getId();
+        String actionUrl = getFrontendUrl() + "/myclub/" + fee.getClub().getId() + "/payments";
         variables.put("actionUrl", actionUrl);
         
         // Current year for footer
