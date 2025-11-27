@@ -135,8 +135,6 @@ export function StaffClubsManagement() {
     number | undefined
   >();
   const [selectedStatus, setSelectedStatus] = useState<string | undefined>();
-  // Hidden semester filter (temporarily removed from UI). Default semester = 1
-  const [semester] = useState<number>(1);
   // const [campuses] = useState<Campus[]>([]);
   const [clubCategories, setClubCategories] = useState<ClubCategoryType[]>([]);
 
@@ -169,9 +167,8 @@ export function StaffClubsManagement() {
         keyword: searchTerm,
         campusId: selectedCampus,
         categoryId: selectedCategory,
-        semester: semester,
         status: selectedStatus,
-        page: page,
+        page: page - 1,
         size: pageSize,
       });
 
@@ -242,7 +239,7 @@ export function StaffClubsManagement() {
       );
       const result = await resp.getAllForStaff({
         q: search || categorySearchTerm,
-        page: page !== undefined ? page : categoryPage,
+        page: page !== undefined ? page - 1 : categoryPage - 1,
         size: categoryPageSize,
       });
       if (result && result.code === 200 && result.data) {

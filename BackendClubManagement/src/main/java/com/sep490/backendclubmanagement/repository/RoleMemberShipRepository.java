@@ -626,6 +626,56 @@ WHERE cm.club.id = :clubId
             @Param("clubId") Long clubId,
             @Param("semesterId") Long semesterId
     );
+
+    /**
+     * Get list of user IDs who are Club Officers in a specific club and semester
+     * Club Officers are users with CLUB_OFFICER role (not team-specific)
+     */
+    @Query("""
+        SELECT DISTINCT cm.user.id
+        FROM RoleMemberShip rm
+        JOIN rm.clubMemberShip cm
+        JOIN rm.clubRole cr
+        LEFT JOIN cr.systemRole sr
+        WHERE cm.club.id = :clubId
+          AND rm.semester.id = :semesterId
+          AND COALESCE(rm.isActive, TRUE) = TRUE
+          AND cr IS NOT NULL
+          AND (
+              UPPER(TRIM(cr.roleCode)) IN ('CLUB_OFFICER')
+              OR (sr IS NOT NULL AND UPPER(TRIM(sr.roleName)) IN ('CLUB_OFFICER'))
+          )
+    """)
+    List<Long> findClubOfficerUserIdsByClubIdAndSemesterId(
+            @Param("clubId") Long clubId,
+            @Param("semesterId") Long semesterId
+    );
+
+    /**
+     * Get list of user IDs who are Club Officers in a specific club and semester
+     * Club Officers are users with CLUB_OFFICER role (not team-specific)
+     */
+    @Query("""
+        SELECT DISTINCT cm.user.id
+        FROM RoleMemberShip rm
+        JOIN rm.clubMemberShip cm
+        JOIN rm.team t
+        JOIN rm.clubRole cr
+        LEFT JOIN cr.systemRole sr
+        WHERE t.id = :teamId
+          AND rm.semester.id = :semesterId
+          AND COALESCE(rm.isActive, TRUE) = TRUE
+          AND cr IS NOT NULL
+          AND (
+              UPPER(TRIM(cr.roleCode)) IN ('TEAM_OFFICER')
+              OR (sr IS NOT NULL AND UPPER(TRIM(sr.roleName)) IN ('TEAM_OFFICER'))
+          )
+    """)
+    List<Long> findTeamOfficerUserIdsByClubIdAndSemesterId(
+            @Param("teamId") Long teamId,
+            @Param("semesterId") Long semesterId
+    );
+
     @Query("""
         SELECT CASE WHEN COUNT(rm) > 0 THEN true ELSE false END
         FROM RoleMemberShip rm

@@ -31,11 +31,11 @@ export async function getClubDetail(clubId: number): Promise<ClubDetailDTO> {
 
 /**
  * Get club information for members to view
- * GET /api/clubs/{id}/club-info
+ * GET /api/clubs/info/{id}/club-info
  */
 export async function getClubInfo(clubId: number): Promise<ClubDetailData> {
   const res = await axiosClient.get<ClubDetailData>(
-    `/clubs/${clubId}/club-info`
+    `/clubInfo/${clubId}/club-info`
   );
   if (res.code !== 200)
     throw new Error(res.message || "Failed to fetch club info");
@@ -44,14 +44,14 @@ export async function getClubInfo(clubId: number): Promise<ClubDetailData> {
 
 /**
  * Update club information (Club Officer only)
- * PUT /api/clubs/{id}/officer-update
+ * PUT /api/clubs/info/{id}/officer-update
  */
 export async function updateClubInfo(
   clubId: number,
   request: UpdateClubInfoRequest
 ): Promise<ClubDetailData> {
   const res = await axiosClient.put<ClubDetailData>(
-    `/clubs/${clubId}/officer-update`,
+    `/clubInfo/${clubId}/officer-update`,
     request
   );
   if (res.code !== 200) {

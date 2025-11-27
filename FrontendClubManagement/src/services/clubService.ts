@@ -92,7 +92,7 @@ export interface ClubDetailData {
 export async function getClubDetailById(
   clubId: number
 ): Promise<ClubDetailData> {
-  const res = await axiosClient.get<ClubDetailData>(`/clubs/${clubId}`);
+  const res = await axiosClient.get<ClubDetailData>(`/clubInfo/${clubId}`);
   if (!res.data) throw new Error("Club not found");
   return res.data;
 }
@@ -101,7 +101,9 @@ export async function getClubDetailById(
 export async function getClubDetailByCode(
   clubCode: string
 ): Promise<ClubDetailData> {
-  const res = await axiosClient.get<ClubDetailData>(`/clubs/code/${clubCode}`);
+  const res = await axiosClient.get<ClubDetailData>(
+    `/clubInfo/code/${clubCode}`
+  );
   if (!res.data) throw new Error("Club not found");
   return res.data;
 }
@@ -145,7 +147,7 @@ export const clubService = {
   },
 
   async getTeamsInClubDetail(clubId: number): Promise<ApiResponse<TeamDTO[]>> {
-    const url = `/clubs/${clubId}/teams/dto`;
+    const url = `/clubInfo/${clubId}/teams/dto`;
     return axiosClient.get<TeamDTO[]>(url);
   },
 };

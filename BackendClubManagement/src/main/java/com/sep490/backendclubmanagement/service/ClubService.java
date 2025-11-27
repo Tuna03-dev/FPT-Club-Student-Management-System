@@ -1,6 +1,5 @@
 package com.sep490.backendclubmanagement.service;
 
-import com.sep490.backendclubmanagement.dto.request.ClubFilterRequest;
 import com.sep490.backendclubmanagement.dto.request.CreateClubRequest;
 import com.sep490.backendclubmanagement.dto.request.UpdateClubInfoRequest;
 import com.sep490.backendclubmanagement.dto.request.UpdateClubRequest;
@@ -18,9 +17,13 @@ import com.sep490.backendclubmanagement.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -41,6 +44,7 @@ public class ClubService implements ClubServiceInterface {
     private final RoleMemberShipRepository roleMemberShipRepository;
     private final SystemRoleRepository systemRoleRepository;
     private final RoleService roleService;
+    private final NotificationService notificationService;
 
     @Override
     @Transactional(readOnly = true)
@@ -130,20 +134,61 @@ public class ClubService implements ClubServiceInterface {
 
     @Override
     @Transactional(readOnly = true)
-    public PageResponse<ClubManagementResponse> getClubsByFilter(ClubFilterRequest request, Long staffId) throws AppException {
+    public PageResponse<ClubManagementResponse> getClubsByFilter(
+            String keyword, Long campusId, Long categoryId, String status,
+            Pageable pageable, Long staffId) throws AppException {
         // Kiểm tra quyền STAFF
         if (!roleService.isStaff(staffId)) {
             throw new AppException(ErrorCode.FORBIDDEN);
         }
 
-        Page<Club> page = clubRepository.getAllClubsByFilter(
-                request.getKeyword(),
-                request.getCampusId(),
-                request.getCategoryId(),
-                request.getStatus(),
-                request.getPageable("id,desc")
-        );
+        Page<Club> page;
 
+        // If keyword is provided, use client-side filtering with Vietnamese normalization
+        if (keyword != null && !keyword.trim().isEmpty()) {
+            String trimmedKeyword = keyword.trim();
+            // Get all clubs without keyword filter
+            page = clubRepository.getAllClubsByFilter(
+                    null,
+                    campusId,
+                    categoryId,
+                    status,
+                    PageRequest.of(0, Integer.MAX_VALUE)
+            );
+
+            // Filter using Vietnamese normalization
+            List<Club> filteredList = page.getContent().stream()
+                    .filter(club -> {
+                        String clubName = normalizeVietnamese(club.getClubName() != null ? club.getClubName() : "");
+                        String clubCode = normalizeVietnamese(club.getClubCode() != null ? club.getClubCode() : "");
+
+                        // Split keyword into individual words for better matching
+                        String[] keywords = trimmedKeyword.split("\\s+");
+                        for (String kw : keywords) {
+                            String normalizedKw = normalizeVietnamese(kw);
+                            if (clubName.contains(normalizedKw) || clubCode.contains(normalizedKw)) {
+                                return true;
+                            }
+                        }
+                        return false;
+                    })
+                    .collect(Collectors.toList());
+
+            // Apply pagination manually
+            int start = (int) pageable.getOffset();
+            int end = Math.min((start + pageable.getPageSize()), filteredList.size());
+            List<Club> paginatedList = start >= filteredList.size() ?
+                    Collections.emptyList() : filteredList.subList(start, end);
+            page = new PageImpl<>(paginatedList, pageable, filteredList.size());
+        } else {
+            page = clubRepository.getAllClubsByFilter(
+                    keyword,
+                    campusId,
+                    categoryId,
+                    status,
+                    pageable
+            );
+        }
 
         List<ClubManagementResponse> content = page.getContent().stream()
                 .map(club -> {
@@ -216,6 +261,31 @@ public class ClubService implements ClubServiceInterface {
 
         // Tạo membership cho chủ CLB
         createPresidentMembership(savedClub, president);
+
+        // Send notification to the new club president
+        try {
+            String actionUrl = "/clubs/" + savedClub.getId();
+            String title = "Bạn được chỉ định làm Chủ nhiệm CLB";
+            String message = "Bạn đã được chỉ định làm Chủ nhiệm của CLB " + savedClub.getClubName() +
+                    " (" + savedClub.getClubCode() + "). Chúc mừng bạn!";
+
+            notificationService.sendToUser(
+                    president.getId(),
+                    staffId,
+                    title,
+                    message,
+                    NotificationType.CLUB_ROLE_ASSIGNED,
+                    NotificationPriority.HIGH,
+                    actionUrl,
+                    savedClub.getId(),
+                    null,
+                    null,
+                    null,
+                    null
+            );
+        } catch (Exception e) {
+            log.error("Failed to send club creation notification: {}", e.getMessage());
+        }
 
         ClubManagementResponse response = clubMapper.toClubManagementResponse(savedClub);
         response.setTotalMembers(clubRepository.countMembersByClubId(savedClub.getId()));
@@ -390,6 +460,36 @@ public class ClubService implements ClubServiceInterface {
         return response;
     }
 
+    /**
+     * Get list of Club Officer user IDs in current semester for a specific club
+     * @param clubId Club ID
+     * @return List of user IDs who are Club Officers
+     */
+    private List<Long> getClubOfficersInCurrentSemester(Long clubId) {
+        Semester currentSemester = semesterRepository.findByIsCurrentTrue()
+                .orElse(null);
+
+        if (currentSemester == null) {
+            return Collections.emptyList();
+        }
+
+        return roleMemberShipRepository.findClubOfficerUserIdsByClubIdAndSemesterId(
+                clubId, currentSemester.getId());
+    }
+
+    /**
+     * Get all active members of a club
+     * @param clubId Club ID
+     * @return List of user IDs who are active members
+     */
+    private List<Long> getActiveClubMembers(Long clubId) {
+        List<ClubMemberShip> activeMembers = clubMemberShipRepository
+                .findByClubIdAndStatus(clubId, ClubMemberShipStatus.ACTIVE);
+        return activeMembers.stream()
+                .map(m -> m.getUser().getId())
+                .collect(Collectors.toList());
+    }
+
     @Override
     @Transactional
     public void deactivateClub(Long clubId, Long staffId) throws AppException {
@@ -404,6 +504,34 @@ public class ClubService implements ClubServiceInterface {
         club.setStatus("UNACTIVE");
         clubRepository.save(club);
         log.info("Deactivated club with ID: {}", clubId);
+
+        // Send notification to all club members about deactivation
+        try {
+            List<Long> memberIds = getActiveClubMembers(clubId);
+
+            if (!memberIds.isEmpty()) {
+                String actionUrl = "/clubs/" + clubId;
+                String title = "Câu lạc bộ đã bị vô hiệu hóa";
+                String message = "CLB " + club.getClubName() + " đã bị vô hiệu hóa bởi nhà trường. " +
+                        "Mọi hoạt động của CLB sẽ tạm ngưng cho đến khi được kích hoạt lại.";
+
+                notificationService.sendToUsers(
+                        memberIds,
+                        staffId,
+                        title,
+                        message,
+                        NotificationType.SYSTEM_WARNING,
+                        NotificationPriority.HIGH,
+                        actionUrl,
+                        clubId,
+                        null,
+                        null,
+                        null
+                );
+            }
+        } catch (Exception e) {
+            log.error("Failed to send club deactivation notification: {}", e.getMessage());
+        }
     }
 
     @Override
@@ -420,6 +548,34 @@ public class ClubService implements ClubServiceInterface {
         club.setStatus("ACTIVE");
         clubRepository.save(club);
         log.info("Activated club with ID: {}", clubId);
+
+        // Send notification to all club members about activation
+        try {
+            List<Long> memberIds = getActiveClubMembers(clubId);
+
+            if (!memberIds.isEmpty()) {
+                String actionUrl = "/clubs/" + clubId;
+                String title = "Câu lạc bộ đã được kích hoạt lại";
+                String message = "CLB " + club.getClubName() + " đã được kích hoạt lại bởi nhà trường. " +
+                        "Các hoạt động của CLB có thể tiếp tục.";
+
+                notificationService.sendToUsers(
+                        memberIds,
+                        staffId,
+                        title,
+                        message,
+                        NotificationType.SYSTEM_ANNOUNCEMENT,
+                        NotificationPriority.HIGH,
+                        actionUrl,
+                        clubId,
+                        null,
+                        null,
+                        null
+                );
+            }
+        } catch (Exception e) {
+            log.error("Failed to send club activation notification: {}", e.getMessage());
+        }
     }
 
     @Override
@@ -469,6 +625,11 @@ public class ClubService implements ClubServiceInterface {
         // Tìm club
         Club club = clubRepository.findById(clubId)
                 .orElseThrow(() -> new AppException(ErrorCode.CLUB_NOT_FOUND));
+
+        // Check if club is active (only active clubs can update information)
+        if (!"ACTIVE".equalsIgnoreCase(club.getStatus())) {
+            throw new AppException(ErrorCode.CLUB_NOT_ACTIVE);
+        }
 
         // ===== Validate and update clubCode (allow updating clubCode) =====
         if (request.getClubCode() != null) {
@@ -549,6 +710,14 @@ public class ClubService implements ClubServiceInterface {
 
         // Trả về thông tin club đã cập nhật
         return getClubDetail(clubId);
+    }
+
+    private String normalizeVietnamese(String text) {
+        if (text == null || text.isBlank()) return "";
+        String normalized = text.replace("đ", "d").replace("Đ", "d");
+        normalized = java.text.Normalizer.normalize(normalized, java.text.Normalizer.Form.NFD);
+        normalized = normalized.replaceAll("\\p{InCombiningDiacriticalMarks}+", "");
+        return normalized.toLowerCase();
     }
 }
 

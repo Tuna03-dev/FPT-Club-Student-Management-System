@@ -1,6 +1,10 @@
 package com.sep490.backendclubmanagement.security;
 
 import com.sep490.backendclubmanagement.dto.response.ClubRoleInfo;
+import com.sep490.backendclubmanagement.repository.RecruitmentApplicationRepository;
+import com.sep490.backendclubmanagement.repository.RecruitmentRepository;
+import com.sep490.backendclubmanagement.repository.ReportRepository;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -15,7 +19,12 @@ import java.util.List;
  */
 @Component("clubSecurity")
 @Slf4j
+@RequiredArgsConstructor
 public class ClubSecurity {
+
+    private final RecruitmentRepository recruitmentRepository;
+    private final RecruitmentApplicationRepository recruitmentApplicationRepository;
+    private final ReportRepository reportRepository;
 
     /**
      * Check if current user has a specific club role in the given club
@@ -298,5 +307,97 @@ public class ClubSecurity {
             details != null ? details.getClass().getName() : "null");
         return null;
     }
-}
 
+    // ============= RECRUITMENT-BASED CHECKS =============
+
+    /**
+     * Check if current user is a club officer of the club that owns the recruitment
+     * @param recruitmentId ID of the recruitment
+     * @return true if user is club officer of the recruitment's club, false otherwise
+     */
+    public boolean isClubOfficerForRecruitment(Long recruitmentId) {
+        try {
+            return recruitmentRepository.findById(recruitmentId)
+                    .map(recruitment -> isClubOfficerInClub(recruitment.getClub().getId()))
+                    .orElse(false);
+        } catch (Exception e) {
+            log.error("Error checking club officer permission for recruitment", e);
+            return false;
+        }
+    }
+
+    /**
+     * Check if current user is a club officer of the club that owns the application's recruitment
+     * @param applicationId ID of the recruitment application
+     * @return true if user is club officer of the application's recruitment's club, false otherwise
+     */
+    public boolean isClubOfficerForApplication(Long applicationId) {
+        try {
+            return recruitmentApplicationRepository.findById(applicationId)
+                    .map(application -> isClubOfficerInClub(application.getRecruitment().getClub().getId()))
+                    .orElse(false);
+        } catch (Exception e) {
+            log.error("Error checking club officer permission for application", e);
+            return false;
+        }
+    }
+
+    // ============= REPORT-BASED CHECKS =============
+
+    /**
+     * Check if current user is a team officer or club officer of the club that owns the report
+     * @param reportId ID of the report
+     * @return true if user is team officer or club officer of the report's club, false otherwise
+     */
+    public boolean isTeamOfficerOrClubOfficerForReport(Long reportId) {
+        try {
+            return reportRepository.findById(reportId)
+                    .map(report -> {
+                        Long clubId = report.getClubReportRequirement().getClub().getId();
+                        return isTeamOfficerOrClubOfficerInClub(clubId);
+                    })
+                    .orElse(false);
+        } catch (Exception e) {
+            log.error("Error checking team officer or club officer permission for report", e);
+            return false;
+        }
+    }
+
+    /**
+     * Check if current user is a club officer of the club that owns the report
+     * @param reportId ID of the report
+     * @return true if user is club officer of the report's club, false otherwise
+     */
+    public boolean isClubOfficerForReport(Long reportId) {
+        try {
+            return reportRepository.findById(reportId)
+                    .map(report -> {
+                        Long clubId = report.getClubReportRequirement().getClub().getId();
+                        return isClubOfficerInClub(clubId);
+                    })
+                    .orElse(false);
+        } catch (Exception e) {
+            log.error("Error checking club officer permission for report", e);
+            return false;
+        }
+    }
+
+    /**
+     * Check if current user is a member of the club that owns the report
+     * @param reportId ID of the report
+     * @return true if user is member of the report's club, false otherwise
+     */
+    public boolean isMemberOfClubForReport(Long reportId) {
+        try {
+            return reportRepository.findById(reportId)
+                    .map(report -> {
+                        Long clubId = report.getClubReportRequirement().getClub().getId();
+                        return isMemberOfClub(clubId);
+                    })
+                    .orElse(false);
+        } catch (Exception e) {
+            log.error("Error checking member permission for report", e);
+            return false;
+        }
+    }
+}
