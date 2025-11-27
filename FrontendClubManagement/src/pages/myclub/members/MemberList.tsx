@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { useSearchParams, useParams } from "react-router-dom";
+import { useDebounce } from "@/hooks/useDebounce";
 import {
   Users,
   Search,
@@ -150,9 +151,11 @@ const Members = () => {
   }, [clubId]);
 
   const [searchQuery, setSearchQuery] = useState("");
+  const debouncedSearchQuery = useDebounce(searchQuery, 500);
   const [selectedTerm, setSelectedTerm] = useState("");
   const [selectedRole, setSelectedRole] = useState("all");
   const [selectedStatus, setSelectedStatus] = useState("active");
+  const prevFiltersRef = useRef({ searchQuery: "", selectedTerm: "", selectedRole: "all", selectedStatus: "active" });
   const [selectedMember, setSelectedMember] =
     useState<MemberResponseDTO | null>(null);
   const [page, setPage] = useState(0); // 0-based
@@ -163,7 +166,6 @@ const Members = () => {
   const [semesters, setSemesters] = useState<SemesterDTO[]>([]);
   const [clubRoles, setClubRoles] = useState<ClubRoleDTO[]>([]);
   const [teams, setTeams] = useState<TeamDTO[]>([]);
-  const [initialLoad, setInitialLoad] = useState(true);
 
   const [isEditRoleOpen, setIsEditRoleOpen] = useState(false);
   const [selectedMemberRole, setSelectedMemberRole] = useState<string>("");
@@ -183,6 +185,7 @@ const Members = () => {
   const [leftMembersLoading, setLeftMembersLoading] = useState(false);
   const [leftMembersError, setLeftMembersError] = useState<string | null>(null);
   const [leftMembersSearchQuery, setLeftMembersSearchQuery] = useState("");
+  const debouncedLeftMembersSearch = useDebounce(leftMembersSearchQuery, 500);
   const [leftMembersPageNum, setLeftMembersPageNum] = useState(0);
 
   // Function to update URL params (stable)
@@ -226,55 +229,66 @@ const Members = () => {
     setSelectedStatus(status);
   }, [searchParams]);
 
-  // Initial load: Fetch semesters, roles, and teams only once
+  // Initial load: Fetch semesters first (needed for default filter), then load members immediately
+  // Roles and teams are lazy loaded when needed (for officers only)
   useEffect(() => {
+    // Load semesters, roles, teams in background (không block members)
     const loadInitialData = async () => {
       try {
-        const [semestersRes, rolesRes, teamsRes] = await Promise.all([
-          clubService.getSemesters(clubId),
-          clubService.getRoles(clubId),
-          clubService.getTeams(clubId),
-        ]);
-
+        const semestersRes = await clubService.getSemesters(clubId);
         if (semestersRes.code === 200 && semestersRes.data) {
           setSemesters(semestersRes.data);
           // Set default current semester only if no selection in URL/state
-          // Read raw location to avoid depending on react-router's searchParams in this effect
           const params = new URLSearchParams(window.location.search);
           if (!params.get("semester")) {
-            const currentSemester = semestersRes.data.find(
-              (semester) => semester.isCurrent
-            );
+            const currentSemester = semestersRes.data.find((semester) => semester.isCurrent);
             if (currentSemester) {
               const termId = currentSemester.id.toString();
               setSelectedTerm(termId);
-              // Do not write default to URL per requirement; only set local state
-              // updateUrlParams({ semester: termId });
             }
           }
         }
-
-        if (rolesRes.code === 200 && rolesRes.data) {
-          setClubRoles(rolesRes.data);
-        }
-
-        if (teamsRes.code === 200 && teamsRes.data) {
-          setTeams(teamsRes.data);
+        // Lazy load roles and teams in background (only needed for officers)
+        if (isOfficer) {
+          Promise.all([
+            clubService.getRoles(clubId),
+            clubService.getTeams(clubId),
+          ]).then(([rolesRes, teamsRes]) => {
+            if (rolesRes.code === 200 && rolesRes.data) {
+              setClubRoles(rolesRes.data);
+            }
+            if (teamsRes.code === 200 && teamsRes.data) {
+              setTeams(teamsRes.data);
+            }
+          }).catch((e) => {
+            console.error("Error fetching roles/teams:", e);
+          });
         }
       } catch (e: unknown) {
         console.error("Error fetching initial data:", e);
-      } finally {
-        setInitialLoad(false);
       }
     };
-
     loadInitialData();
-  }, [clubId]); // Run when clubId changes
+  }, [clubId, isOfficer]);
 
   useEffect(() => {
-    if (initialLoad) return;
-    setPage(0);
-  }, [searchQuery, selectedTerm, selectedRole, selectedStatus, initialLoad]);
+    const prev = prevFiltersRef.current;
+    const changed = 
+      prev.searchQuery !== debouncedSearchQuery ||
+      prev.selectedTerm !== selectedTerm ||
+      prev.selectedRole !== selectedRole ||
+      prev.selectedStatus !== selectedStatus;
+    
+    if (changed) {
+      prevFiltersRef.current = { 
+        searchQuery: debouncedSearchQuery, 
+        selectedTerm, 
+        selectedRole, 
+        selectedStatus 
+      };
+      setPage(0);
+    }
+  }, [debouncedSearchQuery, selectedTerm, selectedRole, selectedStatus]);
 
   const loadMembers = useCallback(async () => {
     setLoading(true);
@@ -283,9 +297,9 @@ const Members = () => {
       const res = await memberService.getMembers(clubId, {
         page,
         size,
-        searchTerm: searchQuery || undefined,
+        searchTerm: debouncedSearchQuery || undefined,
         status: undefined, // Not used; using isActive instead
-        semesterId: selectedTerm !== "" ? parseInt(selectedTerm) : undefined,
+        semesterId: selectedTerm ? parseInt(selectedTerm) : undefined,
         roleId: selectedRole !== "all" ? parseInt(selectedRole) : undefined,
         isActive: selectedStatus === "active" ? true : false,
       });
@@ -308,7 +322,7 @@ const Members = () => {
   }, [
     page,
     size,
-    searchQuery,
+    debouncedSearchQuery,
     selectedTerm,
     selectedRole,
     selectedStatus,
@@ -322,7 +336,7 @@ const Members = () => {
       const res = await memberService.getLeftMembers(clubId, {
         page: leftMembersPageNum,
         size,
-        searchTerm: leftMembersSearchQuery || undefined,
+        searchTerm: debouncedLeftMembersSearch || undefined,
       });
 
       if (res.code === 200 && res.data) {
@@ -341,7 +355,7 @@ const Members = () => {
     } finally {
       setLeftMembersLoading(false);
     }
-  }, [leftMembersPageNum, size, leftMembersSearchQuery, clubId]);
+  }, [leftMembersPageNum, size, debouncedLeftMembersSearch, clubId]);
 
   const clearFilters = useCallback(() => {
     // Remove params from URL and reset local filters to defaults
@@ -364,19 +378,16 @@ const Members = () => {
   }, [semesters, loadMembers, updateUrlParams]);
 
   // Fetch members when page or filters change
+  // Fetch members when page or filters change
   useEffect(() => {
-    if (!initialLoad) {
-      loadMembers();
-    }
+    loadMembers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     page,
-    size,
-    searchQuery,
+    debouncedSearchQuery,
     selectedTerm,
     selectedRole,
     selectedStatus,
-    initialLoad,
-    loadMembers,
   ]);
 
   // Fetch left members when tab changes or filters change
@@ -384,7 +395,8 @@ const Members = () => {
     if (activeTab === "left") {
       loadLeftMembers();
     }
-  }, [activeTab, leftMembersPageNum, leftMembersSearchQuery, loadLeftMembers]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, leftMembersPageNum, debouncedLeftMembersSearch]);
 
   const filteredMembers = useMemo(() => {
     // Server-side filtering is now handled by the API

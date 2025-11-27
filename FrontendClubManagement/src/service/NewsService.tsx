@@ -51,3 +51,33 @@ export async function getAllClubs(): Promise<ClubDto[]> {
   const res = await axiosClient.get<ClubDto[]>("/events/get-all-club");
   return res.data ?? [];
 }
+
+// ===== Paginated Response =====
+export interface PagedResponse<T> {
+  content: T[];
+  totalPages: number;
+  totalElements: number;
+  currentPage: number;
+  pageSize: number;
+}
+
+/**
+ * Lấy danh sách tin tức đã được publish của một câu lạc bộ với phân trang và tìm kiếm
+ */
+export async function getPublishedNewsByClubId(
+  clubId: number,
+  keyword?: string,
+  page: number = 0,
+  size: number = 10,
+  sort: string = "createdAt,desc"
+): Promise<PagedResponse<NewsData>> {
+  const res = await axiosClient.get<PagedResponse<NewsData>>(
+    `/news/clubs/${clubId}/published`,
+    {
+      params: { keyword, page, size, sort },
+      timeout: 30000,
+    }
+  );
+  if (!res.data) throw new Error("Empty response");
+  return res.data;
+}

@@ -110,7 +110,7 @@ export const router = createBrowserRouter([
         ),
       },
 
-      { path: "myRecruitmentApplication", element: <StudentRecruitment /> },
+      { path: "myRecruitmentApplications", element: <StudentRecruitment /> },
       { path: "clubDetail/:clubId", element: <ClubDetail /> }, // giữ nguyên của B
       {
         path: "profile",

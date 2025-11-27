@@ -7,7 +7,9 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.data.jpa.repository.Modifying;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 public interface RecruitmentRepository extends JpaRepository<Recruitment, Long> {
@@ -32,6 +34,11 @@ public interface RecruitmentRepository extends JpaRepository<Recruitment, Long> 
                                                          @Param("status") RecruitmentStatus status,
                                                          @Param("keyword") String keyword, 
                                                          Pageable pageable);
+
+    // Bulk update to close expired recruitments whose endDate is before provided time and currently OPEN
+    @Modifying
+    @Query("UPDATE Recruitment r SET r.status = :newStatus WHERE r.endDate < :now AND r.status = :oldStatus")
+    int closeExpiredRecruitments(@Param("newStatus") RecruitmentStatus newStatus,
+                                 @Param("oldStatus") RecruitmentStatus oldStatus,
+                                 @Param("now") LocalDateTime now);
 }
-
-

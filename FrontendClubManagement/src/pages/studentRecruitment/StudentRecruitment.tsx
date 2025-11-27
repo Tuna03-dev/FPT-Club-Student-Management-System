@@ -123,122 +123,11 @@ export function StudentRecruitment() {
   const [detailLoading, setDetailLoading] = useState(false);
 
   // Mock data
-  const recruitmentCampaigns: RecruitmentCampaign[] = [
-    {
-      id: "1",
-      clubId: "1",
-      clubName: "CLB Lập trình FPT",
-      clubImage: "/placeholder-creu7.png",
-      semesterId: "2024-1",
-      semesterName: "Kỳ 1 - 2024",
-      title: "Tuyển thành viên mới - Kỳ 1/2024",
-      description:
-        "Tuyển thành viên có đam mê lập trình, muốn học hỏi và phát triển kỹ năng công nghệ",
-      startDate: "2024-01-15",
-      endDate: "2024-01-30",
-      status: "OPEN",
-      applicationsCount: 45,
-      maxApplications: 100,
-      requirements: [
-        "Sinh viên năm 1-3",
-        "Có kiến thức cơ bản về lập trình",
-        "Cam kết tham gia hoạt động",
-      ],
-    },
-    {
-      id: "2",
-      clubId: "2",
-      clubName: "CLB Khởi nghiệp FPT",
-      clubImage: "/startup-pitch-competition-business.jpg",
-      semesterId: "2024-1",
-      semesterName: "Kỳ 1 - 2024",
-      title: "Tuyển Core Member - Business Development",
-      description:
-        "Tìm kiếm những thành viên có tư duy kinh doanh, muốn phát triển startup",
-      startDate: "2024-01-20",
-      endDate: "2024-02-05",
-      status: "OPEN",
-      applicationsCount: 23,
-      maxApplications: 50,
-      requirements: [
-        "GPA >= 3.0",
-        "Có kinh nghiệm dự án",
-        "Kỹ năng thuyết trình tốt",
-      ],
-    },
-    {
-      id: "3",
-      clubId: "3",
-      clubName: "CLB Nhiếp ảnh FPT",
-      clubImage: "/placeholder-lvjzr.png",
-      semesterId: "2024-1",
-      semesterName: "Kỳ 1 - 2024",
-      title: "Tuyển thành viên - Photography Team",
-      description:
-        "Dành cho những bạn yêu thích nhiếp ảnh và muốn học hỏi kỹ thuật chuyên nghiệp",
-      startDate: "2024-01-10",
-      endDate: "2024-01-25",
-      status: "CLOSED",
-      applicationsCount: 67,
-      maxApplications: 80,
-      requirements: [
-        "Có máy ảnh cá nhân",
-        "Đam mê nhiếp ảnh",
-        "Sẵn sàng tham gia workshop",
-      ],
-    },
-  ];
+  // TODO: Replace with real data fetched from the API.
+  const recruitmentCampaigns: RecruitmentCampaign[] = [];
 
-  const formQuestions: FormQuestion[] = [
-    {
-      id: "1",
-      recruitmentId: "1",
-      questionText: "Tại sao bạn muốn tham gia CLB Lập trình FPT?",
-      questionType: "TEXT",
-      required: true,
-      order: 1,
-    },
-    {
-      id: "2",
-      recruitmentId: "1",
-      questionText: "Bạn có kinh nghiệm với ngôn ngữ lập trình nào?",
-      questionType: "MCQ",
-      options: [
-        "JavaScript",
-        "Python",
-        "Java",
-        "C++",
-        "C#",
-        "Chưa có kinh nghiệm",
-      ],
-      required: true,
-      order: 2,
-    },
-    {
-      id: "3",
-      recruitmentId: "1",
-      questionText:
-        "Bạn có thể tham gia các hoạt động nào? (Chọn nhiều đáp án)",
-      questionType: "CHECKBOX",
-      options: [
-        "Workshop",
-        "Hackathon",
-        "Dự án nhóm",
-        "Mentoring",
-        "Tổ chức sự kiện",
-      ],
-      required: true,
-      order: 3,
-    },
-    {
-      id: "4",
-      recruitmentId: "1",
-      questionText: "Mô tả về bản thân và mục tiêu học tập",
-      questionType: "TEXT",
-      required: false,
-      order: 4,
-    },
-  ];
+  // TODO: Load recruitment form questions from API when applying.
+  const formQuestions: FormQuestion[] = [];
 
   // Load my applications from API
   useEffect(() => {
@@ -259,6 +148,7 @@ export function StudentRecruitment() {
           page: currentPage,
           size: pageSize,
           status: statusParam,
+          keyword: myAppSearchQuery.trim() || undefined,
         });
         setMyApplications(response.content);
         setTotalPages(response.totalPages);
@@ -273,31 +163,12 @@ export function StudentRecruitment() {
     if (activeView === "status") {
       fetchMyApplications();
     }
-  }, [activeView, myAppStatusFilter, currentPage]); // Re-fetch when status filter or page changes
+  }, [activeView, myAppStatusFilter, currentPage, myAppSearchQuery]); // Re-fetch when status filter, page, or search query changes
 
-  // Reset to page 0 when filter changes
+  // Reset to page 0 when filter or search changes
   useEffect(() => {
     setCurrentPage(0);
-  }, [myAppStatusFilter]);
-
-  // Filter my applications by search query (client-side)
-  const filteredMyApplications = myApplications.filter((application) => {
-    // Filter by search query (search in application ID, user name, email)
-    const matchesSearch =
-      myAppSearchQuery === "" ||
-      application.id.toString().includes(myAppSearchQuery) ||
-      application.userName
-        .toLowerCase()
-        .includes(myAppSearchQuery.toLowerCase()) ||
-      application.userEmail
-        .toLowerCase()
-        .includes(myAppSearchQuery.toLowerCase()) ||
-      application.studentId
-        .toLowerCase()
-        .includes(myAppSearchQuery.toLowerCase());
-
-    return matchesSearch;
-  });
+  }, [myAppStatusFilter, myAppSearchQuery]);
 
   const filteredCampaigns = recruitmentCampaigns.filter((campaign) => {
     const matchesSearch =
@@ -320,7 +191,6 @@ export function StudentRecruitment() {
   };
 
   const handleSubmitApplication = () => {
-    console.log("[v0] Submitting application:", formAnswers);
     // Reset form and go back to list
     setFormAnswers({});
     setActiveView("list");
@@ -393,7 +263,7 @@ export function StudentRecruitment() {
 
     return (
       <div className="min-h-screen bg-background">
-        <div className="container mx-auto px-4 py-8">
+        <div className="container mx-auto px-12 py-8">
           <div className="max-w-4xl mx-auto">
             {/* Header */}
             <div className="flex items-center space-x-4 mb-6">
@@ -570,7 +440,7 @@ export function StudentRecruitment() {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-12 py-8">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
@@ -707,15 +577,15 @@ export function StudentRecruitment() {
                                 campaign.status === "OPEN"
                                   ? "bg-green-100 text-green-800"
                                   : campaign.status === "CLOSED"
-                                  ? "bg-red-100 text-red-800"
-                                  : "bg-blue-100 text-blue-800"
+                                    ? "bg-red-100 text-red-800"
+                                    : "bg-blue-100 text-blue-800"
                               }
                             >
                               {campaign.status === "OPEN"
                                 ? "Đang mở"
                                 : campaign.status === "CLOSED"
-                                ? "Đã đóng"
-                                : "Sắp mở"}
+                                  ? "Đã đóng"
+                                  : "Sắp mở"}
                             </Badge>
                           </div>
                           <CardDescription className="mt-2">
@@ -792,15 +662,6 @@ export function StudentRecruitment() {
         {activeView === "status" && (
           <>
             <div className="space-y-6">
-              {/* <div className="flex items-center justify-between">
-                <h2 className="text-2xl font-bold">
-                  Trạng thái đơn ứng tuyển của tôi
-                </h2>
-                <Button variant="outline" onClick={() => setActiveView("list")}>
-                  Xem danh sách tuyển dụng
-                </Button>
-              </div> */}
-
               {/* Search and Filter */}
               <div className="flex flex-col sm:flex-row gap-4">
                 <div className="relative flex-1">
@@ -830,7 +691,7 @@ export function StudentRecruitment() {
               </div>
 
               {isLoading ? (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {[...Array(4)].map((_, index) => (
                     <Card key={index} className="overflow-hidden">
                       <CardHeader>
@@ -856,10 +717,10 @@ export function StudentRecruitment() {
                             index % 4 === 0
                               ? "bg-green-50 border-green-200"
                               : index % 4 === 1
-                              ? "bg-purple-50 border-purple-200"
-                              : index % 4 === 2
-                              ? "bg-red-50 border-red-200"
-                              : "bg-yellow-50 border-yellow-200"
+                                ? "bg-purple-50 border-purple-200"
+                                : index % 4 === 2
+                                  ? "bg-red-50 border-red-200"
+                                  : "bg-yellow-50 border-yellow-200"
                           }`}
                         >
                           <div className="flex items-start space-x-3">
@@ -890,18 +751,16 @@ export function StudentRecruitment() {
               ) : (
                 <>
                   {/* Results count and info */}
-                  {filteredMyApplications.length > 0 && (
+                  {myApplications.length > 0 && (
                     <div className="flex items-center justify-between text-sm text-muted-foreground">
                       <div>
                         {myAppSearchQuery ? (
                           <>
                             Tìm thấy{" "}
                             <span className="font-semibold">
-                              {filteredMyApplications.length}
+                              {totalElements}
                             </span>{" "}
                             kết quả tìm kiếm
-                            {totalElements > filteredMyApplications.length &&
-                              ` trong ${totalElements} đơn`}
                           </>
                         ) : (
                           <>
@@ -925,7 +784,7 @@ export function StudentRecruitment() {
                           </>
                         )}
                       </div>
-                      {!myAppSearchQuery && totalPages > 1 && (
+                      {totalPages > 1 && (
                         <div>
                           Trang {currentPage + 1} / {totalPages}
                         </div>
@@ -933,9 +792,9 @@ export function StudentRecruitment() {
                     </div>
                   )}
 
-                  {/* Applications Grid - 2 columns */}
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {filteredMyApplications.map((application) => {
+                  {/* Applications Grid - 3 columns */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {myApplications.map((application) => {
                       // For now, we don't have recruitment data joined in the response
                       // You may need to fetch recruitment details separately or modify backend to include it
                       return (
@@ -967,12 +826,12 @@ export function StudentRecruitment() {
                                     {application.status === "UNDER_REVIEW"
                                       ? "Đang xem xét"
                                       : application.status === "ACCEPTED"
-                                      ? "Đã duyệt"
-                                      : application.status === "REJECTED"
-                                      ? "Từ chối"
-                                      : application.status === "INTERVIEW"
-                                      ? "Chờ phỏng vấn"
-                                      : "Đang xét duyệt"}
+                                        ? "Đã duyệt"
+                                        : application.status === "REJECTED"
+                                          ? "Từ chối"
+                                          : application.status === "INTERVIEW"
+                                            ? "Chờ phỏng vấn"
+                                            : "Đang xét duyệt"}
                                   </span>
                                 </div>
                               </Badge>
@@ -1097,186 +956,182 @@ export function StudentRecruitment() {
                   </div>
 
                   {/* Pagination */}
-                  {!myAppSearchQuery &&
-                    totalPages > 1 &&
-                    filteredMyApplications.length > 0 && (
-                      <div className="flex justify-center mt-6">
-                        <Pagination>
-                          <PaginationContent>
-                            <PaginationItem>
-                              <PaginationPrevious
-                                onClick={() => {
-                                  if (currentPage > 0) {
-                                    setCurrentPage(currentPage - 1);
-                                    window.scrollTo({
-                                      top: 0,
-                                      behavior: "smooth",
-                                    });
-                                  }
-                                }}
-                                className={
-                                  currentPage === 0
-                                    ? "pointer-events-none opacity-50"
-                                    : "cursor-pointer"
+                  {totalPages > 1 && myApplications.length > 0 && (
+                    <div className="flex justify-center mt-6">
+                      <Pagination>
+                        <PaginationContent>
+                          <PaginationItem>
+                            <PaginationPrevious
+                              onClick={() => {
+                                if (currentPage > 0) {
+                                  setCurrentPage(currentPage - 1);
+                                  window.scrollTo({
+                                    top: 0,
+                                    behavior: "smooth",
+                                  });
                                 }
-                              />
-                            </PaginationItem>
-
-                            {/* First page */}
-                            {currentPage > 2 && (
-                              <>
-                                <PaginationItem>
-                                  <PaginationLink
-                                    onClick={() => {
-                                      setCurrentPage(0);
-                                      window.scrollTo({
-                                        top: 0,
-                                        behavior: "smooth",
-                                      });
-                                    }}
-                                    className="cursor-pointer"
-                                  >
-                                    1
-                                  </PaginationLink>
-                                </PaginationItem>
-                                {currentPage > 3 && (
-                                  <PaginationItem>
-                                    <PaginationEllipsis />
-                                  </PaginationItem>
-                                )}
-                              </>
-                            )}
-
-                            {/* Pages around current page */}
-                            {Array.from(
-                              { length: Math.min(5, totalPages) },
-                              (_, i) => {
-                                let pageNum;
-                                if (totalPages <= 5) {
-                                  pageNum = i;
-                                } else if (currentPage <= 2) {
-                                  pageNum = i;
-                                } else if (currentPage >= totalPages - 3) {
-                                  pageNum = totalPages - 5 + i;
-                                } else {
-                                  pageNum = currentPage - 2 + i;
-                                }
-
-                                if (pageNum < 0 || pageNum >= totalPages)
-                                  return null;
-                                if (currentPage > 2 && pageNum === 0)
-                                  return null;
-                                if (
-                                  currentPage < totalPages - 3 &&
-                                  pageNum === totalPages - 1
-                                )
-                                  return null;
-
-                                return (
-                                  <PaginationItem key={pageNum}>
-                                    <PaginationLink
-                                      onClick={() => {
-                                        setCurrentPage(pageNum);
-                                        window.scrollTo({
-                                          top: 0,
-                                          behavior: "smooth",
-                                        });
-                                      }}
-                                      isActive={currentPage === pageNum}
-                                      className="cursor-pointer"
-                                    >
-                                      {pageNum + 1}
-                                    </PaginationLink>
-                                  </PaginationItem>
-                                );
+                              }}
+                              className={
+                                currentPage === 0
+                                  ? "pointer-events-none opacity-50"
+                                  : "cursor-pointer"
                               }
-                            )}
+                            />
+                          </PaginationItem>
 
-                            {/* Last page */}
-                            {currentPage < totalPages - 3 && (
-                              <>
-                                {currentPage < totalPages - 4 && (
-                                  <PaginationItem>
-                                    <PaginationEllipsis />
-                                  </PaginationItem>
-                                )}
+                          {/* First page */}
+                          {currentPage > 2 && (
+                            <>
+                              <PaginationItem>
+                                <PaginationLink
+                                  onClick={() => {
+                                    setCurrentPage(0);
+                                    window.scrollTo({
+                                      top: 0,
+                                      behavior: "smooth",
+                                    });
+                                  }}
+                                  className="cursor-pointer"
+                                >
+                                  1
+                                </PaginationLink>
+                              </PaginationItem>
+                              {currentPage > 3 && (
                                 <PaginationItem>
+                                  <PaginationEllipsis />
+                                </PaginationItem>
+                              )}
+                            </>
+                          )}
+
+                          {/* Pages around current page */}
+                          {Array.from(
+                            { length: Math.min(5, totalPages) },
+                            (_, i) => {
+                              let pageNum;
+                              if (totalPages <= 5) {
+                                pageNum = i;
+                              } else if (currentPage <= 2) {
+                                pageNum = i;
+                              } else if (currentPage >= totalPages - 3) {
+                                pageNum = totalPages - 5 + i;
+                              } else {
+                                pageNum = currentPage - 2 + i;
+                              }
+
+                              if (pageNum < 0 || pageNum >= totalPages)
+                                return null;
+                              if (currentPage > 2 && pageNum === 0) return null;
+                              if (
+                                currentPage < totalPages - 3 &&
+                                pageNum === totalPages - 1
+                              )
+                                return null;
+
+                              return (
+                                <PaginationItem key={pageNum}>
                                   <PaginationLink
                                     onClick={() => {
-                                      setCurrentPage(totalPages - 1);
+                                      setCurrentPage(pageNum);
                                       window.scrollTo({
                                         top: 0,
                                         behavior: "smooth",
                                       });
                                     }}
+                                    isActive={currentPage === pageNum}
                                     className="cursor-pointer"
                                   >
-                                    {totalPages}
+                                    {pageNum + 1}
                                   </PaginationLink>
                                 </PaginationItem>
-                              </>
-                            )}
+                              );
+                            }
+                          )}
 
-                            <PaginationItem>
-                              <PaginationNext
-                                onClick={() => {
-                                  if (currentPage < totalPages - 1) {
-                                    setCurrentPage(currentPage + 1);
+                          {/* Last page */}
+                          {currentPage < totalPages - 3 && (
+                            <>
+                              {currentPage < totalPages - 4 && (
+                                <PaginationItem>
+                                  <PaginationEllipsis />
+                                </PaginationItem>
+                              )}
+                              <PaginationItem>
+                                <PaginationLink
+                                  onClick={() => {
+                                    setCurrentPage(totalPages - 1);
                                     window.scrollTo({
                                       top: 0,
                                       behavior: "smooth",
                                     });
-                                  }
-                                }}
-                                className={
-                                  currentPage === totalPages - 1
-                                    ? "pointer-events-none opacity-50"
-                                    : "cursor-pointer"
-                                }
-                              />
-                            </PaginationItem>
-                          </PaginationContent>
-                        </Pagination>
-                      </div>
-                    )}
+                                  }}
+                                  className="cursor-pointer"
+                                >
+                                  {totalPages}
+                                </PaginationLink>
+                              </PaginationItem>
+                            </>
+                          )}
 
-                  {filteredMyApplications.length === 0 &&
-                    myApplications.length > 0 && (
-                      <Card>
-                        <CardContent className="text-center py-12">
-                          <Search className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                          <h3 className="text-lg font-medium mb-2">
-                            Không tìm thấy kết quả phù hợp
-                          </h3>
-                          <p className="text-muted-foreground mb-4">
-                            Thử điều chỉnh bộ lọc hoặc từ khóa tìm kiếm
-                          </p>
-                          <Button
-                            variant="outline"
-                            onClick={() => {
-                              setMyAppSearchQuery("");
-                              setMyAppStatusFilter("all");
-                            }}
-                          >
-                            Xóa bộ lọc
-                          </Button>
-                        </CardContent>
-                      </Card>
-                    )}
+                          <PaginationItem>
+                            <PaginationNext
+                              onClick={() => {
+                                if (currentPage < totalPages - 1) {
+                                  setCurrentPage(currentPage + 1);
+                                  window.scrollTo({
+                                    top: 0,
+                                    behavior: "smooth",
+                                  });
+                                }
+                              }}
+                              className={
+                                currentPage === totalPages - 1
+                                  ? "pointer-events-none opacity-50"
+                                  : "cursor-pointer"
+                              }
+                            />
+                          </PaginationItem>
+                        </PaginationContent>
+                      </Pagination>
+                    </div>
+                  )}
 
                   {myApplications.length === 0 && (
                     <Card>
                       <CardContent className="text-center py-12">
-                        <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                        <h3 className="text-lg font-medium mb-2">
-                          Chưa có đơn ứng tuyển nào
-                        </h3>
-                        <p className="text-muted-foreground mb-4">
-                          Hãy khám phá và ứng tuyển vào các CLB yêu thích!
-                        </p>
-                        <Button onClick={() => setActiveView("list")}>
-                          Xem danh sách tuyển dụng
-                        </Button>
+                        {myAppSearchQuery || myAppStatusFilter !== "all" ? (
+                          <>
+                            <Search className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                            <h3 className="text-lg font-medium mb-2">
+                              Không tìm thấy kết quả phù hợp
+                            </h3>
+                            <p className="text-muted-foreground mb-4">
+                              Thử điều chỉnh bộ lọc hoặc từ khóa tìm kiếm
+                            </p>
+                            <Button
+                              variant="outline"
+                              onClick={() => {
+                                setMyAppSearchQuery("");
+                                setMyAppStatusFilter("all");
+                              }}
+                            >
+                              Xóa bộ lọc
+                            </Button>
+                          </>
+                        ) : (
+                          <>
+                            <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                            <h3 className="text-lg font-medium mb-2">
+                              Chưa có đơn ứng tuyển nào
+                            </h3>
+                            <p className="text-muted-foreground mb-4">
+                              Hãy khám phá và ứng tuyển vào các CLB yêu thích!
+                            </p>
+                            <Button onClick={() => setActiveView("list")}>
+                              Xem danh sách tuyển dụng
+                            </Button>
+                          </>
+                        )}
                       </CardContent>
                     </Card>
                   )}
@@ -1466,15 +1321,15 @@ export function StudentRecruitment() {
                                 "UNDER_REVIEW"
                                   ? "Đang xem xét"
                                   : selectedApplicationDetail.status ===
-                                    "ACCEPTED"
-                                  ? "Đã duyệt"
-                                  : selectedApplicationDetail.status ===
-                                    "REJECTED"
-                                  ? "Từ chối"
-                                  : selectedApplicationDetail.status ===
-                                    "INTERVIEW"
-                                  ? "Chờ phỏng vấn"
-                                  : "Đang xét duyệt"}
+                                      "ACCEPTED"
+                                    ? "Đã duyệt"
+                                    : selectedApplicationDetail.status ===
+                                        "REJECTED"
+                                      ? "Từ chối"
+                                      : selectedApplicationDetail.status ===
+                                          "INTERVIEW"
+                                        ? "Chờ phỏng vấn"
+                                        : "Đang xét duyệt"}
                               </span>
                             </div>
                           </Badge>
@@ -1546,8 +1401,8 @@ export function StudentRecruitment() {
                       {selectedApplicationDetail.status === "INTERVIEW"
                         ? "Thông tin phỏng vấn"
                         : selectedApplicationDetail.status === "REJECTED"
-                        ? "Phản hồi từ CLB"
-                        : "Ghi chú từ CLB"}
+                          ? "Phản hồi từ CLB"
+                          : "Ghi chú từ CLB"}
                     </h4>
                     <div className="bg-muted/50 rounded p-3 text-sm whitespace-pre-wrap">
                       {selectedApplicationDetail.reviewNotes}

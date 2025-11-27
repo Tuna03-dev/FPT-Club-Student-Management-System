@@ -381,4 +381,27 @@ public class EventService {
     public List<EventWithoutReportRequirementDto> getEventsWithoutReportRequirement() {
         return eventRepository.findEventsWithoutReportRequirement();
     }
+
+    /**
+     * Lấy danh sách events đã được publish của một câu lạc bộ với phân trang và tìm kiếm
+     */
+    public com.sep490.backendclubmanagement.dto.response.PagedResponse<EventData> getPublishedEventsByClubId(
+            Long clubId, String keyword, Pageable pageable) {
+        Page<Event> eventPage = eventRepository.findPublishedEventsByClubId(clubId, keyword, pageable);
+
+        Page<EventData> dataPage = eventPage.map(event -> {
+            EventData dto = eventMapper.toDto(event);
+            dto.setClubId(event.getClub() != null ? event.getClub().getId() : null);
+            return dto;
+        });
+
+        // Set media URLs for all events in the page
+        List<Long> eventIds = eventPage.getContent().stream().map(Event::getId).collect(Collectors.toList());
+        if (!eventIds.isEmpty()) {
+            setMediaUrlsAndTypesBatch(dataPage.getContent(), eventIds);
+        }
+
+        return com.sep490.backendclubmanagement.dto.response.PagedResponse.of(dataPage);
+    }
 }
+

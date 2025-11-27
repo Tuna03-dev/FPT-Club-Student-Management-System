@@ -43,9 +43,24 @@ export interface OutcomeTransactionResponse {
 export interface TransactionQueryParams {
   page?: number;
   size?: number;
-  status?: string;
-  fromDate?: string;
-  toDate?: string;
+  status?: string; // SUCCESS, PENDING, FAILED, CANCELLED
+  fromDate?: string; // yyyy-MM-dd
+  toDate?: string; // yyyy-MM-dd
+  minAmount?: number;
+  maxAmount?: number;
+  search?: string;
+}
+
+// Income-specific filter params
+export interface IncomeTransactionQueryParams extends TransactionQueryParams {
+  source?: string; // PayOS, Cash, Bank Transfer, etc.
+  feeId?: number;
+  userId?: number;
+}
+
+// Outcome-specific filter params
+export interface OutcomeTransactionQueryParams extends TransactionQueryParams {
+  category?: string; // Event, Equipment, Transportation, etc.
 }
 
 // Create Income Transaction Request
@@ -72,10 +87,10 @@ export interface CreateOutcomeTransactionRequest {
 }
 
 export const transactionService = {
-  // Lấy danh sách Income Transactions
+  // Lấy danh sách Income Transactions với filters
   async getIncomeTransactions(
     clubId: number,
-    params?: TransactionQueryParams
+    params?: IncomeTransactionQueryParams
   ): Promise<ApiResponse<PageResponse<IncomeTransactionResponse>>> {
     const url = `/clubs/${clubId}/transactions/income`;
     return axiosClient.get<PageResponse<IncomeTransactionResponse>>(url, {
@@ -83,10 +98,10 @@ export const transactionService = {
     });
   },
 
-  // Lấy danh sách Outcome Transactions
+  // Lấy danh sách Outcome Transactions với filters
   async getOutcomeTransactions(
     clubId: number,
-    params?: TransactionQueryParams
+    params?: OutcomeTransactionQueryParams
   ): Promise<ApiResponse<PageResponse<OutcomeTransactionResponse>>> {
     const url = `/clubs/${clubId}/transactions/outcome`;
     return axiosClient.get<PageResponse<OutcomeTransactionResponse>>(url, {

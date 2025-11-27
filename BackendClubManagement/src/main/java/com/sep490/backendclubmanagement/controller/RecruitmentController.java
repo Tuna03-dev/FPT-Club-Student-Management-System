@@ -20,7 +20,6 @@ import org.springframework.util.MultiValueMap;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/recruitments")
@@ -41,6 +40,19 @@ public class RecruitmentController {
     ) {
         Pageable pageable = PageRequest.of(page, size, parseSort(sort));
         PagedResponse<RecruitmentData> data = recruitmentService.listRecruitments(clubId, status, keyword, pageable);
+        return ResponseEntity.ok(ApiResponse.success(data));
+    }
+
+    @GetMapping("/clubs/{clubId}/open")
+    public ResponseEntity<ApiResponse<PagedResponse<RecruitmentData>>> listOpenRecruitments(
+            @PathVariable Long clubId,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "startDate,desc") String sort
+    ) {
+        Pageable pageable = PageRequest.of(page, size, parseSort(sort));
+        PagedResponse<RecruitmentData> data = recruitmentService.listRecruitments(clubId, RecruitmentStatus.OPEN, keyword, pageable);
         return ResponseEntity.ok(ApiResponse.success(data));
     }
 
@@ -182,6 +194,7 @@ public class RecruitmentController {
     public ResponseEntity<ApiResponse<PagedResponse<RecruitmentApplicationData>>> getMyApplications(
             Authentication authentication,
             @RequestParam(required = false) RecruitmentApplicationStatus status,
+            @RequestParam(required = false) String keyword,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(defaultValue = "submittedDate,desc") String sort
@@ -192,7 +205,7 @@ public class RecruitmentController {
                 .orElseThrow(() -> new AppException(ErrorCode.UNAUTHORIZED));
         
         Pageable pageable = PageRequest.of(page, size, parseSort(sort));
-        PagedResponse<RecruitmentApplicationData> data = recruitmentService.listMyApplications(currentUser.getId(), status, pageable);
+        PagedResponse<RecruitmentApplicationData> data = recruitmentService.listMyApplications(currentUser.getId(), status, keyword, pageable);
         return ResponseEntity.ok(ApiResponse.success(data));
     }
 

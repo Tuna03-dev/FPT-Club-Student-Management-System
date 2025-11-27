@@ -222,9 +222,9 @@ export interface PendingRequestDto {
 
 export async function getPendingRequests(clubId?: number): Promise<PendingRequestDto[]> {
   const params = clubId && clubId > 0 ? { clubId } : {};
-  const res = await axiosClient.get<PendingRequestDto[]>("/events/pending-requests", { 
+  const res = await axiosClient.get<PendingRequestDto[]>("/events/pending-requests", {
     params,
-    timeout: 30000 
+    timeout: 30000
   });
   return res.data ?? [];
 }
@@ -320,4 +320,32 @@ export async function batchMarkAttendance(payload: BatchMarkAttendanceRequest): 
   await axiosClient.post<void>("/events/batch-mark-attendance", payload);
 }
 
+// ===== Paginated Response =====
+export interface PagedResponse<T> {
+  content: T[];
+  totalPages: number;
+  totalElements: number;
+  currentPage: number;
+  pageSize: number;
+}
 
+/**
+ * Lấy danh sách events đã được publish của một câu lạc bộ với phân trang và tìm kiếm
+ */
+export async function getPublishedEventsByClubId(
+  clubId: number,
+  keyword?: string,
+  page: number = 0,
+  size: number = 10,
+  sort: string = "startTime,desc"
+): Promise<PagedResponse<EventData>> {
+  const res = await axiosClient.get<PagedResponse<EventData>>(
+    `/events/clubs/${clubId}/published`,
+    {
+      params: { keyword, page, size, sort },
+      timeout: 30000,
+    }
+  );
+  if (!res.data) throw new Error("Empty response");
+  return res.data;
+}

@@ -61,6 +61,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     );
                     authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
 
+                    // Extract and set club roles from JWT token
+                    try {
+                        java.util.List<com.sep490.backendclubmanagement.dto.response.ClubRoleInfo> clubRoles =
+                            jwtUtil.extractClubRoles(jwt);
+                        authToken.setDetails(clubRoles);
+                        log.debug("Set {} club roles for user: {}", clubRoles.size(), username);
+                    } catch (Exception e) {
+                        log.warn("Could not extract club roles from token for user: {}", username, e);
+                    }
+
                     SecurityContextHolder.getContext().setAuthentication(authToken);
                     log.info("Successfully authenticated user: {} for request: {}", username, request.getRequestURI());
                 } else {
