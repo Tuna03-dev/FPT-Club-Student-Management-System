@@ -35,11 +35,16 @@ interface Event {
   requestStatus?: string;
 }
 
+interface PendingRequestMeta {
+  requestEventId: number;
+  status?: string;
+}
+
 interface PendingRequestsCardProps {
   clubId: number;
   pendingRequests: PendingRequestDto[] | null;
   loadingPending: boolean;
-  onRequestClick: (event: Event) => void;
+  onRequestClick: (event: Event, meta?: PendingRequestMeta) => void;
   onRefetch: () => Promise<void>;
   determineEventStatus: (
     startDate: Date,
@@ -175,7 +180,10 @@ export function PendingRequestsCard({
                     isMyDraft: true,
                     requestStatus: req.status,
                   };
-                  onRequestClick(mapped);
+                  onRequestClick(mapped, {
+                    requestEventId: req.requestEventId,
+                    status: req.status,
+                  });
                 }}
               >
                 <div className="font-semibold text-foreground">

@@ -14,6 +14,7 @@ export function EventLegend({ clubId }: EventLegendProps) {
   const clubRole = clubId ? authService.getClubRole(clubId) : null
   const systemRoleInClub = clubRole?.systemRole?.toUpperCase()
   const showPending = isStaff || (clubId && systemRoleInClub && ["CLUB_OFFICER", "TEAM_OFFICER"].includes(systemRoleInClub))
+  const showPendingPublish = isStaff
 
   return (
     <Card className="p-6 shadow-lg">
@@ -35,6 +36,12 @@ export function EventLegend({ clubId }: EventLegendProps) {
           <div className="flex items-center gap-3">
             <div className="w-4 h-4 rounded bg-gray-400"></div>
             <span className="text-sm text-foreground">Chờ duyệt</span>
+          </div>
+        )}
+        {showPendingPublish && (
+          <div className="flex items-center gap-3">
+            <div className="w-4 h-4 rounded bg-orange-500"></div>
+            <span className="text-sm text-foreground">Chờ public (Staff)</span>
           </div>
         )}
         <div className="flex items-center gap-3">
