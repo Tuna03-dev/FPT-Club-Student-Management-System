@@ -16,6 +16,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -47,6 +48,7 @@ public class IncomeTransactionController {
      * @param feeId - Filter by fee ID (optional)
      */
     @GetMapping
+    @PreAuthorize("@clubSecurity.isMemberOfClub(#clubId)")
     public ApiResponse<PageResponse<IncomeTransactionResponse>> getIncomeTransactions(
             @PathVariable Long clubId,
             @RequestParam(defaultValue = "0") int page,
@@ -96,6 +98,7 @@ public class IncomeTransactionController {
      * GET /api/clubs/{clubId}/transactions/income/{transactionId}
      */
     @GetMapping("/{transactionId}")
+    @PreAuthorize("@clubSecurity.isMemberOfClub(#clubId)")
     public ApiResponse<IncomeTransactionResponse> getIncomeTransactionById(
             @PathVariable Long clubId,
             @PathVariable Long transactionId
@@ -109,6 +112,7 @@ public class IncomeTransactionController {
      * POST /api/clubs/{clubId}/transactions/income
      */
     @PostMapping
+    @PreAuthorize("@clubSecurity.isClubOfficerOrTreasureInClub(#clubId)")
     public ApiResponse<IncomeTransactionResponse> createIncomeTransaction(
             @PathVariable Long clubId,
             @Valid @RequestBody CreateIncomeTransactionRequest request
@@ -122,6 +126,7 @@ public class IncomeTransactionController {
      * PUT /api/clubs/{clubId}/transactions/income/{transactionId}
      */
     @PutMapping("/{transactionId}")
+    @PreAuthorize("@clubSecurity.isClubOfficerOrTreasureInClub(#clubId)")
     public ApiResponse<IncomeTransactionResponse> updateIncomeTransaction(
             @PathVariable Long clubId,
             @PathVariable Long transactionId,
@@ -136,6 +141,7 @@ public class IncomeTransactionController {
      * POST /api/clubs/{clubId}/transactions/income/{transactionId}/approve
      */
     @PostMapping("/{transactionId}/approve")
+    @PreAuthorize("@clubSecurity.isClubOfficerOrTreasureInClub(#clubId)")
     public ApiResponse<IncomeTransactionResponse> approveIncomeTransaction(
             @PathVariable Long clubId,
             @PathVariable Long transactionId
@@ -149,6 +155,7 @@ public class IncomeTransactionController {
      * POST /api/clubs/{clubId}/transactions/income/{transactionId}/reject
      */
     @PostMapping("/{transactionId}/reject")
+    @PreAuthorize("@clubSecurity.isClubOfficerOrTreasureInClub(#clubId)")
     public ApiResponse<IncomeTransactionResponse> rejectIncomeTransaction(
             @PathVariable Long clubId,
             @PathVariable Long transactionId
@@ -162,6 +169,7 @@ public class IncomeTransactionController {
      * DELETE /api/clubs/{clubId}/transactions/income/{transactionId}
      */
     @DeleteMapping("/{transactionId}")
+    @PreAuthorize("@clubSecurity.isClubOfficerOrTreasureInClub(#clubId)")
     public ApiResponse<Void> deleteIncomeTransaction(
             @PathVariable Long clubId,
             @PathVariable Long transactionId
@@ -178,6 +186,7 @@ public class IncomeTransactionController {
      * Frontend can then include this URL when creating/updating transaction
      */
     @PostMapping("/upload-receipt")
+    @PreAuthorize("@clubSecurity.isClubOfficerOrTreasureInClub(#clubId)")
     public ApiResponse<Map<String, String>> uploadReceiptImage(
             @PathVariable Long clubId,
             @RequestParam("file") MultipartFile file

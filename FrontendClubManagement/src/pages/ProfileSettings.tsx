@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   User,
   Mail,
@@ -12,6 +12,7 @@ import {
   Calendar,
   Briefcase,
   CalendarDays,
+  AlertCircle,
 } from "lucide-react";
 import {
   Card,
@@ -46,6 +47,10 @@ export default function ProfileSettings() {
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [previewAvatar, setPreviewAvatar] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [validationErrors, setValidationErrors] = useState<{
+    phone?: string;
+    email?: string;
+  }>({});
 
   // User data state for editing
   const [userData, setUserData] = useState({
@@ -55,7 +60,7 @@ export default function ProfileSettings() {
   });
 
   // Load profile data from backend
-  useState(() => {
+  useEffect(() => {
     const loadProfile = async () => {
       try {
         setLoading(true);
@@ -76,7 +81,7 @@ export default function ProfileSettings() {
       }
     };
     loadProfile();
-  });
+  }, []);
 
   // Helper function to get system role display name
   const getSystemRoleDisplay = (systemRole: string) => {
@@ -93,16 +98,66 @@ export default function ProfileSettings() {
     }
   };
 
+  // Validation functions
+  const validatePhone = (phone: string): string | undefined => {
+    if (!phone || phone.trim() === "") {
+      return undefined; // Phone is optional
+    }
+    const phoneRegex = /^(0|\+84)[0-9]{9}$/;
+    const cleanedPhone = phone.trim();
+    if (!phoneRegex.test(cleanedPhone)) {
+      return "Số điện thoại không hợp lệ. Vui lòng nhập số gồm 10 chữ số bắt đầu bằng 0 hoặc +84.";
+    }
+    return undefined;
+  };
+
+  const validateEmail = (email: string): string | undefined => {
+    if (!email || email.trim() === "") {
+      return undefined; // Email is optional (though it's disabled)
+    }
+    const emailRegex = /^\S+@\S+\.\S+$/;
+    if (!emailRegex.test(email.trim())) {
+      return "Email không hợp lệ. Vui lòng nhập đúng định dạng email.";
+    }
+    return undefined;
+  };
+
   const handleSaveProfile = async () => {
+    // Clear previous errors
+    setValidationErrors({});
+
+    // Validate phone number
+    const phoneError = validatePhone(userData.phone);
+    if (phoneError) {
+      setValidationErrors({ phone: phoneError });
+      toast.error("Lỗi xác thực", {
+        description: phoneError,
+      });
+      return;
+    }
+
+    // Validate email if it exists (though it's disabled, we validate the format)
+    if (profileData?.email) {
+      const emailError = validateEmail(profileData.email);
+      if (emailError) {
+        setValidationErrors({ email: emailError });
+        toast.error("Lỗi xác thực", {
+          description: emailError,
+        });
+        return;
+      }
+    }
+
     try {
       const response = await userService.updateMyProfile({
         fullName: userData.name,
-        phoneNumber: userData.phone || null,
+        phoneNumber: userData.phone.trim() || null,
         dateOfBirth: userData.dateOfBirth || null,
       });
 
       if (response.code === 200 && response.data) {
         setProfileData(response.data);
+        setValidationErrors({});
         toast.success("Cập nhật thành công!", {
           description: "Thông tin cá nhân đã được lưu.",
         });
@@ -197,22 +252,23 @@ export default function ProfileSettings() {
       <div className="p-4 sm:p-6 max-w-5xl mx-auto space-y-6">
         {/* Header */}
         <div className="flex items-center gap-3 mb-8">
-          <div className="p-3 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 shadow-lg">
-            <User className="h-6 w-6 sm:h-8 sm:w-8 text-primary" />
+          <div className="p-3 rounded-xl bg-gradient-to-br from-orange-100 to-orange-50 shadow-lg">
+            <User className="h-6 w-6 sm:h-8 sm:w-8 text-orange-500" />
           </div>
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
+          <div className="flex-1">
+            
+            <h1 className="text-2xl sm:text-3xl font-bold  ">
               Thông tin cá nhân
             </h1>
-            <p className="text-sm sm:text-base text-muted-foreground">
+            <p className="text-sm sm:text-base text-muted-foreground mt-1">
               Quản lý thông tin tài khoản của bạn
             </p>
           </div>
         </div>
 
         {/* Profile Card */}
-        <Card className="border-primary/20 shadow-lg hover:shadow-xl transition-shadow duration-300 !py-0">
-          <CardHeader className="bg-gradient-to-r from-primary/10 to-primary/5 border-b border-primary/10 !p-4 sm:!p-6 rounded-t-xl">
+        <Card className="border-orange-200 shadow-lg hover:shadow-xl transition-shadow duration-300 !py-0">
+          <CardHeader className="bg-gradient-to-r from-orange-50 to-orange-100/50 border-b border-orange-200 !p-4 sm:!p-6 rounded-t-xl">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div className="space-y-1">
                 <CardTitle className="text-xl sm:text-2xl">
@@ -223,9 +279,14 @@ export default function ProfileSettings() {
                 </CardDescription>
               </div>
               <Button
-                onClick={() => setIsEditing(!isEditing)}
+                onClick={() => {
+                  setIsEditing(!isEditing);
+                  if (isEditing) {
+                    setValidationErrors({});
+                  }
+                }}
                 variant={isEditing ? "outline" : "default"}
-                className="shadow-md w-full sm:w-auto"
+                className="shadow-md w-full sm:w-auto bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white"
               >
                 {isEditing ? "Hủy" : "Chỉnh sửa"}
               </Button>
@@ -236,9 +297,9 @@ export default function ProfileSettings() {
               {/* Avatar Section */}
               <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6">
                 <div className="relative group">
-                  <Avatar className="h-24 w-24 sm:h-32 sm:w-32 border-4 border-primary/20 shadow-lg">
+                  <Avatar className="h-24 w-24 sm:h-32 sm:w-32 border-4 border-orange-200 shadow-lg">
                     <AvatarImage src={profileData?.avatarUrl} />
-                    <AvatarFallback className="text-xl sm:text-2xl bg-gradient-to-br from-primary/20 to-primary/5">
+                    <AvatarFallback className="text-xl sm:text-2xl bg-gradient-to-br from-orange-100 to-orange-50 text-orange-600">
                       {userData.name.charAt(0) || "U"}
                     </AvatarFallback>
                   </Avatar>
@@ -270,7 +331,7 @@ export default function ProfileSettings() {
                     {userData.name || "Người dùng"}
                   </h3>
                   <div className="flex gap-2 flex-wrap justify-center sm:justify-start">
-                    <Badge className="bg-gradient-to-r from-primary to-primary/80 shadow-md">
+                    <Badge className="bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-md">
                       <Shield className="h-3 w-3 mr-1" />
                       {getSystemRoleDisplay(
                         profileData?.systemRoleName || "STUDENT"
@@ -292,7 +353,7 @@ export default function ProfileSettings() {
                     htmlFor="dateOfBirth"
                     className="flex items-center gap-2"
                   >
-                    <CalendarDays className="h-4 w-4 text-primary" />
+                    <CalendarDays className="h-4 w-4 text-orange-500" />
                     Ngày sinh
                   </Label>
                   <Input
@@ -303,13 +364,13 @@ export default function ProfileSettings() {
                       setUserData({ ...userData, dateOfBirth: e.target.value })
                     }
                     disabled={!isEditing}
-                    className="border-primary/20 focus:border-primary disabled:opacity-60"
+                    className="border-orange-200 focus:border-orange-400 disabled:opacity-60"
                   />
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="name" className="flex items-center gap-2">
-                    <User className="h-4 w-4 text-primary" />
+                    <User className="h-4 w-4 text-orange-500" />
                     Họ và tên
                   </Label>
                   <Input
@@ -319,7 +380,7 @@ export default function ProfileSettings() {
                       setUserData({ ...userData, name: e.target.value })
                     }
                     disabled={!isEditing}
-                    className="border-primary/20 focus:border-primary disabled:opacity-60"
+                    className="border-orange-200 focus:border-orange-400 disabled:opacity-60"
                   />
                 </div>
 
@@ -328,20 +389,20 @@ export default function ProfileSettings() {
                     htmlFor="studentId"
                     className="flex items-center gap-2"
                   >
-                    <IdCard className="h-4 w-4 text-primary" />
+                    <IdCard className="h-4 w-4 text-orange-500" />
                     Mã số sinh viên
                   </Label>
                   <Input
                     id="studentId"
                     value={profileData?.studentCode || ""}
                     disabled
-                    className="border-primary/20 focus:border-primary disabled:opacity-60"
+                    className="border-orange-200 focus:border-orange-400 disabled:opacity-60"
                   />
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="email" className="flex items-center gap-2">
-                    <Mail className="h-4 w-4 text-primary" />
+                    <Mail className="h-4 w-4 text-orange-500" />
                     Email
                   </Label>
                   <Input
@@ -349,25 +410,45 @@ export default function ProfileSettings() {
                     type="email"
                     value={profileData?.email || ""}
                     disabled
-                    className="border-primary/20 focus:border-primary disabled:opacity-60"
+                    className={`border-orange-200 focus:border-orange-400 disabled:opacity-60 ${
+                      validationErrors.email ? "border-red-500 focus:border-red-500" : ""
+                    }`}
                   />
+                  {validationErrors.email && (
+                    <div className="flex items-center gap-1.5 text-sm text-red-600">
+                      <AlertCircle className="h-3.5 w-3.5" />
+                      <span>{validationErrors.email}</span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="phone" className="flex items-center gap-2">
-                    <Phone className="h-4 w-4 text-primary" />
+                    <Phone className="h-4 w-4 text-orange-500" />
                     Số điện thoại
                   </Label>
                   <Input
                     id="phone"
                     value={userData.phone}
-                    onChange={(e) =>
-                      setUserData({ ...userData, phone: e.target.value })
-                    }
+                    onChange={(e) => {
+                      setUserData({ ...userData, phone: e.target.value });
+                      // Clear error when user types
+                      if (validationErrors.phone) {
+                        setValidationErrors({ ...validationErrors, phone: undefined });
+                      }
+                    }}
                     disabled={!isEditing}
-                    className="border-primary/20 focus:border-primary disabled:opacity-60"
-                    placeholder="Chưa có số điện thoại"
+                    className={`border-orange-200 focus:border-orange-400 disabled:opacity-60 ${
+                      validationErrors.phone ? "border-red-500 focus:border-red-500" : ""
+                    }`}
+                    placeholder="0xxxxxxxxx hoặc +84xxxxxxxxx"
                   />
+                  {validationErrors.phone && (
+                    <div className="flex items-center gap-1.5 text-sm text-red-600">
+                      <AlertCircle className="h-3.5 w-3.5" />
+                      <span>{validationErrors.phone}</span>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -375,7 +456,7 @@ export default function ProfileSettings() {
                 <div className="flex justify-end">
                   <Button
                     onClick={handleSaveProfile}
-                    className="bg-gradient-to-r from-primary to-primary/80 shadow-lg hover:shadow-xl transition-all"
+                    className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white shadow-lg hover:shadow-xl transition-all"
                   >
                     <Save className="h-4 w-4 mr-2" />
                     Lưu thay đổi
@@ -388,11 +469,11 @@ export default function ProfileSettings() {
 
         {/* Clubs Activity History Card */}
         {!loading && profileData && profileData.clubMemberships.length > 0 && (
-          <Card className="border-primary/20 shadow-lg hover:shadow-xl transition-shadow duration-300 !py-0">
-            <CardHeader className="bg-gradient-to-r from-primary/10 to-primary/5 border-b border-primary/10 !p-4 sm:!p-6 rounded-t-xl">
+          <Card className="border-orange-200 shadow-lg hover:shadow-xl transition-shadow duration-300 !py-0">
+            <CardHeader className="bg-gradient-to-r from-orange-50 to-orange-100/50 border-b border-orange-200 !p-4 sm:!p-6 rounded-t-xl">
               <div className="space-y-1">
                 <CardTitle className="flex items-center gap-2 text-xl sm:text-2xl">
-                  <Users className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
+                  <Users className="h-5 w-5 sm:h-6 sm:w-6 text-orange-500" />
                   Lịch sử hoạt động CLB
                 </CardTitle>
                 <CardDescription className="text-sm">
@@ -426,7 +507,7 @@ export default function ProfileSettings() {
                     className="mt-6 space-y-6"
                   >
                     {/* Club Overview */}
-                    <div className="flex items-center justify-between p-5 rounded-xl bg-gradient-to-br from-primary/10 via-primary/5 to-transparent border border-primary/20 shadow-sm hover:shadow-md transition-all duration-300">
+                    <div className="flex items-center justify-between p-5 rounded-xl bg-gradient-to-br from-orange-50 via-orange-100/30 to-transparent border border-orange-200 shadow-sm hover:shadow-md transition-all duration-300">
                       <div className="space-y-1">
                         <h3 className="font-semibold text-xl text-foreground">
                           {club.clubName}
@@ -456,8 +537,8 @@ export default function ProfileSettings() {
                     {/* Activity History Timeline */}
                     <div className="space-y-3">
                       <h4 className="font-semibold flex items-center gap-2 text-foreground text-lg">
-                        <div className="p-2 rounded-lg bg-primary/10">
-                          <Calendar className="h-4 w-4 text-primary" />
+                        <div className="p-2 rounded-lg bg-orange-100">
+                          <Calendar className="h-4 w-4 text-orange-500" />
                         </div>
                         Lịch sử vai trò
                       </h4>
@@ -465,7 +546,7 @@ export default function ProfileSettings() {
                       {club.roles.length > 0 ? (
                         <div className="space-y-3 relative pl-8">
                           {/* Timeline line */}
-                          <div className="absolute left-[11px] top-0 bottom-0 w-0.5 bg-gradient-to-b from-primary via-primary/50 to-transparent"></div>
+                          <div className="absolute left-[11px] top-0 bottom-0 w-0.5 bg-gradient-to-b from-orange-400 via-orange-300 to-transparent"></div>
 
                           {club.roles.map((role) => (
                             <div
@@ -486,7 +567,7 @@ export default function ProfileSettings() {
                               </div>
 
                               {/* Activity Card */}
-                              <Card className="border-primary/20 hover:border-primary/40 hover:shadow-lg transition-all duration-300 overflow-hidden">
+                              <Card className="border-orange-200 hover:border-orange-300 hover:shadow-lg transition-all duration-300 overflow-hidden">
                                 <CardContent className="p-5">
                                   <div className="space-y-4">
                                     {/* Header */}
@@ -514,30 +595,30 @@ export default function ProfileSettings() {
                                       </div>
                                     </div>
 
-                                    <Separator className="bg-primary/10" />
+                                    <Separator className="bg-orange-200" />
 
                                     {/* Details Grid */}
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                      <div className="space-y-2 p-3 rounded-lg bg-gradient-to-br from-primary/5 to-transparent border border-primary/10">
+                                      <div className="space-y-2 p-3 rounded-lg bg-gradient-to-br from-orange-50 to-transparent border border-orange-200">
                                         <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                                          <Shield className="h-4 w-4 text-primary" />
+                                          <Shield className="h-4 w-4 text-orange-500" />
                                           Vai trò
                                         </div>
-                                        <Badge className="bg-gradient-to-r from-primary to-primary/80 shadow-sm text-sm">
+                                        <Badge className="bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-sm text-sm">
                                           {role.clubRoleName}
                                         </Badge>
                                       </div>
 
-                                      <div className="space-y-2 p-3 rounded-lg bg-gradient-to-br from-primary/5 to-transparent border border-primary/10">
+                                      <div className="space-y-2 p-3 rounded-lg bg-gradient-to-br from-orange-50 to-transparent border border-orange-200">
                                         <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                                          <Briefcase className="h-4 w-4 text-primary" />
+                                          <Briefcase className="h-4 w-4 text-orange-500" />
                                           Phân ban
                                         </div>
                                         <Badge
                                           variant="outline"
-                                          className="border-primary/40 bg-background text-sm"
+                                          className="border-orange-300 bg-background text-sm"
                                         >
-                                          <Building2 className="h-3 w-3 mr-1" />
+                                          <Building2 className="h-3 w-3 mr-1 text-orange-500" />
                                           {role.teamName}
                                         </Badge>
                                       </div>
@@ -599,9 +680,9 @@ export default function ProfileSettings() {
 
             <div className="flex justify-center py-6">
               {previewAvatar && (
-                <Avatar className="h-48 w-48 border-4 border-primary/20 shadow-lg">
+                <Avatar className="h-48 w-48 border-4 border-orange-200 shadow-lg">
                   <AvatarImage src={previewAvatar} />
-                  <AvatarFallback className="text-4xl bg-gradient-to-br from-primary/20 to-primary/5">
+                  <AvatarFallback className="text-4xl bg-gradient-to-br from-orange-100 to-orange-50 text-orange-600">
                     {userData.name.charAt(0) || "U"}
                   </AvatarFallback>
                 </Avatar>
@@ -619,7 +700,7 @@ export default function ProfileSettings() {
               <Button
                 onClick={handleConfirmAvatar}
                 disabled={uploadingAvatar}
-                className="w-full sm:w-auto bg-gradient-to-r from-primary to-primary/80"
+                className="w-full sm:w-auto bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white"
               >
                 {uploadingAvatar ? (
                   <>
@@ -638,8 +719,8 @@ export default function ProfileSettings() {
         {loading && (
           <>
             {/* Profile Card Skeleton */}
-            <Card className="border-primary/20 shadow-lg !py-0">
-              <CardHeader className="bg-gradient-to-r from-primary/10 to-primary/5 border-b border-primary/10 !p-4 sm:!p-6 rounded-t-xl">
+            <Card className="border-orange-200 shadow-lg !py-0">
+              <CardHeader className="bg-gradient-to-r from-orange-50 to-orange-100/50 border-b border-orange-200 !p-4 sm:!p-6 rounded-t-xl">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                   <div className="space-y-2">
                     <Skeleton className="h-6 w-40" />
@@ -679,8 +760,8 @@ export default function ProfileSettings() {
             </Card>
 
             {/* Clubs Activity Skeleton */}
-            <Card className="border-primary/20 shadow-lg !py-0">
-              <CardHeader className="bg-gradient-to-r from-primary/10 to-primary/5 border-b border-primary/10 !p-4 sm:!p-6 rounded-t-xl">
+            <Card className="border-orange-200 shadow-lg !py-0">
+              <CardHeader className="bg-gradient-to-r from-orange-50 to-orange-100/50 border-b border-orange-200 !p-4 sm:!p-6 rounded-t-xl">
                 <div className="space-y-2">
                   <Skeleton className="h-6 w-48" />
                   <Skeleton className="h-4 w-72" />
