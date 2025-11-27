@@ -54,12 +54,14 @@ public interface RoleMemberShipRepository extends JpaRepository<RoleMemberShip, 
     @Query(value = "SELECT sr.role_name\n" +
             "FROM users u\n" +
             "         JOIN club_memberships cm ON u.id = cm.user_id\n" +
+            "         JOIN clubs c ON cm.club_id = c.id\n" +
             "         JOIN role_memberships rm ON cm.id = rm.club_membership_id\n" +
             "         JOIN semesters s ON rm.semester_id = s.id\n" +
             "         JOIN club_roles cr ON rm.clubrole_id = cr.id\n" +
             "         JOIN system_roles sr ON cr.system_role_id = sr.id\n" +
             "WHERE u.id = :userId\n" +
             "  AND cm.club_id = :clubId\n" +
+            "  AND c.status = 'ACTIVE'\n" +
             "  AND s.is_current = true\n" +
             "LIMIT 1",
             nativeQuery = true)
