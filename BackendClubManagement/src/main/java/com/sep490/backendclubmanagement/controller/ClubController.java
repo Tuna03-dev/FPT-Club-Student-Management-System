@@ -20,7 +20,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 @RestController
-@RequestMapping("/api/clubs")
+@RequestMapping("/api/clubInfo")
 @RequiredArgsConstructor
 public class ClubController {
 
@@ -65,8 +65,8 @@ public class ClubController {
      * @param id Club ID
      * @return Club detail data
      */
-    @GetMapping("/{id}/club-info")
     @PreAuthorize("@clubSecurity.isMemberOfClub(#id)")
+    @GetMapping("/{id}/club-info")
     public ResponseEntity<ApiResponse<ClubDetailData>> getClubInfo(
             @PathVariable Long id) throws AppException {
         Long userId = SecurityUtils.getCurrentUserId();
@@ -80,8 +80,8 @@ public class ClubController {
      * @param request Update request with club information
      * @return Updated club detail data
      */
-    @PutMapping("/{id}/officer-update")
     @PreAuthorize("@clubSecurity.isClubOfficerInClub(#id)")
+    @PutMapping("/{id}/officer-update")
     public ResponseEntity<ApiResponse<ClubDetailData>> updateClubInfo(
             @PathVariable Long id,
             @Valid @RequestBody UpdateClubInfoRequest request) throws AppException {

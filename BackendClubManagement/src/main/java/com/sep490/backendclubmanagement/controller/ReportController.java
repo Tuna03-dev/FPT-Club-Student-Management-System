@@ -122,7 +122,7 @@ public class ReportController {
      * If autoSubmit is false and user is club president, the report will be created as draft.
      * Team officer can only create draft reports regardless of autoSubmit flag.
      */
-    @PreAuthorize("clubSecurity.isTeamOfficerOrClubOfficerInClub(#request.clubId)")
+    @PreAuthorize("@clubSecurity.isTeamOfficerOrClubOfficerInClub(#request.clubId)")
     @PostMapping(value = "/club", consumes = "multipart/form-data")
     public ApiResponse<ReportDetailResponse> createReport(
             @RequestPart("request") @Valid CreateReportRequest request,

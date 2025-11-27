@@ -34,7 +34,7 @@ public class RecruitmentController {
     private final ClubSecurity clubSecurity;
 
     @GetMapping("/clubs/{clubId}")
-    @PreAuthorize("@clubSecurity.isMemberOfClub(#clubId)")
+    @PreAuthorize("@clubSecurity.isClubOfficerInClub(#clubId)")
     public ResponseEntity<ApiResponse<PagedResponse<RecruitmentData>>> listRecruitments(
             @PathVariable Long clubId,
             @RequestParam(required = false) RecruitmentStatus status,
