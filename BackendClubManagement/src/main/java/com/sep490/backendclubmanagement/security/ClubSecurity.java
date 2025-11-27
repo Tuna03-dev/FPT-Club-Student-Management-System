@@ -115,6 +115,26 @@ public class ClubSecurity {
     }
 
     /**
+     * Check if current user is CLUB_OFFICER or CLUB_TREASURER in the given club
+     * Used for finance-related operations
+     * @param clubId ID of the club
+     * @return true if user is CLUB_OFFICER or CLUB_TREASURER, false otherwise
+     */
+    public boolean isClubOfficerOrTreasureInClub(Long clubId) {
+        return isClubOfficerInClub(clubId) || isTreasureInClub(clubId);
+    }
+
+    /**
+     * Check if current user is TEAM_OFFICER, CLUB_TREASURER, or CLUB_OFFICER in the given club
+     * CLUB_TREASURER has all permissions of TEAM_OFFICER
+     * @param clubId ID of the club
+     * @return true if user has any of these roles, false otherwise
+     */
+    public boolean isTeamOfficerOrTreasureOrClubOfficerInClub(Long clubId) {
+        return isClubOfficerInClub(clubId) || isTreasureInClub(clubId) || isTeamOfficerInClub(clubId);
+    }
+
+    /**
      * Check if current user is a member (has any role) in the given club
      * @param clubId ID of the club
      * @return true if user has any role in the club, false otherwise
