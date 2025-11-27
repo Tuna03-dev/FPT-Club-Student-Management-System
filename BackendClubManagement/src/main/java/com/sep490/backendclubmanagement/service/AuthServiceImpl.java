@@ -1,9 +1,6 @@
 package com.sep490.backendclubmanagement.service;
 
 import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
-import com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier;
-import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
-import com.google.api.client.json.jackson2.JacksonFactory;
 import com.sep490.backendclubmanagement.dto.response.AuthenticationResponse;
 import com.sep490.backendclubmanagement.dto.response.ClubRoleInfo;
 import com.sep490.backendclubmanagement.entity.SystemRole;
@@ -15,14 +12,12 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Service;
 
-import java.security.GeneralSecurityException;
 import java.util.*;
 
 @Service
@@ -37,13 +32,11 @@ public class AuthServiceImpl implements AuthService{
     private final TokenBlacklistService tokenBlacklistService;
     private final RefreshTokenService refreshTokenService;
     private final ClubManagementService clubManagementService;
-
-    @Value("${google.client-id}")
-    private String googleClientId;
+    private final GoogleTokenVerifierService googleTokenVerifier;
 
     @Override
     public AuthenticationResponse loginWithGoogle(String idToken, HttpServletRequest request, HttpServletResponse response) throws Exception {
-        GoogleIdToken.Payload payload = verifyIdToken(idToken);
+        GoogleIdToken.Payload payload = googleTokenVerifier.verifyIdToken(idToken);
         String email = payload.getEmail();
 
         Optional<Map<String, Object>> profileOpt = fapApiService.findProfileByEmail(email);
@@ -338,36 +331,6 @@ public class AuthServiceImpl implements AuthService{
 
     // Private helper methods
 
-    private GoogleIdToken.Payload verifyIdToken(String idTokenString) throws Exception {
-        if (idTokenString == null || idTokenString.trim().isEmpty()) {
-            throw new IllegalArgumentException("ID token cannot be null or empty");
-        }
-
-        var transport = GoogleNetHttpTransport.newTrustedTransport();
-        var jsonFactory = JacksonFactory.getDefaultInstance();
-        GoogleIdTokenVerifier verifier = new GoogleIdTokenVerifier.Builder(transport, jsonFactory)
-                .setAudience(Collections.singletonList(googleClientId))
-                .build();
-
-        GoogleIdToken idToken;
-        try {
-            idToken = verifier.verify(idTokenString);
-        } catch (GeneralSecurityException | java.io.IOException e) {
-            log.error("Google ID token verification failed: {}", e.getMessage());
-            throw new RuntimeException("Failed to verify Google ID token", e);
-        }
-        if (idToken == null) {
-            log.error("Google ID token is null after verification");
-            throw new RuntimeException("Invalid Google ID token");
-        }
-
-        GoogleIdToken.Payload payload = idToken.getPayload();
-        if (payload == null) {
-            throw new RuntimeException("Invalid Google ID token payload");
-        }
-
-        return payload;
-    }
 
     private String extractRefreshTokenFromCookie(HttpServletRequest request) {
         if (request.getCookies() != null) {
