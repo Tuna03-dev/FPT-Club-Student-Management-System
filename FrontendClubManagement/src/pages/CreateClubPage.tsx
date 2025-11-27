@@ -1279,7 +1279,7 @@ const CreateClubPage = () => {
               <Input
                 id="proposalFile"
                 type="file"
-                accept=".doc,.docx,.xls,.xlsx,.pdf,.ppt,.pptx"
+                accept=".doc,.docx,.xls,.xlsx,.pdf,.ppt,.pptx,.zip"
                 onChange={(e) => setProposalFile(e.target.files?.[0] || null)}
               />
             </div>
@@ -1461,7 +1461,7 @@ const CreateClubPage = () => {
               <Input
                 id="finalFormFile"
                 type="file"
-                accept=".doc,.docx,.xls,.xlsx,.pdf,.ppt,.pptx"
+                accept=".doc,.docx,.xls,.xlsx,.pdf,.ppt,.pptx,.zip"
                 onChange={(e) => setFinalFormFile(e.target.files?.[0] || null)}
               />
             </div>
@@ -1639,6 +1639,9 @@ const CreateClubPage = () => {
                         // File Office: dùng Office Online Viewer
                         const viewerUrl = `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(fileUrl)}`;
                         window.open(viewerUrl, '_blank');
+                      } else if (fileExtension === 'zip') {
+                        // File ZIP: download trực tiếp
+                        window.open(fileUrl, '_blank');
                       } else {
                         // File khác: thử mở trực tiếp
                         window.open(fileUrl, '_blank');

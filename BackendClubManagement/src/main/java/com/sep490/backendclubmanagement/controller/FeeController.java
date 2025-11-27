@@ -28,7 +28,7 @@ public class FeeController {
     private final FeeService feeService;
 
     @GetMapping
-    @PreAuthorize(SecurityConfig.AUTHORITY_ALL_ROLES)
+    @PreAuthorize("@clubSecurity.isMemberOfClub(#clubId)")
     public ApiResponse<PageResponse<FeeDetailResponse>> getFees(
             @PathVariable Long clubId,
             @RequestParam(required = false) String search,
@@ -39,27 +39,24 @@ public class FeeController {
         Pageable pageable = PageRequest.of(page, size, Sort.by(
                 Sort.Order.desc("createdAt")
         ));
-
-        // If search or filter is provided, use search method, otherwise use simple getFeesByClubId
         PageResponse<FeeDetailResponse> responses;
         if ((search != null && !search.trim().isEmpty()) || isExpired != null) {
             responses = feeService.searchFees(clubId, search, isExpired, pageable);
         } else {
             responses = feeService.getFeesByClubId(clubId, pageable);
         }
-
         return ApiResponse.success(responses);
     }
 
     @GetMapping("/drafts")
-    @PreAuthorize(SecurityConfig.AUTHORITY_ALL_ROLES)
+    @PreAuthorize("@clubSecurity.isClubOfficerInClub(#clubId) or @clubSecurity.isTreasureInClub(#clubId)")
     public ApiResponse<List<FeeDetailResponse>> getDraftFees(@PathVariable Long clubId) {
         List<FeeDetailResponse> responses = feeService.getDraftFeesByClubId(clubId);
         return ApiResponse.success(responses);
     }
 
     @GetMapping("/check-title")
-    @PreAuthorize(SecurityConfig.AUTHORITY_ALL_ROLES)
+    @PreAuthorize("@clubSecurity.isMemberOfClub(#clubId)")
     public ApiResponse<Boolean> checkFeeTitleExists(
             @PathVariable Long clubId,
             @RequestParam String title,
@@ -75,7 +72,7 @@ public class FeeController {
     }
 
     @PostMapping
-    @PreAuthorize(SecurityConfig.AUTHORITY_ALL_ROLES)
+    @PreAuthorize("@clubSecurity.isClubOfficerInClub(#clubId) or @clubSecurity.isTreasureInClub(#clubId)")
     public ApiResponse<FeeDetailResponse> createFee(
             @PathVariable Long clubId,
             @Valid @RequestBody CreateFeeRequest request) {
@@ -88,7 +85,7 @@ public class FeeController {
     }
 
     @PutMapping("/{feeId}")
-    @PreAuthorize(SecurityConfig.AUTHORITY_ALL_ROLES)
+//    @PreAuthorize("@clubSecurity.isClubOfficerInClub(@feeService.getClubIdByFeeId(#feeId)) or @clubSecurity.isTreasureInClub(@feeService.getClubIdByFeeId(#feeId))")
     public ApiResponse<FeeDetailResponse> updateFee(
             @PathVariable Long clubId,
             @PathVariable Long feeId,
@@ -102,7 +99,7 @@ public class FeeController {
     }
 
     @DeleteMapping("/{feeId}")
-    @PreAuthorize(SecurityConfig.AUTHORITY_ALL_ROLES)
+//    @PreAuthorize("@clubSecurity.isClubOfficerInClub(@feeService.getClubIdByFeeId(#feeId)) or @clubSecurity.isTreasureInClub(@feeService.getClubIdByFeeId(#feeId))")
     public ApiResponse<Void> deleteFee(
             @PathVariable Long clubId,
             @PathVariable Long feeId) {
@@ -114,11 +111,8 @@ public class FeeController {
         }
     }
 
-    
-
-
     @PostMapping("/{feeId}/generate-payment")
-    @PreAuthorize(SecurityConfig.AUTHORITY_ALL_ROLES)
+//    @PreAuthorize("@clubSecurity.isMemberOfClub(@feeService.getClubIdByFeeId(#feeId))")
     public ApiResponse<PayOSCreatePaymentResponse> generatePaymentQR(
             @PathVariable Long clubId,
             @PathVariable Long feeId,
@@ -136,7 +130,7 @@ public class FeeController {
     }
 
     @PatchMapping("/{feeId}/publish")
-    @PreAuthorize(SecurityConfig.AUTHORITY_ALL_ROLES)
+//    @PreAuthorize("@clubSecurity.isClubOfficerInClub(@feeService.getClubIdByFeeId(#feeId)) or @clubSecurity.isTreasureInClub(@feeService.getClubIdByFeeId(#feeId))")
     public ApiResponse<FeeDetailResponse> publishFee(
             @PathVariable Long clubId,
             @PathVariable Long feeId
@@ -150,7 +144,7 @@ public class FeeController {
     }
 
     @GetMapping("/{feeId}/paid-members")
-    @PreAuthorize(SecurityConfig.AUTHORITY_ALL_ROLES)
+//    @PreAuthorize("@clubSecurity.isMemberOfClub(@feeService.getClubIdByFeeId(#feeId))")
     public ApiResponse<PageResponse<com.sep490.backendclubmanagement.dto.response.FeePaidMemberResponse>> getPaidMembers(
             @PathVariable Long clubId,
             @PathVariable Long feeId,
@@ -169,7 +163,7 @@ public class FeeController {
     }
 
     @GetMapping("/unpaid")
-    @PreAuthorize(SecurityConfig.AUTHORITY_ALL_ROLES)
+    @PreAuthorize("@clubSecurity.isMemberOfClub(#clubId)")
     public ApiResponse<List<FeeDetailResponse>> getUnpaidFees(
             @PathVariable Long clubId,
             @RequestParam Long userId
@@ -179,19 +173,16 @@ public class FeeController {
     }
 
     @GetMapping("/paid")
-    @PreAuthorize(SecurityConfig.AUTHORITY_ALL_ROLES)
+    @PreAuthorize("@clubSecurity.isMemberOfClub(#clubId)")
     public ApiResponse<PageResponse<FeeDetailResponse>> getPaidFees(
             @PathVariable Long clubId,
             @RequestParam Long userId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size
     ) {
-        // Create Pageable without sorting (sorting is handled in the native query)
         Pageable pageable = PageRequest.of(page, size);
-        
         PageResponse<FeeDetailResponse> paidFees = feeService.getPaidFeesByUser(clubId, userId, pageable);
         return ApiResponse.success(paidFees);
     }
 
 }
-

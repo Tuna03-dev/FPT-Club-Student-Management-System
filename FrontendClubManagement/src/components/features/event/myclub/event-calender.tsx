@@ -56,6 +56,7 @@ interface Event {
   isMyDraft?: boolean;
   requestStatus?: string;
   eventTypeName?: string;
+  isPendingPublish?: boolean;
 }
 interface EventFormValues {
   title: string;
@@ -94,6 +95,10 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
   const [loadingPending, setLoadingPending] = useState(false);
   const [cancelledEvents, setCancelledEvents] = useState<Event[] | null>(null);
   const [loadingCancelled, setLoadingCancelled] = useState(false);
+  const [selectedPendingRequest, setSelectedPendingRequest] = useState<{
+    requestEventId: number;
+    status?: string;
+  } | null>(null);
   const { isClubOfficer: isPresidentOfCurrentClub } =
     useClubPermissions(clubId);
 
@@ -197,6 +202,7 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
                 isMyDraft: true,
                 requestStatus: d.requestStatus,
                 eventTypeName: d.event.eventTypeName,
+            isPendingPublish: d.requestStatus === null,
               }));
             const byId = new Map<string, Event>();
             for (const e of all) byId.set(e.id, e);
@@ -208,6 +214,7 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
                   ...draft,
                   isMyDraft: true,
                   requestStatus: draft.requestStatus,
+                  isPendingPublish: draft.requestStatus === null,
                 });
               else {
                 // Only add if it's a pending draft (not cancelled)
@@ -295,6 +302,7 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
         ),
         images: event.mediaUrls || [],
         eventTypeName: event.eventTypeName,
+        isPendingPublish: false,
       }));
 
       let all: Event[] = mappedEvents;
@@ -336,6 +344,7 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
               isMyDraft: true,
               requestStatus: d.requestStatus,
               eventTypeName: d.event.eventTypeName,
+              isPendingPublish: d.requestStatus === null,
             }));
           const byId = new Map<string, Event>();
           // First add all regular events
@@ -353,6 +362,7 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
                 ...draft,
                 isMyDraft: true,
                 requestStatus: draft.requestStatus,
+                  isPendingPublish: draft.requestStatus === null,
               });
             } else {
               // Only add if it's a pending draft (not cancelled)
@@ -401,6 +411,25 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
     })();
   }, []);
 
+  const refreshPendingRequests = useCallback(async () => {
+    const user = authService.getCurrentUser();
+    if (!user) return;
+    const roleUpper = user.systemRole
+      ? String(user.systemRole).trim().toUpperCase()
+      : "";
+    const isReviewer = roleUpper === "STAFF" || isPresidentOfCurrentClub;
+    if (!isReviewer) return;
+    setLoadingPending(true);
+    try {
+      const list = await getPendingRequests(clubId && clubId > 0 ? clubId : undefined);
+      setPendingRequests(list);
+    } catch {
+      setPendingRequests([]);
+    } finally {
+      setLoadingPending(false);
+    }
+  }, [clubId, isPresidentOfCurrentClub]);
+
   // Load pending requests (STAFF/CLUB_OFFICER) and cancelled events (STAFF)
   useEffect(() => {
     const user = authService.getCurrentUser();
@@ -408,13 +437,8 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
     const roleUpper = user.systemRole
       ? String(user.systemRole).trim().toUpperCase()
       : "";
-    const isReviewer = roleUpper === "STAFF" || isPresidentOfCurrentClub;
-    if (isReviewer) {
-      setLoadingPending(true);
-      getPendingRequests(clubId && clubId > 0 ? clubId : undefined)
-        .then((list) => setPendingRequests(list))
-        .catch(() => setPendingRequests([]))
-        .finally(() => setLoadingPending(false));
+    if (roleUpper === "STAFF" || isPresidentOfCurrentClub) {
+      refreshPendingRequests();
     }
     if (roleUpper === "STAFF") {
       setLoadingCancelled(true);
@@ -442,7 +466,8 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
         .catch(() => setCancelledEvents([]))
         .finally(() => setLoadingCancelled(false));
     }
-  }, [clubId, isPresidentOfCurrentClub]);
+  }, [clubId, isPresidentOfCurrentClub, refreshPendingRequests]);
+
 
   // Listen to global refetch event (after cancel from modal)
   useEffect(() => {
@@ -469,6 +494,7 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
           isMyDraft: true,
           requestStatus: "CANCELLED",
           eventTypeName: e.eventTypeName,
+          isPendingPublish: false,
         }));
         setCancelledEvents(mapped);
       }
@@ -755,6 +781,7 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
           isMyDraft: event.isMyDraft,
           requestStatus: event.requestStatus,
           eventTypeName: event.eventTypeName,
+          isPendingPublish: event.isPendingPublish,
         })
       );
   };
@@ -930,9 +957,18 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
     }
   };
 
-  const handleRequestClick = (event: Event) => {
+  const handleRequestClick = (
+    event: Event,
+    meta?: { requestEventId: number; status?: string }
+  ) => {
     setSelectedEvent(event);
     setSelectedReadOnly(true);
+    setSelectedPendingRequest(meta ?? null);
+  };
+
+  const handlePendingActionSuccess = async () => {
+    await refetchEvents();
+    await refreshPendingRequests();
   };
 
   const handlePrevMonth = () => {
@@ -971,6 +1007,7 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
                 isMyDraft: e.isMyDraft,
                 requestStatus: e.requestStatus,
                 eventTypeName: e.eventTypeName,
+                isPendingPublish: e.isPendingPublish,
               })
             )}
             onPrevMonth={handlePrevMonth}
@@ -1056,6 +1093,7 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
           onClose={() => {
             setSelectedEvent(null);
             setSelectedReadOnly(false);
+            setSelectedPendingRequest(null);
           }}
           onUpdated={(upd: Event) => {
             setEvents((prev) =>
@@ -1067,6 +1105,8 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
             setEvents((prev) => prev.filter((e) => e.id !== id));
           }}
           readOnly={selectedReadOnly}
+          pendingRequest={selectedPendingRequest ?? undefined}
+          onPendingActionSuccess={handlePendingActionSuccess}
         />
       )}
     </>

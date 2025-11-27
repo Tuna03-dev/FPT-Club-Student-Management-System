@@ -28,6 +28,14 @@ export interface EventFormData {
 }
 
 export function CreateEventForm({ eventTypes, onSubmit, onSuccess, initialStartTime, initialEndTime }: CreateEventFormProps) {
+  const toLocalDateTimeInputValue = (date: Date) => {
+    const offset = date.getTimezoneOffset()
+    const local = new Date(date.getTime() - offset * 60000)
+    return local.toISOString().slice(0, 16)
+  }
+
+  const [minStartTime, setMinStartTime] = useState(() => toLocalDateTimeInputValue(new Date()))
+
   const [formData, setFormData] = useState<EventFormData>({
     title: "",
     description: "",
@@ -48,6 +56,38 @@ export function CreateEventForm({ eventTypes, onSubmit, onSuccess, initialStartT
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialStartTime, initialEndTime])
 
+  // Keep min start time synced with current time (updated every minute)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setMinStartTime(toLocalDateTimeInputValue(new Date()))
+    }, 60_000)
+    return () => clearInterval(interval)
+  }, [])
+
+  // Ensure current selections always respect the minimum start time
+  useEffect(() => {
+    setFormData((prev) => {
+      let changed = false
+      let startTime = prev.startTime
+      let endTime = prev.endTime
+      if (startTime && new Date(startTime) < new Date(minStartTime)) {
+        startTime = minStartTime
+        changed = true
+      }
+      const minEndCandidate = startTime || minStartTime
+      if (endTime && new Date(endTime) < new Date(minEndCandidate)) {
+        endTime = minEndCandidate
+        changed = true
+      }
+      if (!changed) return prev
+      return {
+        ...prev,
+        startTime,
+        endTime,
+      }
+    })
+  }, [minStartTime])
+
   const [imagePreview, setImagePreview] = useState<string[]>([])
   const [mediaTypes, setMediaTypes] = useState<Array<"image" | "video">>([]) // Track type of each media
   const [isLoading, setIsLoading] = useState(false)
@@ -55,6 +95,32 @@ export function CreateEventForm({ eventTypes, onSubmit, onSuccess, initialStartT
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
+    if (name === "startTime") {
+      const clampedValue = value && new Date(value) < new Date(minStartTime) ? minStartTime : value
+      setFormData((prev) => {
+        const minEndCandidate = clampedValue || minStartTime
+        const endTimeNeedsUpdate =
+          prev.endTime && new Date(prev.endTime) < new Date(minEndCandidate)
+        return {
+          ...prev,
+          startTime: clampedValue,
+          endTime: endTimeNeedsUpdate ? minEndCandidate : prev.endTime,
+        }
+      })
+      return
+    }
+
+    if (name === "endTime") {
+      const minEndCandidate = formData.startTime || minStartTime
+      const clampedValue =
+        value && new Date(value) < new Date(minEndCandidate) ? minEndCandidate : value
+      setFormData((prev) => ({
+        ...prev,
+        endTime: clampedValue,
+      }))
+      return
+    }
+
     setFormData((prev) => ({
       ...prev,
       [name]: value,
@@ -227,6 +293,7 @@ export function CreateEventForm({ eventTypes, onSubmit, onSuccess, initialStartT
             id="startTime"
             name="startTime"
             type="datetime-local"
+            min={minStartTime}
             value={formData.startTime}
             onChange={handleInputChange}
             disabled={isLoading}
@@ -238,6 +305,7 @@ export function CreateEventForm({ eventTypes, onSubmit, onSuccess, initialStartT
             id="endTime"
             name="endTime"
             type="datetime-local"
+            min={formData.startTime || minStartTime}
             value={formData.endTime}
             onChange={handleInputChange}
             disabled={isLoading}

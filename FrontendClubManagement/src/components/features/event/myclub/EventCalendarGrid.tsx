@@ -12,6 +12,7 @@ export interface CalendarEvent {
   isMyDraft?: boolean
   requestStatus?: string
   eventTypeName?: string
+  isPendingPublish?: boolean
 }
 
 interface EventCalendarGridProps {

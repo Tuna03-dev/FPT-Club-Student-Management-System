@@ -170,4 +170,7 @@ export const axiosClient = {
   },
 };
 
+// Export axiosInstance để dùng cho blob response
+export { axiosInstance };
+
 export default axiosClient;
