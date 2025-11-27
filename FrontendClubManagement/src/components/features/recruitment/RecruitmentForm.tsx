@@ -35,7 +35,6 @@ interface RecruitmentFormData {
   recruitment_id?: string;
   title: string;
   description: string;
-  start_date: string;
   end_date: string;
   requirements?: string[];
   benefits?: string[];
@@ -64,7 +63,6 @@ export function RecruitmentForm({
   const [newRecruitment, setNewRecruitment] = useState({
     title: "",
     description: "",
-    start_date: "",
     end_date: "",
     requirements: [""],
     benefits: [""],
@@ -112,8 +110,7 @@ export function RecruitmentForm({
       setNewRecruitment({
         title: editingRecruitment.title,
         description: editingRecruitment.description,
-        start_date: editingRecruitment.start_date.split("T")[0],
-        end_date: editingRecruitment.end_date.split("T")[0],
+        end_date: editingRecruitment.end_date.slice(0, 16),
         requirements: editingRecruitment.requirements?.length
           ? editingRecruitment.requirements
           : [""],
@@ -161,7 +158,6 @@ export function RecruitmentForm({
       setNewRecruitment({
         title: "",
         description: "",
-        start_date: "",
         end_date: "",
         requirements: [""],
         benefits: [""],
@@ -287,12 +283,16 @@ export function RecruitmentForm({
       toast.error("Vui lòng nhập mô tả đợt tuyển dụng");
       return false;
     }
-    if (!newRecruitment.start_date) {
-      toast.error("Vui lòng chọn ngày bắt đầu");
-      return false;
-    }
     if (!newRecruitment.end_date) {
       toast.error("Vui lòng chọn ngày kết thúc");
+      return false;
+    }
+
+    // Validate end date is not in the past
+    const endDate = new Date(newRecruitment.end_date);
+    const now = new Date();
+    if (endDate <= now) {
+      toast.error("Ngày kết thúc phải sau thời điểm hiện tại");
       return false;
     }
 
@@ -328,14 +328,6 @@ export function RecruitmentForm({
       }
     }
 
-    // Validate dates
-    const startDate = new Date(newRecruitment.start_date);
-    const endDate = new Date(newRecruitment.end_date);
-    if (startDate >= endDate) {
-      toast.error("Ngày kết thúc phải sau ngày bắt đầu");
-      return false;
-    }
-
     return true;
   };
 
@@ -343,13 +335,14 @@ export function RecruitmentForm({
   const buildRequestData = (
     status: "DRAFT" | "OPEN"
   ): RecruitmentCreateRequest => {
-    const startDate = new Date(newRecruitment.start_date).toISOString();
-    const endDate = new Date(newRecruitment.end_date).toISOString();
+    // Format end_date to ISO string without timezone (for Java LocalDateTime)
+    // Input from datetime-local is "YYYY-MM-DDTHH:mm" (local time)
+    // Backend expects ISO format: "YYYY-MM-DDTHH:mm:ss"
+    const endDate = newRecruitment.end_date + ":00";
 
     return {
       title: newRecruitment.title,
       description: newRecruitment.description,
-      startDate: startDate,
       endDate: endDate,
       requirements: newRecruitment.requirements
         .filter((r) => r.trim())
@@ -570,36 +563,20 @@ export function RecruitmentForm({
             />
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* Dates only now (2 columns) */}
-            <div>
-              <Label htmlFor="start_date">Ngày bắt đầu</Label>
-              <Input
-                id="start_date"
-                type="date"
-                value={newRecruitment.start_date}
-                onChange={(e) =>
-                  setNewRecruitment((prev) => ({
-                    ...prev,
-                    start_date: e.target.value,
-                  }))
-                }
-              />
-            </div>
-            <div>
-              <Label htmlFor="end_date">Ngày kết thúc</Label>
-              <Input
-                id="end_date"
-                type="date"
-                value={newRecruitment.end_date}
-                onChange={(e) =>
-                  setNewRecruitment((prev) => ({
-                    ...prev,
-                    end_date: e.target.value,
-                  }))
-                }
-              />
-            </div>
+          <div>
+            <Label htmlFor="end_date">Ngày giờ kết thúc</Label>
+            <Input
+              id="end_date"
+              type="datetime-local"
+              value={newRecruitment.end_date}
+              min={new Date().toISOString().slice(0, 16)}
+              onChange={(e) =>
+                setNewRecruitment((prev) => ({
+                  ...prev,
+                  end_date: e.target.value,
+                }))
+              }
+            />
           </div>
         </CardContent>
       </Card>

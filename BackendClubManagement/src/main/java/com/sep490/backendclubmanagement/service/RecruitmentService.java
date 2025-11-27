@@ -235,6 +235,11 @@ public class RecruitmentService implements RecruitmentServiceInterface {
             throw new AppException(ErrorCode.RECRUITMENT_CLOSED);
         }
         
+        // Check if recruitment end date has passed
+        if (r.getEndDate() != null && LocalDateTime.now().isAfter(r.getEndDate())) {
+            throw new AppException(ErrorCode.RECRUITMENT_ENDED);
+        }
+
         recruitmentMapper.updateEntity(r, req);
         
         // If recruitment is updated to OPEN, close all other OPEN recruitments of the club
@@ -390,7 +395,11 @@ public class RecruitmentService implements RecruitmentServiceInterface {
             page = applicationRepository.findApplicationsByRecruitment(recruitmentId, status, keyword, pageable);
         }
 
-        Page<RecruitmentApplicationData> dataPage = page.map(recruitmentApplicationMapper::toDto);
+        Page<RecruitmentApplicationData> dataPage = page.map(app -> {
+            RecruitmentApplicationData data = recruitmentApplicationMapper.toDto(app);
+            setTeamName(data, app.getTeamId());
+            return data;
+        });
         return PagedResponse.of(dataPage);
     }
 
@@ -435,7 +444,11 @@ public class RecruitmentService implements RecruitmentServiceInterface {
             page = applicationRepository.findMyApplications(applicantId, status, keyword, pageable);
         }
 
-        Page<RecruitmentApplicationData> dataPage = page.map(recruitmentApplicationMapper::toDto);
+        Page<RecruitmentApplicationData> dataPage = page.map(app -> {
+            RecruitmentApplicationData data = recruitmentApplicationMapper.toDto(app);
+            setTeamName(data, app.getTeamId());
+            return data;
+        });
         return PagedResponse.of(dataPage);
     }
 
@@ -599,14 +612,17 @@ public class RecruitmentService implements RecruitmentServiceInterface {
         RecruitmentApplication app = applicationRepository.findById(applicationId)
                 .orElseThrow(() -> new AppException(ErrorCode.INTERNAL_SERVER_ERROR));
         
-        // Check permission: must be CLUB_PRESIDENT and a member of the club
+        // Check permission: must be CLUB_OFFICER
         Long clubId = app.getRecruitment().getClub().getId();
         checkClubOfficerPermission(userId, clubId);
         
         List<RecruitmentFormAnswer> answers = answerRepository.findByApplication_Id(applicationId);
         app.setAnswers(new HashSet<>(answers));
         
-        return recruitmentApplicationMapper.toDto(app);
+        RecruitmentApplicationData data = recruitmentApplicationMapper.toDto(app);
+        setTeamName(data, app.getTeamId());
+
+        return data;
     }
 
     @Override
@@ -622,7 +638,10 @@ public class RecruitmentService implements RecruitmentServiceInterface {
         List<RecruitmentFormAnswer> answers = answerRepository.findByApplication_Id(applicationId);
         app.setAnswers(new HashSet<>(answers));
         
-        return recruitmentApplicationMapper.toDto(app);
+        RecruitmentApplicationData data = recruitmentApplicationMapper.toDto(app);
+        setTeamName(data, app.getTeamId());
+
+        return data;
     }
 
     @Override
@@ -641,9 +660,19 @@ public class RecruitmentService implements RecruitmentServiceInterface {
             throw new AppException(ErrorCode.CLUB_NOT_ACTIVE);
         }
 
+        // Check if current status is INTERVIEW and interview time hasn't passed yet
+        if (app.getStatus() == RecruitmentApplicationStatus.INTERVIEW
+            && app.getInterviewTime() != null
+            && LocalDateTime.now().isBefore(app.getInterviewTime())) {
+            throw new AppException(ErrorCode.INTERVIEW_NOT_YET);
+        }
+
         app.setStatus(req.status);
         app.setReviewNotes(req.reviewNotes);
         app.setReviewedDate(LocalDateTime.now());
+        app.setInterviewTime(req.interviewTime);
+        app.setInterviewAddress(req.interviewAddress);
+        app.setInterviewPreparationRequirements(req.interviewPreparationRequirements);
         applicationRepository.save(app);
         
         // If status is ACCEPTED, add user to the registered team
@@ -674,6 +703,18 @@ public class RecruitmentService implements RecruitmentServiceInterface {
                     message += " Lý do: " + req.reviewNotes;
                 }
                 notificationType = NotificationType.RECRUITMENT_APPLICATION_REJECTED;
+            } else if (req.interviewTime != null) {
+                // If interview time is scheduled (regardless of status)
+                title = "Thông báo lịch phỏng vấn";
+                message = "Bạn đã được mời phỏng vấn cho đợt tuyển \"" + app.getRecruitment().getTitle() + "\".";
+                if (req.interviewAddress != null && !req.interviewAddress.trim().isEmpty()) {
+                    message += " Địa điểm: " + req.interviewAddress + ".";
+                }
+                if (req.interviewPreparationRequirements != null && !req.interviewPreparationRequirements.trim().isEmpty()) {
+                    message += " Yêu cầu chuẩn bị: " + req.interviewPreparationRequirements;
+                }
+                notificationType = NotificationType.RECRUITMENT_APPLICATION_REVIEWED;
+                priority = NotificationPriority.HIGH;
             }
 
             if (notificationType != null) {
@@ -699,6 +740,72 @@ public class RecruitmentService implements RecruitmentServiceInterface {
 
         return getApplicationInternal(app.getId());
     }
+
+    @Override
+    @Transactional
+    public RecruitmentApplicationData updateInterviewSchedule(Long userId, InterviewUpdateRequest req) throws AppException {
+        RecruitmentApplication app = applicationRepository.findById(req.applicationId)
+                .orElseThrow(() -> new AppException(ErrorCode.INTERNAL_SERVER_ERROR));
+
+        // Check permission: must be CLUB_PRESIDENT and a member of the club
+        Long clubId = app.getRecruitment().getClub().getId();
+        checkClubOfficerPermission(userId, clubId);
+
+        // Check if club is active
+        Club club = app.getRecruitment().getClub();
+        if (!"ACTIVE".equalsIgnoreCase(club.getStatus())) {
+            throw new AppException(ErrorCode.CLUB_NOT_ACTIVE);
+        }
+
+        // Check if current interview time hasn't passed yet (can only update before interview time)
+        if (app.getInterviewTime() != null && LocalDateTime.now().isAfter(app.getInterviewTime())) {
+            throw new AppException(ErrorCode.INTERVIEW_TIME_PASSED);
+        }
+
+        // Update interview schedule
+        app.setInterviewTime(req.interviewTime);
+        app.setInterviewAddress(req.interviewAddress);
+        app.setInterviewPreparationRequirements(req.interviewPreparationRequirements);
+        applicationRepository.save(app);
+
+        // Send notification to applicant about interview schedule update
+        try {
+            Long applicantId = app.getApplicant().getId();
+            String actionUrl = "/myRecruitmentApplications";
+            String title = "Cập nhật lịch phỏng vấn";
+            String message = "Lịch phỏng vấn cho đợt tuyển \"" + app.getRecruitment().getTitle() + "\" đã được cập nhật.";
+
+            if (req.interviewTime != null) {
+                message += " Thời gian: " + req.interviewTime + ".";
+            }
+            if (req.interviewAddress != null && !req.interviewAddress.trim().isEmpty()) {
+                message += " Địa điểm: " + req.interviewAddress + ".";
+            }
+            if (req.interviewPreparationRequirements != null && !req.interviewPreparationRequirements.trim().isEmpty()) {
+                message += " Yêu cầu chuẩn bị: " + req.interviewPreparationRequirements;
+            }
+
+            notificationService.sendToUser(
+                    applicantId,
+                    userId,
+                    title,
+                    message,
+                    NotificationType.RECRUITMENT_APPLICATION_REVIEWED,
+                    NotificationPriority.HIGH,
+                    actionUrl,
+                    clubId,
+                    null,
+                    null,
+                    null,
+                    null
+            );
+        } catch (Exception e) {
+            // Log error but don't fail the operation
+            System.err.println("Failed to send interview schedule update notification: " + e.getMessage());
+        }
+
+        return getApplicationInternal(app.getId());
+    }
     
     /**
      * Get application information without permission check (for internal use)
@@ -710,7 +817,19 @@ public class RecruitmentService implements RecruitmentServiceInterface {
         List<RecruitmentFormAnswer> answers = answerRepository.findByApplication_Id(applicationId);
         app.setAnswers(new HashSet<>(answers));
         
-        return recruitmentApplicationMapper.toDto(app);
+        RecruitmentApplicationData data = recruitmentApplicationMapper.toDto(app);
+        setTeamName(data, app.getTeamId());
+
+        return data;
+    }
+
+    /**
+     * Helper method to set team name in application data
+     */
+    private void setTeamName(RecruitmentApplicationData data, Long teamId) {
+        if (teamId != null) {
+            teamRepository.findById(teamId).ifPresent(team -> data.setTeamName(team.getTeamName()));
+        }
     }
     
     /**

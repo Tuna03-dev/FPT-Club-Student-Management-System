@@ -1,5 +1,3 @@
-"use client";
-
 import { useState, useEffect, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -43,6 +41,7 @@ import {
   updateRecruitment,
   changeRecruitmentStatus,
   updateApplicationStatus,
+  updateInterviewSchedule,
   type RecruitmentCreateRequest,
 } from "@/services/recruitmentService";
 import { toast } from "sonner";
@@ -58,7 +57,7 @@ import {
 } from "@/components/ui/dialog";
 import { useDebounce } from "@/hooks/useDebounce";
 
-type RecruitmentStatus = "draft" | "open" | "closed" | "cancelled";
+type RecruitmentStatus = "draft" | "open" | "closed";
 type ApplicationStatus = "under_review" | "accepted" | "rejected" | "interview";
 type QuestionType = "TEXT" | "MCQ" | "CHECKBOX" | "FILE";
 
@@ -84,6 +83,9 @@ interface RecruitmentApplication {
   score?: number;
   notes?: string;
   avatar?: string;
+  interviewTime?: string;
+  interviewAddress?: string;
+  interviewPreparationRequirements?: string;
 }
 
 interface Recruitment {
@@ -93,7 +95,6 @@ interface Recruitment {
   semester_name: string;
   title: string;
   description: string;
-  start_date: string;
   end_date: string;
   status: RecruitmentStatus;
   requirements?: string[];
@@ -111,14 +112,12 @@ const statusLabels: Record<RecruitmentStatus, string> = {
   draft: "Bản nháp",
   open: "Đang mở",
   closed: "Đã đóng",
-  cancelled: "Đã hủy",
 };
 
 const statusColors: Record<RecruitmentStatus, string> = {
   draft: "bg-gray-100 text-gray-700",
   open: "bg-green-100 text-green-700",
   closed: "bg-red-100 text-red-700",
-  cancelled: "bg-blue-100 text-blue-700",
 };
 
 export function RecruitmentManagement() {
@@ -172,6 +171,8 @@ export function RecruitmentManagement() {
   const [applicationsStatusFilter, setApplicationsStatusFilter] = useState<
     ApplicationStatus | "all"
   >("all");
+  const [applicationsRefreshTrigger, setApplicationsRefreshTrigger] =
+    useState(0);
 
   // Dialog states
   const [statusChangeDialog, setStatusChangeDialog] = useState<{
@@ -222,7 +223,6 @@ export function RecruitmentManagement() {
         semester_name: "Fall 2024", // TODO: Get from API if available
         title: r.title,
         description: r.description,
-        start_date: r.startDate,
         end_date: r.endDate,
         status: r.status.toLowerCase() as RecruitmentStatus,
         requirements: r.requirements ? r.requirements.split("\n") : [],
@@ -322,6 +322,12 @@ export function RecruitmentManagement() {
               answers: answersMap,
               score: a.score,
               notes: a.reviewNotes,
+              teamId: a.teamId?.toString(),
+              teamName: a.teamName,
+              interviewTime: a.interviewTime,
+              interviewAddress: a.interviewAddress,
+              interviewPreparationRequirements:
+                a.interviewPreparationRequirements,
             };
           });
 
@@ -345,6 +351,7 @@ export function RecruitmentManagement() {
     applicationsPage,
     debouncedApplicationsSearchQuery,
     applicationsStatusFilter,
+    applicationsRefreshTrigger,
   ]);
 
   // Reset applications page when recruitment, debounced search, or filter changes
@@ -380,7 +387,6 @@ export function RecruitmentManagement() {
         semester_name: "Fall 2024",
         title: freshData.title,
         description: freshData.description,
-        start_date: freshData.startDate,
         end_date: freshData.endDate,
         status: freshData.status.toLowerCase() as RecruitmentStatus,
         requirements: freshData.requirements
@@ -495,7 +501,10 @@ export function RecruitmentManagement() {
   const handleUpdateApplicationStatus = async (
     applicationId: string,
     newStatus: ApplicationStatus,
-    notes?: string
+    notes?: string,
+    interviewTime?: string,
+    interviewAddress?: string,
+    interviewPreparationRequirements?: string
   ) => {
     try {
       // Convert status to API format
@@ -509,7 +518,10 @@ export function RecruitmentManagement() {
       const updatedApplication = await updateApplicationStatus(
         parseInt(applicationId),
         apiStatus,
-        notes
+        notes,
+        interviewTime,
+        interviewAddress,
+        interviewPreparationRequirements
       );
 
       // Map response back to component format
@@ -524,6 +536,10 @@ export function RecruitmentManagement() {
                 ...app,
                 status: mappedStatus,
                 notes: updatedApplication.reviewNotes,
+                interviewTime: updatedApplication.interviewTime,
+                interviewAddress: updatedApplication.interviewAddress,
+                interviewPreparationRequirements:
+                  updatedApplication.interviewPreparationRequirements,
               }
             : app
         )
@@ -539,6 +555,10 @@ export function RecruitmentManagement() {
                   ...app,
                   status: mappedStatus,
                   notes: updatedApplication.reviewNotes,
+                  interviewTime: updatedApplication.interviewTime,
+                  interviewAddress: updatedApplication.interviewAddress,
+                  interviewPreparationRequirements:
+                    updatedApplication.interviewPreparationRequirements,
                 }
               : app
           ),
@@ -554,9 +574,69 @@ export function RecruitmentManagement() {
       }[mappedStatus];
 
       toast.success(`Đã cập nhật trạng thái đơn thành ${statusText}!`);
+
+      // Trigger refresh to get latest data from server
+      setApplicationsRefreshTrigger((prev) => prev + 1);
     } catch (err: any) {
       console.error("Error updating application status:", err);
       toast.error(err.message || "Không thể cập nhật trạng thái đơn");
+    }
+  };
+
+  const handleUpdateInterview = async (
+    applicationId: string,
+    interviewTime?: string,
+    interviewAddress?: string,
+    interviewPreparationRequirements?: string
+  ) => {
+    try {
+      const updatedApplication = await updateInterviewSchedule(
+        parseInt(applicationId),
+        interviewTime,
+        interviewAddress,
+        interviewPreparationRequirements
+      );
+
+      // Update local state
+      setApplications((prevApplications) =>
+        prevApplications.map((app) =>
+          app.application_id === applicationId
+            ? {
+                ...app,
+                interviewTime: updatedApplication.interviewTime,
+                interviewAddress: updatedApplication.interviewAddress,
+                interviewPreparationRequirements:
+                  updatedApplication.interviewPreparationRequirements,
+              }
+            : app
+        )
+      );
+
+      // Update selected recruitment applications
+      if (selectedRecruitment) {
+        setSelectedRecruitment({
+          ...selectedRecruitment,
+          applications: selectedRecruitment.applications.map((app) =>
+            app.application_id === applicationId
+              ? {
+                  ...app,
+                  interviewTime: updatedApplication.interviewTime,
+                  interviewAddress: updatedApplication.interviewAddress,
+                  interviewPreparationRequirements:
+                    updatedApplication.interviewPreparationRequirements,
+                }
+              : app
+          ),
+        });
+      }
+
+      toast.success("Đã cập nhật thông tin phỏng vấn!");
+
+      // Trigger refresh to get latest data from server
+      setApplicationsRefreshTrigger((prev) => prev + 1);
+    } catch (err: any) {
+      console.error("Error updating interview schedule:", err);
+      toast.error(err.message || "Không thể cập nhật thông tin phỏng vấn");
     }
   };
 
@@ -738,7 +818,6 @@ export function RecruitmentManagement() {
                   <SelectItem value="draft">Bản nháp</SelectItem>
                   <SelectItem value="open">Đang mở</SelectItem>
                   <SelectItem value="closed">Đã đóng</SelectItem>
-                  <SelectItem value="cancelled">Đã hủy</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -853,21 +932,18 @@ export function RecruitmentManagement() {
                       <div className="grid grid-cols-2 gap-4 mb-4 text-sm">
                         <div>
                           <span className="text-muted-foreground">
-                            Bắt đầu:
-                          </span>
-                          <div className="font-medium">
-                            {new Date(
-                              recruitment.start_date
-                            ).toLocaleDateString("vi-VN")}
-                          </div>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">
                             Kết thúc:
                           </span>
                           <div className="font-medium">
-                            {new Date(recruitment.end_date).toLocaleDateString(
-                              "vi-VN"
+                            {new Date(recruitment.end_date).toLocaleString(
+                              "vi-VN",
+                              {
+                                year: "numeric",
+                                month: "2-digit",
+                                day: "2-digit",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              }
                             )}
                           </div>
                         </div>
@@ -896,6 +972,7 @@ export function RecruitmentManagement() {
                           onClick={() => {
                             setSelectedRecruitment(recruitment);
                             setActiveTab("applications");
+                            setApplicationsRefreshTrigger((prev) => prev + 1);
                           }}
                           className="bg-transparent"
                         >
@@ -1212,6 +1289,7 @@ export function RecruitmentManagement() {
             applications={applications}
             applicationsLoading={applicationsLoading}
             onUpdateApplicationStatus={handleUpdateApplicationStatus}
+            onUpdateInterview={handleUpdateInterview}
             currentPage={applicationsPage}
             totalPages={applicationsTotalPages}
             totalElements={applicationsTotalElements}

@@ -167,6 +167,22 @@ public class RecruitmentController {
     }
 
     /**
+     * Update interview schedule
+     * Must be club officer of the application's recruitment's club
+     * Can only update before interview time
+     */
+    @PutMapping("/applications/interview")
+    @PreAuthorize("@clubSecurity.isClubOfficerForApplication(#request.applicationId)")
+    public ResponseEntity<ApiResponse<RecruitmentApplicationData>> updateInterviewSchedule(
+            @RequestBody InterviewUpdateRequest request
+    ) throws AppException {
+        Long userId = SecurityUtils.getCurrentUserId();
+
+        RecruitmentApplicationData data = recruitmentService.updateInterviewSchedule(userId, request);
+        return ResponseEntity.ok(ApiResponse.success(data));
+    }
+
+    /**
      * List applications for a recruitment
      * Must be club officer - detailed permission check done in service layer
      */

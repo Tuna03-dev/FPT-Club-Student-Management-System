@@ -29,4 +29,5 @@ public interface RecruitmentServiceInterface {
     RecruitmentApplicationData getApplication(Long userId, Long applicationId) throws AppException;
     RecruitmentApplicationData getMyApplication(Long applicantId, Long applicationId) throws AppException;
     RecruitmentApplicationData reviewApplication(Long userId, ApplicationReviewRequest request) throws AppException;
+    RecruitmentApplicationData updateInterviewSchedule(Long userId, InterviewUpdateRequest request) throws AppException;
 }

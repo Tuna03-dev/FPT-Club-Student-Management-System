@@ -16,10 +16,14 @@ public class RecruitmentApplicationData {
     private String userPhone;
     private String studentId;
     private Long teamId;
+    private String teamName;
     private RecruitmentApplicationStatus status;
     private String reviewNotes;
     private LocalDateTime submittedDate;
     private LocalDateTime reviewedDate;
+    private LocalDateTime interviewTime;
+    private String interviewAddress;
+    private String interviewPreparationRequirements;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private List<ApplicationAnswerData> answers;
