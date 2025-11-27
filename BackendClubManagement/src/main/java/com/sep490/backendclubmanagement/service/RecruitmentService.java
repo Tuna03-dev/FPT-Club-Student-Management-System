@@ -10,6 +10,8 @@ import com.sep490.backendclubmanagement.mapper.RecruitmentMapper;
 import com.sep490.backendclubmanagement.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,6 +21,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -32,7 +35,6 @@ public class RecruitmentService implements RecruitmentServiceInterface {
     private final TeamOptionRepository teamOptionRepository;
     private final TeamRepository teamRepository;
     private final UserRepository userRepository;
-    private final EventRepository eventRepository; // placeholder if needed later
     private final RecruitmentMapper recruitmentMapper;
     private final RecruitmentApplicationMapper recruitmentApplicationMapper;
     private final CloudinaryService cloudinaryService;
@@ -40,21 +42,72 @@ public class RecruitmentService implements RecruitmentServiceInterface {
     private final RoleMemberShipRepository roleMembershipRepository;
     private final SemesterRepository semesterRepository;
     private final ClubRoleRepository clubRoleRepository;
+    private final ClubRepository clubRepository;
+    private final NotificationService notificationService;
+
+    /**
+     * Get list of Club Officer user IDs in current semester for a specific club
+     * @param clubId Club ID
+     * @return List of user IDs who are Club Officers
+     */
+    private List<Long> getClubOfficersInCurrentSemester(Long clubId) {
+        Semester currentSemester = semesterRepository.findByIsCurrentTrue()
+                .orElse(null);
+
+        if (currentSemester == null) {
+            return Collections.emptyList();
+        }
+
+        return roleMembershipRepository.findClubOfficerUserIdsByClubIdAndSemesterId(
+                clubId, currentSemester.getId());
+    }
 
     @Override
-    public PagedResponse<RecruitmentData> listRecruitments(Long clubId, RecruitmentStatus status, Pageable pageable) {
+    public PagedResponse<RecruitmentData> listRecruitments(Long userId,Long clubId, RecruitmentStatus status,String keyword, Pageable pageable) throws AppException {
+        checkClubOfficerPermission(userId, clubId);
+        return listRecruitments(clubId, status, keyword, pageable);
+    }
+
+    @Override
+    public PagedResponse<RecruitmentData> listRecruitmentsForGuest(Long clubId, RecruitmentStatus status, Pageable pageable) {
         return listRecruitments(clubId, status, null, pageable);
     }
     
-    public PagedResponse<RecruitmentData> listRecruitments(Long clubId, RecruitmentStatus status, String keyword, Pageable pageable) {
+    public PagedResponse<RecruitmentData> listRecruitments(Long clubId, RecruitmentStatus status, String keyword, Pageable pageable){
         Page<Recruitment> page;
-        
-        // If keyword is provided, use search query
+
+        // If keyword is provided, use client-side filtering with Vietnamese normalization
         if (keyword != null && !keyword.trim().isEmpty()) {
             String trimmedKeyword = keyword.trim();
+            // Get all recruitments without keyword filter
             page = (status == null)
-                    ? recruitmentRepository.searchByClubIdAndKeyword(clubId, trimmedKeyword, pageable)
-                    : recruitmentRepository.searchByClubIdAndStatusAndKeyword(clubId, status, trimmedKeyword, pageable);
+                    ? recruitmentRepository.findByClub_Id(clubId, PageRequest.of(0, Integer.MAX_VALUE))
+                    : recruitmentRepository.findByClub_IdAndStatus(clubId, status, PageRequest.of(0, Integer.MAX_VALUE));
+
+            // Filter using Vietnamese normalization
+            List<Recruitment> filteredList = page.getContent().stream()
+                    .filter(recruitment -> {
+                        String title = normalizeVietnamese(recruitment.getTitle() != null ? recruitment.getTitle() : "");
+                        String desc = normalizeVietnamese(recruitment.getDescription() != null ? recruitment.getDescription() : "");
+
+                        // Split keyword into individual words for better matching
+                        String[] keywords = trimmedKeyword.split("\\s+");
+                        for (String kw : keywords) {
+                            String normalizedKw = normalizeVietnamese(kw);
+                            if (title.contains(normalizedKw) || desc.contains(normalizedKw)) {
+                                return true;
+                            }
+                        }
+                        return false;
+                    })
+                    .collect(Collectors.toList());
+
+            // Apply pagination manually
+            int start = (int) pageable.getOffset();
+            int end = Math.min((start + pageable.getPageSize()), filteredList.size());
+            List<Recruitment> paginatedList = start >= filteredList.size() ?
+                    Collections.emptyList() : filteredList.subList(start, end);
+            page = new PageImpl<>(paginatedList, pageable, filteredList.size());
         } else {
             // Otherwise use normal query
             page = (status == null)
@@ -93,8 +146,16 @@ public class RecruitmentService implements RecruitmentServiceInterface {
     @Transactional
     public RecruitmentData createRecruitment(Long userId, Long clubId, RecruitmentCreateRequest req) throws AppException {
         // Check permission: must be CLUB_PRESIDENT and a member of the club
-        checkClubPresidentPermission(userId, clubId);
-        
+        checkClubOfficerPermission(userId, clubId);
+
+        // Validate club exists and is active
+        Club club = clubRepository.findById(clubId)
+                .orElseThrow(() -> new AppException(ErrorCode.INTERNAL_SERVER_ERROR));
+
+        if (!"ACTIVE".equalsIgnoreCase(club.getStatus())) {
+            throw new AppException(ErrorCode.CLUB_NOT_ACTIVE);
+        }
+
         Recruitment r = recruitmentMapper.toEntity(req, clubId);
         r = recruitmentRepository.save(r);
         
@@ -118,6 +179,40 @@ public class RecruitmentService implements RecruitmentServiceInterface {
         List<TeamOption> teamOptions = teamOptionRepository.findByRecruitment_Id(r.getId());
         r.setTeamOptions(new HashSet<>(teamOptions));
         
+        // Send notification to Club Officers if recruitment status is OPEN
+        if (r.getStatus() == RecruitmentStatus.OPEN) {
+            try {
+                // Get Club Officers in current semester
+                List<Long> officerIds = getClubOfficersInCurrentSemester(clubId);
+                List<Long> recipientIds = officerIds.stream()
+                        .filter(memberId -> !memberId.equals(userId)) // Don't notify the creator
+                        .collect(Collectors.toList());
+
+                if (!recipientIds.isEmpty()) {
+                    String actionUrl = "/recruitments/" + r.getId();
+                    String title = "Đợt tuyển thành viên mới đã mở";
+                    String message = "CLB " + club.getClubName() + " đã mở đợt tuyển thành viên: \"" + r.getTitle() + "\"";
+
+                    notificationService.sendToUsers(
+                            recipientIds,
+                            userId,
+                            title,
+                            message,
+                            NotificationType.RECRUITMENT_OPENED,
+                            NotificationPriority.NORMAL,
+                            actionUrl,
+                            clubId,
+                            null,
+                            null,
+                            null
+                    );
+                }
+            } catch (Exception e) {
+                // Log error but don't fail the operation
+                System.err.println("Failed to send recruitment notification: " + e.getMessage());
+            }
+        }
+
         return recruitmentMapper.toDto(r);
     }
 
@@ -128,8 +223,13 @@ public class RecruitmentService implements RecruitmentServiceInterface {
                 .orElseThrow(() -> new AppException(ErrorCode.INTERNAL_SERVER_ERROR));
         
         // Check permission: must be CLUB_PRESIDENT and a member of the club
-        checkClubPresidentPermission(userId, r.getClub().getId());
+        checkClubOfficerPermission(userId, r.getClub().getId());
         
+        // Check if club is active
+        if (!"ACTIVE".equalsIgnoreCase(r.getClub().getStatus())) {
+            throw new AppException(ErrorCode.CLUB_NOT_ACTIVE);
+        }
+
         // Check if recruitment is closed
         if (r.getStatus() == RecruitmentStatus.CLOSED) {
             throw new AppException(ErrorCode.RECRUITMENT_CLOSED);
@@ -168,8 +268,16 @@ public class RecruitmentService implements RecruitmentServiceInterface {
                 .orElseThrow(() -> new AppException(ErrorCode.INTERNAL_SERVER_ERROR));
         
         // Check permission: must be CLUB_PRESIDENT and a member of the club
-        checkClubPresidentPermission(userId, r.getClub().getId());
+        checkClubOfficerPermission(userId, r.getClub().getId());
         
+        // Check if club is active
+        if (!"ACTIVE".equalsIgnoreCase(r.getClub().getStatus())) {
+            throw new AppException(ErrorCode.CLUB_NOT_ACTIVE);
+        }
+
+        // Store old status to check if status changed to OPEN
+        RecruitmentStatus oldStatus = r.getStatus();
+
         // If new status is OPEN, close all other OPEN recruitments of the club
         if (status == RecruitmentStatus.OPEN) {
             closeOtherOpenRecruitments(r.getClub().getId(), r.getId());
@@ -177,6 +285,43 @@ public class RecruitmentService implements RecruitmentServiceInterface {
         
         r.setStatus(status);
         recruitmentRepository.save(r);
+
+        // Send notification to Club Officers if status changed to OPEN
+        if (status == RecruitmentStatus.OPEN && oldStatus != RecruitmentStatus.OPEN) {
+            try {
+                Club club = r.getClub();
+                Long clubId = club.getId();
+
+                // Get Club Officers in current semester
+                List<Long> officerIds = getClubOfficersInCurrentSemester(clubId);
+                List<Long> recipientIds = officerIds.stream()
+                        .filter(memberId -> !memberId.equals(userId)) // Don't notify the creator
+                        .collect(Collectors.toList());
+
+                if (!recipientIds.isEmpty()) {
+                    String actionUrl = "/recruitments/" + r.getId();
+                    String title = "Đợt tuyển thành viên mới đã mở";
+                    String message = "CLB " + club.getClubName() + " đã mở đợt tuyển thành viên: \"" + r.getTitle() + "\"";
+
+                    notificationService.sendToUsers(
+                            recipientIds,
+                            userId,
+                            title,
+                            message,
+                            NotificationType.RECRUITMENT_OPENED,
+                            NotificationPriority.NORMAL,
+                            actionUrl,
+                            clubId,
+                            null,
+                            null,
+                            null
+                    );
+                }
+            } catch (Exception e) {
+                // Log error but don't fail the operation
+                System.err.println("Failed to send recruitment status change notification: " + e.getMessage());
+            }
+        }
     }
 
     @Override
@@ -186,15 +331,16 @@ public class RecruitmentService implements RecruitmentServiceInterface {
                 .orElseThrow(() -> new AppException(ErrorCode.INTERNAL_SERVER_ERROR));
         
         // Check permission: must be CLUB_PRESIDENT and a member of the club
-        checkClubPresidentPermission(userId, r.getClub().getId());
+        checkClubOfficerPermission(userId, r.getClub().getId());
         
+        // Check if club is active
+        if (!"ACTIVE".equalsIgnoreCase(r.getClub().getStatus())) {
+            throw new AppException(ErrorCode.CLUB_NOT_ACTIVE);
+        }
+
         recruitmentRepository.deleteById(id);
     }
 
-    @Override
-    public PagedResponse<RecruitmentApplicationData> listApplications(Long userId, Long recruitmentId, RecruitmentApplicationStatus status, Pageable pageable) throws AppException {
-        return listApplications(userId, recruitmentId, status, null, pageable);
-    }
     
     public PagedResponse<RecruitmentApplicationData> listApplications(Long userId, Long recruitmentId, RecruitmentApplicationStatus status, String keyword, Pageable pageable) throws AppException {
         // Get recruitment to determine clubId
@@ -202,27 +348,97 @@ public class RecruitmentService implements RecruitmentServiceInterface {
                 .orElseThrow(() -> new AppException(ErrorCode.INTERNAL_SERVER_ERROR));
         
         // Check permission: must be CLUB_PRESIDENT and a member of the club
-        checkClubPresidentPermission(userId, recruitment.getClub().getId());
+        checkClubOfficerPermission(userId, recruitment.getClub().getId());
         
-        // Use single dynamic query that handles all parameter combinations
-        Page<RecruitmentApplication> page = applicationRepository.findApplicationsByRecruitment(recruitmentId, status, keyword, pageable);
+        Page<RecruitmentApplication> page;
+
+        // If keyword is provided, use client-side filtering with Vietnamese normalization
+        if (keyword != null && !keyword.trim().isEmpty()) {
+            String trimmedKeyword = keyword.trim();
+            // Get all applications without keyword filter
+            page = (status == null)
+                    ? applicationRepository.findByRecruitment_Id(recruitmentId, PageRequest.of(0, Integer.MAX_VALUE))
+                    : applicationRepository.findByRecruitment_IdAndStatus(recruitmentId, status, PageRequest.of(0, Integer.MAX_VALUE));
+
+            // Filter using Vietnamese normalization
+            List<RecruitmentApplication> filteredList = page.getContent().stream()
+                    .filter(app -> {
+                        String fullName = normalizeVietnamese(app.getApplicant().getFullName() != null ? app.getApplicant().getFullName() : "");
+                        String email = normalizeVietnamese(app.getApplicant().getEmail() != null ? app.getApplicant().getEmail() : "");
+                        String studentCode = normalizeVietnamese(app.getApplicant().getStudentCode() != null ? app.getApplicant().getStudentCode() : "");
+
+                        // Split keyword into individual words for better matching
+                        String[] keywords = trimmedKeyword.split("\\s+");
+                        for (String kw : keywords) {
+                            String normalizedKw = normalizeVietnamese(kw);
+                            if (fullName.contains(normalizedKw) || email.contains(normalizedKw) || studentCode.contains(normalizedKw)) {
+                                return true;
+                            }
+                        }
+                        return false;
+                    })
+                    .collect(Collectors.toList());
+
+            // Apply pagination manually
+            int start = (int) pageable.getOffset();
+            int end = Math.min((start + pageable.getPageSize()), filteredList.size());
+            List<RecruitmentApplication> paginatedList = start >= filteredList.size() ?
+                    Collections.emptyList() : filteredList.subList(start, end);
+            page = new PageImpl<>(paginatedList, pageable, filteredList.size());
+        } else {
+            // Use single dynamic query that handles all parameter combinations
+            page = applicationRepository.findApplicationsByRecruitment(recruitmentId, status, keyword, pageable);
+        }
+
         Page<RecruitmentApplicationData> dataPage = page.map(recruitmentApplicationMapper::toDto);
         return PagedResponse.of(dataPage);
     }
 
     @Override
     public PagedResponse<RecruitmentApplicationData> listMyApplications(Long applicantId, RecruitmentApplicationStatus status, String keyword, Pageable pageable) {
-        // Use single dynamic query that handles all parameter combinations
-        Page<RecruitmentApplication> page = applicationRepository.findMyApplications(applicantId, status, keyword, pageable);
+        Page<RecruitmentApplication> page;
+
+        // If keyword is provided, use client-side filtering with Vietnamese normalization
+        if (keyword != null && !keyword.trim().isEmpty()) {
+            String trimmedKeyword = keyword.trim();
+            // Get all applications without keyword filter
+            page = (status == null)
+                    ? applicationRepository.findMyApplications(applicantId, null, null, PageRequest.of(0, Integer.MAX_VALUE))
+                    : applicationRepository.findMyApplications(applicantId, status, null, PageRequest.of(0, Integer.MAX_VALUE));
+
+            // Filter using Vietnamese normalization
+            List<RecruitmentApplication> filteredList = page.getContent().stream()
+                    .filter(app -> {
+                        String recruitmentTitle = normalizeVietnamese(app.getRecruitment().getTitle() != null ? app.getRecruitment().getTitle() : "");
+                        String clubName = normalizeVietnamese(app.getRecruitment().getClub().getClubName() != null ? app.getRecruitment().getClub().getClubName() : "");
+
+                        // Split keyword into individual words for better matching
+                        String[] keywords = trimmedKeyword.split("\\s+");
+                        for (String kw : keywords) {
+                            String normalizedKw = normalizeVietnamese(kw);
+                            if (recruitmentTitle.contains(normalizedKw) || clubName.contains(normalizedKw)) {
+                                return true;
+                            }
+                        }
+                        return false;
+                    })
+                    .collect(Collectors.toList());
+
+            // Apply pagination manually
+            int start = (int) pageable.getOffset();
+            int end = Math.min((start + pageable.getPageSize()), filteredList.size());
+            List<RecruitmentApplication> paginatedList = start >= filteredList.size() ?
+                    Collections.emptyList() : filteredList.subList(start, end);
+            page = new PageImpl<>(paginatedList, pageable, filteredList.size());
+        } else {
+            // Use single dynamic query that handles all parameter combinations
+            page = applicationRepository.findMyApplications(applicantId, status, keyword, pageable);
+        }
+
         Page<RecruitmentApplicationData> dataPage = page.map(recruitmentApplicationMapper::toDto);
         return PagedResponse.of(dataPage);
     }
 
-    @Override
-    @Transactional
-    public RecruitmentApplicationData submitApplication(Long applicantId, ApplicationSubmitRequest req) throws AppException {
-        return submitApplication(applicantId, req, null);
-    }
 
     /**
      * Submit application with file upload support
@@ -236,11 +452,18 @@ public class RecruitmentService implements RecruitmentServiceInterface {
     public RecruitmentApplicationData submitApplication(Long applicantId, ApplicationSubmitRequest req, MultiValueMap<String, MultipartFile> allFiles) throws AppException {
         Recruitment recruitment = recruitmentRepository.findById(req.recruitmentId)
                 .orElseThrow(() -> new AppException(ErrorCode.INTERNAL_SERVER_ERROR));
+
+        // Check if club is active (only active clubs can receive applications)
+        Club club = recruitment.getClub();
+        if (!"ACTIVE".equalsIgnoreCase(club.getStatus())) {
+            throw new AppException(ErrorCode.CLUB_NOT_ACTIVE);
+        }
+
         User applicant = userRepository.findById(applicantId)
                 .orElseThrow(() -> new AppException(ErrorCode.UNAUTHORIZED));
 
         // Check if user is already an active member of the club
-        Long clubId = recruitment.getClub().getId();
+        Long clubId = club.getId();
         boolean isAlreadyMember = clubMemberShipRepository.existsByUserIdAndClubIdAndStatus(
                 applicantId, clubId, ClubMemberShipStatus.ACTIVE);
         if (isAlreadyMember) {
@@ -314,7 +537,6 @@ public class RecruitmentService implements RecruitmentServiceInterface {
                     }
                 } catch (NumberFormatException e) {
                     // Invalid questionId format, skip
-                    continue;
                 } catch (Exception e) {
                     throw new AppException(ErrorCode.INTERNAL_SERVER_ERROR);
                 }
@@ -340,6 +562,35 @@ public class RecruitmentService implements RecruitmentServiceInterface {
         }
         answerRepository.saveAll(answers);
 
+        // Send notification to Club Officers about new application
+        try {
+            List<Long> officerIds = getClubOfficersInCurrentSemester(clubId);
+
+            if (!officerIds.isEmpty()) {
+                String actionUrl = "/recruitments/" + recruitment.getId() + "/applications/" + app.getId();
+                String title = "Có đơn ứng tuyển mới";
+                String message = applicant.getFullName() + " đã nộp đơn ứng tuyển vào đợt tuyển thành viên: \""
+                        + recruitment.getTitle() + "\"";
+
+                notificationService.sendToUsers(
+                        officerIds,
+                        applicantId,
+                        title,
+                        message,
+                        NotificationType.RECRUITMENT_APPLICATION_SUBMITTED,
+                        NotificationPriority.NORMAL,
+                        actionUrl,
+                        clubId,
+                        null,
+                        null,
+                        null
+                );
+            }
+        } catch (Exception e) {
+            // Log error but don't fail the operation
+            System.err.println("Failed to send application submitted notification: " + e.getMessage());
+        }
+
         return getApplicationInternal(app.getId());
     }
 
@@ -350,7 +601,7 @@ public class RecruitmentService implements RecruitmentServiceInterface {
         
         // Check permission: must be CLUB_PRESIDENT and a member of the club
         Long clubId = app.getRecruitment().getClub().getId();
-        checkClubPresidentPermission(userId, clubId);
+        checkClubOfficerPermission(userId, clubId);
         
         List<RecruitmentFormAnswer> answers = answerRepository.findByApplication_Id(applicationId);
         app.setAnswers(new HashSet<>(answers));
@@ -382,8 +633,14 @@ public class RecruitmentService implements RecruitmentServiceInterface {
         
         // Check permission: must be CLUB_PRESIDENT and a member of the club
         Long clubId = app.getRecruitment().getClub().getId();
-        checkClubPresidentPermission(userId, clubId);
+        checkClubOfficerPermission(userId, clubId);
         
+        // Check if club is active
+        Club club = app.getRecruitment().getClub();
+        if (!"ACTIVE".equalsIgnoreCase(club.getStatus())) {
+            throw new AppException(ErrorCode.CLUB_NOT_ACTIVE);
+        }
+
         app.setStatus(req.status);
         app.setReviewNotes(req.reviewNotes);
         app.setReviewedDate(LocalDateTime.now());
@@ -394,6 +651,52 @@ public class RecruitmentService implements RecruitmentServiceInterface {
             addMemberToTeam(app);
         }
         
+        // Send notification to applicant about application review result
+        try {
+            Long applicantId = app.getApplicant().getId();
+            String actionUrl = "/myRecruitmentApplications";
+            String title = "";
+            String message = "";
+            NotificationType notificationType = null;
+            NotificationPriority priority = NotificationPriority.NORMAL;
+
+            if (req.status == RecruitmentApplicationStatus.ACCEPTED) {
+                title = "Đơn ứng tuyển được chấp nhận";
+                message = "Đơn ứng tuyển của bạn vào đợt tuyển \"" + app.getRecruitment().getTitle()
+                        + "\" đã được chấp nhận. Chào mừng bạn đến với CLB " + club.getClubName() + "!";
+                notificationType = NotificationType.RECRUITMENT_APPLICATION_APPROVED;
+                priority = NotificationPriority.HIGH;
+            } else if (req.status == RecruitmentApplicationStatus.REJECTED) {
+                title = "Đơn ứng tuyển không được chấp nhận";
+                message = "Đơn ứng tuyển của bạn vào đợt tuyển \"" + app.getRecruitment().getTitle()
+                        + "\" không được chấp nhận.";
+                if (req.reviewNotes != null && !req.reviewNotes.trim().isEmpty()) {
+                    message += " Lý do: " + req.reviewNotes;
+                }
+                notificationType = NotificationType.RECRUITMENT_APPLICATION_REJECTED;
+            }
+
+            if (notificationType != null) {
+                notificationService.sendToUser(
+                        applicantId,
+                        userId,
+                        title,
+                        message,
+                        notificationType,
+                        priority,
+                        actionUrl,
+                        clubId,
+                        null,
+                        null,
+                        null,
+                        null
+                );
+            }
+        } catch (Exception e) {
+            // Log error but don't fail the operation
+            System.err.println("Failed to send application review notification: " + e.getMessage());
+        }
+
         return getApplicationInternal(app.getId());
     }
     
@@ -470,7 +773,7 @@ public class RecruitmentService implements RecruitmentServiceInterface {
         // Collect IDs of questions that should be kept
         Set<Long> requestedQuestionIds = reqs.stream()
                 .map(q -> q.id)
-                .filter(id -> id != null)
+                .filter(Objects::nonNull)
                 .collect(java.util.stream.Collectors.toSet());
         
         // Delete questions that are not in the request (orphaned questions)
@@ -590,7 +893,7 @@ public class RecruitmentService implements RecruitmentServiceInterface {
      * Check if user has permission to manage recruitment of the club
      * Requirement: must be an ACTIVE member of the club AND have club role CLUB_PRESIDENT in the current semester
      */
-    private void checkClubPresidentPermission(Long userId, Long clubId) throws AppException {
+    private void checkClubOfficerPermission(Long userId, Long clubId) throws AppException {
         // Get current semester
         Semester currentSemester = semesterRepository.findCurrentSemester()
                 .orElseThrow(() -> new AppException(ErrorCode.INTERNAL_SERVER_ERROR));
@@ -613,6 +916,14 @@ public class RecruitmentService implements RecruitmentServiceInterface {
     public int closeExpiredRecruitments(java.time.LocalDateTime now) {
         // Only close recruitments that are currently OPEN
         return recruitmentRepository.closeExpiredRecruitments(RecruitmentStatus.CLOSED, RecruitmentStatus.OPEN, now);
+    }
+
+    private String normalizeVietnamese(String text) {
+        if (text == null || text.isBlank()) return "";
+        String normalized = text.replace("đ", "d").replace("Đ", "d");
+        normalized = java.text.Normalizer.normalize(normalized, java.text.Normalizer.Form.NFD);
+        normalized = normalized.replaceAll("\\p{InCombiningDiacriticalMarks}+", "");
+        return normalized.toLowerCase();
     }
 
 }

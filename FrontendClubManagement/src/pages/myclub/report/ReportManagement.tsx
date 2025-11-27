@@ -299,8 +299,8 @@ export function ClubReportManagement() {
       reportType === "post-event"
         ? "post_event"
         : reportType === "other"
-        ? "periodic"
-        : reportType;
+          ? "periodic"
+          : reportType;
 
     // Map report info if exists
     const reportInfo = clubRequirement?.report
@@ -443,9 +443,9 @@ export function ClubReportManagement() {
 
         // Build filter request (requests tab uses its own filters)
         const filterRequest: ClubReportRequirementFilterRequest = {
-          page: currentPage,
+          page: currentPage - 1,
           size: pageSize,
-          sort: ["createdAt,desc"],
+          sort: "createdAt,desc",
           keyword: debouncedSearchQuery || undefined,
           status:
             statusFilterRequests !== "all" ? statusFilterRequests : undefined,
@@ -509,9 +509,9 @@ export function ClubReportManagement() {
         // Build filter request
         const filterRequest: ReportFilterRequest = {
           clubId: clubId,
-          page: currentPageMyReports,
+          page: currentPageMyReports - 1,
           size: pageSize,
-          sort: ["createdAt,desc"],
+          sort: "createdAt,desc",
           keyword: debouncedSearchQuery || undefined,
           status:
             statusFilterReports !== "all" &&
@@ -565,9 +565,9 @@ export function ClubReportManagement() {
         // Build filter request
         const filterRequest: ReportFilterRequest = {
           clubId: clubId,
-          page: currentPageClubReports,
+          page: currentPageClubReports - 1,
           size: pageSize,
-          sort: ["createdAt,desc"],
+          sort: "createdAt,desc",
           keyword: debouncedSearchQuery || undefined,
           status:
             statusFilterReports !== "all" &&
@@ -618,9 +618,9 @@ export function ClubReportManagement() {
       // Always refresh requests tab (use paginated API to match backend)
       // Note: Backend already filters by teamId for team officers
       const requestsFilter: ClubReportRequirementFilterRequest = {
-        page: currentPage,
+        page: currentPage - 1,
         size: pageSize,
-        sort: ["createdAt,desc"],
+        sort: "createdAt,desc",
         keyword: debouncedSearchQuery || undefined,
         status:
           statusFilterRequests !== "all" ? statusFilterRequests : undefined,
@@ -649,9 +649,9 @@ export function ClubReportManagement() {
       // Always refresh submissions tab (my reports)
       const myReportsFilter: ReportFilterRequest = {
         clubId: clubId,
-        page: currentPageMyReports,
+        page: currentPageMyReports - 1,
         size: pageSize,
-        sort: ["createdAt,desc"],
+        sort: "createdAt,desc",
       };
       const myReportsResponse = await getMyReports(myReportsFilter);
       setMyReports(myReportsResponse.content);
@@ -661,9 +661,9 @@ export function ClubReportManagement() {
       if (isClubOfficer) {
         const clubReportsFilter: ReportFilterRequest = {
           clubId: clubId,
-          page: currentPageClubReports,
+          page: currentPageClubReports - 1,
           size: pageSize,
-          sort: ["createdAt,desc"],
+          sort: "createdAt,desc",
         };
         const clubReportsResponse = await getClubReports(clubReportsFilter);
         setAllClubReports(clubReportsResponse.content);
@@ -2251,8 +2251,8 @@ export function ClubReportManagement() {
                           frontendType === "post-event"
                             ? "post_event"
                             : frontendType === "other"
-                            ? "periodic"
-                            : frontendType;
+                              ? "periodic"
+                              : frontendType;
                         return (
                           <Badge className={reportTypeColors[reportTypeKey]}>
                             {reportTypeLabels[reportTypeKey]}
@@ -2859,8 +2859,8 @@ export function ClubReportManagement() {
                         {approvingReport
                           ? "Đang xử lý..."
                           : selectedReportDetail.mustResubmit
-                          ? "Nộp lại lên trường"
-                          : "Chấp nhận và nộp lên trường"}
+                            ? "Nộp lại lên trường"
+                            : "Chấp nhận và nộp lên trường"}
                       </Button>
                       <Button
                         variant="outline"
@@ -3564,8 +3564,8 @@ export function ClubReportManagement() {
                       {savingDraft
                         ? "Đang lưu..."
                         : editingReportId
-                        ? "Cập nhật"
-                        : "Lưu bản nháp"}
+                          ? "Cập nhật"
+                          : "Lưu bản nháp"}
                     </Button>
                     <Button
                       onClick={async () => {
@@ -3912,10 +3912,10 @@ export function ClubReportManagement() {
                         {resubmittingReport
                           ? "Đang nộp..."
                           : isClubOfficerResubmit
-                          ? "Nộp lại lên trường"
-                          : isTeamOfficerResubmitFromUniversity
-                          ? "Nộp lại lên câu lạc bộ"
-                          : "Nộp lại"}
+                            ? "Nộp lại lên trường"
+                            : isTeamOfficerResubmitFromUniversity
+                              ? "Nộp lại lên câu lạc bộ"
+                              : "Nộp lại"}
                       </Button>
                     );
                   })()
@@ -4006,8 +4006,8 @@ export function ClubReportManagement() {
                                   err instanceof Error
                                     ? err.message
                                     : shouldSubmitToSchool
-                                    ? "Không thể nộp báo cáo lên trường"
-                                    : "Không thể nộp báo cáo";
+                                      ? "Không thể nộp báo cáo lên trường"
+                                      : "Không thể nộp báo cáo";
                                 toast.error(errorMessage);
                               } finally {
                                 setSubmittingReport(false);
@@ -4020,8 +4020,8 @@ export function ClubReportManagement() {
                             {submittingReport
                               ? "Đang nộp..."
                               : shouldSubmitToSchool
-                              ? "Nộp báo cáo lên trường"
-                              : "Nộp báo cáo"}
+                                ? "Nộp báo cáo lên trường"
+                                : "Nộp báo cáo"}
                           </Button>
                         );
                       })()}

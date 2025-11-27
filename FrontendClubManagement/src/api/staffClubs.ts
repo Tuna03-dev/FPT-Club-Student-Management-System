@@ -22,14 +22,10 @@ export async function getStaffClubs(
   if (filter.campusId) params.append("campusId", filter.campusId.toString());
   if (filter.categoryId)
     params.append("categoryId", filter.categoryId.toString());
-  if (filter.semester !== undefined)
-    params.append("semester", filter.semester.toString());
   if (filter.status) params.append("status", filter.status);
   if (filter.page !== undefined) params.append("page", filter.page.toString());
   if (filter.size !== undefined) params.append("size", filter.size.toString());
-  if (filter.sort) {
-    filter.sort.forEach((s) => params.append("sort", s));
-  }
+  if (filter.sort) params.append("sort", filter.sort);
 
   const res = await axiosClient.get<PageResponse<ClubManagementResponse>>(
     `/staff/clubs?${params.toString()}`
