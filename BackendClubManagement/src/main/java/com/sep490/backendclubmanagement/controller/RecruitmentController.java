@@ -156,7 +156,7 @@ public class RecruitmentController {
      * Note: Authorization is checked inside method because applicationId is in request body
      */
     @PostMapping("/applications/review")
-    @PreAuthorize("clubSecurity.isClubOfficerForApplication(#request.applicationId)")
+    @PreAuthorize("@clubSecurity.isClubOfficerForApplication(#request.applicationId)")
     public ResponseEntity<ApiResponse<RecruitmentApplicationData>> review(
             @RequestBody ApplicationReviewRequest request
     ) throws AppException {

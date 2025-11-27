@@ -654,7 +654,7 @@ public class RecruitmentService implements RecruitmentServiceInterface {
         // Send notification to applicant about application review result
         try {
             Long applicantId = app.getApplicant().getId();
-            String actionUrl = "/my-applications/" + app.getId();
+            String actionUrl = "/myRecruitmentApplications";
             String title = "";
             String message = "";
             NotificationType notificationType = null;

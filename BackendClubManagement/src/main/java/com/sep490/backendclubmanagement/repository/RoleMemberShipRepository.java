@@ -635,8 +635,7 @@ WHERE cm.club.id = :clubId
         JOIN rm.clubMemberShip cm
         JOIN rm.clubRole cr
         LEFT JOIN cr.systemRole sr
-        WHERE cm.user.id = :userId
-          AND cm.club.id = :clubId
+        WHERE cm.club.id = :clubId
           AND rm.semester.id = :semesterId
           AND COALESCE(rm.isActive, TRUE) = TRUE
           AND cr IS NOT NULL

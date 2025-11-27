@@ -64,16 +64,6 @@ public interface ReportServiceInterface {
      */
     ReportRequirementResponse createReportRequirement(CreateReportRequirementRequest request, MultipartFile file, Long userId);
 
-    /**
-     * Create a report (draft for team officer, can submit for club president)
-     * If autoSubmit is true (or null/default) and user is club president, the report will be automatically submitted.
-     * If autoSubmit is false and user is club president, the report will be created as draft.
-     * Team officer can only create draft reports regardless of autoSubmit flag.
-     * @param request Create request containing report details and optional autoSubmit flag
-     * @param userId Current user ID
-     * @return Created report detail response
-     */
-    ReportDetailResponse createReport(CreateReportRequest request, Long userId) throws  AppException;
 
     /**
      * Create a report with file upload (draft for team officer, can submit for club president)
@@ -85,16 +75,8 @@ public interface ReportServiceInterface {
      * @param userId Current user ID
      * @return Created report detail response
      */
-    ReportDetailResponse createReportWithFile(CreateReportRequest request, MultipartFile file, Long userId) throws  AppException;
+    ReportDetailResponse createReport(CreateReportRequest request, MultipartFile file, Long userId) throws  AppException;
 
-    /**
-     * Update a draft report
-     * @param reportId Report ID
-     * @param request Update request containing report details
-     * @param userId Current user ID
-     * @return Updated report detail response
-     */
-    ReportDetailResponse updateReport(Long reportId, UpdateReportRequest request, Long userId) throws  AppException;
 
     /**
      * Update a draft report with file upload
@@ -104,7 +86,7 @@ public interface ReportServiceInterface {
      * @param userId Current user ID
      * @return Updated report detail response
      */
-    ReportDetailResponse updateReportWithFile(Long reportId, UpdateReportRequest request, MultipartFile file, Long userId) throws  AppException;
+    ReportDetailResponse updateReport(Long reportId, UpdateReportRequest request, MultipartFile file, Long userId) throws  AppException;
 
     /**
      * Submit a draft report (club president or team officer who is the creator)

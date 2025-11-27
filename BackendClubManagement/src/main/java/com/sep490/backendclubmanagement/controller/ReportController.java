@@ -2,11 +2,8 @@ package com.sep490.backendclubmanagement.controller;
 
 import com.sep490.backendclubmanagement.dto.ApiResponse;
 import com.sep490.backendclubmanagement.dto.request.AssignTeamToReportRequirementRequest;
-import com.sep490.backendclubmanagement.dto.request.ClubReportRequirementFilterRequest;
 import com.sep490.backendclubmanagement.dto.request.CreateReportRequirementRequest;
 import com.sep490.backendclubmanagement.dto.request.CreateReportRequest;
-import com.sep490.backendclubmanagement.dto.request.ReportFilterRequest;
-import com.sep490.backendclubmanagement.dto.request.ReportRequirementFilterRequest;
 import com.sep490.backendclubmanagement.dto.request.ReportReviewRequest;
 import com.sep490.backendclubmanagement.dto.request.SubmitReportRequest;
 import com.sep490.backendclubmanagement.dto.request.UpdateReportRequest;
@@ -132,7 +129,7 @@ public class ReportController {
             @RequestPart(value = "file", required = false) MultipartFile file
     ) throws AppException {
         Long userId = SecurityUtils.getCurrentUserId();
-        ReportDetailResponse data = reportService.createReportWithFile(request, file, userId);
+        ReportDetailResponse data = reportService.createReport(request, file, userId);
         return ApiResponse.success(data);
     }
 
@@ -149,7 +146,7 @@ public class ReportController {
             @RequestPart(value = "file", required = false) MultipartFile file
     ) throws  AppException {
         Long userId = SecurityUtils.getCurrentUserId();
-        ReportDetailResponse data = reportService.updateReportWithFile(reportId, request, file, userId);
+        ReportDetailResponse data = reportService.updateReport(reportId, request, file, userId);
         return ApiResponse.success(data);
     }
 

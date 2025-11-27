@@ -459,12 +459,29 @@ public class ReportServiceImpl implements ReportServiceInterface {
     }
 
     /**
-     * Create a report (draft for team officer, can submit for club president)
+     * Create a report with file upload (draft for team officer, can submit for club president)
      * If autoSubmit is true and user is club president, the report will be automatically submitted
      */
     @Override
     @Transactional
-    public ReportDetailResponse createReport(CreateReportRequest request, Long userId) throws AppException{
+    public ReportDetailResponse createReport(CreateReportRequest request, MultipartFile file, Long userId) throws AppException {
+        // Upload file if provided
+        String fileUrl = request.getFileUrl(); // Use provided fileUrl if any
+        if (file != null && !file.isEmpty()) {
+            try {
+                // Upload file to Cloudinary in club/reports folder
+                CloudinaryService.UploadResult uploadResult = cloudinaryService.uploadFile(file, "club/reports");
+                fileUrl = uploadResult.url();
+                log.info("Uploaded file for report: {}", fileUrl);
+            } catch (Exception e) {
+                log.error("Failed to upload file for report: {}", e.getMessage(), e);
+                throw new RuntimeException("Failed to upload file: " + e.getMessage(), e);
+            }
+        }
+
+        // Set the uploaded file URL to request
+        request.setFileUrl(fileUrl);
+
         // Get current semester
         Semester currentSemester = semesterRepository.findCurrentSemester()
                 .orElseThrow(() -> new NotFoundException("Current semester not found"));
@@ -494,7 +511,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
         if (!isClubOfficerOrTeamOfficer) {
             throw new ForbiddenException(
                     "Chỉ cán bộ ban (team officer) hoặc chủ nhiệm câu lạc bộ (club president) " +
-                    "trong kỳ hiện tại và đang hoạt động mới có quyền tạo báo cáo."
+                            "trong kỳ hiện tại và đang hoạt động mới có quyền tạo báo cáo."
             );
         }
 
@@ -504,7 +521,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
                 .findByClubIdAndSubmissionReportRequirementId(request.getClubId(), request.getReportRequirementId())
                 .orElseThrow(() -> new NotFoundException(
                         "ClubReportRequirement not found for clubId: " + request.getClubId() +
-                        " and submissionReportRequirementId: " + request.getReportRequirementId()
+                                " and submissionReportRequirementId: " + request.getReportRequirementId()
                 ));
 
         // Check if a report already exists for this ClubReportRequirement
@@ -563,7 +580,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
         // 3. Setting clubReportRequirement.setReport(report) is just for bidirectional relationship in memory
         Report savedReport = reportRepository.save(report);
 
-        log.info("User {} created report {} with status {} for club {} (autoSubmit: {})", 
+        log.info("User {} created report {} with status {} for club {} (autoSubmit: {})",
                 userId, savedReport.getId(), status, request.getClubId(), shouldAutoSubmit);
 
         // If autoSubmit is true and report was created as PENDING_CLUB, the report is already submitted
@@ -574,13 +591,13 @@ public class ReportServiceImpl implements ReportServiceInterface {
                 .orElse(savedReport));
     }
 
+
     /**
-     * Create a report with file upload (draft for team officer, can submit for club president)
-     * If autoSubmit is true and user is club president, the report will be automatically submitted
+     * Update a draft report with file upload
      */
     @Override
     @Transactional
-    public ReportDetailResponse createReportWithFile(CreateReportRequest request, MultipartFile file, Long userId) throws AppException {
+    public ReportDetailResponse updateReport(Long reportId, UpdateReportRequest request, MultipartFile file, Long userId) throws AppException{
         // Upload file if provided
         String fileUrl = request.getFileUrl(); // Use provided fileUrl if any
         if (file != null && !file.isEmpty()) {
@@ -588,9 +605,9 @@ public class ReportServiceImpl implements ReportServiceInterface {
                 // Upload file to Cloudinary in club/reports folder
                 CloudinaryService.UploadResult uploadResult = cloudinaryService.uploadFile(file, "club/reports");
                 fileUrl = uploadResult.url();
-                log.info("Uploaded file for report: {}", fileUrl);
+                log.info("Uploaded file for report update: {}", fileUrl);
             } catch (Exception e) {
-                log.error("Failed to upload file for report: {}", e.getMessage(), e);
+                log.error("Failed to upload file for report update: {}", e.getMessage(), e);
                 throw new RuntimeException("Failed to upload file: " + e.getMessage(), e);
             }
         }
@@ -598,16 +615,6 @@ public class ReportServiceImpl implements ReportServiceInterface {
         // Set the uploaded file URL to request
         request.setFileUrl(fileUrl);
 
-        // Delegate to createReport method
-        return createReport(request, userId);
-    }
-
-    /**
-     * Update a draft report or rejected report (for resubmission)
-     */
-    @Override
-    @Transactional
-    public ReportDetailResponse updateReport(Long reportId, UpdateReportRequest request, Long userId) throws AppException {
         // Get report with relations
         Report report = reportRepository.findByIdWithRelations(reportId)
                 .orElseThrow(() -> new NotFoundException("Report not found with ID: " + reportId));
@@ -621,25 +628,25 @@ public class ReportServiceImpl implements ReportServiceInterface {
         }
 
         // Only allow updating draft reports, rejected reports (for resubmission), or pending club reports
-        if (report.getStatus() != ReportStatus.DRAFT 
-                && report.getStatus() != ReportStatus.REJECTED_CLUB 
+        if (report.getStatus() != ReportStatus.DRAFT
+                && report.getStatus() != ReportStatus.REJECTED_CLUB
                 && report.getStatus() != ReportStatus.REJECTED_UNIVERSITY) {
             throw new ForbiddenException(
                     "Chỉ có thể cập nhật báo cáo ở trạng thái nháp (DRAFT), bị từ chối (REJECTED). " +
-                    "Trạng thái hiện tại: " + report.getStatus()
+                            "Trạng thái hiện tại: " + report.getStatus()
             );
         }
 
         // Check if user is the creator
         boolean isCreator = report.getCreatedBy() != null && report.getCreatedBy().getId().equals(userId);
-        
+
         if (!isCreator) {
             throw new ForbiddenException("Bạn không có quyền cập nhật báo cáo này. Chỉ người tạo mới được chỉnh sửa.");
         }
 
         // Get report requirement and check deadline
-        if (report.getClubReportRequirement() != null && 
-            report.getClubReportRequirement().getSubmissionReportRequirement() != null) {
+        if (report.getClubReportRequirement() != null &&
+                report.getClubReportRequirement().getSubmissionReportRequirement() != null) {
             SubmissionReportRequirement reportRequirement = report.getClubReportRequirement()
                     .getSubmissionReportRequirement();
             validateDeadlineForAction(reportRequirement, report, "cập nhật báo cáo");
@@ -659,33 +666,6 @@ public class ReportServiceImpl implements ReportServiceInterface {
         log.info("User {} updated report {}", userId, reportId);
 
         return reportMapper.toDetail(updatedReport);
-    }
-
-    /**
-     * Update a draft report with file upload
-     */
-    @Override
-    @Transactional
-    public ReportDetailResponse updateReportWithFile(Long reportId, UpdateReportRequest request, MultipartFile file, Long userId) throws AppException{
-        // Upload file if provided
-        String fileUrl = request.getFileUrl(); // Use provided fileUrl if any
-        if (file != null && !file.isEmpty()) {
-            try {
-                // Upload file to Cloudinary in club/reports folder
-                CloudinaryService.UploadResult uploadResult = cloudinaryService.uploadFile(file, "club/reports");
-                fileUrl = uploadResult.url();
-                log.info("Uploaded file for report update: {}", fileUrl);
-            } catch (Exception e) {
-                log.error("Failed to upload file for report update: {}", e.getMessage(), e);
-                throw new RuntimeException("Failed to upload file: " + e.getMessage(), e);
-            }
-        }
-
-        // Set the uploaded file URL to request
-        request.setFileUrl(fileUrl);
-
-        // Delegate to updateReport method
-        return updateReport(reportId, request, userId);
     }
 
     /**
