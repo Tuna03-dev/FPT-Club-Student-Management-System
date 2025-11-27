@@ -13,7 +13,6 @@ import {
 import { TransactionFiltersComponent, type TransactionFilters } from "@/components/features/finance/TransactionFilters";
 import { FeesTable } from "@/components/features/finance/FeesTable";
 import { PayOSIntegration } from "@/components/features/finance/PayOsIntegration";
-import { CreateTransactionDialog } from "@/components/features/finance/CreateTransactionDialog";
 import { EditTransactionDialog } from "@/components/features/finance/EditTransactionDialog";
 import type { Fee } from "@/types/fee";
 import type { PageResponse } from "@/types";
@@ -594,10 +593,9 @@ export default function Finance() {
             <TransactionsTable
               transactions={incomeTransactions}
               transactionType="INCOME"
-              onAddTransaction={() => {
-                setActiveTransactionTab("INCOME");
-                setIsAddTransactionOpen(true);
-              }}
+              clubId={numericClubId}
+              onCreateIncome={handleCreateIncomeTransaction}
+              onCreateOutcome={handleCreateOutcomeTransaction}
               onEditTransaction={(transaction) => {
                 setEditingTransaction(transaction);
                 setIsEditTransactionOpen(true);
@@ -611,7 +609,7 @@ export default function Finance() {
               onRejectTransaction={(id) =>
                 handleRejectTransaction(id, "INCOME")
               }
-              isAddOpen={isAddTransactionOpen}
+              isAddOpen={isAddTransactionOpen && activeTransactionTab === "INCOME"}
               setIsAddOpen={setIsAddTransactionOpen}
               loading={incomeLoading}
               fees={feesPage?.content ?? []}
@@ -631,10 +629,9 @@ export default function Finance() {
             <TransactionsTable
               transactions={outcomeTransactions}
               transactionType="OUTCOME"
-              onAddTransaction={() => {
-                setActiveTransactionTab("OUTCOME");
-                setIsAddTransactionOpen(true);
-              }}
+              clubId={numericClubId}
+              onCreateIncome={handleCreateIncomeTransaction}
+              onCreateOutcome={handleCreateOutcomeTransaction}
               onEditTransaction={(transaction) => {
                 setEditingTransaction(transaction);
                 setIsEditTransactionOpen(true);
@@ -648,7 +645,7 @@ export default function Finance() {
               onRejectTransaction={(id) =>
                 handleRejectTransaction(id, "OUTCOME")
               }
-              isAddOpen={isAddTransactionOpen}
+              isAddOpen={isAddTransactionOpen && activeTransactionTab === "OUTCOME"}
               setIsAddOpen={setIsAddTransactionOpen}
               loading={outcomeLoading}
               currentPage={outcomePage}
@@ -692,16 +689,7 @@ export default function Finance() {
           </TabsContent>
         </Tabs>
 
-        {/* Create Transaction Dialog */}
-        <CreateTransactionDialog
-          open={isAddTransactionOpen}
-          onOpenChange={setIsAddTransactionOpen}
-          transactionType={activeTransactionTab}
-          fees={feesPage?.content ?? []}
-          clubId={numericClubId}
-          onCreateIncome={handleCreateIncomeTransaction}
-          onCreateOutcome={handleCreateOutcomeTransaction}
-        />
+        {/* Dialog is now handled inside TransactionsTable */}
 
         {/* Edit Transaction Dialog */}
         <EditTransactionDialog

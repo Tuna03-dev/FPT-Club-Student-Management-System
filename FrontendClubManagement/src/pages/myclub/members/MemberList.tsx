@@ -166,7 +166,6 @@ const Members = () => {
   const [semesters, setSemesters] = useState<SemesterDTO[]>([]);
   const [clubRoles, setClubRoles] = useState<ClubRoleDTO[]>([]);
   const [teams, setTeams] = useState<TeamDTO[]>([]);
-  const [metadataLoaded, setMetadataLoaded] = useState(false);
 
   const [isEditRoleOpen, setIsEditRoleOpen] = useState(false);
   const [selectedMemberRole, setSelectedMemberRole] = useState<string>("");
@@ -233,28 +232,22 @@ const Members = () => {
   // Initial load: Fetch semesters first (needed for default filter), then load members immediately
   // Roles and teams are lazy loaded when needed (for officers only)
   useEffect(() => {
+    // Load semesters, roles, teams in background (không block members)
     const loadInitialData = async () => {
       try {
-        // Only fetch semesters initially - critical for default filter
         const semestersRes = await clubService.getSemesters(clubId);
-
         if (semestersRes.code === 200 && semestersRes.data) {
           setSemesters(semestersRes.data);
           // Set default current semester only if no selection in URL/state
           const params = new URLSearchParams(window.location.search);
           if (!params.get("semester")) {
-            const currentSemester = semestersRes.data.find(
-              (semester) => semester.isCurrent
-            );
+            const currentSemester = semestersRes.data.find((semester) => semester.isCurrent);
             if (currentSemester) {
               const termId = currentSemester.id.toString();
               setSelectedTerm(termId);
             }
           }
         }
-
-        setMetadataLoaded(true);
-
         // Lazy load roles and teams in background (only needed for officers)
         if (isOfficer) {
           Promise.all([
@@ -273,15 +266,12 @@ const Members = () => {
         }
       } catch (e: unknown) {
         console.error("Error fetching initial data:", e);
-        setMetadataLoaded(true);
       }
     };
-
     loadInitialData();
-  }, [clubId, isOfficer]); // Run when clubId changes
+  }, [clubId, isOfficer]);
 
   useEffect(() => {
-    if (!metadataLoaded) return;
     const prev = prevFiltersRef.current;
     const changed = 
       prev.searchQuery !== debouncedSearchQuery ||
@@ -298,14 +288,9 @@ const Members = () => {
       };
       setPage(0);
     }
-  }, [debouncedSearchQuery, selectedTerm, selectedRole, selectedStatus, metadataLoaded]);
+  }, [debouncedSearchQuery, selectedTerm, selectedRole, selectedStatus]);
 
   const loadMembers = useCallback(async () => {
-    // Don't load if no semester is selected yet
-    if (!selectedTerm && !debouncedSearchQuery) {
-      return;
-    }
-    
     setLoading(true);
     setError(null);
     try {
@@ -314,7 +299,7 @@ const Members = () => {
         size,
         searchTerm: debouncedSearchQuery || undefined,
         status: undefined, // Not used; using isActive instead
-        semesterId: selectedTerm !== "" ? parseInt(selectedTerm) : undefined,
+        semesterId: selectedTerm ? parseInt(selectedTerm) : undefined,
         roleId: selectedRole !== "all" ? parseInt(selectedRole) : undefined,
         isActive: selectedStatus === "active" ? true : false,
       });
@@ -393,11 +378,9 @@ const Members = () => {
   }, [semesters, loadMembers, updateUrlParams]);
 
   // Fetch members when page or filters change
-  // Load immediately after metadata is ready (don't wait for roles/teams)
+  // Fetch members when page or filters change
   useEffect(() => {
-    if (metadataLoaded) {
-      loadMembers();
-    }
+    loadMembers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     page,
@@ -405,7 +388,6 @@ const Members = () => {
     selectedTerm,
     selectedRole,
     selectedStatus,
-    metadataLoaded,
   ]);
 
   // Fetch left members when tab changes or filters change

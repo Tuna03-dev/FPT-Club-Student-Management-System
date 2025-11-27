@@ -19,9 +19,12 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.io.IOException;
 import java.util.List;
 
 @RestController
@@ -274,6 +277,47 @@ public class EventController {
             @RequestParam(defaultValue = "startTime,desc") String sort) {
         Pageable pageable = createPageable(page, size, sort);
         return ApiResponse.success(eventService.getPublishedEventsByClubId(clubId, keyword, pageable));
+    }
+
+    /**
+     * Export danh sách điểm danh sự kiện ra file Excel
+     * GET /api/events/{eventId}/attendance/export-excel
+     */
+    @GetMapping("/{eventId}/attendance/export-excel")
+    public ResponseEntity<byte[]> exportAttendanceExcel(@PathVariable Long eventId) throws IOException {
+        Long userId = SecurityUtils.getCurrentUserId();
+
+        EventData event = eventService.getEventById(eventId);
+        Long clubId = event != null ? event.getClubId() : null;
+        if (clubId == null) {
+            throw new ForbiddenException("Event không thuộc về club nào");
+        }
+
+        // Chỉ ban cán sự của CLB mới có quyền xuất Excel
+        if (!roleService.isClubPresident(userId, clubId) && !roleService.isClubOfficer(userId, clubId)) {
+            throw new ForbiddenException("Chỉ ban cán sự của CLB này mới có quyền xuất Excel điểm danh");
+        }
+
+        java.io.ByteArrayOutputStream excelStream = eventService.exportAttendanceToExcel(eventId);
+        byte[] excelBytes = excelStream.toByteArray();
+
+        // Tạo tên file với tên sự kiện
+        String eventName = event.getTitle() != null ? event.getTitle() : "Event";
+        // Loại bỏ ký tự đặc biệt trong tên file
+       // String safeFileName = eventName.replaceAll("[^a-zA-Z0-9\\s]", "_").replaceAll("\\s+", "_");
+        String fileName = eventName + "_DiemDanh.xlsx";
+
+        HttpHeaders headers = new HttpHeaders();
+        // Set content type cho Excel file
+        headers.setContentType(new MediaType("application", "vnd.openxmlformats-officedocument.spreadsheetml.sheet"));
+        // Encode filename với UTF-8 để hỗ trợ tiếng Việt trong tên file
+        String encodedFileName = java.net.URLEncoder.encode(fileName, java.nio.charset.StandardCharsets.UTF_8).replace("+", "%20");
+        headers.add("Content-Disposition", "attachment; filename=\"" + fileName + "\"; filename*=UTF-8''" + encodedFileName);
+        headers.setContentLength(excelBytes.length);
+
+        return ResponseEntity.ok()
+                .headers(headers)
+                .body(excelBytes);
     }
 
     /**
