@@ -1,4 +1,4 @@
-import axiosClient, { default as axiosInstance } from "@/api/axiosClient";
+import axiosClient, { axiosInstance } from "@/api/axiosClient";
 
 export interface EventData {
   id: number;
@@ -326,9 +326,8 @@ export async function batchMarkAttendance(payload: BatchMarkAttendanceRequest): 
  * @returns Blob chứa file Excel
  */
 export async function exportAttendanceExcel(eventId: number): Promise<Blob> {
-  // Import axiosInstance trực tiếp để tránh wrapper parse JSON
-  const { axiosInstance } = await import("@/api/axiosClient");
-  
+  // Dùng axiosInstance trực tiếp để tránh wrapper parse JSON
+  // axiosInstance đã được import ở đầu file
   const res = await axiosInstance.get(`/events/${eventId}/attendance/export-excel`, {
     responseType: 'blob',
     timeout: 60000, // Tăng timeout cho file lớn
@@ -343,7 +342,7 @@ export async function exportAttendanceExcel(eventId: number): Promise<Blob> {
   if (typeof res.data === 'string') {
     try {
       const errorData = JSON.parse(res.data);
-      throw new Error(errorData.message || "Không thể xuất file Excel");
+      throw new Error(errorData.message || errorData.data?.message || "Không thể xuất file Excel");
     } catch {
       throw new Error("Response is not a valid Excel file");
     }
