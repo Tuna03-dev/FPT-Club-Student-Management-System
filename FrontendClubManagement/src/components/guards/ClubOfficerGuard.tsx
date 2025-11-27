@@ -1,12 +1,27 @@
 import type { ReactNode } from "react";
-import { Navigate } from "react-router-dom";
-import { usePermission } from "@/contexts/PermissionContext";
+import { ClubPermissionGuard } from "./ClubPermissionGuard";
 
-export default function ClubOfficerGuard({ children }: { children: ReactNode }) {
-  const { isOfficer, loading } = usePermission();
-
-  // Chỉ điều hướng sau khi có kết luận dứt khoát
-  if (loading) return null;
-
-  return isOfficer ? <>{children}</> : <Navigate to="/403" replace />;
+/**
+ * Guard component that requires CLUB_OFFICER role
+ * Uses the new useClubPermissions hook instead of PermissionContext
+ * 
+ * @example
+ * ```tsx
+ * <ClubOfficerGuard>
+ *   <AdminPage />
+ * </ClubOfficerGuard>
+ * ```
+ */
+export default function ClubOfficerGuard({ 
+  children,
+  clubId,
+}: { 
+  children: ReactNode;
+  clubId?: number;
+}) {
+  return (
+    <ClubPermissionGuard require="clubOfficer" clubId={clubId}>
+      {children}
+    </ClubPermissionGuard>
+  );
 }
