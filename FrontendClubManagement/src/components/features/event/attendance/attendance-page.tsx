@@ -56,7 +56,11 @@ export function AttendancePage({ eventId, event: propEvent }: AttendancePageProp
   const clubRole = eventClubId ? authService.getClubRole(eventClubId) : null
   const systemRoleInClub = clubRole?.systemRole?.toUpperCase()
   const isPresident = eventClubId && systemRoleInClub === "CLUB_OFFICER"
-  const isOfficer = eventClubId && systemRoleInClub === "TEAM_OFFICER"
+  const isOfficer =
+    eventClubId &&
+    (systemRoleInClub === "TEAM_OFFICER" ||
+      systemRoleInClub === "CLUB_TREASURE" ||
+      systemRoleInClub === "CLUB_TREASURER")
   const canMarkAttendance = isPresident || isOfficer
   const readOnly = (searchParams.get("mode") ?? "") === "view" || !canMarkAttendance
 

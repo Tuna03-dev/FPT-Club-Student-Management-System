@@ -426,6 +426,25 @@ SELECT CASE WHEN EXISTS (
     boolean isClubOfficer(@Param("userId") Long userId,
                           @Param("clubId") Long clubId);
 
+    @Query("""
+    SELECT CASE WHEN EXISTS (
+        SELECT 1
+        FROM RoleMemberShip rm
+        JOIN rm.clubMemberShip cm
+        LEFT JOIN rm.clubRole cr
+        WHERE cm.user.id = :userId
+          AND cm.club.id = :clubId
+          AND COALESCE(rm.isActive, TRUE) = TRUE
+          AND rm.team IS NULL
+          AND UPPER(TRIM(COALESCE(cr.roleName, ''))) IN (
+              'CLUB_TREASURE','CLUB_TREASURER','TREASURER',
+              'THU QUY','THỦ QUỸ'
+          )
+    ) THEN TRUE ELSE FALSE END
+    """)
+    boolean isClubTreasurer(@Param("userId") Long userId,
+                            @Param("clubId") Long clubId);
+
     // User là OFFICER ở bất kỳ CLB nào? (học kỳ hiện tại)
     @Query("""
     SELECT CASE WHEN EXISTS (
@@ -445,6 +464,25 @@ SELECT CASE WHEN EXISTS (
     ) THEN TRUE ELSE FALSE END
     """)
     boolean existsOfficerSomewhere(@Param("userId") Long userId);
+
+    @Query("""
+    SELECT CASE WHEN EXISTS (
+        SELECT 1
+        FROM RoleMemberShip rm
+        JOIN rm.clubMemberShip cm
+        LEFT JOIN rm.clubRole cr
+        JOIN rm.semester s
+        WHERE cm.user.id = :userId
+          AND s.isCurrent = TRUE
+          AND COALESCE(rm.isActive, TRUE) = TRUE
+          AND rm.team IS NULL
+          AND UPPER(TRIM(COALESCE(cr.roleName, ''))) IN (
+              'CLUB_TREASURE','CLUB_TREASURER','TREASURER',
+              'THU QUY','THỦ QUỸ'
+          )
+    ) THEN TRUE ELSE FALSE END
+    """)
+    boolean existsTreasurerSomewhere(@Param("userId") Long userId);
     // Trả về đầy đủ bản ghi RoleMemberShip (nếu cần)
     @Query(value = "SELECT rm.* FROM role_memberships rm " +
            "JOIN club_memberships cms ON rm.club_membership_id = cms.id " +

@@ -56,7 +56,7 @@ public class EventManagementService {
         }
 
         boolean isClubPresident = request.getClubId() != null && roleService.isClubPresident(userId, request.getClubId());
-        boolean isClubOfficer = request.getClubId() != null && roleService.isClubOfficer(userId, request.getClubId());
+        boolean isClubOfficer = request.getClubId() != null && hasEventOfficerPrivileges(userId, request.getClubId());
         boolean isMeeting = eventType != null && "MEETING".equalsIgnoreCase(eventType.getTypeName());
         
         // STAFF không được tạo sự kiện MEETING
@@ -551,8 +551,17 @@ public class EventManagementService {
                 log.error("Failed to send notification for event rejection by club: {}", e.getMessage(), e);
             }
         }
+
     }
-    
+
+    private boolean hasEventOfficerPrivileges(Long userId, Long clubId) {
+        return roleService.isClubOfficer(userId, clubId) || roleService.isClubTreasurer(userId, clubId);
+    }
+
+    private boolean hasEventOfficerPrivileges(Long userId) {
+        return roleService.isClubOfficer(userId) || roleService.isClubTreasurer(userId);
+    }
+
 
     @Transactional
     public void approveEventByStaff(EventApprovalRequest request, Long userId) {
@@ -779,7 +788,7 @@ public class EventManagementService {
         // Check role theo clubId nếu có, nếu không thì check global role
         if (clubId != null && clubId > 0) {
             isClubPresident = roleService.isClubPresident(userId, clubId);
-            isClubOfficer = roleService.isClubOfficer(userId, clubId);
+            isClubOfficer = hasEventOfficerPrivileges(userId, clubId);
             
             if (isClubPresident) {
                 statuses = List.of(RequestStatus.PENDING_UNIVERSITY);
@@ -791,7 +800,7 @@ public class EventManagementService {
         } else {
             // Fallback: check global role (for backward compatibility)
             isClubPresident = roleService.isClubPresident(userId);
-            isClubOfficer = roleService.isClubOfficer(userId);
+            isClubOfficer = hasEventOfficerPrivileges(userId);
             
             if (isClubPresident) {
                 statuses = List.of(RequestStatus.PENDING_UNIVERSITY);
@@ -882,7 +891,8 @@ public class EventManagementService {
             boolean isCreator = requestEventRepository
                     .findByEventIdAndCreatedById(eventId, userId)
                     .isPresent();
-            boolean isClubLeader = (clubId != null) && (roleService.isClubPresident(userId, clubId) || roleService.isClubOfficer(userId, clubId));
+            boolean isClubLeader = (clubId != null) && (roleService.isClubPresident(userId, clubId)
+                    || hasEventOfficerPrivileges(userId, clubId));
             if (!isCreator && !isClubLeader) {
                 throw new ForbiddenException("Bạn không có quyền cập nhật sự kiện này");
             }
@@ -924,7 +934,7 @@ public class EventManagementService {
         if (clubId != null && clubId > 0) {
             // Check role theo clubId
             isClubPresident = roleService.isClubPresident(userId, clubId);
-            isClubOfficer = roleService.isClubOfficer(userId, clubId);
+            isClubOfficer = hasEventOfficerPrivileges(userId, clubId);
             
             if (isClubPresident) {
                 allowedStatuses = List.of(RequestStatus.PENDING_UNIVERSITY);
@@ -936,7 +946,7 @@ public class EventManagementService {
         } else {
             // Event toàn trường hoặc không có club - check global role
             isClubPresident = roleService.isClubPresident(userId);
-            isClubOfficer = roleService.isClubOfficer(userId);
+            isClubOfficer = hasEventOfficerPrivileges(userId);
             
             if (isClubPresident) {
                 allowedStatuses = List.of(RequestStatus.PENDING_UNIVERSITY);
@@ -1099,7 +1109,8 @@ public class EventManagementService {
             boolean isCreator = requestEventRepository
                     .findByEventIdAndCreatedById(eventId, userId)
                     .isPresent();
-            boolean isClubLeader = (clubId != null) && (roleService.isClubPresident(userId, clubId) || roleService.isClubOfficer(userId, clubId));
+            boolean isClubLeader = (clubId != null) && (roleService.isClubPresident(userId, clubId)
+                    || hasEventOfficerPrivileges(userId, clubId));
             if (!isCreator && !isClubLeader) {
                 throw new ForbiddenException("Bạn không có quyền xóa sự kiện này");
             }
@@ -1118,7 +1129,7 @@ public class EventManagementService {
         if (clubId != null && clubId > 0) {
             // Check role theo clubId
             isClubPresident = roleService.isClubPresident(userId, clubId);
-            isClubOfficer = roleService.isClubOfficer(userId, clubId);
+            isClubOfficer = hasEventOfficerPrivileges(userId, clubId);
             
             if (isClubPresident) {
                 allowedStatuses = List.of(RequestStatus.PENDING_UNIVERSITY);
@@ -1130,7 +1141,7 @@ public class EventManagementService {
         } else {
             // Event toàn trường hoặc không có club - check global role
             isClubPresident = roleService.isClubPresident(userId);
-            isClubOfficer = roleService.isClubOfficer(userId);
+            isClubOfficer = hasEventOfficerPrivileges(userId);
             
             if (isClubPresident) {
                 allowedStatuses = List.of(RequestStatus.PENDING_UNIVERSITY);

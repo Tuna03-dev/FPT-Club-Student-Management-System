@@ -103,13 +103,11 @@ public class RoleService {
             String systemRoleInClub = roleMemberShipRepository.findSystemRoleByUserIdAndClubId(userId, clubId)
                     .map(r -> r == null ? "" : r.trim().toUpperCase())
                     .orElse("");
-            return "CLUB_OFFICER".equals(systemRoleInClub) || 
-                   "TEAM_OFFICER".equals(systemRoleInClub);
+            return hasEventCreationPrivilege(systemRoleInClub);
         }
         // Fallback: nếu không có clubId, check global systemRole (cho backward compatibility)
         String systemRole = getUserSystemRole(userId);
-        return "CLUB_OFFICER".equals(systemRole) || 
-               "TEAM_OFFICER".equals(systemRole);
+        return hasEventCreationPrivilege(systemRole);
     }
     
     /**
@@ -122,6 +120,42 @@ public class RoleService {
             return List.of();
         }
         return clubRepository.findAllById(clubIds);
+    }
+
+    public boolean isClubTreasurer(Long userId) {
+        if (roleMemberShipRepository.existsTreasurerSomewhere(userId)) return true;
+        String systemRole = getUserSystemRole(userId);
+        return isTreasurerRole(systemRole);
+    }
+
+    public boolean isClubTreasurer(Long userId, Long clubId) {
+        String role = roleMemberShipRepository.findSystemRoleByUserIdAndClubId(userId, clubId)
+                .map(r -> r == null ? "" : r.trim().toUpperCase())
+                .orElse("");
+        if (isTreasurerRole(role)) return true;
+        return roleMemberShipRepository.isClubTreasurer(userId, clubId);
+    }
+
+    private boolean isTreasurerRole(String role) {
+        if (role == null) {
+            return false;
+        }
+        String normalized = role.trim().toUpperCase();
+        return "CLUB_TREASURE".equals(normalized)
+                || "CLUB_TREASURER".equals(normalized)
+                || "TREASURER".equals(normalized);
+    }
+
+    private boolean hasEventCreationPrivilege(String role) {
+        if (role == null) {
+            return false;
+        }
+        String normalized = role.trim().toUpperCase();
+        return "CLUB_OFFICER".equals(normalized)
+                || "TEAM_OFFICER".equals(normalized)
+                || "CLUB_TREASURE".equals(normalized)
+                || "CLUB_TREASURER".equals(normalized)
+                || "TREASURER".equals(normalized);
     }
 }
 

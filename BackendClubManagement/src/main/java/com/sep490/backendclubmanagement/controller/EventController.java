@@ -229,7 +229,9 @@ public class EventController {
             throw new ForbiddenException("Event không thuộc về club nào");
         }
 
-        if (!roleService.isClubPresident(userId, clubId) && !roleService.isClubOfficer(userId, clubId)) {
+        if (!roleService.isClubPresident(userId, clubId)
+                && !roleService.isClubOfficer(userId, clubId)
+                && !roleService.isClubTreasurer(userId, clubId)) {
             throw new ForbiddenException("Chỉ ban cán sự của CLB này mới có quyền xem danh sách đăng ký");
         }
         
@@ -247,7 +249,9 @@ public class EventController {
             throw new ForbiddenException("Event không thuộc về club nào");
         }
 
-        if (!roleService.isClubPresident(userId, clubId) && !roleService.isClubOfficer(userId, clubId)) {
+        if (!roleService.isClubPresident(userId, clubId)
+                && !roleService.isClubOfficer(userId, clubId)
+                && !roleService.isClubTreasurer(userId, clubId)) {
             throw new ForbiddenException("Chỉ ban cán sự của CLB này mới có quyền điểm danh");
         }
         
@@ -294,7 +298,9 @@ public class EventController {
         }
 
         // Chỉ ban cán sự của CLB mới có quyền xuất Excel
-        if (!roleService.isClubPresident(userId, clubId) && !roleService.isClubOfficer(userId, clubId)) {
+        if (!roleService.isClubPresident(userId, clubId)
+                && !roleService.isClubOfficer(userId, clubId)
+                && !roleService.isClubTreasurer(userId, clubId)) {
             throw new ForbiddenException("Chỉ ban cán sự của CLB này mới có quyền xuất Excel điểm danh");
         }
 

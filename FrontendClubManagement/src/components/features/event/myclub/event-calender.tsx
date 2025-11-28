@@ -72,6 +72,13 @@ interface EventCalendarProps {
   clubId: number;
 }
 
+const EVENT_PRIVILEGED_ROLES = [
+  "CLUB_OFFICER",
+  "TEAM_OFFICER",
+  "CLUB_TREASURE",
+  "CLUB_TREASURER",
+];
+
 export function EventCalendar({ clubId }: EventCalendarProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
@@ -169,8 +176,11 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
         // Check if user can see draft events: STAFF or has CLUB_OFFICER/TEAM_OFFICER role in this club
         const clubRole = clubId ? authService.getClubRole(clubId) : null;
         const systemRoleInClub = clubRole?.systemRole?.toUpperCase();
-        const canSeeDrafts = isStaff || 
-          (clubId && systemRoleInClub && ["CLUB_OFFICER", "TEAM_OFFICER"].includes(systemRoleInClub));
+        const canSeeDrafts =
+          isStaff ||
+          (clubId &&
+            systemRoleInClub &&
+            EVENT_PRIVILEGED_ROLES.includes(systemRoleInClub));
         
         if (canSeeDrafts) {
           try {
@@ -311,8 +321,11 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
       const isStaffRefetch = roleUpper === "STAFF";
       const clubRoleRefetch = clubId ? authService.getClubRole(clubId) : null;
       const systemRoleInClubRefetch = clubRoleRefetch?.systemRole?.toUpperCase();
-      const canSeeDraftsRefetch = isStaffRefetch || 
-        (clubId && systemRoleInClubRefetch && ["CLUB_OFFICER", "TEAM_OFFICER"].includes(systemRoleInClubRefetch));
+      const canSeeDraftsRefetch =
+        isStaffRefetch ||
+        (clubId &&
+          systemRoleInClubRefetch &&
+          EVENT_PRIVILEGED_ROLES.includes(systemRoleInClubRefetch));
 
       if (canSeeDraftsRefetch) {
         try {
@@ -630,6 +643,8 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
     let unsubscribeSystemRoleStudent: (() => void) | null = null;
     let unsubscribeSystemRoleTeamOfficer: (() => void) | null = null;
     let unsubscribeSystemRoleClubOfficer: (() => void) | null = null;
+    let unsubscribeSystemRoleClubTreasurer: (() => void) | null = null;
+    let unsubscribeSystemRoleClubTreasurerAlt: (() => void) | null = null;
     
     if (roleUpper !== "STAFF" && roleUpper !== "ADMIN") {
       const handleEventPublished = (msg: any) => {
@@ -658,6 +673,10 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
       
       // Subscribe to CLUB_OFFICER role
       unsubscribeSystemRoleClubOfficer = subscribeToSystemRole("CLUB_OFFICER", handleEventPublished);
+
+      // Subscribe to CLUB_TREASURE roles
+      unsubscribeSystemRoleClubTreasurer = subscribeToSystemRole("CLUB_TREASURE", handleEventPublished);
+      unsubscribeSystemRoleClubTreasurerAlt = subscribeToSystemRole("CLUB_TREASURER", handleEventPublished);
     }
 
     // Subscribe to club (for Club Officers)
@@ -666,7 +685,8 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
     if (clubId && clubId > 0) {
       const clubRole = authService.getClubRole(clubId);
       const systemRoleInClub = clubRole?.systemRole?.toUpperCase();
-      const canSubscribeToClub = systemRoleInClub && ["CLUB_OFFICER", "TEAM_OFFICER"].includes(systemRoleInClub);
+      const canSubscribeToClub =
+        systemRoleInClub && EVENT_PRIVILEGED_ROLES.includes(systemRoleInClub);
       
       if (canSubscribeToClub) {
         console.log(`[EventCalendar] Subscribing to club ${clubId} for role ${systemRoleInClub}`);
@@ -734,6 +754,8 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
       if (unsubscribeSystemRoleStudent) unsubscribeSystemRoleStudent();
       if (unsubscribeSystemRoleTeamOfficer) unsubscribeSystemRoleTeamOfficer();
       if (unsubscribeSystemRoleClubOfficer) unsubscribeSystemRoleClubOfficer();
+      if (unsubscribeSystemRoleClubTreasurer) unsubscribeSystemRoleClubTreasurer();
+      if (unsubscribeSystemRoleClubTreasurerAlt) unsubscribeSystemRoleClubTreasurerAlt();
       if (unsubscribeClub) unsubscribeClub();
     };
   }, [isConnected, clubId, subscribeToUserQueue, subscribeToSystemRole, subscribeToClub, refetchEvents, getPendingRequests]);
@@ -930,8 +952,11 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
     const isStaff = user.systemRole === "STAFF";
     const clubRole = clubId ? authService.getClubRole(clubId) : null;
     const systemRoleInClub = clubRole?.systemRole?.toUpperCase();
-    const canCreate = isStaff || 
-      (clubId && systemRoleInClub && ["CLUB_OFFICER", "TEAM_OFFICER"].includes(systemRoleInClub));
+    const canCreate =
+      isStaff ||
+      (clubId &&
+        systemRoleInClub &&
+        EVENT_PRIVILEGED_ROLES.includes(systemRoleInClub));
     
     if (!canCreate) return;
     const start = new Date(

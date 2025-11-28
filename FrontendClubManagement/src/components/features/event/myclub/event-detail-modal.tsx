@@ -73,7 +73,11 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
   const clubRole = currentClubId ? authService.getClubRole(currentClubId) : null
   const systemRoleInClub = clubRole?.systemRole?.toUpperCase()
   const isClubPresident = currentClubId && systemRoleInClub === "CLUB_OFFICER"
-  const isClubOfficer = currentClubId && systemRoleInClub === "TEAM_OFFICER"
+  const isClubOfficer =
+    currentClubId &&
+    (systemRoleInClub === "TEAM_OFFICER" ||
+      systemRoleInClub === "CLUB_TREASURE" ||
+      systemRoleInClub === "CLUB_TREASURER")
   const canMarkAttendance = isClubPresident || isClubOfficer
   const canManageMeeting = canMarkAttendance // FE: lãnh đạo CLB có quyền quản lý MEETING
 

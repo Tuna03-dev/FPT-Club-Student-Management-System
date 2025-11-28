@@ -13,7 +13,13 @@ export function EventLegend({ clubId }: EventLegendProps) {
   // Check systemRole in clubRoleList instead of global systemRole
   const clubRole = clubId ? authService.getClubRole(clubId) : null
   const systemRoleInClub = clubRole?.systemRole?.toUpperCase()
-  const showPending = isStaff || (clubId && systemRoleInClub && ["CLUB_OFFICER", "TEAM_OFFICER"].includes(systemRoleInClub))
+  const showPending =
+    isStaff ||
+    (clubId &&
+      systemRoleInClub &&
+      ["CLUB_OFFICER", "TEAM_OFFICER", "CLUB_TREASURE", "CLUB_TREASURER"].includes(
+        systemRoleInClub
+      ))
   const showPendingPublish = isStaff
 
   return (
