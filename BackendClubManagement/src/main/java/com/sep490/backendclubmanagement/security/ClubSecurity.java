@@ -110,8 +110,8 @@ public class ClubSecurity {
      * @param clubId ID of the club
      * @return true if user is an officer, false otherwise
      */
-    public boolean isTeamOfficerOrClubOfficerInClub(Long clubId) {
-        return isClubOfficerInClub(clubId) || isTeamOfficerInClub(clubId);
+    public boolean isTeamOfficerOrClubOfficerOrTreasurerInClub(Long clubId) {
+        return isClubOfficerInClub(clubId) || isTeamOfficerInClub(clubId) || isTreasureInClub(clubId);
     }
 
     /**
@@ -354,7 +354,7 @@ public class ClubSecurity {
             return reportRepository.findById(reportId)
                     .map(report -> {
                         Long clubId = report.getClubReportRequirement().getClub().getId();
-                        return isTeamOfficerOrClubOfficerInClub(clubId);
+                        return isTeamOfficerOrClubOfficerOrTreasurerInClub(clubId);
                     })
                     .orElse(false);
         } catch (Exception e) {

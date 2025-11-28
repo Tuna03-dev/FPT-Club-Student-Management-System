@@ -23,6 +23,7 @@ import {
   type SubmissionFormData,
 } from "@/components/features/report/ReportSubmissionModal";
 import { Input } from "@/components/ui/input";
+import { formatDateTimeVN } from "@/lib/dateUtils";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
@@ -313,14 +314,7 @@ export function StaffReportManagement() {
     });
   };
 
-  const formatDate = (dateString: string) => {
-    try {
-      const date = new Date(dateString);
-      return date.toLocaleDateString("vi-VN");
-    } catch {
-      return dateString;
-    }
-  };
+  const formatDate = (dateString: string) => formatDateTimeVN(dateString);
 
   const isDeadlinePassed = (deadline: string) => {
     return new Date(deadline) < new Date();
@@ -395,20 +389,18 @@ export function StaffReportManagement() {
         submittedByAvatar: "",
         department: reportDetail.club?.clubName || "",
         createdAt: reportDetail.submittedDate
-          ? new Date(reportDetail.submittedDate).toLocaleDateString("vi-VN")
+          ? formatDate(reportDetail.submittedDate)
           : reportDetail.createdAt
-            ? new Date(reportDetail.createdAt).toLocaleDateString("vi-VN")
+            ? formatDate(reportDetail.createdAt)
             : "",
         dueDate: reportDetail.reportRequirement?.dueDate
-          ? new Date(reportDetail.reportRequirement.dueDate).toLocaleDateString(
-              "vi-VN"
-            )
+          ? formatDate(reportDetail.reportRequirement.dueDate)
           : "",
         content: reportDetail.content || "",
         fileUrl: reportDetail.fileUrl,
         reviewer: reportDetail.reviewedDate ? "Staff" : undefined,
         reviewDate: reportDetail.reviewedDate
-          ? new Date(reportDetail.reviewedDate).toLocaleDateString("vi-VN")
+          ? formatDate(reportDetail.reviewedDate)
           : undefined,
         approvalNotes:
           reportDetail.status !== "REJECTED_UNIVERSITY" &&
@@ -1000,12 +992,20 @@ export function StaffReportManagement() {
             club={selectedReportDetail.club}
             report={selectedReportDetail.report}
             onApprove={async () => {
-              // Refresh reports list after approval
-              await fetchReports();
+              // After successful approve in the modal, refresh the reports list with skeleton
+              try {
+                await fetchReports();
+              } catch (err) {
+                // Fetch errors handled inside fetchReports
+              }
             }}
             onReject={async () => {
-              // Refresh reports list after rejection
-              await fetchReports();
+              // After successful reject in the modal, refresh the reports list with skeleton
+              try {
+                await fetchReports();
+              } catch (err) {
+                // Fetch errors handled inside fetchReports
+              }
             }}
           />
         )}
