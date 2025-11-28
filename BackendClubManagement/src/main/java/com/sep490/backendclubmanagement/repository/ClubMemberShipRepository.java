@@ -181,6 +181,9 @@ public interface ClubMemberShipRepository extends JpaRepository<ClubMemberShip, 
     // Kiểm tra xem user đã là thành viên active của club chưa
     boolean existsByUserIdAndClubIdAndStatus(Long userId, Long clubId, ClubMemberShipStatus status);
 
+    // Kiểm tra xem user có thuộc club hay không (bất kể trạng thái)
+    boolean existsByUserIdAndClubId(Long userId, Long clubId);
+
     // Tìm membership của user trong club với status cụ thể
     java.util.Optional<ClubMemberShip> findByUserIdAndClubIdAndStatus(Long userId, Long clubId, ClubMemberShipStatus status);
 

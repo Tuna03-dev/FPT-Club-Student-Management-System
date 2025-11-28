@@ -23,6 +23,8 @@ public interface RecruitmentApplicationMapper {
     @Mapping(source = "interviewTime", target = "interviewTime")
     @Mapping(source = "interviewAddress", target = "interviewAddress")
     @Mapping(source = "interviewPreparationRequirements", target = "interviewPreparationRequirements")
+    @Mapping(source = "recruitment.club.clubName", target = "clubName")
+    @Mapping(source = "recruitment.title", target = "recruitmentTitle")
     @Mapping(source = "answers", target = "answers", qualifiedByName = "mapAnswersList")
     @Mapping(target = "teamName", ignore = true)  // Will be set manually in service
     RecruitmentApplicationData toDto(RecruitmentApplication application);

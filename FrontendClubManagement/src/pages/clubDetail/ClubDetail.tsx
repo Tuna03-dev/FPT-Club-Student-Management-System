@@ -382,9 +382,39 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
   }, [searchParams]);
 
   // Format date helper
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString("vi-VN");
+  // Accept backend LocalDateTime strings like "YYYY-MM-DDTHH:mm[:ss]" (no TZ)
+  // and display as "DD/MM/YYYY HH:mm". Falls back to locale formatting.
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return "";
+
+    try {
+      // If string contains a 'T', treat as LocalDateTime from backend
+      if (dateString.includes("T")) {
+        // Keep up to minutes (YYYY-MM-DDTHH:mm)
+        const trimmed = dateString.slice(0, 16);
+        const [datePart, timePart] = trimmed.split("T");
+        if (datePart && timePart) {
+          const [year, month, day] = datePart.split("-");
+          const hhmm = timePart.slice(0, 5); // HH:mm
+          return `${day}/${month}/${year} ${hhmm}`;
+        }
+      }
+
+      // Fallback: use Date and locale formatting
+      const d = new Date(dateString);
+      if (!isNaN(d.getTime())) {
+        const dateStr = d.toLocaleDateString("vi-VN");
+        const timeStr = d.toLocaleTimeString("vi-VN", {
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+        return `${dateStr} ${timeStr}`;
+      }
+    } catch (e) {
+      console.error("formatDate error", e);
+    }
+
+    return dateString;
   };
 
   // Format number helper (add comma separator)
@@ -683,13 +713,7 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
                         <div className="flex items-center gap-1">
                           <Calendar className="h-3 w-3 flex-shrink-0" />
                           <span>
-                            Bắt đầu: {formatDate(recruitment.startDate)}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Calendar className="h-3 w-3 flex-shrink-0" />
-                          <span>
-                            Hết hạn: {formatDate(recruitment.endDate)}
+                            Thời hạn: {formatDate(recruitment.endDate)}
                           </span>
                         </div>
                       </div>
@@ -1290,8 +1314,8 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
                 </p>
                 <div className="bg-red-50 border border-red-200 rounded-lg p-4">
                   <p className="text-sm text-red-800">
-                    Vui lòng đợi kết quả xét tuyển trước khi nộp lại hoặc liên
-                    hệ ban quản lý câu lạc bộ nếu cần hỗ trợ.
+                    Vui lòng đợi kết quả xét tuyển hoặc liên hệ ban quản lý câu
+                    lạc bộ nếu cần hỗ trợ.
                   </p>
                 </div>
               </div>

@@ -248,8 +248,12 @@ export function RecruitmentManagement() {
       setRecruitments(mappedRecruitments);
     } catch (err: any) {
       console.error("Error fetching recruitments:", err);
-      setError(err.message || "Không thể tải danh sách tuyển dụng");
-      toast.error("Không thể tải danh sách tuyển dụng");
+      const errorMessage =
+        err.response?.data?.message ||
+        err.message ||
+        "Không thể tải danh sách tuyển dụng";
+      setError(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -339,7 +343,11 @@ export function RecruitmentManagement() {
         );
       } catch (err: any) {
         console.error("Error fetching applications:", err);
-        toast.error("Không thể tải danh sách đơn ứng tuyển");
+        const errorMessage =
+          err.response?.data?.message ||
+          err.message ||
+          "Không thể tải danh sách đơn ứng tuyển";
+        toast.error(errorMessage);
       } finally {
         setApplicationsLoading(false);
       }
@@ -411,14 +419,15 @@ export function RecruitmentManagement() {
         updated_at: freshData.updatedAt,
       };
 
-      console.log("Mapped recruitment for editing:", mappedRecruitment);
-      console.log("Team options from API:", freshData.teamOptions);
-
       // Load recruitment data into form
       setEditingRecruitment(mappedRecruitment);
     } catch (err: any) {
       console.error("Error loading recruitment for edit:", err);
-      toast.error("Không thể tải dữ liệu đợt tuyển dụng");
+      const errorMessage =
+        err.response?.data?.message ||
+        err.message ||
+        "Không thể tải dữ liệu đợt tuyển dụng";
+      toast.error(errorMessage);
       setActiveTab("list"); // Go back to list on error
     } finally {
       setEditLoading(false);
@@ -486,12 +495,13 @@ export function RecruitmentManagement() {
       await fetchRecruitments();
     } catch (err: any) {
       console.error("Error saving recruitment:", err);
-      toast.error(
+      const errorMessage =
+        err.response?.data?.message ||
         err.message ||
-          (isEdit
-            ? "Không thể cập nhật đợt tuyển dụng"
-            : "Không thể tạo đợt tuyển dụng")
-      );
+        (isEdit
+          ? "Không thể cập nhật đợt tuyển dụng"
+          : "Không thể tạo đợt tuyển dụng");
+      toast.error(errorMessage);
       throw err; // Re-throw to let the form component handle it
     } finally {
       setCreateLoading(false);
@@ -579,7 +589,11 @@ export function RecruitmentManagement() {
       setApplicationsRefreshTrigger((prev) => prev + 1);
     } catch (err: any) {
       console.error("Error updating application status:", err);
-      toast.error(err.message || "Không thể cập nhật trạng thái đơn");
+      const errorMessage =
+        err.response?.data?.message ||
+        err.message ||
+        "Không thể cập nhật trạng thái đơn";
+      toast.error(errorMessage);
     }
   };
 
@@ -636,7 +650,11 @@ export function RecruitmentManagement() {
       setApplicationsRefreshTrigger((prev) => prev + 1);
     } catch (err: any) {
       console.error("Error updating interview schedule:", err);
-      toast.error(err.message || "Không thể cập nhật thông tin phỏng vấn");
+      const errorMessage =
+        err.response?.data?.message ||
+        err.message ||
+        "Không thể cập nhật thông tin phỏng vấn";
+      toast.error(errorMessage);
     }
   };
 
@@ -660,10 +678,6 @@ export function RecruitmentManagement() {
     newStatus: "OPEN" | "CLOSED"
   ) => {
     try {
-      console.log(
-        `Changing recruitment ${recruitmentId} status to ${newStatus}`
-      );
-
       // Set loading state for this specific button
       setChangingStatusId(recruitmentId);
 
@@ -686,16 +700,15 @@ export function RecruitmentManagement() {
       // Reset filter to "all" to show the updated recruitment
       // (so it doesn't disappear if user was filtering by specific status)
       if (statusFilter !== "all") {
-        console.log("Resetting filter to 'all' to show updated recruitment");
         setStatusFilter("all");
       }
-
-      console.log("Status changed successfully, list updated");
     } catch (err: any) {
       console.error("Error changing recruitment status:", err);
-      toast.error(
-        err.message || "Không thể thay đổi trạng thái đơn tuyển dụng"
-      );
+      const errorMessage =
+        err.response?.data?.message ||
+        err.message ||
+        "Không thể thay đổi trạng thái đơn tuyển dụng";
+      toast.error(errorMessage);
 
       // Refetch on error to ensure consistency
       await fetchRecruitments();
@@ -798,7 +811,7 @@ export function RecruitmentManagement() {
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
                 <Input
-                  placeholder="Tìm kiếm đợt tuyển dụng..."
+                  placeholder="Tìm kiếm đợt tuyển dụng theo tiêu đề và mô tả"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-10"
@@ -917,9 +930,6 @@ export function RecruitmentManagement() {
                                 🔒 Không thể chỉnh sửa
                               </Badge>
                             )}
-                            {/* <Badge variant="outline" className="text-xs">
-                              {recruitment.semester_name}
-                            </Badge> */}
                           </div>
                         </div>
                       </div>

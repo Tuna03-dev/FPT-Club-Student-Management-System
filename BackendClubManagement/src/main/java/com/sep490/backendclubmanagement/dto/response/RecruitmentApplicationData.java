@@ -17,6 +17,8 @@ public class RecruitmentApplicationData {
     private String studentId;
     private Long teamId;
     private String teamName;
+    private String clubName;
+    private String recruitmentTitle;
     private RecruitmentApplicationStatus status;
     private String reviewNotes;
     private LocalDateTime submittedDate;
@@ -38,5 +40,3 @@ public class RecruitmentApplicationData {
         private LocalDateTime updatedAt;
     }
 }
-
-

@@ -54,6 +54,8 @@ export interface RecruitmentApplicationData {
   userPhone?: string;
   studentId: string;
   teamId?: number;
+  clubName?: string;
+  recruitmentTitle?: string;
   teamName?: string;
   submittedDate: string;
   reviewedDate?: string;
@@ -250,7 +252,7 @@ export async function deleteRecruitment(id: number): Promise<void> {
 export interface FormAnswerRequest {
   questionId: number;
   answerText?: string;
-  fileUrl?: string;
+  hasFile?: boolean; // Indicates whether this answer should use the uploaded file
 }
 
 export interface ApplicationSubmitRequest {
@@ -261,7 +263,7 @@ export interface ApplicationSubmitRequest {
 
 export async function submitApplication(
   request: ApplicationSubmitRequest,
-  filesByQuestionId?: Map<number, File>
+  file?: File
 ): Promise<RecruitmentApplicationData> {
   const formData = new FormData();
 
@@ -271,11 +273,9 @@ export async function submitApplication(
     new Blob([JSON.stringify(request)], { type: "application/json" })
   );
 
-  // Add files with questionId mapping if provided
-  if (filesByQuestionId && filesByQuestionId.size > 0) {
-    filesByQuestionId.forEach((file, questionId) => {
-      formData.append(`file_${questionId}`, file);
-    });
+  // Add single file if provided
+  if (file) {
+    formData.append("file", file);
   }
 
   const res = await axiosClient.post<RecruitmentApplicationData>(

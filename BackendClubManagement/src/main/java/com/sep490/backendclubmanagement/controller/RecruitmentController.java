@@ -5,7 +5,6 @@ import com.sep490.backendclubmanagement.dto.request.*;
 import com.sep490.backendclubmanagement.dto.response.*;
 import com.sep490.backendclubmanagement.entity.RecruitmentApplicationStatus;
 import com.sep490.backendclubmanagement.entity.RecruitmentStatus;
-import com.sep490.backendclubmanagement.entity.User;
 import com.sep490.backendclubmanagement.exception.AppException;
 import com.sep490.backendclubmanagement.exception.ErrorCode;
 import com.sep490.backendclubmanagement.security.ClubSecurity;
@@ -19,7 +18,6 @@ import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
-import org.springframework.util.MultiValueMap;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -116,25 +114,7 @@ public class RecruitmentController {
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 
-    /**
-     * Delete recruitment
-     * Must be club officer of the recruitment's club
-     */
-    @DeleteMapping("/{id}")
-    public ResponseEntity<ApiResponse<Void>> deleteRecruitment(
-            Authentication authentication,
-            @PathVariable Long id
-    ) throws AppException {
-        // Check authorization: user must be club officer of the recruitment's club
-        if (!clubSecurity.isClubOfficerForRecruitment(id)) {
-            throw new AppException(ErrorCode.INSUFFICIENT_PERMISSIONS);
-        }
-        Long userId = SecurityUtils.getCurrentUserId();
-        recruitmentService.deleteRecruitment(userId, id);
-        return ResponseEntity.ok(ApiResponse.success(null));
-    }
 
-    
     /**
      * Submit application to recruitment
      * Any authenticated user can submit application
@@ -142,11 +122,11 @@ public class RecruitmentController {
     @PostMapping(path = "/applications/submit", consumes = "multipart/form-data")
     public ResponseEntity<ApiResponse<RecruitmentApplicationData>> submit(
             @RequestPart("request") ApplicationSubmitRequest request,
-            @RequestParam MultiValueMap<String, MultipartFile> allFiles
+            @RequestPart(value = "file", required = false) MultipartFile file
     ) throws AppException {
         Long userId = SecurityUtils.getCurrentUserId();
         
-        RecruitmentApplicationData data = recruitmentService.submitApplication(userId, request, allFiles);
+        RecruitmentApplicationData data = recruitmentService.submitApplication(userId, request, file);
         return ResponseEntity.ok(ApiResponse.success(data));
     }
 

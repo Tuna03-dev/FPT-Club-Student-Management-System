@@ -1,5 +1,3 @@
-
-
 import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,7 +12,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   ArrowLeft,
@@ -31,6 +28,7 @@ import {
   type ApplicationSubmitRequest,
 } from "@/services/recruitmentService";
 import { getClubDetailById, type ClubDetailData } from "@/services/clubService";
+import { getMyClubs } from "@/api/clubs";
 import type { VisibleTeamDTO } from "@/types/team";
 import {
   Dialog,
@@ -58,9 +56,15 @@ export function ClubApplicationForm({
   const [recruitment, setRecruitment] = useState<RecruitmentData | null>(null);
   const [club, setClub] = useState<ClubDetailData | null>(null);
   const [selectedTeamId, setSelectedTeamId] = useState<number | null>(null);
-  const [uploadedFiles, setUploadedFiles] = useState<Record<number, File>>({});
-  const [showAlreadyAppliedDialog, setShowAlreadyAppliedDialog] = useState(false);
-  const [alreadyAppliedMessage, setAlreadyAppliedMessage] = useState<string | null>(null);
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null); // Single file for entire form
+  const [fileQuestionId, setFileQuestionId] = useState<number | null>(null); // Which question the file belongs to
+  const [isAlreadyMember, setIsAlreadyMember] = useState(false); // User is already a club member
+  const [hasAlreadyApplied, setHasAlreadyApplied] = useState(false); // User has already applied
+  const [showAlreadyAppliedDialog, setShowAlreadyAppliedDialog] =
+    useState(false);
+  const [alreadyAppliedMessage, setAlreadyAppliedMessage] = useState<
+    string | null
+  >(null);
 
   // Memoize teams to prevent order changes on re-render
   const teams = useMemo<VisibleTeamDTO[]>(() => {
@@ -101,13 +105,50 @@ export function ClubApplicationForm({
     fetchData();
   }, [recruitmentId]);
 
-  // Handle file selection
+  // Check if user is already a member or has already applied
+  useEffect(() => {
+    const checkEligibility = async () => {
+      if (!recruitment) return;
+
+      try {
+        // Check if user is already a member of the club
+        const myClubs = await getMyClubs();
+        const isMember = myClubs.some(
+          (club) => club.clubId === recruitment.clubId
+        );
+        setIsAlreadyMember(isMember);
+
+        if (isMember) return; // No need to check application if already a member
+
+        // Check if user has already applied for this recruitment
+        const { getMyApplications } = await import(
+          "@/services/recruitmentService"
+        );
+        const myApps = await getMyApplications({ page: 0, size: 20 });
+        const hasApplied = myApps.content.some(
+          (app) => app.recruitmentId === recruitment.id
+        );
+        setHasAlreadyApplied(hasApplied);
+
+        if (hasApplied) {
+          setAlreadyAppliedMessage(
+            "Bạn đã nộp đơn ứng tuyển cho đợt này. Không thể nộp lại."
+          );
+        }
+      } catch (err) {
+        console.error("Error checking eligibility:", err);
+        // If we cannot determine, allow user to proceed (backend will validate)
+      }
+    };
+
+    checkEligibility();
+  }, [recruitment]);
+
+  // Handle file selection - only one file for entire form
   const handleFileChange = (questionId: number, file: File | null) => {
     if (file) {
-      setUploadedFiles((prev) => ({
-        ...prev,
-        [questionId]: file,
-      }));
+      setUploadedFile(file);
+      setFileQuestionId(questionId);
 
       // Set file info in form answers
       setFormAnswers((prev) => ({
@@ -119,9 +160,8 @@ export function ClubApplicationForm({
       }));
     } else {
       // Remove file
-      const newFiles = { ...uploadedFiles };
-      delete newFiles[questionId];
-      setUploadedFiles(newFiles);
+      setUploadedFile(null);
+      setFileQuestionId(null);
 
       setFormAnswers((prev) => ({
         ...prev,
@@ -131,6 +171,42 @@ export function ClubApplicationForm({
         },
       }));
     }
+  };
+
+  // Format date helper
+  // Accept backend LocalDateTime strings like "YYYY-MM-DDTHH:mm[:ss]" (no TZ)
+  // and display as "DD/MM/YYYY HH:mm". Falls back to locale formatting.
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return "";
+
+    try {
+      // If string contains a 'T', treat as LocalDateTime from backend
+      if (dateString.includes("T")) {
+        // Keep up to minutes (YYYY-MM-DDTHH:mm)
+        const trimmed = dateString.slice(0, 16);
+        const [datePart, timePart] = trimmed.split("T");
+        if (datePart && timePart) {
+          const [year, month, day] = datePart.split("-");
+          const hhmm = timePart.slice(0, 5); // HH:mm
+          return `${day}/${month}/${year} ${hhmm}`;
+        }
+      }
+
+      // Fallback: use Date and locale formatting
+      const d = new Date(dateString);
+      if (!isNaN(d.getTime())) {
+        const dateStr = d.toLocaleDateString("vi-VN");
+        const timeStr = d.toLocaleTimeString("vi-VN", {
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+        return `${dateStr} ${timeStr}`;
+      }
+    } catch (e) {
+      console.error("formatDate error", e);
+    }
+
+    return dateString;
   };
 
   const handleSubmitApplication = async () => {
@@ -156,18 +232,12 @@ export function ClubApplicationForm({
         return;
       }
 
-      // For file type, check if file is uploaded or link is provided
+      // For file type, check if file is uploaded
       if (q.questionType === "FILE_UPLOAD") {
-        const hasFile = uploadedFiles[q.id];
-        const hasLink =
-          typeof answer === "object"
-            ? answer.fileUrl && answer.fileUrl.trim()
-            : answer && answer.trim();
+        const hasFile = uploadedFile && fileQuestionId === q.id;
 
-        if (!hasFile && !hasLink) {
-          alert(
-            `Vui lòng tải lên file hoặc cung cấp link cho câu hỏi: ${q.questionText}`
-          );
+        if (!hasFile) {
+          alert(`Vui lòng tải lên file cho câu hỏi: ${q.questionText}`);
           return;
         }
       }
@@ -204,31 +274,18 @@ export function ClubApplicationForm({
     setIsSubmitting(true);
 
     try {
-      // Prepare answers for API and collect files
+      // Prepare answers for API
       const answers: any[] = [];
-      const filesByQuestionId = new Map<number, File>();
 
       Object.entries(formAnswers).forEach(([questionId, answer]) => {
         const qId = Number(questionId);
 
-        // Check if this question has an uploaded file
-        if (uploadedFiles[qId]) {
-          filesByQuestionId.set(qId, uploadedFiles[qId]);
+        // Check if this question uses the uploaded file
+        if (uploadedFile && fileQuestionId === qId) {
           answers.push({
             questionId: qId,
-            answerText:
-              typeof answer === "object" ? answer.answerText || "" : "",
-            fileUrl: "", // Will be filled by backend after upload
-          });
-        } else if (
-          typeof answer === "object" &&
-          (answer.fileUrl || answer.answerText)
-        ) {
-          // File URL provided (Google Drive link, etc.)
-          answers.push({
-            questionId: qId,
-            answerText: answer.answerText || "",
-            fileUrl: answer.fileUrl || "",
+            answerText: "",
+            hasFile: true, // Mark this answer as using the uploaded file
           });
         } else {
           // Handle other types (TEXT, MCQ, CHECKBOX)
@@ -237,6 +294,7 @@ export function ClubApplicationForm({
             answerText: Array.isArray(answer)
               ? answer.join(", ")
               : String(answer),
+            hasFile: false,
           });
         }
       });
@@ -247,10 +305,7 @@ export function ClubApplicationForm({
         answers,
       };
 
-      await submitApplication(
-        request,
-        filesByQuestionId.size > 0 ? filesByQuestionId : undefined
-      );
+      await submitApplication(request, uploadedFile || undefined);
       setSubmitSuccess(true);
     } catch (err: any) {
       console.error("Error submitting application:", err);
@@ -271,7 +326,8 @@ export function ClubApplicationForm({
         // Handle specific error: already applied for this recruitment round (ví dụ code 3002)
         if (errorCode === 3002) {
           setAlreadyAppliedMessage(
-            errorMessage || "Bạn đã nộp đơn ứng tuyển cho đợt này. Không thể nộp lại."
+            errorMessage ||
+              "Bạn đã nộp đơn ứng tuyển cho đợt này. Không thể nộp lại."
           );
           setShowAlreadyAppliedDialog(true);
           return;
@@ -358,8 +414,8 @@ export function ClubApplicationForm({
               <CardContent>
                 <div className="space-y-3">
                   {[...Array(3)].map((_, index) => (
-                    <div 
-                      key={index} 
+                    <div
+                      key={index}
                       className="flex items-start space-x-3 p-4 border rounded-lg hover:bg-accent/5"
                     >
                       <Skeleton className="h-5 w-5 rounded-full mt-1 flex-shrink-0" />
@@ -519,7 +575,10 @@ export function ClubApplicationForm({
   return (
     <div className="min-h-screen bg-background">
       {/* Dialog show when user already applied for this recruitment round */}
-      <Dialog open={showAlreadyAppliedDialog} onOpenChange={setShowAlreadyAppliedDialog}>
+      <Dialog
+        open={showAlreadyAppliedDialog}
+        onOpenChange={setShowAlreadyAppliedDialog}
+      >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-red-600">
@@ -528,11 +587,13 @@ export function ClubApplicationForm({
             <DialogDescription className="pt-4">
               <div className="space-y-3">
                 <p className="text-foreground">
-                  {alreadyAppliedMessage || "Bạn đã nộp đơn ứng tuyển cho đợt này. Không thể nộp lại."}
+                  {alreadyAppliedMessage ||
+                    "Bạn đã nộp đơn ứng tuyển cho đợt này. Không thể nộp lại."}
                 </p>
                 <div className="bg-red-50 border border-red-200 rounded-lg p-4">
                   <p className="text-sm text-red-800">
-                    Vui lòng đợi kết quả xét tuyển trước khi nộp lại hoặc liên hệ ban quản lý câu lạc bộ nếu cần hỗ trợ.
+                    Vui lòng đợi kết quả xét tuyển hoặc liên hệ ban quản lý câu
+                    lạc bộ nếu cần hỗ trợ.
                   </p>
                 </div>
               </div>
@@ -587,30 +648,12 @@ export function ClubApplicationForm({
                     <div className="flex items-center gap-2 text-sm">
                       <Calendar className="h-4 w-4 text-muted-foreground" />
                       <span className="text-muted-foreground">
-                        {new Date(recruitment.startDate).toLocaleDateString(
-                          "vi-VN",
-                          {
-                            day: "2-digit",
-                            month: "2-digit",
-                            year: "numeric",
-                          }
-                        )}
-                        {" - "}
-                        {new Date(recruitment.endDate).toLocaleDateString(
-                          "vi-VN",
-                          {
-                            day: "2-digit",
-                            month: "2-digit",
-                            year: "numeric",
-                          }
-                        )}
+                        Thời hạn: {formatDate(recruitment.endDate)}
                       </span>
                     </div>
 
                     {/* Max Applicants */}
-                    {false && (
-                      <div />
-                    )}
+                    {false && <div />}
                   </div>
 
                   {recruitment.requirements && (
@@ -803,6 +846,17 @@ export function ClubApplicationForm({
 
                       {question.questionType === "FILE_UPLOAD" && (
                         <div className="space-y-4">
+                          {/* Warning if file already uploaded for another question */}
+                          {uploadedFile && fileQuestionId !== question.id && (
+                            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2">
+                              <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
+                              <p className="text-sm text-amber-800">
+                                Bạn đã tải file cho câu hỏi khác. Chỉ có thể tải
+                                1 file cho toàn bộ đơn ứng tuyển.
+                              </p>
+                            </div>
+                          )}
+
                           {/* File Upload Section */}
                           <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 bg-gray-50">
                             <div className="text-center mb-4">
@@ -810,8 +864,9 @@ export function ClubApplicationForm({
                               <p className="text-sm text-gray-600 mb-1">
                                 Tải file từ máy tính
                               </p>
-                              <p className="text-xs text-gray-500">
-                                Hỗ trợ: PDF, DOC, DOCX (tối đa 10MB)
+                              <p className="text-xs text-amber-600 font-medium mt-1">
+                                Lưu ý: Chỉ tải được 1 file cho toàn bộ đơn (tối
+                                đa 20MB)
                               </p>
                             </div>
 
@@ -820,13 +875,12 @@ export function ClubApplicationForm({
                                 type="file"
                                 id={`file-upload-${question.id}`}
                                 className="hidden"
-                                accept=".pdf,.doc,.docx"
                                 onChange={(e) => {
                                   const file = e.target.files?.[0];
                                   if (file) {
-                                    if (file.size > 10 * 1024 * 1024) {
+                                    if (file.size > 20 * 1024 * 1024) {
                                       alert(
-                                        "File quá lớn! Vui lòng chọn file nhỏ hơn 10MB"
+                                        "File quá lớn! Vui lòng chọn file nhỏ hơn 20MB"
                                       );
                                       e.target.value = "";
                                       return;
@@ -847,114 +901,66 @@ export function ClubApplicationForm({
                                     ?.click();
                                 }}
                                 className="w-full sm:w-auto"
+                                disabled={
+                                  uploadedFile !== null &&
+                                  fileQuestionId !== question.id
+                                }
                               >
                                 <Upload className="h-4 w-4 mr-2" />
-                                Chọn file
+                                {uploadedFile && fileQuestionId === question.id
+                                  ? "Thay đổi file"
+                                  : "Chọn file"}
                               </Button>
 
-                              {uploadedFiles[question.id] && (
-                                <div className="w-full p-3 bg-white border rounded-lg flex items-center justify-between">
-                                  <div className="flex items-center gap-2 flex-1 min-w-0">
-                                    <div className="h-8 w-8 bg-blue-100 rounded flex items-center justify-center flex-shrink-0">
-                                      <svg
-                                        className="h-4 w-4 text-blue-600"
-                                        fill="none"
-                                        viewBox="0 0 24 24"
-                                        stroke="currentColor"
-                                      >
-                                        <path
-                                          strokeLinecap="round"
-                                          strokeLinejoin="round"
-                                          strokeWidth={2}
-                                          d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                                        />
-                                      </svg>
+                              {uploadedFile &&
+                                fileQuestionId === question.id && (
+                                  <div className="w-full p-3 bg-white border rounded-lg flex items-center justify-between">
+                                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                                      <div className="h-8 w-8 bg-blue-100 rounded flex items-center justify-center flex-shrink-0">
+                                        <svg
+                                          className="h-4 w-4 text-blue-600"
+                                          fill="none"
+                                          viewBox="0 0 24 24"
+                                          stroke="currentColor"
+                                        >
+                                          <path
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                            strokeWidth={2}
+                                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                                          />
+                                        </svg>
+                                      </div>
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-medium text-gray-900 truncate">
+                                          {uploadedFile.name}
+                                        </p>
+                                        <p className="text-xs text-gray-500">
+                                          {(uploadedFile.size / 1024).toFixed(
+                                            1
+                                          )}{" "}
+                                          KB
+                                        </p>
+                                      </div>
                                     </div>
-                                    <div className="flex-1 min-w-0">
-                                      <p className="text-sm font-medium text-gray-900 truncate">
-                                        {uploadedFiles[question.id].name}
-                                      </p>
-                                      <p className="text-xs text-gray-500">
-                                        {(
-                                          uploadedFiles[question.id].size / 1024
-                                        ).toFixed(1)}{" "}
-                                        KB
-                                      </p>
-                                    </div>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => {
+                                        handleFileChange(question.id, null);
+                                        const input = document.getElementById(
+                                          `file-upload-${question.id}`
+                                        ) as HTMLInputElement;
+                                        if (input) input.value = "";
+                                      }}
+                                      className="ml-2 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                    >
+                                      Xóa
+                                    </Button>
                                   </div>
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => {
-                                      handleFileChange(question.id, null);
-                                      const input = document.getElementById(
-                                        `file-upload-${question.id}`
-                                      ) as HTMLInputElement;
-                                      if (input) input.value = "";
-                                    }}
-                                    className="ml-2 text-red-600 hover:text-red-700 hover:bg-red-50"
-                                  >
-                                    Xóa
-                                  </Button>
-                                </div>
-                              )}
+                                )}
                             </div>
-                          </div>
-
-                          {/* Divider */}
-                          <div className="relative">
-                            <div className="absolute inset-0 flex items-center">
-                              <div className="w-full border-t border-gray-300"></div>
-                            </div>
-                            <div className="relative flex justify-center text-sm">
-                              <span className="px-2 bg-white text-gray-500">
-                                hoặc
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* Link Input Section */}
-                          <div className="space-y-2">
-                            <Label
-                              htmlFor={`file-url-${question.id}`}
-                              className="text-sm"
-                            >
-                              Link file (Google Drive, Dropbox, v.v.) nếu như
-                              file vượt quá dung lượng hoặc các định dạng file
-                              khác.
-                            </Label>
-                            <Input
-                              id={`file-url-${question.id}`}
-                              type="url"
-                              placeholder="https://drive.google.com/file/..."
-                              value={
-                                uploadedFiles[question.id]
-                                  ? ""
-                                  : typeof formAnswers[question.id] === "object"
-                                  ? formAnswers[question.id]?.fileUrl || ""
-                                  : formAnswers[question.id] || ""
-                              }
-                              disabled={!!uploadedFiles[question.id]}
-                              onChange={(e) => {
-                                const fileUrl = e.target.value;
-                                setFormAnswers((prev) => ({
-                                  ...prev,
-                                  [question.id]: {
-                                    fileUrl: fileUrl,
-                                    answerText: fileUrl,
-                                  },
-                                }));
-                              }}
-                              className={
-                                uploadedFiles[question.id] ? "bg-gray-100" : ""
-                              }
-                            />
-                            {uploadedFiles[question.id] && (
-                              <p className="text-xs text-gray-500">
-                                Đã chọn file từ máy tính. Xóa file để nhập link.
-                              </p>
-                            )}
                           </div>
                         </div>
                       )}
@@ -984,11 +990,40 @@ export function ClubApplicationForm({
                 </div>
               </div>
 
+              {/* Warning messages if user cannot apply */}
+              {isAlreadyMember && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
+                  <AlertCircle className="h-5 w-5 text-red-600 mt-0.5 flex-shrink-0" />
+                  <div className="text-sm text-red-800">
+                    <p className="font-medium mb-1">Không thể ứng tuyển</p>
+                    <p>
+                      Bạn đã là thành viên của câu lạc bộ này và không thể ứng
+                      tuyển lại.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {!isAlreadyMember && hasAlreadyApplied && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-start gap-3">
+                  <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
+                  <div className="text-sm text-amber-800">
+                    <p className="font-medium mb-1">Đã nộp đơn ứng tuyển</p>
+                    <p>
+                      Bạn đã nộp đơn ứng tuyển cho đợt này. Vui lòng đợi kết quả
+                      xét duyệt.
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {/* Submit Buttons */}
               <div className="flex gap-4 pt-6 border-t">
                 <Button
                   onClick={handleSubmitApplication}
-                  disabled={isSubmitting}
+                  disabled={
+                    isSubmitting || isAlreadyMember || hasAlreadyApplied
+                  }
                   className="flex-1"
                   size="lg"
                 >

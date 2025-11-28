@@ -92,8 +92,11 @@ export function RecruitmentForm({
         const teams = await getAllTeamsForPresident(clubId);
         setAvailableTeams(teams);
       } catch (error: any) {
-        console.error("Error loading teams:", error);
-        toast.error(error.message || "Không thể tải danh sách phòng ban");
+        const errorMessage =
+          error.response?.data?.message ||
+          error.message ||
+          "Không thể tải danh sách phòng ban";
+        toast.error(errorMessage);
       } finally {
         setLoadingTeams(false);
       }
@@ -105,8 +108,6 @@ export function RecruitmentForm({
   // Load data when editing - This effect handles form data loading
   useEffect(() => {
     if (editingRecruitment) {
-      console.log("Loading editing recruitment data:", editingRecruitment);
-
       setNewRecruitment({
         title: editingRecruitment.title,
         description: editingRecruitment.description,
@@ -139,13 +140,8 @@ export function RecruitmentForm({
         editingRecruitment.teamOptions &&
         editingRecruitment.teamOptions.length > 0
       ) {
-        console.log(
-          "Setting team options from editing recruitment:",
-          editingRecruitment.teamOptions
-        );
         setSelectedTeamIds(editingRecruitment.teamOptions.map((t) => t.id));
       } else {
-        console.log("No team options in editing recruitment");
         setSelectedTeamIds([]);
       }
     }
@@ -154,7 +150,6 @@ export function RecruitmentForm({
   // Reset form when explicitly cancelled or switching to create mode
   useEffect(() => {
     if (!editingRecruitment) {
-      console.log("No editing recruitment, resetting form");
       setNewRecruitment({
         title: "",
         description: "",
@@ -859,7 +854,7 @@ export function RecruitmentForm({
                   </p>
                   <ul className="list-disc list-inside space-y-1 text-xs">
                     <li>
-                      Ứng viên sẽ có thể tải lên file (PDF, Word, tối đa 10MB.)
+                      Ứng viên sẽ có thể tải lên file (PDF, Word, tối đa 20MB.)
                     </li>
                     <li>
                       Ứng viên có thể gửi link (Drive,..) nếu như vượt quá dung

@@ -305,7 +305,7 @@ export function ApplicationsList({
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
             <Input
-              placeholder="Tìm kiếm ứng viên..."
+              placeholder="Tìm kiếm theo tên, email, MSSV của ứng viên"
               value={searchQuery}
               onChange={(e) => onSearchChange?.(e.target.value)}
               className="pl-10"
@@ -737,7 +737,7 @@ export function ApplicationsList({
                       )}
                       {selectedApplication.teamName && (
                         <div>
-                          <strong>Phòng ban:</strong>{" "}
+                          <strong>Phòng ban ứng tuyển:</strong>{" "}
                           <span className="font-medium text-blue-600">
                             {selectedApplication.teamName}
                           </span>

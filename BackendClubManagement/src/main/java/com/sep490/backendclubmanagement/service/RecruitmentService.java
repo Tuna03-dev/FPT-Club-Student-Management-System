@@ -15,7 +15,6 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.MultiValueMap;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
@@ -72,7 +71,7 @@ public class RecruitmentService implements RecruitmentServiceInterface {
     public PagedResponse<RecruitmentData> listRecruitmentsForGuest(Long clubId, RecruitmentStatus status, Pageable pageable) {
         return listRecruitments(clubId, status, null, pageable);
     }
-    
+
     public PagedResponse<RecruitmentData> listRecruitments(Long clubId, RecruitmentStatus status, String keyword, Pageable pageable){
         Page<Recruitment> page;
 
@@ -114,7 +113,7 @@ public class RecruitmentService implements RecruitmentServiceInterface {
                     ? recruitmentRepository.findByClub_Id(clubId, pageable)
                     : recruitmentRepository.findByClub_IdAndStatus(clubId, status, pageable);
         }
-        
+
         Page<RecruitmentData> dataPage = page.map(recruitmentMapper::toDto);
         return PagedResponse.of(dataPage);
     }
@@ -154,6 +153,11 @@ public class RecruitmentService implements RecruitmentServiceInterface {
 
         if (!"ACTIVE".equalsIgnoreCase(club.getStatus())) {
             throw new AppException(ErrorCode.CLUB_NOT_ACTIVE);
+        }
+
+        // Validate provided endDate is not in the past
+        if (req.endDate != null && req.endDate.isBefore(LocalDateTime.now())) {
+            throw new AppException(ErrorCode.INVALID_INPUT, "Thời hạn không được chọn trong quá khứ");
         }
 
         Recruitment r = recruitmentMapper.toEntity(req, clubId);
@@ -238,6 +242,11 @@ public class RecruitmentService implements RecruitmentServiceInterface {
         // Check if recruitment end date has passed
         if (r.getEndDate() != null && LocalDateTime.now().isAfter(r.getEndDate())) {
             throw new AppException(ErrorCode.RECRUITMENT_ENDED);
+        }
+
+        // Prevent updating recruitment to an end date in the past
+        if (req.endDate != null && req.endDate.isBefore(LocalDateTime.now())) {
+            throw new AppException(ErrorCode.INVALID_INPUT, "Thời hạn không được chọn trong quá khứ");
         }
 
         recruitmentMapper.updateEntity(r, req);
@@ -329,22 +338,6 @@ public class RecruitmentService implements RecruitmentServiceInterface {
         }
     }
 
-    @Override
-    @Transactional
-    public void deleteRecruitment(Long userId, Long id) throws AppException {
-        Recruitment r = recruitmentRepository.findById(id)
-                .orElseThrow(() -> new AppException(ErrorCode.INTERNAL_SERVER_ERROR));
-        
-        // Check permission: must be CLUB_PRESIDENT and a member of the club
-        checkClubOfficerPermission(userId, r.getClub().getId());
-        
-        // Check if club is active
-        if (!"ACTIVE".equalsIgnoreCase(r.getClub().getStatus())) {
-            throw new AppException(ErrorCode.CLUB_NOT_ACTIVE);
-        }
-
-        recruitmentRepository.deleteById(id);
-    }
 
     
     public PagedResponse<RecruitmentApplicationData> listApplications(Long userId, Long recruitmentId, RecruitmentApplicationStatus status, String keyword, Pageable pageable) throws AppException {
@@ -457,14 +450,19 @@ public class RecruitmentService implements RecruitmentServiceInterface {
      * Submit application with file upload support
      * @param applicantId User ID of the applicant
      * @param req Application submit request
-     * @param allFiles MultiValueMap containing files with keys like "file_<questionId>"
+     * @param file Single file to upload (optional)
      * @return Submitted application data
      * @throws AppException if submission fails
      */
     @Transactional
-    public RecruitmentApplicationData submitApplication(Long applicantId, ApplicationSubmitRequest req, MultiValueMap<String, MultipartFile> allFiles) throws AppException {
+    public RecruitmentApplicationData submitApplication(Long applicantId, ApplicationSubmitRequest req, MultipartFile file) throws AppException {
         Recruitment recruitment = recruitmentRepository.findById(req.recruitmentId)
                 .orElseThrow(() -> new AppException(ErrorCode.INTERNAL_SERVER_ERROR));
+
+        // Do not allow submission if recruitment is not OPEN (e.g., DRAFT or CLOSED)
+        if (recruitment.getStatus() != RecruitmentStatus.OPEN) {
+            throw new AppException(ErrorCode.RECRUITMENT_CLOSED);
+        }
 
         // Check if club is active (only active clubs can receive applications)
         Club club = recruitment.getClub();
@@ -472,13 +470,18 @@ public class RecruitmentService implements RecruitmentServiceInterface {
             throw new AppException(ErrorCode.CLUB_NOT_ACTIVE);
         }
 
+        // Validate file size (max 20 MB)
+        final long MAX_FILE_SIZE = 20L * 1024 * 1024; // 20 MB
+        if (file != null && !file.isEmpty() && file.getSize() > MAX_FILE_SIZE) {
+            throw new AppException(ErrorCode.FILE_TOO_LARGE);
+        }
+
         User applicant = userRepository.findById(applicantId)
                 .orElseThrow(() -> new AppException(ErrorCode.UNAUTHORIZED));
 
         // Check if user is already an active member of the club
         Long clubId = club.getId();
-        boolean isAlreadyMember = clubMemberShipRepository.existsByUserIdAndClubIdAndStatus(
-                applicantId, clubId, ClubMemberShipStatus.ACTIVE);
+        boolean isAlreadyMember = clubMemberShipRepository.existsByUserIdAndClubId(applicantId, clubId);
         if (isAlreadyMember) {
             throw new AppException(ErrorCode.ALREADY_CLUB_MEMBER);
         }
@@ -494,20 +497,16 @@ public class RecruitmentService implements RecruitmentServiceInterface {
             if (question.getIsRequired() != null && question.getIsRequired() == 1) {
                 boolean isAnswered = req.answers.stream()
                         .anyMatch(ans -> ans.questionId.equals(question.getId()) && 
-                                       (ans.answerText != null && !ans.answerText.trim().isEmpty() || 
-                                        ans.fileUrl != null && !ans.fileUrl.trim().isEmpty()));
-                
+                                       (ans.answerText != null && !ans.answerText.trim().isEmpty()));
+
                 // Check if file is uploaded for this question
-                if (!isAnswered && allFiles != null) {
-                    String fileKey = "file_" + question.getId();
-                    if (allFiles.containsKey(fileKey)) {
-                        List<MultipartFile> files = allFiles.get(fileKey);
-                        if (files != null && !files.isEmpty() && files.getFirst() != null && !files.getFirst().isEmpty()) {
-                            isAnswered = true;
-                        }
-                    }
+                if (!isAnswered && file != null && !file.isEmpty()) {
+                    // File can be used as answer for any required question if hasFile is marked true
+                    isAnswered = req.answers.stream()
+                            .anyMatch(ans -> ans.questionId.equals(question.getId()) &&
+                                           ans.hasFile != null && ans.hasFile);
                 }
-                
+
                 if (!isAnswered) {
                     throw new AppException(ErrorCode.INTERNAL_SERVER_ERROR);
                 }
@@ -523,48 +522,27 @@ public class RecruitmentService implements RecruitmentServiceInterface {
                 .build();
         app = applicationRepository.save(app);
 
-        // Build a map of questionId -> uploaded file URL
-        Map<Long, String> uploadedFileUrls = new HashMap<>();
-        if (allFiles != null && !allFiles.isEmpty()) {
-            // Parse files with format "file_<questionId>"
-            for (Map.Entry<String, List<MultipartFile>> entry : allFiles.entrySet()) {
-                String key = entry.getKey();
-                
-                // Skip non-file fields (like "request")
-                if (!key.startsWith("file_")) {
-                    continue;
-                }
-                
-                try {
-                    // Extract questionId from key "file_<questionId>"
-                    Long questionId = Long.parseLong(key.substring(5));
-                    List<MultipartFile> files = entry.getValue();
-                    
-                    if (files != null && !files.isEmpty()) {
-                        MultipartFile file = files.getFirst(); // Take first file
-                        if (file != null && !file.isEmpty()) {
-                            // Upload to Cloudinary
-                            CloudinaryService.UploadResult uploadResult = cloudinaryService.uploadFile(file);
-                            uploadedFileUrls.put(questionId, uploadResult.url());
-                        }
-                    }
-                } catch (NumberFormatException e) {
-                    // Invalid questionId format, skip
-                } catch (Exception e) {
-                    throw new AppException(ErrorCode.INTERNAL_SERVER_ERROR);
-                }
+        // Upload file if provided
+        String uploadedFileUrl = null;
+        if (file != null && !file.isEmpty()) {
+            try {
+                CloudinaryService.UploadResult uploadResult = cloudinaryService.uploadFile(file);
+                uploadedFileUrl = uploadResult.url();
+            } catch (Exception e) {
+                throw new AppException(ErrorCode.INTERNAL_SERVER_ERROR);
             }
         }
 
+        // Save answers
         List<RecruitmentFormAnswer> answers = new ArrayList<>();
         for (ApplicationSubmitRequest.FormAnswerRequest a : req.answers) {
-            String fileUrl = a.fileUrl;
-            
-            // If file was uploaded for this question, use the uploaded URL
-            if (uploadedFileUrls.containsKey(a.questionId)) {
-                fileUrl = uploadedFileUrls.get(a.questionId);
+            String fileUrl = null;
+
+            // If file was uploaded and this answer is marked to use it, assign the uploaded URL
+            if (uploadedFileUrl != null && a.hasFile != null && a.hasFile) {
+                fileUrl = uploadedFileUrl;
             }
-            
+
             RecruitmentFormAnswer ans = RecruitmentFormAnswer.builder()
                     .application(app)
                     .question(RecruitmentFormQuestion.builder().id(a.questionId).build())
@@ -762,6 +740,11 @@ public class RecruitmentService implements RecruitmentServiceInterface {
             throw new AppException(ErrorCode.INTERVIEW_TIME_PASSED);
         }
 
+        // Prevent updating recruitment to an end date in the past
+        if (req.interviewTime != null && req.interviewTime.isBefore(LocalDateTime.now())) {
+            throw new AppException(ErrorCode.INVALID_INPUT, "Thời gian phỏng vấn không được chọn trong quá khứ");
+        }
+
         // Update interview schedule
         app.setInterviewTime(req.interviewTime);
         app.setInterviewAddress(req.interviewAddress);
@@ -834,31 +817,36 @@ public class RecruitmentService implements RecruitmentServiceInterface {
     
     /**
      * Add member to team after application is accepted
+     * Only adds the user if they are not already a member of the club (regardless of status)
      */
     private void addMemberToTeam(RecruitmentApplication app) throws AppException {
         Long applicantId = app.getApplicant().getId();
         Long clubId = app.getRecruitment().getClub().getId();
         Long teamId = app.getTeamId();
         
-        // Check if user is already a member of the club
-        ClubMemberShip clubMembership = clubMemberShipRepository
-                .findByUserIdAndClubIdAndStatus(applicantId, clubId, ClubMemberShipStatus.ACTIVE)
-                .orElse(null);
-        
-        // If not a member yet, create new ClubMemberShip
-        if (clubMembership == null) {
-            Club club = app.getRecruitment().getClub();
-            User applicant = app.getApplicant();
-            
-            clubMembership = ClubMemberShip.builder()
-                    .user(applicant)
-                    .club(club)
-                    .joinDate(LocalDate.now())
-                    .status(ClubMemberShipStatus.ACTIVE)
-                    .build();
-            clubMembership = clubMemberShipRepository.save(clubMembership);
+        // Check if user is already a member of the club (regardless of status)
+        boolean isAlreadyMember = clubMemberShipRepository
+                .existsByUserIdAndClubId(applicantId, clubId);
+
+        // Only proceed if user is not already a member
+        if (isAlreadyMember) {
+            // User is already a member of the club, do not add again
+            return;
         }
-        
+
+        // User is not a member yet, proceed to add them
+        Club club = app.getRecruitment().getClub();
+        User applicant = app.getApplicant();
+
+        // Create new ClubMemberShip
+        ClubMemberShip clubMembership = ClubMemberShip.builder()
+                .user(applicant)
+                .club(club)
+                .joinDate(LocalDate.now())
+                .status(ClubMemberShipStatus.ACTIVE)
+                .build();
+        clubMembership = clubMemberShipRepository.save(clubMembership);
+
         // Get current semester
         Semester currentSemester = semesterRepository.findCurrentSemester()
                 .orElseThrow(() -> new AppException(ErrorCode.INTERNAL_SERVER_ERROR));
