@@ -1,4 +1,5 @@
 "use client"
+import { Video } from "lucide-react"
 import type { CalendarEvent } from "./EventCalendarGrid"
 
 interface EventCellProps {
@@ -41,17 +42,23 @@ export function EventCell({
       </div>
       <div className="flex flex-col gap-0.5 flex-1 overflow-y-auto max-h-[100px] min-h-0 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-border [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:hover:bg-muted-foreground/30">
         {events.map((event) => {
+          const isPendingPublish = event.isPendingPublish === true
           const isDraft =
-            event.isMyDraft === true ||
-            (event.requestStatus !== undefined &&
-              event.requestStatus !== null &&
-              event.requestStatus !== "")
+            !isPendingPublish &&
+            (event.isMyDraft === true ||
+              (event.requestStatus !== undefined &&
+                event.requestStatus !== null &&
+                event.requestStatus !== ""))
 
           return (
             <div
               key={event.id}
               className={`text-[11px] px-1.5 py-0.5 rounded font-medium truncate cursor-pointer hover:opacity-90 flex-shrink-0 transition-opacity inline-flex items-center gap-1 ${
-                isDraft ? "!bg-gray-400 !text-white" : getStatusColor(event.status)
+                isPendingPublish
+                  ? "!bg-orange-500 !text-white"
+                  : isDraft
+                    ? "!bg-gray-400 !text-white"
+                    : getStatusColor(event.status)
               }`}
               title={`${event.title}${event.isMyDraft ? " (Draft)" : ""} - ${event.location} - ${event.startDate.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}`}
               onClick={(e) => {
@@ -64,7 +71,7 @@ export function EventCell({
                   ? String(event.eventTypeName).trim().toUpperCase()
                   : ""
                 if (t === "MEETING") {
-                  return <span className="align-middle">📷</span>
+                  return <Video className="w-3 h-3 align-middle flex-shrink-0 text-black dark:text-white" />
                 }
                 return null
               })()}

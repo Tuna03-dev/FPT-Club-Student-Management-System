@@ -1,6 +1,5 @@
 package com.sep490.backendclubmanagement.service;
 
-import com.sep490.backendclubmanagement.dto.request.ClubCategoryFilterRequest;
 import com.sep490.backendclubmanagement.dto.request.CreateClubCategoryRequest;
 import com.sep490.backendclubmanagement.dto.request.UpdateClubCategoryRequest;
 import com.sep490.backendclubmanagement.dto.response.ClubCategoryDTO;
@@ -16,11 +15,15 @@ import com.sep490.backendclubmanagement.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collections;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -40,17 +43,52 @@ public class ClubCategoryServiceImpl implements ClubCategoryService {
 
     @Override
     @Transactional(readOnly = true)
-    public PageResponse<ClubCategoryDTO> getAllClubCategoriesWithFilter(ClubCategoryFilterRequest request) throws AppException {
+    public PageResponse<ClubCategoryDTO> getAllClubCategoriesWithFilter(String keyword, Pageable pageable) throws AppException {
         Long userId = SecurityUtils.getCurrentUserId();
         if (!roleService.isStaff(userId)) {
             throw new ForbiddenException("Chỉ STAFF mới có quyền truy cập");
         }
 
-        Pageable pageable = request.getPageable("id,desc");
-        Page<ClubCategory> categoryPage = clubCategoryRepository.findAllWithFilter(
-            request.getKeyword(),
-            pageable
-        );
+        Page<ClubCategory> categoryPage;
+
+        // If keyword is provided, use client-side filtering with Vietnamese normalization
+        if (keyword != null && !keyword.trim().isEmpty()) {
+            String trimmedKeyword = keyword.trim();
+            // Get all categories without keyword filter
+            categoryPage = clubCategoryRepository.findAllWithFilter(
+                null,
+                PageRequest.of(0, Integer.MAX_VALUE)
+            );
+
+            // Filter using Vietnamese normalization
+            List<ClubCategory> filteredList = categoryPage.getContent().stream()
+                    .filter(category -> {
+                        String categoryName = normalizeVietnamese(category.getCategoryName() != null ? category.getCategoryName() : "");
+
+                        // Split keyword into individual words for better matching
+                        String[] keywords = trimmedKeyword.split("\\s+");
+                        for (String kw : keywords) {
+                            String normalizedKw = normalizeVietnamese(kw);
+                            if (categoryName.contains(normalizedKw)) {
+                                return true;
+                            }
+                        }
+                        return false;
+                    })
+                    .collect(Collectors.toList());
+
+            // Apply pagination manually
+            int start = (int) pageable.getOffset();
+            int end = Math.min((start + pageable.getPageSize()), filteredList.size());
+            List<ClubCategory> paginatedList = start >= filteredList.size() ?
+                    Collections.emptyList() : filteredList.subList(start, end);
+            categoryPage = new PageImpl<>(paginatedList, pageable, filteredList.size());
+        } else {
+            categoryPage = clubCategoryRepository.findAllWithFilter(
+                keyword,
+                pageable
+            );
+        }
 
         Page<ClubCategoryDTO> dtoPage = categoryPage.map(clubCategoryMapper::toDTO);
         return PageResponse.of(dtoPage);
@@ -134,5 +172,13 @@ public class ClubCategoryServiceImpl implements ClubCategoryService {
 
         clubCategoryRepository.delete(category);
         log.info("Deleted club category with ID: {}", id);
+    }
+
+    private String normalizeVietnamese(String text) {
+        if (text == null || text.isBlank()) return "";
+        String normalized = text.replace("đ", "d").replace("Đ", "d");
+        normalized = java.text.Normalizer.normalize(normalized, java.text.Normalizer.Form.NFD);
+        normalized = normalized.replaceAll("\\p{InCombiningDiacriticalMarks}+", "");
+        return normalized.toLowerCase();
     }
 }

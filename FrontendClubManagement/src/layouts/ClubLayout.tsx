@@ -14,6 +14,12 @@ import {
   Plus,
   Newspaper,
   X,
+  ClipboardList,
+  User,
+  LogOut,
+  Building2,
+  PlusCircle,
+  FileSignature,
 } from "lucide-react";
 import {
   NavLink,
@@ -58,7 +64,7 @@ const navItems = [
   { key: "notifications", url: "/notifications", icon: Bell },
 ];
 
-type PermissionLevel = "CLUB_OFFICER" | "TEAM_OFFICER" | "MEMBER";
+type PermissionLevel = "CLUB_OFFICER" | "CLUB_TREASURER" | "TEAM_OFFICER" | "MEMBER";
 
 interface ManagementItem {
   key: string;
@@ -80,7 +86,7 @@ const managementItems: ManagementItem[] = [
     key: "permissions",
     url: "/roles",
     icon: Shield,
-    label: "Phân quyền",
+    label: "Quản lý vai trò",
     requiredRole: "CLUB_OFFICER",
   },
   {
@@ -123,7 +129,14 @@ const managementItems: ManagementItem[] = [
     url: "/finance",
     icon: DollarSign,
     label: "Quản lý tài chính",
-    requiredRole: "CLUB_OFFICER",
+    requiredRole: "CLUB_TREASURER", // CLUB_TREASURER hoặc CLUB_OFFICER (xử lý trong logic filter)
+  },
+  {
+    key: "manage_information",
+    url: "/information",
+    icon: ClipboardList,
+    label: "Quản lý thông tin",
+    requiredRole: "MEMBER",
   },
 ];
 
@@ -137,6 +150,7 @@ const managementColors: Record<string, string> = {
   pending_requests: "bg-gradient-to-br from-orange-500 to-orange-600",
   manage_reports: "bg-gradient-to-br from-pink-500 to-pink-600",
   club_news: "bg-gradient-to-br from-indigo-500 to-indigo-600",
+  manage_information: "bg-gradient-to-br from-indigo-500 to-indigo-600",
 };
 
 export const ClubLayout = () => {
@@ -229,6 +243,7 @@ export const ClubLayout = () => {
   const {
     isClubOfficer,
     isTeamOfficer,
+    isClubTreasurer,
     loading: permissionsLoading,
   } = useClubPermissions(validClubId ? numericClubId : undefined);
 
@@ -250,12 +265,14 @@ export const ClubLayout = () => {
   }
 
   // Determine user's role level
+  // Permission hierarchy: CLUB_OFFICER > CLUB_TREASURER > TEAM_OFFICER > MEMBER
   const userRoleLevel: PermissionLevel = useMemo(() => {
     if (permissionsLoading) return "MEMBER"; // Default while loading
     if (isClubOfficer) return "CLUB_OFFICER";
+    if (isClubTreasurer) return "CLUB_TREASURER";
     if (isTeamOfficer) return "TEAM_OFFICER";
     return "MEMBER";
-  }, [isClubOfficer, isTeamOfficer, permissionsLoading]);
+  }, [isClubOfficer, isClubTreasurer, isTeamOfficer, permissionsLoading]);
 
   // Sync search input with URL params
   useEffect(() => {
@@ -323,13 +340,29 @@ export const ClubLayout = () => {
     if (permissionsLoading) return [];
 
     const roleHierarchy: Record<PermissionLevel, number> = {
-      CLUB_OFFICER: 3,
+      CLUB_OFFICER: 4,
+      CLUB_TREASURER: 3,
       TEAM_OFFICER: 2,
       MEMBER: 1,
     };
 
     return managementItems
       .filter((item) => {
+        // Special handling for finance: CLUB_TREASURER or CLUB_OFFICER
+        if (item.key === "manage_finance") {
+          return isClubTreasurer || isClubOfficer;
+        }
+
+        // CLUB_TREASURER has all permissions of TEAM_OFFICER
+        // So if item requires TEAM_OFFICER, CLUB_TREASURER can also access it
+        if (item.requiredRole === "TEAM_OFFICER") {
+          return (
+            roleHierarchy[userRoleLevel] >= roleHierarchy[item.requiredRole] ||
+            isClubTreasurer ||
+            isClubOfficer
+          );
+        }
+
         // Check if user has required role level
         return roleHierarchy[userRoleLevel] >= roleHierarchy[item.requiredRole];
       })
@@ -345,7 +378,7 @@ export const ClubLayout = () => {
         }
         return item;
       });
-  }, [userRoleLevel, permissionsLoading]);
+  }, [userRoleLevel, permissionsLoading, isClubTreasurer, isClubOfficer]);
   // CHỈ hiện "Quản lí tin tức" khi amOfficer === true
 
   const getInitials = (name: string) =>
@@ -455,27 +488,30 @@ export const ClubLayout = () => {
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="hidden sm:flex items-center gap-2 hover:bg-secondary/80"
+                  className="hidden sm:flex items-center gap-2 hover:bg-orange-50 transition"
                   onClick={() => navigate("/")}
                 >
-                  <Home className="h-4 w-4" />
-                  <span className="font-medium">Trang chủ</span>
+                  <Home className="h-4 w-4 text-orange-500" />
+                  <span className="font-medium text-orange-600">Trang chủ</span>
                 </Button>
                 <NotificationBell />
-                <DropdownMenu>
+                <DropdownMenu
+                  onOpenChange={(open) => {
+                    if (open) {
+                      // Refresh user roles if needed
+                    }
+                  }}
+                >
                   <DropdownMenuTrigger asChild>
-                    <button className="flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 hover:bg-secondary/80 transition-all duration-200">
-                      <Avatar className="h-9 w-9 ring-2 ring-primary/20 hover:ring-primary/40 transition-all">
-                        <AvatarImage
-                          src={user?.avatarUrl}
-                          alt={user?.fullName}
-                        />
-                        <AvatarFallback className="bg-gradient-to-br from-primary/20 to-primary/10 text-primary text-sm font-semibold">
+                    <button className="flex items-center gap-2 rounded-md px-2 py-1 hover:bg-orange-50 transition">
+                      <Avatar className="h-9 w-9">
+                        <AvatarImage src={user?.avatarUrl} alt={user?.fullName} />
+                        <AvatarFallback className="bg-orange-100 text-orange-600 text-sm">
                           {user ? getInitials(user.fullName) : "U"}
                         </AvatarFallback>
                       </Avatar>
-                      <span className="hidden sm:block text-sm font-medium text-foreground max-w-[120px] truncate">
-                        {user?.fullName || "User"}
+                      <span className="hidden sm:block text-[15px] font-medium text-gray-700 group-hover:text-orange-600 max-w-[120px] truncate">
+                        {user?.fullName}
                       </span>
                     </button>
                   </DropdownMenuTrigger>
@@ -485,26 +521,22 @@ export const ClubLayout = () => {
                   >
                     <DropdownMenuLabel>
                       <div className="flex flex-col space-y-0.5">
-                        <p className="text-sm font-semibold">
+                        <p className="text-[14px] font-semibold text-gray-800">
                           {user?.fullName}
                         </p>
-                        <p className="text-xs text-muted-foreground">
-                          {user?.email}
-                        </p>
+                        <p className="text-[13px] text-gray-500">{user?.email}</p>
                       </div>
                     </DropdownMenuLabel>
                     <DropdownMenuSeparator />
-
                     {!showClubsList ? (
                       <>
                         <DropdownMenuItem
                           onClick={() => navigate("/profile")}
-                          className="cursor-pointer"
+                          className="cursor-pointer text-[14px] text-gray-700"
                         >
+                          <User className="mr-2 h-4 w-4 text-orange-500" />
                           Thông tin cá nhân
                         </DropdownMenuItem>
-
-                        {/* "Câu lạc bộ của tôi" chỉ khi có CLB */}
                         {!clubsLoading &&
                           !clubsError &&
                           clubs &&
@@ -512,42 +544,50 @@ export const ClubLayout = () => {
                             <DropdownMenuItem
                               onClick={() => setShowClubsList(true)}
                               onSelect={(e) => e.preventDefault()}
-                              className="cursor-pointer"
+                              className="cursor-pointer text-[14px] text-gray-700"
                             >
+                              <Users className="mr-2 h-4 w-4 text-orange-500" />
                               Câu lạc bộ của tôi
                             </DropdownMenuItem>
                           )}
-
                         <DropdownMenuItem
                           onClick={() => navigate("/create-club")}
-                          className="cursor-pointer"
+                          className="cursor-pointer text-[14px] text-gray-700"
                         >
+                          <PlusCircle className="mr-2 h-4 w-4 text-orange-500" />
                           Đăng ký thành lập CLB
                         </DropdownMenuItem>
-
+                        <DropdownMenuItem
+                          onClick={() => navigate("/myRecruitmentApplications")}
+                          className="cursor-pointer text-[14px] text-gray-700"
+                        >
+                          <FileSignature className="mr-2 h-4 w-4 text-orange-500" />
+                          Đơn ứng tuyển của tôi
+                        </DropdownMenuItem>
                         {isStaff && (
                           <DropdownMenuItem
                             onClick={() => navigate("/staff/club-creation")}
-                            className="cursor-pointer"
+                            className="cursor-pointer text-[14px] text-gray-700"
                           >
+                            <Building2 className="mr-2 h-4 w-4 text-orange-500" />
                             Trang quản lý của ICPDP
                           </DropdownMenuItem>
                         )}
-
                         {isAdmin && (
                           <DropdownMenuItem
                             onClick={() => navigate("/admin")}
-                            className="cursor-pointer"
+                            className="cursor-pointer text-[14px] text-gray-700"
                           >
+                            <Shield className="mr-2 h-4 w-4 text-orange-500" />
                             Trang quản trị
                           </DropdownMenuItem>
                         )}
-
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
                           onClick={handleLogout}
-                          className="cursor-pointer text-red-600"
+                          className="cursor-pointer text-[14px] text-red-600"
                         >
+                          <LogOut className="mr-2 h-4 w-4" />
                           Đăng xuất
                         </DropdownMenuItem>
                       </>
@@ -556,33 +596,31 @@ export const ClubLayout = () => {
                         <DropdownMenuItem
                           onClick={() => setShowClubsList(false)}
                           onSelect={(e) => e.preventDefault()}
-                          className="cursor-pointer text-xs text-muted-foreground"
+                          className="cursor-pointer text-[13px] text-gray-500"
                         >
                           ← Quay lại
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
-                        <DropdownMenuLabel className="text-sm font-semibold">
+                        <DropdownMenuLabel className="px-3 py-1.5 text-[14px] font-semibold text-gray-800">
                           CLB của bạn
                         </DropdownMenuLabel>
-
                         {clubsLoading && (
-                          <div className="px-3 py-2 text-sm text-muted-foreground">
+                          <div className="px-3 py-2 text-[14px] text-gray-500">
                             Đang tải danh sách CLB…
                           </div>
                         )}
                         {clubsError && (
-                          <div className="px-3 py-2 text-sm text-red-600">
+                          <div className="px-3 py-2 text-[14px] text-red-600">
                             {clubsError}
                           </div>
                         )}
                         {!clubsLoading &&
                           !clubsError &&
                           (!clubs || clubs.length === 0) && (
-                            <div className="px-3 py-2 text-sm text-muted-foreground">
+                            <div className="px-3 py-2 text-[14px] text-gray-500">
                               Bạn chưa thuộc CLB nào.
                             </div>
                           )}
-
                         {!clubsLoading &&
                           !clubsError &&
                           clubs?.map((club) => (
@@ -606,13 +644,13 @@ export const ClubLayout = () => {
                                     className="h-9 w-9 rounded-md object-cover"
                                   />
                                 ) : (
-                                  <div className="h-9 w-9 rounded-md bg-gradient-to-br from-primary/40 to-primary/60 flex items-center justify-center">
+                                  <div className="h-9 w-9 rounded-md bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center">
                                     <span className="text-white font-bold text-sm">
                                       {club.clubName?.charAt(0) || "C"}
                                     </span>
                                   </div>
                                 )}
-                                <span className="text-sm truncate">
+                                <span className="text-[14px] truncate text-gray-700">
                                   {club.clubName}
                                 </span>
                               </div>
@@ -636,9 +674,9 @@ export const ClubLayout = () => {
                   <DropdownMenuContent align="end" className="w-64">
                     <div className="px-2 py-1.5">
                       <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-                        {userRoleLevel === "CLUB_OFFICER"
-                          ? "QUẢN LÝ"
-                          : userRoleLevel === "TEAM_OFFICER"
+                        {userRoleLevel === "CLUB_OFFICER" ||
+                        userRoleLevel === "CLUB_TREASURER" ||
+                        userRoleLevel === "TEAM_OFFICER"
                           ? "QUẢN LÝ"
                           : "DANH MỤC"}
                       </h3>
@@ -676,9 +714,9 @@ export const ClubLayout = () => {
                   <div>
                     <div className="px-3 mb-4">
                       <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                        {userRoleLevel === "CLUB_OFFICER"
-                          ? "QUẢN LÝ"
-                          : userRoleLevel === "TEAM_OFFICER"
+                        {userRoleLevel === "CLUB_OFFICER" ||
+                        userRoleLevel === "CLUB_TREASURER" ||
+                        userRoleLevel === "TEAM_OFFICER"
                           ? "QUẢN LÝ"
                           : "DANH MỤC"}
                       </h2>
@@ -770,9 +808,9 @@ export const ClubLayout = () => {
                           {team.teamName.charAt(0).toUpperCase()}
                         </div>
                         <div className="flex-1 truncate">{team.teamName}</div>
-                        <span className="text-[10px] text-muted-foreground">
+                        {/* <span className="text-[10px] text-muted-foreground">
                           {team.memberCount}
-                        </span>
+                        </span> */}
                       </NavLink>
                     );
                   })}

@@ -14,6 +14,7 @@ import {
   getEventRegistrations, 
   batchMarkAttendance, 
   getEventById,
+  exportAttendanceExcel,
   type EventRegistrationDto,
   type BatchMarkAttendanceItem
 } from "@/service/EventService"
@@ -43,16 +44,21 @@ interface AttendancePageProps {
 
 export function AttendancePage({ eventId, event: propEvent }: AttendancePageProps) {
   const [searchParams] = useSearchParams()
-  const user = authService.getCurrentUser()
-  const isPresident = user?.systemRole === "CLUB_OFFICER"
-  const isOfficer = user?.systemRole === "TEAM_OFFICER"
-  const canMarkAttendance = isPresident || isOfficer
-  const readOnly = (searchParams.get("mode") ?? "") === "view" || !canMarkAttendance
   const [searchTerm, setSearchTerm] = useState("")
   const [students, setStudents] = useState<Student[]>([])
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [exporting, setExporting] = useState(false)
   const [event, setEvent] = useState<Event | undefined>(propEvent)
+  const [eventClubId, setEventClubId] = useState<number | null>(null)
+  
+  // Check systemRole in clubRoleList instead of global systemRole
+  const clubRole = eventClubId ? authService.getClubRole(eventClubId) : null
+  const systemRoleInClub = clubRole?.systemRole?.toUpperCase()
+  const isPresident = eventClubId && systemRoleInClub === "CLUB_OFFICER"
+  const isOfficer = eventClubId && systemRoleInClub === "TEAM_OFFICER"
+  const canMarkAttendance = isPresident || isOfficer
+  const readOnly = (searchParams.get("mode") ?? "") === "view" || !canMarkAttendance
 
   // Fetch event data and registrations
   useEffect(() => {
@@ -74,6 +80,8 @@ export function AttendancePage({ eventId, event: propEvent }: AttendancePageProp
           time: startDate.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
           location: eventData.location || "Chưa có địa điểm"
         })
+        // Store clubId from event for permission check
+        setEventClubId(eventData.clubId ?? null)
         
         // Fetch registrations
         const registrations = await getEventRegistrations(eventIdNum)
@@ -190,24 +198,61 @@ export function AttendancePage({ eventId, event: propEvent }: AttendancePageProp
     }
   }
 
-  const handleDownload = () => {
-    const csv = [
-      ["Mã Sinh Viên", "Tên Sinh Viên", "Trạng Thái", "Ghi Chú"].join(","),
-      ...students.map((s) =>
-        [
-          s.studentId,
-          s.name,
-          s.attendance === "present" ? "Có mặt" : s.attendance === "absent" ? "Vắng mặt" : "Chưa điểm danh",
-          `"${s.note}"`,
-        ].join(","),
-      ),
-    ].join("\n")
+  const handleDownload = async () => {
+    if (!eventId) {
+      toast.error("Không tìm thấy thông tin sự kiện")
+      return
+    }
 
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" })
-    const link = document.createElement("a")
-    link.href = URL.createObjectURL(blob)
-    link.download = `attendance-${new Date().toISOString().split("T")[0]}.csv`
-    link.click()
+    try {
+      setExporting(true)
+      const eventIdNum = typeof eventId === 'string' ? parseInt(eventId, 10) : eventId
+      
+      // Gọi API export Excel từ backend
+      const blob = await exportAttendanceExcel(eventIdNum)
+      
+      // Kiểm tra blob có hợp lệ không
+      if (!blob || blob.size === 0) {
+        throw new Error("File Excel rỗng hoặc không hợp lệ")
+      }
+      
+      // Kiểm tra xem có phải là JSON error không (khi backend trả về error nhưng status 200)
+      if (blob.type === 'application/json' || blob.type.startsWith('text/')) {
+        const text = await blob.text()
+        try {
+          const errorData = JSON.parse(text)
+          throw new Error(errorData.message || errorData.data?.message || "Không thể xuất file Excel")
+        } catch {
+          throw new Error("Không thể xuất file Excel. Vui lòng thử lại sau.")
+        }
+      }
+      
+      // Tạo URL từ blob và download
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement("a")
+      link.href = url
+      
+      // Lấy tên file từ Content-Disposition header hoặc dùng tên mặc định
+      const fileName = event?.name 
+        ? `${event.name.replace(/[^a-zA-Z0-9\s]/g, "_").replace(/\s+/g, "_")}_DiemDanh.xlsx`
+        : `DiemDanh_${eventIdNum}_${new Date().toISOString().split("T")[0]}.xlsx`
+      
+      link.download = fileName
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      
+      // Cleanup
+      window.URL.revokeObjectURL(url)
+      
+      toast.success("Xuất Excel thành công!")
+    } catch (error: any) {
+      console.error("Error exporting Excel:", error)
+      const errorMessage = error?.message || error?.response?.data?.message || "Không thể xuất file Excel"
+      toast.error(errorMessage)
+    } finally {
+      setExporting(false)
+    }
   }
 
   if (loading) {
@@ -334,9 +379,24 @@ export function AttendancePage({ eventId, event: propEvent }: AttendancePageProp
               />
             </div>
           <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={handleDownload} className="gap-2 bg-transparent">
-                <Download className="h-4 w-4" />
-                <span className="hidden sm:inline">Xuất Excel</span>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleDownload} 
+                disabled={exporting}
+                className="gap-2 bg-transparent"
+              >
+                {exporting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span className="hidden sm:inline">Đang xuất...</span>
+                  </>
+                ) : (
+                  <>
+                    <Download className="h-4 w-4" />
+                    <span className="hidden sm:inline">Xuất Excel</span>
+                  </>
+                )}
               </Button>
               {!readOnly && (
               <Button 

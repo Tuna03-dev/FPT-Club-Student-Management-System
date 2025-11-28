@@ -1,10 +1,19 @@
 "use client";
-import { type Dispatch, type SetStateAction } from "react";
+import { type Dispatch, type SetStateAction, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { authService } from "@/services/authService";
 import { useClubPermissions } from "@/hooks/useClubPermissions";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   type PendingRequestDto,
   approveByClub,
@@ -26,11 +35,16 @@ interface Event {
   requestStatus?: string;
 }
 
+interface PendingRequestMeta {
+  requestEventId: number;
+  status?: string;
+}
+
 interface PendingRequestsCardProps {
   clubId: number;
   pendingRequests: PendingRequestDto[] | null;
   loadingPending: boolean;
-  onRequestClick: (event: Event) => void;
+  onRequestClick: (event: Event, meta?: PendingRequestMeta) => void;
   onRefetch: () => Promise<void>;
   determineEventStatus: (
     startDate: Date,
@@ -63,6 +77,42 @@ export function PendingRequestsCard({
     : "";
   const canReview =
     !!user && (roleUpper === "STAFF" || isPresidentOfCurrentClub);
+  
+  // State cho dialog nhập lý do từ chối
+  const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
+  const [rejectReason, setRejectReason] = useState("");
+  const [rejectingRequestId, setRejectingRequestId] = useState<number | null>(null);
+
+  const handleReject = async (requestEventId: number, isStaff: boolean, reason: string) => {
+    try {
+      if (isStaff) {
+        await approveByUniversity(requestEventId, false, reason || undefined);
+        setPendingRequests((prev) =>
+          (prev ?? []).filter(
+            (x) => x.requestEventId !== requestEventId
+          )
+        );
+        toast.success("Đã từ chối sự kiện");
+        await onRefetch();
+        // Refresh lại trang sau khi từ chối
+        window.location.reload();
+      } else {
+        await approveByClub(requestEventId, false, reason || undefined);
+        const refreshed = await getPendingRequests(clubId && clubId > 0 ? clubId : undefined);
+        setPendingRequests(refreshed);
+        toast.success("Đã từ chối sự kiện");
+      }
+      await onRefetch();
+    } catch (e: unknown) {
+      console.error("Reject failed", e);
+      toast.error(
+        getErrorMessage(
+          e,
+          "Không thể từ chối sự kiện. Vui lòng thử lại."
+        )
+      );
+    }
+  };
 
   if (!canReview) return null;
 
@@ -99,8 +149,11 @@ export function PendingRequestsCard({
             const reqStatusUpper = req.status
               ? String(req.status).trim().toUpperCase()
               : undefined;
+            // Check systemRole in clubRoleList instead of global systemRole
+            const clubRole = clubId ? authService.getClubRole(clubId) : null;
+            const systemRoleInClub = clubRole?.systemRole?.toUpperCase();
             const isPresidentActionable =
-              roleUpper === "CLUB_OFFICER" && reqStatusUpper === "PENDING_CLUB";
+              (systemRoleInClub === "CLUB_OFFICER" || roleUpper === "CLUB_OFFICER") && reqStatusUpper === "PENDING_CLUB";
             const isStaffActionable =
               roleUpper === "STAFF" && reqStatusUpper === "PENDING_UNIVERSITY";
             const showActions = isPresidentActionable || isStaffActionable;
@@ -127,7 +180,10 @@ export function PendingRequestsCard({
                     isMyDraft: true,
                     requestStatus: req.status,
                   };
-                  onRequestClick(mapped);
+                  onRequestClick(mapped, {
+                    requestEventId: req.requestEventId,
+                    status: req.status,
+                  });
                 }}
               >
                 <div className="font-semibold text-foreground">
@@ -176,12 +232,18 @@ export function PendingRequestsCard({
                     </div>
                   );
                 })()}
-                {showActions && (
+                {showActions && (() => {
+                  // Kiểm tra xem sự kiện đã bắt đầu chưa
+                  const isEventStarted = req.event ? new Date(req.event.startTime) < new Date() : false;
+                  
+                  return (
                   <div className="flex gap-3">
                     <Button
                       size="sm"
                       variant="secondary"
                       className="bg-emerald-50 text-emerald-600 hover:bg-emerald-100"
+                      disabled={isEventStarted}
+                      title={isEventStarted ? "Sự kiện đã bắt đầu, không thể duyệt" : ""}
                       onClick={async (e) => {
                         e.stopPropagation();
                         const userNow = authService.getCurrentUser();
@@ -195,14 +257,22 @@ export function PendingRequestsCard({
                               )
                             );
                             toast.success("Đã duyệt sự kiện thành công");
-                          } else if (userNow.systemRole === "CLUB_OFFICER") {
-                            await approveByClub(req.requestEventId, true);
-                            // Refresh pending requests to get updated status
-                            const refreshed = await getPendingRequests();
-                            setPendingRequests(refreshed);
-                            toast.success(
-                              "Đã duyệt sự kiện. Đang chờ duyệt từ Nhà trường"
-                            );
+                            await onRefetch();
+                            // Refresh lại trang sau khi duyệt
+                            window.location.reload();
+                          } else {
+                            // Check systemRole in clubRoleList instead of global systemRole
+                            const clubRole = clubId ? authService.getClubRole(clubId) : null;
+                            const systemRoleInClub = clubRole?.systemRole?.toUpperCase();
+                            if (systemRoleInClub === "CLUB_OFFICER") {
+                              await approveByClub(req.requestEventId, true);
+                              // Refresh pending requests to get updated status
+                              const refreshed = await getPendingRequests(clubId && clubId > 0 ? clubId : undefined);
+                              setPendingRequests(refreshed);
+                              toast.success(
+                                "Đã duyệt sự kiện. Đang chờ duyệt từ Nhà trường"
+                              );
+                            }
                           }
                           await onRefetch();
                         } catch (e: unknown) {
@@ -222,50 +292,79 @@ export function PendingRequestsCard({
                       size="sm"
                       variant="secondary"
                       className="bg-rose-50 text-rose-600 hover:bg-rose-100"
-                      onClick={async (e) => {
+                      onClick={(e) => {
                         e.stopPropagation();
                         const userNow = authService.getCurrentUser();
                         if (!userNow) return;
-                        try {
-                          if (userNow.systemRole === "STAFF") {
-                            await approveByUniversity(
-                              req.requestEventId,
-                              false
-                            );
-                            setPendingRequests((prev) =>
-                              (prev ?? []).filter(
-                                (x) => x.requestEventId !== req.requestEventId
-                              )
-                            );
-                            toast.success("Đã từ chối sự kiện");
-                          } else if (userNow.systemRole === "CLUB_OFFICER") {
-                            await approveByClub(req.requestEventId, false);
-                            // Refresh pending requests to get updated status
-                            const refreshed = await getPendingRequests();
-                            setPendingRequests(refreshed);
-                            toast.success("Đã từ chối sự kiện");
-                          }
-                          await onRefetch();
-                        } catch (e: unknown) {
-                          console.error("Reject failed", e);
-                          toast.error(
-                            getErrorMessage(
-                              e,
-                              "Không thể từ chối sự kiện. Vui lòng thử lại."
-                            )
-                          );
-                        }
+                        // Mở dialog để nhập lý do cho cả STAFF và CLUB_OFFICER
+                        setRejectingRequestId(req.requestEventId);
+                        setRejectReason("");
+                        setRejectDialogOpen(true);
                       }}
                     >
                       ✗ Từ chối
                     </Button>
                   </div>
-                )}
+                  );
+                })()}
               </div>
             );
           })}
         </div>
       )}
+      
+      {/* Dialog nhập lý do từ chối (cho cả STAFF và CLUB_OFFICER) */}
+      <Dialog open={rejectDialogOpen} onOpenChange={setRejectDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Từ chối sự kiện</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="reject-reason">Lý do từ chối *</Label>
+              <Textarea
+                id="reject-reason"
+                placeholder="Nhập lý do từ chối sự kiện..."
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                rows={4}
+                className="mt-2"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setRejectDialogOpen(false);
+                setRejectReason("");
+                setRejectingRequestId(null);
+              }}
+            >
+              Hủy
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={async () => {
+                if (!rejectReason.trim()) {
+                  toast.error("Vui lòng nhập lý do từ chối");
+                  return;
+                }
+                if (rejectingRequestId !== null) {
+                  const userNow = authService.getCurrentUser();
+                  const isStaff = userNow?.systemRole === "STAFF";
+                  await handleReject(rejectingRequestId, isStaff, rejectReason.trim());
+                  setRejectDialogOpen(false);
+                  setRejectReason("");
+                  setRejectingRequestId(null);
+                }
+              }}
+            >
+              Xác nhận từ chối
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }

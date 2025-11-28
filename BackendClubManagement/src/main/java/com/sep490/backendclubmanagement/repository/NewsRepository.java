@@ -108,4 +108,19 @@ public interface NewsRepository extends JpaRepository<News, Long> {
     Page<News> findDraftsVisibleToUser(@Param("authorId") Long authorId,
                                        @Param("clubId") Long clubId,
                                        Pageable pageable);
+
+    /**
+     * Lấy danh sách tin tức đã được publish của một câu lạc bộ với phân trang và tìm kiếm
+     */
+    @Query("SELECT n FROM News n " +
+           "WHERE n.club.id = :clubId " +
+           "AND n.isDraft = false " +
+           "AND (:keyword IS NULL OR :keyword = '' OR " +
+           "LOWER(n.title) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
+           "LOWER(n.content) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
+           "LOWER(n.newsType) LIKE LOWER(CONCAT('%', :keyword, '%'))) " +
+           "ORDER BY n.createdAt DESC")
+    Page<News> findPublishedNewsByClubId(@Param("clubId") Long clubId, @Param("keyword") String keyword, Pageable pageable);
 }
+
+

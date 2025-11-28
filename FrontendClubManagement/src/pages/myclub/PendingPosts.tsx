@@ -33,6 +33,7 @@ export default function PendingPosts() {
   const { isClubOfficer, isTeamOfficer, isClubTreasurer } =
     useClubPermissions(numericClubId);
   const [activeTab, setActiveTab] = useState<string>("");
+  const [isTabInitialized, setIsTabInitialized] = useState(false);
   const [posts, setPosts] = useState<PostWithRelationsData[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -51,46 +52,43 @@ export default function PendingPosts() {
   const { data: teams, loading: teamsLoading } = useTeams(numericClubId);
 
   // Filter teams based on role
+  // CLUB_OFFICER sees all teams, others only see teams where they are officers
   const visibleTeams = useMemo(() => {
     if (!teams) return [];
 
     // Club officer sees all teams
     if (isClubOfficer) return teams;
 
-    // Team officer/treasurer only sees their team
-    // For now, we'll show all teams but load logic will be restricted
-    // In a real implementation, you'd filter teams by userTeamIds
-    return teams;
+    // Team officer/treasurer only sees teams where they have roles (myRoles.length > 0)
+    // This means they are officers of those teams
+    return teams.filter((team) => team.myRoles && team.myRoles.length > 0);
   }, [teams, isClubOfficer]);
 
-  // Set initial tab based on role
+  // Set initial tab based on role - chỉ chạy 1 lần
   useEffect(() => {
-    if (!activeTab && !teamsLoading) {
-      if (isClubOfficer) {
-        setActiveTab("club-wide");
-      } else if (
-        (isTeamOfficer || isClubTreasurer) &&
-        visibleTeams.length > 0
-      ) {
-        // Team officer or treasurer starts with their first team
-        setActiveTab(String(visibleTeams[0].teamId));
-      } else {
-        setActiveTab("club-wide");
-      }
+    if (isTabInitialized || teamsLoading) return;
+
+    if (isClubOfficer) {
+      setActiveTab("club-wide");
+      setIsTabInitialized(true);
+    } else if (
+      (isTeamOfficer || isClubTreasurer) &&
+      visibleTeams.length > 0
+    ) {
+      // Team officer or treasurer starts with their first team
+      setActiveTab(String(visibleTeams[0].teamId));
+      setIsTabInitialized(true);
+    } else if (!isClubOfficer && !isTeamOfficer && !isClubTreasurer) {
+      setActiveTab("club-wide");
+      setIsTabInitialized(true);
     }
-  }, [
-    isClubOfficer,
-    isTeamOfficer,
-    isClubTreasurer,
-    visibleTeams,
-    teamsLoading,
-    activeTab,
-  ]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [teamsLoading, visibleTeams]);
 
   // Load pending posts based on active tab
   const loadPendingPosts = useCallback(
     async (pageNum: number = 0) => {
-      if (!clubId) return;
+      if (!clubId || !activeTab) return;
 
       if (pageNum === 0) {
         setLoading(true);
@@ -110,6 +108,10 @@ export default function PendingPosts() {
         } else {
           // Load team posts
           const teamId = Number(activeTab);
+          if (isNaN(teamId)) {
+            console.error("Invalid teamId:", activeTab);
+            return;
+          }
           response = await postService.getPendingTeamPosts(
             Number(clubId),
             teamId,
@@ -147,14 +149,17 @@ export default function PendingPosts() {
     [clubId, activeTab]
   );
 
-  // Reload when tab changes
+  // Reload when tab changes - chỉ phụ thuộc activeTab
   useEffect(() => {
+    if (!activeTab) return;
+    
     setPosts([]);
     setPage(0);
     setHasMore(true);
     setTotalElements(0);
     loadPendingPosts(0);
-  }, [loadPendingPosts, activeTab]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
 
   // Infinite scroll observer
   useEffect(() => {

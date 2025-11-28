@@ -16,9 +16,15 @@ import com.sep490.backendclubmanagement.service.RoleService;
 import com.sep490.backendclubmanagement.util.SecurityUtils;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.io.IOException;
 import java.util.List;
 
 @RestController
@@ -108,9 +114,10 @@ public class EventController {
      * Lấy danh sách request chờ duyệt
      */
     @GetMapping("/pending-requests")
-    public ApiResponse<List<PendingRequestDto>> getPendingRequests() {
+    public ApiResponse<List<PendingRequestDto>> getPendingRequests(
+            @RequestParam(value = "clubId", required = false) Long clubId) {
         Long userId = SecurityUtils.getCurrentUserId();
-        return ApiResponse.success(eventManagementService.getPendingRequests(userId));
+        return ApiResponse.success(eventManagementService.getPendingRequests(userId, clubId));
     }
 
     /**
@@ -256,5 +263,71 @@ public class EventController {
     @GetMapping("/without-report-requirement")
     public ApiResponse<List<EventWithoutReportRequirementDto>> getEventsWithoutReportRequirement() {
         return ApiResponse.success(eventService.getEventsWithoutReportRequirement());
+    }
+
+    /**
+     * Lấy danh sách events đã được publish của một câu lạc bộ với phân trang và tìm kiếm
+     */
+    @GetMapping("/clubs/{clubId}/published")
+    public ApiResponse<PagedResponse<EventData>> getPublishedEventsByClubId(
+            @PathVariable Long clubId,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "startTime,desc") String sort) {
+        Pageable pageable = createPageable(page, size, sort);
+        return ApiResponse.success(eventService.getPublishedEventsByClubId(clubId, keyword, pageable));
+    }
+
+    /**
+     * Export danh sách điểm danh sự kiện ra file Excel
+     * GET /api/events/{eventId}/attendance/export-excel
+     */
+    @GetMapping("/{eventId}/attendance/export-excel")
+    public ResponseEntity<byte[]> exportAttendanceExcel(@PathVariable Long eventId) throws IOException {
+        Long userId = SecurityUtils.getCurrentUserId();
+
+        EventData event = eventService.getEventById(eventId);
+        Long clubId = event != null ? event.getClubId() : null;
+        if (clubId == null) {
+            throw new ForbiddenException("Event không thuộc về club nào");
+        }
+
+        // Chỉ ban cán sự của CLB mới có quyền xuất Excel
+        if (!roleService.isClubPresident(userId, clubId) && !roleService.isClubOfficer(userId, clubId)) {
+            throw new ForbiddenException("Chỉ ban cán sự của CLB này mới có quyền xuất Excel điểm danh");
+        }
+
+        java.io.ByteArrayOutputStream excelStream = eventService.exportAttendanceToExcel(eventId);
+        byte[] excelBytes = excelStream.toByteArray();
+
+        // Tạo tên file với tên sự kiện
+        String eventName = event.getTitle() != null ? event.getTitle() : "Event";
+        // Loại bỏ ký tự đặc biệt trong tên file
+       // String safeFileName = eventName.replaceAll("[^a-zA-Z0-9\\s]", "_").replaceAll("\\s+", "_");
+        String fileName = eventName + "_DiemDanh.xlsx";
+
+        HttpHeaders headers = new HttpHeaders();
+        // Set content type cho Excel file
+        headers.setContentType(new MediaType("application", "vnd.openxmlformats-officedocument.spreadsheetml.sheet"));
+        // Encode filename với UTF-8 để hỗ trợ tiếng Việt trong tên file
+        String encodedFileName = java.net.URLEncoder.encode(fileName, java.nio.charset.StandardCharsets.UTF_8).replace("+", "%20");
+        headers.add("Content-Disposition", "attachment; filename=\"" + fileName + "\"; filename*=UTF-8''" + encodedFileName);
+        headers.setContentLength(excelBytes.length);
+
+        return ResponseEntity.ok()
+                .headers(headers)
+                .body(excelBytes);
+    }
+
+    /**
+     * Helper method to create Pageable from sort string
+     */
+    private Pageable createPageable(int page, int size, String sortStr) {
+        String[] sortParams = sortStr.split(",");
+        String property = sortParams[0];
+        Sort.Direction direction = sortParams.length > 1 && sortParams[1].equalsIgnoreCase("asc")
+                ? Sort.Direction.ASC : Sort.Direction.DESC;
+        return PageRequest.of(page, size, Sort.by(direction, property));
     }
 }

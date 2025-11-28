@@ -5,9 +5,11 @@ import { ChevronLeft, ChevronRight, X, Calendar, MapPin, Users, ClipboardCheck, 
 import { useNavigate, useParams } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import { UpdateEventForm, type UpdateEventFormData } from "./update-event-form"
-import { updateEvent, deleteEvent, getEventById, registerForEvent, cancelEventRegistration, getRegistrationStatus, cancelClubEventByStaff, publishEventByStaff, type UpdateEventPayload } from "@/service/EventService"
+import { updateEvent, deleteEvent, getEventById, registerForEvent, cancelEventRegistration, getRegistrationStatus, cancelClubEventByStaff, publishEventByStaff, approveByClub, approveByUniversity, type UpdateEventPayload } from "@/service/EventService"
 import { authService } from "@/services/authService"
 import { toast } from "sonner"
 import React from "react"
@@ -37,9 +39,11 @@ interface EventDetailModalProps {
   onUpdated?: (updated: { id: string; title: string; description: string; startDate: Date; endDate: Date; location: string; attendees: number; status: "upcoming" | "ongoing" | "completed"; images: string[]; isMyDraft?: boolean; requestStatus?: string }) => void
   onDeleted?: (id: string) => void
   readOnly?: boolean
+  pendingRequest?: { requestEventId: number; status?: string }
+  onPendingActionSuccess?: () => Promise<void> | void
 }
 
-export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted, readOnly }: EventDetailModalProps) {
+export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted, readOnly, pendingRequest, onPendingActionSuccess }: EventDetailModalProps) {
   const navigate = useNavigate()
   const params = useParams()
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
@@ -54,13 +58,22 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
   const [clubName, setClubName] = useState<string | null>(null)
   const [eventTypeName, setEventTypeName] = useState<string | null>(null)
   const [eventClubId, setEventClubId] = useState<number | null>(null)
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false)
+  const [cancelReason, setCancelReason] = useState("")
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [isProcessingPendingAction, setIsProcessingPendingAction] = useState(false)
+  const [pendingRejectDialogOpen, setPendingRejectDialogOpen] = useState(false)
+  const [pendingRejectReason, setPendingRejectReason] = useState("")
   
   // Get clubId from props or URL params
   const currentClubId = clubId || (params.clubId ? parseInt(params.clubId as string, 10) : undefined)
   const user = authService.getCurrentUser()
-  const isClubPresident = user?.systemRole === "CLUB_OFFICER"
-  const isClubOfficer = user?.systemRole === "TEAM_OFFICER"
   const isStaff = user?.systemRole === "STAFF"
+  // Check systemRole in clubRoleList instead of global systemRole
+  const clubRole = currentClubId ? authService.getClubRole(currentClubId) : null
+  const systemRoleInClub = clubRole?.systemRole?.toUpperCase()
+  const isClubPresident = currentClubId && systemRoleInClub === "CLUB_OFFICER"
+  const isClubOfficer = currentClubId && systemRoleInClub === "TEAM_OFFICER"
   const canMarkAttendance = isClubPresident || isClubOfficer
   const canManageMeeting = canMarkAttendance // FE: lãnh đạo CLB có quyền quản lý MEETING
 
@@ -71,6 +84,65 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
   const isEventUpcoming = new Date() < event.startDate
   const isMeeting = (eventTypeName ?? "").toUpperCase() === "MEETING"
   const canEditStaffEvent = isStaff && isEventUpcoming && (eventClubId == null)
+  const pendingStatusUpper = pendingRequest?.status
+    ? String(pendingRequest.status).trim().toUpperCase()
+    : undefined
+  const canHandlePending =
+    !!pendingRequest &&
+    ((pendingStatusUpper === "PENDING_CLUB" && systemRoleInClub === "CLUB_OFFICER") ||
+      (pendingStatusUpper === "PENDING_UNIVERSITY" && isStaff))
+  const isPendingEventStarted = new Date(event.startDate) < new Date()
+
+  const handleApprovePending = async () => {
+    if (!pendingRequest || !pendingStatusUpper) return
+    if (isPendingEventStarted) {
+      toast.error("Sự kiện đã bắt đầu, không thể duyệt.")
+      return
+    }
+    try {
+      setIsProcessingPendingAction(true)
+      if (pendingStatusUpper === "PENDING_UNIVERSITY") {
+        await approveByUniversity(pendingRequest.requestEventId, true)
+        toast.success("Đã duyệt sự kiện thành công")
+      } else {
+        await approveByClub(pendingRequest.requestEventId, true)
+        toast.success("Đã duyệt. Đang chờ duyệt từ Nhà trường")
+      }
+      await onPendingActionSuccess?.()
+      onClose()
+    } catch (error) {
+      console.error("Approve pending failed:", error)
+      toast.error(getErrorMessage(error, "Không thể duyệt sự kiện. Vui lòng thử lại."))
+    } finally {
+      setIsProcessingPendingAction(false)
+    }
+  }
+
+  const handleRejectPending = async () => {
+    if (!pendingRequest || !pendingStatusUpper) return
+    if (!pendingRejectReason.trim()) {
+      toast.error("Vui lòng nhập lý do từ chối")
+      return
+    }
+    try {
+      setIsProcessingPendingAction(true)
+      if (pendingStatusUpper === "PENDING_UNIVERSITY") {
+        await approveByUniversity(pendingRequest.requestEventId, false, pendingRejectReason.trim())
+      } else {
+        await approveByClub(pendingRequest.requestEventId, false, pendingRejectReason.trim())
+      }
+      toast.success("Đã từ chối sự kiện")
+      setPendingRejectDialogOpen(false)
+      setPendingRejectReason("")
+      await onPendingActionSuccess?.()
+      onClose()
+    } catch (error) {
+      console.error("Reject pending failed:", error)
+      toast.error(getErrorMessage(error, "Không thể từ chối sự kiện. Vui lòng thử lại."))
+    } finally {
+      setIsProcessingPendingAction(false)
+    }
+  }
   
   // Kiểm tra sự kiện đang diễn ra (thời gian hiện tại nằm giữa startDate và endDate)
   const isEventOngoing = new Date() >= event.startDate && new Date() < event.endDate
@@ -365,19 +437,8 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
               <Button
                 className="flex-1 bg-rose-600 hover:bg-rose-700 text-white h-10 text-sm gap-2"
                 disabled={isDeleting}
-                onClick={async () => {
-                  try {
-                    setIsDeleting(true)
-                    await deleteEvent(Number(event.id))
-                    toast.success("Đã xóa sự kiện thành công")
-                    onDeleted?.(event.id)
-                    onClose()
-                  } catch (error: unknown) {
-                    console.error("Error deleting event:", error)
-                    toast.error(getErrorMessage(error, "Không thể xóa sự kiện. Vui lòng thử lại."))
-                  } finally {
-                    setIsDeleting(false)
-                  }
+                onClick={() => {
+                  setDeleteDialogOpen(true)
                 }}
               >
                 {isDeleting ? (
@@ -424,19 +485,8 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
                   <Button
                     className="flex-1 bg-rose-600 hover:bg-rose-700 text-white h-10 text-sm gap-2"
                     disabled={isDeleting}
-                    onClick={async () => {
-                      try {
-                        setIsDeleting(true)
-                        await deleteEvent(Number(event.id))
-                        toast.success("Đã xóa sự kiện thành công")
-                        onDeleted?.(event.id)
-                        onClose()
-                      } catch (error: unknown) {
-                        console.error("Error deleting event:", error)
-                        toast.error(getErrorMessage(error, "Không thể xóa sự kiện. Vui lòng thử lại."))
-                      } finally {
-                        setIsDeleting(false)
-                      }
+                    onClick={() => {
+                      setDeleteDialogOpen(true)
                     }}
                   >
                     {isDeleting ? (
@@ -457,19 +507,9 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
               {isStaff && eventClubId != null && isEventUpcoming && (
                     <Button
                       className="flex-1 bg-amber-500 hover:bg-amber-600 text-white h-10 text-sm gap-2"
-                      onClick={async () => {
-                        try {
-                          await cancelClubEventByStaff(Number(event.id))
-                      toast.success("Đã hủy sự kiện (đưa về nháp)")
-                          // Thông báo cho calendar refetch lại dữ liệu
-                          try {
-                            window.dispatchEvent(new CustomEvent('events:refetch'))
-                          } catch { /* empty */ }
-                          onClose()
-                        } catch (error: unknown) {
-                          console.error("Cancel event failed:", error)
-                          toast.error(getErrorMessage(error, "Không thể hủy sự kiện. Vui lòng thử lại."))
-                        }
+                      onClick={() => {
+                        setCancelReason("");
+                        setCancelDialogOpen(true);
                       }}
                     >
                       Hủy sự kiện
@@ -536,6 +576,49 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
               )}
             </div>
           ))}
+
+          {pendingRequest && canHandlePending && (
+            <div className="border-t border-border pt-4">
+              <p className="text-sm font-semibold text-foreground mb-2">Phê duyệt yêu cầu</p>
+              <div className="flex flex-col gap-2">
+                {isPendingEventStarted && (
+                  <span className="text-xs text-amber-600">
+                    Sự kiện đã bắt đầu nên không thể duyệt. Vui lòng kiểm tra lại.
+                  </span>
+                )}
+                <div className="flex gap-2">
+                  <Button
+                    className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white h-10 text-sm gap-2"
+                    disabled={isProcessingPendingAction || isPendingEventStarted}
+                    onClick={handleApprovePending}
+                  >
+                    {isProcessingPendingAction ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Đang xử lý...
+                      </>
+                    ) : (
+                      <>
+                        <ClipboardCheck className="w-4 h-4" />
+                        Duyệt
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    className="flex-1 bg-rose-600 hover:bg-rose-700 text-white h-10 text-sm gap-2"
+                    disabled={isProcessingPendingAction}
+                    onClick={() => {
+                      setPendingRejectReason("")
+                      setPendingRejectDialogOpen(true)
+                    }}
+                  >
+                    <X className="w-4 h-4" />
+                    Từ chối
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </Card>
       {/* Update Modal */}
@@ -597,6 +680,166 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
             }}
             onSuccess={() => setOpenUpdate(false)}
           />
+        </DialogContent>
+      </Dialog>
+      
+      {/* Dialog nhập lý do từ chối yêu cầu (Pending) */}
+      <Dialog open={pendingRejectDialogOpen} onOpenChange={(open) => {
+        setPendingRejectDialogOpen(open)
+        if (!open) {
+          setPendingRejectReason("")
+        }
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Từ chối yêu cầu</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="pending-reject-reason">Lý do từ chối *</Label>
+              <Textarea
+                id="pending-reject-reason"
+                placeholder="Nhập lý do từ chối sự kiện..."
+                value={pendingRejectReason}
+                onChange={(e) => setPendingRejectReason(e.target.value)}
+                rows={4}
+                className="mt-2"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setPendingRejectDialogOpen(false)
+                setPendingRejectReason("")
+              }}
+            >
+              Hủy
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={isProcessingPendingAction}
+              onClick={handleRejectPending}
+            >
+              {isProcessingPendingAction ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Đang xử lý...
+                </>
+              ) : (
+                "Xác nhận từ chối"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog nhập lý do hủy sự kiện (chỉ cho STAFF) */}
+      <Dialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Hủy sự kiện</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="cancel-reason">Lý do hủy *</Label>
+              <Textarea
+                id="cancel-reason"
+                placeholder="Nhập lý do hủy sự kiện..."
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                rows={4}
+                className="mt-2"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setCancelDialogOpen(false);
+                setCancelReason("");
+              }}
+            >
+              Hủy
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={async () => {
+                if (!cancelReason.trim()) {
+                  toast.error("Vui lòng nhập lý do hủy");
+                  return;
+                }
+                try {
+                  await cancelClubEventByStaff(Number(event.id), cancelReason.trim());
+                  toast.success("Đã hủy sự kiện (đưa về nháp)");
+                  // Thông báo cho calendar refetch lại dữ liệu
+                  try {
+                    window.dispatchEvent(new CustomEvent('events:refetch'));
+                  } catch { /* empty */ }
+                  setCancelDialogOpen(false);
+                  setCancelReason("");
+                  onClose();
+                } catch (error: unknown) {
+                  console.error("Cancel event failed:", error);
+                  toast.error(getErrorMessage(error, "Không thể hủy sự kiện. Vui lòng thử lại."));
+                }
+              }}
+            >
+              Xác nhận hủy
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirm Dialog xóa sự kiện */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Xác nhận xóa sự kiện</DialogTitle>
+            <DialogDescription>
+              Bạn có chắc chắn muốn xóa sự kiện "{event.title}"? Hành động này không thể hoàn tác.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setDeleteDialogOpen(false)
+              }}
+            >
+              Hủy
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={isDeleting}
+              onClick={async () => {
+                try {
+                  setIsDeleting(true)
+                  await deleteEvent(Number(event.id))
+                  toast.success("Đã xóa sự kiện thành công")
+                  onDeleted?.(event.id)
+                  setDeleteDialogOpen(false)
+                  onClose()
+                } catch (error: unknown) {
+                  console.error("Error deleting event:", error)
+                  toast.error(getErrorMessage(error, "Không thể xóa sự kiện. Vui lòng thử lại."))
+                } finally {
+                  setIsDeleting(false)
+                }
+              }}
+            >
+              {isDeleting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                  Đang xóa...
+                </>
+              ) : (
+                "Xác nhận xóa"
+              )}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

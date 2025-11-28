@@ -12,6 +12,7 @@ export interface CalendarEvent {
   isMyDraft?: boolean
   requestStatus?: string
   eventTypeName?: string
+  isPendingPublish?: boolean
 }
 
 interface EventCalendarGridProps {
@@ -25,6 +26,7 @@ interface EventCalendarGridProps {
   onEventClick: (event: CalendarEvent) => void
   getStatusColor: (status: string) => string
   getEventsForDate: (day: number | null) => CalendarEvent[]
+  clubId?: number
 }
 
 const dayNames = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"]
@@ -39,6 +41,7 @@ export function EventCalendarGrid({
   onEventClick,
   getStatusColor,
   getEventsForDate,
+  clubId,
 }: EventCalendarGridProps) {
   return (
     <Card className="p-6 shadow-lg">
@@ -47,6 +50,7 @@ export function EventCalendarGrid({
         onPrevMonth={onPrevMonth}
         onNextMonth={onNextMonth}
         onCreateEvent={onCreateEvent}
+        clubId={clubId}
       />
 
       {/* Day names */}

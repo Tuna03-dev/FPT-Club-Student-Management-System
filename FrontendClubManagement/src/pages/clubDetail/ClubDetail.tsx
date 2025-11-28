@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import {
   useParams,
   useSearchParams,
@@ -38,21 +38,27 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination";
-import { getClubDetailById, type ClubDetailData } from "@/services/clubService";
+import clubService, {
+  getClubDetailById,
+  type ClubDetailData,
+  type TeamDTO,
+} from "@/services/clubService";
 import {
-  getRecruitmentsByClubId,
   type RecruitmentData,
   getMyApplications,
+  getOpenRecruitmentsByClubId,
 } from "@/services/recruitmentService";
-import { getVisibleTeams } from "@/api/teams";
-import type { VisibleTeamDTO } from "@/types/team";
-import { getEventsByClubId, type EventData } from "@/service/EventService";
 import {
-  getAllNewsByFilter,
+  getPublishedEventsByClubId,
+  type EventData,
+} from "@/service/EventService";
+import {
+  getPublishedNewsByClubId,
   type NewsData as NewsDataService,
 } from "@/service/NewsService";
 import { ClubApplicationForm } from "./ClubApplication";
-import { useMyClubs } from "@/hooks/useMyClubs";
+import { getMyClubs } from "@/api/clubs";
+import type { MyClubDTO } from "@/types/dto/MyClubDTO";
 import {
   Dialog,
   DialogContent,
@@ -112,7 +118,7 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
   const [recruitments, setRecruitments] = useState<RecruitmentData[]>([]);
   const [recruitmentsLoaded, setRecruitmentsLoaded] = useState(false);
   const [, setLoadingRecruitments] = useState(false);
-  const [teams, setTeams] = useState<VisibleTeamDTO[]>([]);
+  const [teams, setTeams] = useState<TeamDTO[]>([]);
   const [teamsLoaded, setTeamsLoaded] = useState(false);
   const [loadingTeams, setLoadingTeams] = useState(false);
   const [events, setEvents] = useState<Event[]>([]);
@@ -120,11 +126,13 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
   const [loadingEvents, setLoadingEvents] = useState(false);
   const [eventsCurrentPage, setEventsCurrentPage] = useState(1);
   const eventsPerPage = 3;
+  const [totalEventsPages, setTotalEventsPages] = useState(0);
   const [news, setNews] = useState<News[]>([]);
   const [newsLoaded, setNewsLoaded] = useState(false);
   const [loadingNews, setLoadingNews] = useState(false);
   const [newsCurrentPage, setNewsCurrentPage] = useState(1);
   const newsPerPage = 3;
+  const [totalNewsPages, setTotalNewsPages] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [selectedRecruitmentId, setSelectedRecruitmentId] = useState<
     number | null
@@ -137,8 +145,7 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
   >(null);
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
 
-  // Get user's clubs to check if already a member
-  const { data: myClubs } = useMyClubs();
+  // NOTE: load user's clubs lazily when applying. Do not call hook on mount.
 
   // Fetch recruitments function
   const fetchRecruitments = async () => {
@@ -146,9 +153,9 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
 
     try {
       setLoadingRecruitments(true);
-      const recruitmentsResponse = await getRecruitmentsByClubId(
+      const recruitmentsResponse = await getOpenRecruitmentsByClubId(
         Number(clubId),
-        { status: "OPEN", page: 0, size: 20 }
+        { status: "OPEN", page: 0, size: 10 }
       );
       setRecruitments(recruitmentsResponse.content);
       setRecruitmentsLoaded(true);
@@ -198,8 +205,8 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
 
     try {
       setLoadingTeams(true);
-      const teamsData = await getVisibleTeams(Number(clubId));
-      setTeams(teamsData);
+      const teamsData = await clubService.getTeamsInClubDetail(Number(clubId));
+      setTeams(teamsData.data || []);
       setTeamsLoaded(true);
     } catch (err) {
       console.error("Error fetching teams:", err);
@@ -208,46 +215,56 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
     }
   };
 
-  // Fetch events when events tab is activated
-  const fetchEvents = async () => {
-    if (eventsLoaded || !clubId) return;
+  // Fetch events when events tab is activated or page changes
+  const fetchEvents = async (page: number = eventsCurrentPage) => {
+    if (!clubId) return;
 
     try {
       setLoadingEvents(true);
-      const eventsData = await getEventsByClubId(Number(clubId));
+      // Sử dụng API published events với phân trang từ backend
+      const eventsResponse = await getPublishedEventsByClubId(
+        Number(clubId),
+        undefined, // keyword
+        page - 1, // page (API sử dụng 0-indexed)
+        eventsPerPage, // size
+        "startTime,desc" // sort
+      );
 
       // Map EventData to Event interface
-      const mappedEvents: Event[] = eventsData.map((eventData: EventData) => {
-        const startDate = new Date(eventData.startTime);
-        const endDate = new Date(eventData.endTime);
+      const mappedEvents: Event[] = eventsResponse.content.map(
+        (eventData: EventData) => {
+          const startDate = new Date(eventData.startTime);
+          const endDate = new Date(eventData.endTime);
 
-        // Format date as DD/MM/YYYY
-        const dateStr = startDate.toLocaleDateString("vi-VN");
+          // Format date as DD/MM/YYYY
+          const dateStr = startDate.toLocaleDateString("vi-VN");
 
-        // Format time as HH:mm - HH:mm
-        const startTimeStr = startDate.toLocaleTimeString("vi-VN", {
-          hour: "2-digit",
-          minute: "2-digit",
-        });
-        const endTimeStr = endDate.toLocaleTimeString("vi-VN", {
-          hour: "2-digit",
-          minute: "2-digit",
-        });
-        const timeStr = `${startTimeStr} - ${endTimeStr}`;
+          // Format time as HH:mm - HH:mm
+          const startTimeStr = startDate.toLocaleTimeString("vi-VN", {
+            hour: "2-digit",
+            minute: "2-digit",
+          });
+          const endTimeStr = endDate.toLocaleTimeString("vi-VN", {
+            hour: "2-digit",
+            minute: "2-digit",
+          });
+          const timeStr = `${startTimeStr} - ${endTimeStr}`;
 
-        return {
-          id: eventData.id.toString(),
-          title: eventData.title,
-          date: dateStr,
-          time: timeStr,
-          location: eventData.location,
-          description: eventData.description,
-          attendees: 0, // API doesn't provide this, can be updated later
-          image: eventData.mediaUrls?.[0] || "/placeholder.svg",
-        };
-      });
+          return {
+            id: eventData.id.toString(),
+            title: eventData.title,
+            date: dateStr,
+            time: timeStr,
+            location: eventData.location,
+            description: eventData.description,
+            attendees: 0, // API doesn't provide this, can be updated later
+            image: eventData.mediaUrls?.[0] || "/placeholder.svg",
+          };
+        }
+      );
 
       setEvents(mappedEvents);
+      setTotalEventsPages(eventsResponse.totalPages);
       setEventsLoaded(true);
     } catch (err) {
       console.error("Error fetching events:", err);
@@ -264,20 +281,23 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
 
-  // Fetch news when news tab is activated
-  const fetchNews = async () => {
-    if (newsLoaded || !clubId) return;
+  // Fetch news when news tab is activated or page changes
+  const fetchNews = async (page: number = newsCurrentPage) => {
+    if (!clubId) return;
 
     try {
       setLoadingNews(true);
-      const newsResponse = await getAllNewsByFilter({
-        clubId: Number(clubId),
-        page: 0,
-        size: 100, // Get all news, we'll paginate on frontend
-      });
+      // Sử dụng API published news với phân trang từ backend
+      const newsResponse = await getPublishedNewsByClubId(
+        Number(clubId),
+        undefined, // keyword
+        page - 1, // page (API sử dụng 0-indexed)
+        newsPerPage, // size
+        "createdAt,desc" // sort
+      );
 
       // Map NewsDataService to News interface
-      const mappedNews: News[] = newsResponse.data.map(
+      const mappedNews: News[] = newsResponse.content.map(
         (newsData: NewsDataService) => {
           const updatedDate = new Date(newsData.updatedAt);
 
@@ -298,6 +318,7 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
       );
 
       setNews(mappedNews);
+      setTotalNewsPages(newsResponse.totalPages);
       setNewsLoaded(true);
     } catch (err) {
       console.error("Error fetching news:", err);
@@ -314,6 +335,14 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
 
+  // Fetch events when page changes
+  useEffect(() => {
+    if (activeTab === "events" && eventsLoaded) {
+      fetchEvents(eventsCurrentPage);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eventsCurrentPage]);
+
   // Load news when news tab is activated
   useEffect(() => {
     if (activeTab === "news") {
@@ -322,33 +351,13 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
 
-  // Reset events page when events change
+  // Fetch news when page changes
   useEffect(() => {
-    setEventsCurrentPage(1);
-  }, [events]);
-
-  // Reset news page when news change
-  useEffect(() => {
-    setNewsCurrentPage(1);
-  }, [news]);
-
-  // Calculate paginated events
-  const paginatedEvents = useMemo(() => {
-    const startIndex = (eventsCurrentPage - 1) * eventsPerPage;
-    const endIndex = startIndex + eventsPerPage;
-    return events.slice(startIndex, endIndex);
-  }, [events, eventsCurrentPage, eventsPerPage]);
-
-  const totalEventsPages = Math.ceil(events.length / eventsPerPage);
-
-  // Calculate paginated news
-  const paginatedNews = useMemo(() => {
-    const startIndex = (newsCurrentPage - 1) * newsPerPage;
-    const endIndex = startIndex + newsPerPage;
-    return news.slice(startIndex, endIndex);
-  }, [news, newsCurrentPage, newsPerPage]);
-
-  const totalNewsPages = Math.ceil(news.length / newsPerPage);
+    if (activeTab === "news" && newsLoaded) {
+      fetchNews(newsCurrentPage);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [newsCurrentPage]);
 
   useEffect(() => {
     const tab = searchParams.get("tab");
@@ -373,9 +382,39 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
   }, [searchParams]);
 
   // Format date helper
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString("vi-VN");
+  // Accept backend LocalDateTime strings like "YYYY-MM-DDTHH:mm[:ss]" (no TZ)
+  // and display as "DD/MM/YYYY HH:mm". Falls back to locale formatting.
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return "";
+
+    try {
+      // If string contains a 'T', treat as LocalDateTime from backend
+      if (dateString.includes("T")) {
+        // Keep up to minutes (YYYY-MM-DDTHH:mm)
+        const trimmed = dateString.slice(0, 16);
+        const [datePart, timePart] = trimmed.split("T");
+        if (datePart && timePart) {
+          const [year, month, day] = datePart.split("-");
+          const hhmm = timePart.slice(0, 5); // HH:mm
+          return `${day}/${month}/${year} ${hhmm}`;
+        }
+      }
+
+      // Fallback: use Date and locale formatting
+      const d = new Date(dateString);
+      if (!isNaN(d.getTime())) {
+        const dateStr = d.toLocaleDateString("vi-VN");
+        const timeStr = d.toLocaleTimeString("vi-VN", {
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+        return `${dateStr} ${timeStr}`;
+      }
+    } catch (e) {
+      console.error("formatDate error", e);
+    }
+
+    return dateString;
   };
 
   // Format number helper (add comma separator)
@@ -384,10 +423,11 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
     return num.toLocaleString("vi-VN");
   };
 
-  // Check if user is already a member of this club
-  const isAlreadyMember = () => {
-    if (!myClubs || !clubId) return false;
-    return myClubs.some((myClub) => myClub.clubId === Number(clubId));
+  // Check if user is already a member of this club. Accept clubs array so
+  // we can load clubs lazily instead of calling a hook on mount.
+  const isAlreadyMember = (clubs?: MyClubDTO[] | null) => {
+    if (!clubs || !clubId) return false;
+    return clubs.some((myClub) => myClub.clubId === Number(clubId));
   };
 
   // Handle recruitment application click
@@ -397,8 +437,17 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
       setShowLoginPrompt(true);
       return;
     }
-    // Check if user is already a member
-    if (isAlreadyMember()) {
+    // Check if user is already a member — load user's clubs lazily here
+    let clubs: MyClubDTO[] | null = null;
+    try {
+      clubs = await getMyClubs();
+    } catch (e) {
+      console.error("Error fetching user's clubs:", e);
+      // If we cannot determine membership, allow application flow to continue
+      clubs = null;
+    }
+
+    if (isAlreadyMember(clubs)) {
       setShowMembershipWarning(true);
       return;
     }
@@ -626,7 +675,7 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
                   <div>
                     <p className="text-sm text-muted-foreground">Tin tức</p>
                     <p className="font-semibold text-lg">
-                      {formatNumber(club.totalPosts)}
+                      {formatNumber(club.totalNews)}
                     </p>
                   </div>
                 </div>
@@ -664,13 +713,7 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
                         <div className="flex items-center gap-1">
                           <Calendar className="h-3 w-3 flex-shrink-0" />
                           <span>
-                            Bắt đầu: {formatDate(recruitment.startDate)}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Calendar className="h-3 w-3 flex-shrink-0" />
-                          <span>
-                            Hết hạn: {formatDate(recruitment.endDate)}
+                            Thời hạn: {formatDate(recruitment.endDate)}
                           </span>
                         </div>
                       </div>
@@ -868,7 +911,7 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
               ) : events.length > 0 ? (
                 <>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {paginatedEvents.map((event) => (
+                    {events.map((event) => (
                       <Card
                         key={event.id}
                         className="overflow-hidden hover:shadow-lg transition-shadow flex flex-col"
@@ -1009,7 +1052,7 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
               ) : news.length > 0 ? (
                 <>
                   <div className="space-y-4">
-                    {paginatedNews.map((item) => (
+                    {news.map((item) => (
                       <Card
                         key={item.id}
                         className="overflow-hidden hover:shadow-lg transition-shadow flex flex-col"
@@ -1160,7 +1203,7 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                       {teams.map((team) => (
                         <Card
-                          key={team.teamId}
+                          key={team.id}
                           className="hover:shadow-lg transition-shadow"
                         >
                           <CardHeader>
@@ -1174,15 +1217,6 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
                               </CardDescription>
                             )}
                           </CardHeader>
-                          {team.memberCount !== undefined && (
-                            <CardContent>
-                              <div className="flex items-center justify-between mb-3">
-                                <span className="text-sm text-muted-foreground">
-                                  Thành viên: {team.memberCount}
-                                </span>
-                              </div>
-                            </CardContent>
-                          )}
                         </Card>
                       ))}
                     </div>
@@ -1280,8 +1314,8 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
                 </p>
                 <div className="bg-red-50 border border-red-200 rounded-lg p-4">
                   <p className="text-sm text-red-800">
-                    Vui lòng đợi kết quả xét tuyển trước khi nộp lại hoặc liên
-                    hệ ban quản lý câu lạc bộ nếu cần hỗ trợ.
+                    Vui lòng đợi kết quả xét tuyển hoặc liên hệ ban quản lý câu
+                    lạc bộ nếu cần hỗ trợ.
                   </p>
                 </div>
               </div>

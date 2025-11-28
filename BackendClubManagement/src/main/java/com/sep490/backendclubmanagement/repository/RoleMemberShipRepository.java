@@ -54,12 +54,14 @@ public interface RoleMemberShipRepository extends JpaRepository<RoleMemberShip, 
     @Query(value = "SELECT sr.role_name\n" +
             "FROM users u\n" +
             "         JOIN club_memberships cm ON u.id = cm.user_id\n" +
+            "         JOIN clubs c ON cm.club_id = c.id\n" +
             "         JOIN role_memberships rm ON cm.id = rm.club_membership_id\n" +
             "         JOIN semesters s ON rm.semester_id = s.id\n" +
             "         JOIN club_roles cr ON rm.clubrole_id = cr.id\n" +
             "         JOIN system_roles sr ON cr.system_role_id = sr.id\n" +
             "WHERE u.id = :userId\n" +
             "  AND cm.club_id = :clubId\n" +
+            "  AND c.status = 'ACTIVE'\n" +
             "  AND s.is_current = true\n" +
             "LIMIT 1",
             nativeQuery = true)
@@ -624,6 +626,56 @@ WHERE cm.club.id = :clubId
             @Param("clubId") Long clubId,
             @Param("semesterId") Long semesterId
     );
+
+    /**
+     * Get list of user IDs who are Club Officers in a specific club and semester
+     * Club Officers are users with CLUB_OFFICER role (not team-specific)
+     */
+    @Query("""
+        SELECT DISTINCT cm.user.id
+        FROM RoleMemberShip rm
+        JOIN rm.clubMemberShip cm
+        JOIN rm.clubRole cr
+        LEFT JOIN cr.systemRole sr
+        WHERE cm.club.id = :clubId
+          AND rm.semester.id = :semesterId
+          AND COALESCE(rm.isActive, TRUE) = TRUE
+          AND cr IS NOT NULL
+          AND (
+              UPPER(TRIM(cr.roleCode)) IN ('CLUB_OFFICER')
+              OR (sr IS NOT NULL AND UPPER(TRIM(sr.roleName)) IN ('CLUB_OFFICER'))
+          )
+    """)
+    List<Long> findClubOfficerUserIdsByClubIdAndSemesterId(
+            @Param("clubId") Long clubId,
+            @Param("semesterId") Long semesterId
+    );
+
+    /**
+     * Get list of user IDs who are Club Officers in a specific club and semester
+     * Club Officers are users with CLUB_OFFICER role (not team-specific)
+     */
+    @Query("""
+        SELECT DISTINCT cm.user.id
+        FROM RoleMemberShip rm
+        JOIN rm.clubMemberShip cm
+        JOIN rm.team t
+        JOIN rm.clubRole cr
+        LEFT JOIN cr.systemRole sr
+        WHERE t.id = :teamId
+          AND rm.semester.id = :semesterId
+          AND COALESCE(rm.isActive, TRUE) = TRUE
+          AND cr IS NOT NULL
+          AND (
+              UPPER(TRIM(cr.roleCode)) IN ('TEAM_OFFICER')
+              OR (sr IS NOT NULL AND UPPER(TRIM(sr.roleName)) IN ('TEAM_OFFICER'))
+          )
+    """)
+    List<Long> findTeamOfficerUserIdsByClubIdAndSemesterId(
+            @Param("teamId") Long teamId,
+            @Param("semesterId") Long semesterId
+    );
+
     @Query("""
         SELECT CASE WHEN COUNT(rm) > 0 THEN true ELSE false END
         FROM RoleMemberShip rm

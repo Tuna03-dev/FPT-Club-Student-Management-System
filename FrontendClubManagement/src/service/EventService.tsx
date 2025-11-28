@@ -1,4 +1,4 @@
-import axiosClient from "@/api/axiosClient";
+import axiosClient, { axiosInstance } from "@/api/axiosClient";
 
 export interface EventData {
   id: number;
@@ -220,8 +220,12 @@ export interface PendingRequestDto {
   createdBy: { id: number; fullName: string } | null;
 }
 
-export async function getPendingRequests(): Promise<PendingRequestDto[]> {
-  const res = await axiosClient.get<PendingRequestDto[]>("/events/pending-requests", { timeout: 30000 });
+export async function getPendingRequests(clubId?: number): Promise<PendingRequestDto[]> {
+  const params = clubId && clubId > 0 ? { clubId } : {};
+  const res = await axiosClient.get<PendingRequestDto[]>("/events/pending-requests", {
+    params,
+    timeout: 30000
+  });
   return res.data ?? [];
 }
 
@@ -316,4 +320,63 @@ export async function batchMarkAttendance(payload: BatchMarkAttendanceRequest): 
   await axiosClient.post<void>("/events/batch-mark-attendance", payload);
 }
 
+/**
+ * Export danh sách điểm danh sự kiện ra file Excel
+ * @param eventId ID của sự kiện
+ * @returns Blob chứa file Excel
+ */
+export async function exportAttendanceExcel(eventId: number): Promise<Blob> {
+  // Dùng axiosInstance trực tiếp để tránh wrapper parse JSON
+  // axiosInstance đã được import ở đầu file
+  const res = await axiosInstance.get(`/events/${eventId}/attendance/export-excel`, {
+    responseType: 'blob',
+    timeout: 60000, // Tăng timeout cho file lớn
+  });
+  
+  // Kiểm tra xem response có phải là blob không
+  if (res.data instanceof Blob) {
+    return res.data;
+  }
+  
+  // Nếu không phải blob, có thể là JSON error message - thử parse để lấy error
+  if (typeof res.data === 'string') {
+    try {
+      const errorData = JSON.parse(res.data);
+      throw new Error(errorData.message || errorData.data?.message || "Không thể xuất file Excel");
+    } catch {
+      throw new Error("Response is not a valid Excel file");
+    }
+  }
+  
+  throw new Error("Response is not a valid Excel file");
+}
 
+// ===== Paginated Response =====
+export interface PagedResponse<T> {
+  content: T[];
+  totalPages: number;
+  totalElements: number;
+  currentPage: number;
+  pageSize: number;
+}
+
+/**
+ * Lấy danh sách events đã được publish của một câu lạc bộ với phân trang và tìm kiếm
+ */
+export async function getPublishedEventsByClubId(
+  clubId: number,
+  keyword?: string,
+  page: number = 0,
+  size: number = 10,
+  sort: string = "startTime,desc"
+): Promise<PagedResponse<EventData>> {
+  const res = await axiosClient.get<PagedResponse<EventData>>(
+    `/events/clubs/${clubId}/published`,
+    {
+      params: { keyword, page, size, sort },
+      timeout: 30000,
+    }
+  );
+  if (!res.data) throw new Error("Empty response");
+  return res.data;
+}

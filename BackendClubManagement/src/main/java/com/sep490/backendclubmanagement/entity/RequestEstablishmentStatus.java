@@ -5,6 +5,7 @@ public enum RequestEstablishmentStatus {
     SUBMITTED,                  // Đã gửi
     CONTACT_CONFIRMATION_PENDING,// Đang chờ xác nhận liên hệ [5 ngày]
     CONTACT_CONFIRMED,           // Đã xác nhận liên hệ
+    NAME_REVISION_REQUIRED,      // Staff yêu cầu chỉnh sửa tên CLB
     CONTACT_REJECTED,            // Từ chối xác nhận liên hệ
     PROPOSAL_REQUIRED,           // Yêu cầu đề án
     PROPOSAL_SUBMITTED,          // Đã nộp đề án

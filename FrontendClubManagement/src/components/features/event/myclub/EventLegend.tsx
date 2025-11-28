@@ -1,10 +1,20 @@
 "use client"
+import { Video } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { authService } from "@/services/authService"
 
-export function EventLegend() {
+interface EventLegendProps {
+  clubId?: number
+}
+
+export function EventLegend({ clubId }: EventLegendProps) {
   const user = authService.getCurrentUser()
-  const showPending = !!user && ["CLUB_OFFICER", "TEAM_OFFICER"].includes(user.systemRole)
+  const isStaff = user?.systemRole === "STAFF"
+  // Check systemRole in clubRoleList instead of global systemRole
+  const clubRole = clubId ? authService.getClubRole(clubId) : null
+  const systemRoleInClub = clubRole?.systemRole?.toUpperCase()
+  const showPending = isStaff || (clubId && systemRoleInClub && ["CLUB_OFFICER", "TEAM_OFFICER"].includes(systemRoleInClub))
+  const showPendingPublish = isStaff
 
   return (
     <Card className="p-6 shadow-lg">
@@ -28,6 +38,16 @@ export function EventLegend() {
             <span className="text-sm text-foreground">Chờ duyệt</span>
           </div>
         )}
+        {showPendingPublish && (
+          <div className="flex items-center gap-3">
+            <div className="w-4 h-4 rounded bg-orange-500"></div>
+            <span className="text-sm text-foreground">Chờ public (Staff)</span>
+          </div>
+        )}
+        <div className="flex items-center gap-3">
+          <Video className="w-4 h-4 text-black dark:text-white flex-shrink-0" />
+          <span className="text-sm text-foreground">Sự kiện nội bộ của CLB</span>
+        </div>
       </div>
     </Card>
   )

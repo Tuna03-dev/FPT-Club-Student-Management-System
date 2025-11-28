@@ -132,7 +132,7 @@ public class PayOSIntegrationService {
                 .orElseThrow(() -> new AppException(ErrorCode.CLUB_NOT_FOUND));
 
         if (wallet.getPayOsClientId() == null || wallet.getPayOsApiKey() == null || wallet.getPayOsChecksumKey() == null) {
-            throw new RuntimeException("Thiếu cấu hình PayOS (ClientID/API Key/Checksum Key)");
+            throw new AppException(ErrorCode.VALIDATION_ERROR, "Câu lạc bộ chưa cấu hình PayOS. Vui lòng liên hệ quản trị viên để cấu hình.");
         }
         PayOS payOS = new PayOS(wallet.getPayOsClientId(), wallet.getPayOsApiKey(), wallet.getPayOsChecksumKey());
         // 🔹 Tự sinh orderCode nếu chưa có (số nguyên dương duy nhất)
@@ -187,5 +187,3 @@ public class PayOSIntegrationService {
 
 
 }
-
-

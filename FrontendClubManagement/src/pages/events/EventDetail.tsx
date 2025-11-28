@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { MapPin, Clock, ChevronLeft, ChevronRight, Facebook, Phone } from "lucide-react"
+import { MapPin, Clock, ChevronLeft, ChevronRight, Facebook } from "lucide-react"
 import { Link, useParams } from "react-router-dom"
 import { getEventById, computeEventStatus, type EventData } from "@/service/EventService"
 
@@ -10,7 +10,7 @@ export default function EventDetailPage() {
   const [event, setEvent] = useState<EventData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string>("")
-  const [currentImageIndex, setCurrentImageIndex] = useState(0)
+  const [currentMediaIndex, setCurrentMediaIndex] = useState(0)
 
   useEffect(() => {
     if (!id) return
@@ -21,6 +21,7 @@ export default function EventDetailPage() {
         setError("")
         const eventData = await getEventById(Number(id))
         setEvent(eventData)
+        setCurrentMediaIndex(0) // Reset to first media when event changes
       } catch (e) {
         console.error("Error fetching news:", e)
         setError("Không thể tải thông tin sự kiện")
@@ -32,14 +33,50 @@ export default function EventDetailPage() {
     fetchEvent()
   }, [id])
 
-  const handlePrevImage = () => {
+  const handlePrevMedia = () => {
     if (!event?.mediaUrls) return
-    setCurrentImageIndex((prev) => (prev === 0 ? event.mediaUrls.length - 1 : prev - 1))
+    setCurrentMediaIndex((prev) => (prev === 0 ? event.mediaUrls.length - 1 : prev - 1))
   }
 
-  const handleNextImage = () => {
+  const handleNextMedia = () => {
     if (!event?.mediaUrls) return
-    setCurrentImageIndex((prev) => (prev === event.mediaUrls.length - 1 ? 0 : prev + 1))
+    setCurrentMediaIndex((prev) => (prev === event.mediaUrls.length - 1 ? 0 : prev + 1))
+  }
+
+  // Get current media type (IMAGE or VIDEO)
+  // Defaults to IMAGE if mediaTypes is not available
+  const getCurrentMediaType = (): string => {
+    if (!event?.mediaTypes || currentMediaIndex >= event.mediaTypes.length) return "IMAGE"
+    return event.mediaTypes[currentMediaIndex] || "IMAGE"
+  }
+
+  const isCurrentMediaVideo = getCurrentMediaType() === "VIDEO"
+  const currentMediaUrl = event?.mediaUrls?.[currentMediaIndex] || "/placeholder.svg"
+
+  // Convert URLs in text to clickable links
+  const convertUrlsToLinks = (text: string): React.ReactNode => {
+    if (!text) return text
+    
+    const urlRegex = /(https?:\/\/[^\s]+)/g
+    const parts = text.split(urlRegex)
+    
+    return parts.map((part, index) => {
+      // Check if this part is a URL
+      if (part.match(/^https?:\/\//)) {
+        return (
+          <a
+            key={index}
+            href={part}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary hover:underline break-all"
+          >
+            {part}
+          </a>
+        )
+      }
+      return <span key={index}>{part}</span>
+    })
   }
 
   if (loading) {
@@ -81,33 +118,47 @@ export default function EventDetailPage() {
 
       {/* Main Content */}
       <main className="flex-1 max-w-5xl mx-auto w-full px-4 py-6">
-        {/* Event Image with Carousel */}
-        <div className="relative rounded-lg overflow-hidden h-64 bg-muted mb-6 group">
-          <img
-            src={event.mediaUrls?.[currentImageIndex] || "/placeholder.svg"}
-            alt={event.title}
-            className="w-full h-full object-cover"
-          />
+        {/* Event Media (Image/Video) with Carousel */}
+        <div className="relative rounded-lg overflow-hidden h-[500px] bg-muted mb-6 group">
+          {isCurrentMediaVideo ? (
+            <video
+              key={currentMediaIndex}
+              src={currentMediaUrl}
+              controls
+              className="w-full h-full object-contain"
+              playsInline
+              preload="metadata"
+            >
+              Trình duyệt của bạn không hỗ trợ video.
+            </video>
+          ) : (
+            <img
+              key={currentMediaIndex}
+              src={currentMediaUrl}
+              alt={event.title}
+              className="w-full h-full object-cover"
+            />
+          )}
 
-          {/* Image Navigation Buttons */}
+          {/* Media Navigation Buttons */}
           {event.mediaUrls && event.mediaUrls.length > 1 && (
             <>
               <button
-                onClick={handlePrevImage}
-                className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                onClick={handlePrevMedia}
+                className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-10"
               >
                 <ChevronLeft className="w-5 h-5" />
               </button>
               <button
-                onClick={handleNextImage}
-                className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                onClick={handleNextMedia}
+                className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-10"
               >
                 <ChevronRight className="w-5 h-5" />
               </button>
 
-              {/* Image Counter */}
-              <div className="absolute bottom-2 right-2 bg-black/50 text-white px-2 py-1 rounded text-xs font-medium">
-                {currentImageIndex + 1} / {event.mediaUrls.length}
+              {/* Media Counter */}
+              <div className="absolute bottom-2 right-2 bg-black/50 text-white px-2 py-1 rounded text-xs font-medium z-10">
+                {currentMediaIndex + 1} / {event.mediaUrls.length}
               </div>
             </>
           )}
@@ -171,13 +222,19 @@ export default function EventDetailPage() {
           </span>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 mb-6">
-          <button className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 text-sm">
-            <Phone className="w-4 h-4" />
-            <span>Liên hệ</span>
-          </button>
-          <button className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 text-sm">
-            <Facebook className="w-4 h-4" />
+        <div className="flex justify-end mb-6">
+          <button 
+            onClick={() => {
+              const url = window.location.href
+              // Facebook Share với text mặc định (quote parameter - có thể không hoạt động do Facebook đã deprecated)
+              // Nhưng vẫn thử để có thể hoạt động trong một số trường hợp
+              const shareText = `${event.title} - ${event.location || ''}`
+              const facebookShareUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}&quote=${encodeURIComponent(shareText)}`
+              window.open(facebookShareUrl, '_blank', 'width=600,height=400')
+            }}
+            className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors flex items-center justify-center gap-2"
+          >
+            <Facebook className="w-5 h-5" />
             <span>Chia sẻ Facebook</span>
           </button>
         </div>
@@ -185,7 +242,9 @@ export default function EventDetailPage() {
         {/* Description */}
         <div className="space-y-3">
           <h2 className="text-lg font-bold text-foreground">Mô tả sự kiện</h2>
-          <p className="text-foreground text-sm leading-relaxed whitespace-pre-line">{event.description}</p>
+          <div className="text-foreground text-sm leading-relaxed whitespace-pre-line">
+            {convertUrlsToLinks(event.description || "")}
+          </div>
         </div>
       </main>
 

@@ -37,7 +37,6 @@ public interface RecruitmentMapper {
                 .id(recruitment.getId())
                 .title(recruitment.getTitle())
                 .description(recruitment.getDescription())
-                .startDate(recruitment.getStartDate())
                 .endDate(recruitment.getEndDate())
                 .status(recruitment.getStatus())
                 .requirements(recruitment.getRequirements())
@@ -93,7 +92,6 @@ public interface RecruitmentMapper {
         return Recruitment.builder()
                 .title(request.title)
                 .description(request.description)
-                .startDate(request.startDate)
                 .endDate(request.endDate)
                 .requirements(request.requirements)
                 .status(request.status != null ? request.status : RecruitmentStatus.DRAFT)
@@ -105,7 +103,6 @@ public interface RecruitmentMapper {
     default void updateEntity(Recruitment entity, RecruitmentUpdateRequest request) {
         entity.setTitle(request.title);
         entity.setDescription(request.description);
-        entity.setStartDate(request.startDate);
         entity.setEndDate(request.endDate);
         entity.setRequirements(request.requirements);
         if (request.status != null) {

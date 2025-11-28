@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Search, Calendar, ArrowRight } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -14,6 +14,7 @@ export default function NewsPageList() {
   const [selectedClubId, setSelectedClubId] = useState<string>("all")
   const [clubs, setClubs] = useState<ClubDto[]>([])
   const [news, setNews] = useState<NewsData[]>([])
+  const [allFilteredNews, setAllFilteredNews] = useState<NewsData[]>([]) // Store all filtered news when searching
   const [loading, setLoading] = useState<boolean>(false)
   const [error, setError] = useState<string>("")
   const [currentPage, setCurrentPage] = useState(1)
@@ -38,7 +39,17 @@ export default function NewsPageList() {
     }
   }, [])
 
-  // Fetch news when search query, club, or page changes
+  // Use ref to track if filters just changed to prevent pagination effect from running
+  const filtersJustChangedRef = useRef(false)
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1)
+    filtersJustChangedRef.current = true
+  }, [searchQuery, selectedClubId])
+
+  // Fetch news when filters change
+  // Backend filters AFTER pagination, so we need to fetch all pages when searching
   useEffect(() => {
     let mounted = true
     const controller = new AbortController()
@@ -46,22 +57,100 @@ export default function NewsPageList() {
     const fetchData = async () => {
       setLoading(true)
       setError("")
-      try {
-        const res = await getAllNewsByFilter({
-          keyword: searchQuery || undefined,
-          clubId: selectedClubId !== "all" ? Number(selectedClubId) : undefined,
-          page: currentPage,
-          size: 12,
-        })
-        if (mounted) {
-          setNews(res.data)
-          setTotalPages(Math.ceil(res.total / 12))
+      
+      const hasKeyword = !!searchQuery
+      
+      // If searching, fetch all pages and filter client-side
+      // Otherwise, just fetch page 1
+      if (hasKeyword) {
+        try {
+          // Fetch all pages to find all matching results
+          const allResults: NewsData[] = []
+          let page = 1
+          let hasMore = true
+          let totalFromServer = 0
+          
+          while (hasMore && mounted) {
+            const res = await getAllNewsByFilter({
+              keyword: searchQuery || undefined,
+              clubId: selectedClubId !== "all" ? Number(selectedClubId) : undefined,
+              page: page,
+              size: 12,
+            })
+            
+            totalFromServer = res.total
+            const filtered = res.data || []
+            
+            // Add filtered results (even if empty, we need to check all pages)
+            if (filtered.length > 0) {
+              allResults.push(...filtered)
+            }
+            
+            // Check if there are more pages to fetch
+            // Continue fetching even if current page has no results
+            const totalPages = Math.ceil(totalFromServer / 12)
+            hasMore = page < totalPages
+            page++
+            
+            // Safety limit: don't fetch more than 50 pages
+            if (page > 50) break
+          }
+          
+          if (mounted) {
+            // Store all filtered results for client-side pagination
+            setAllFilteredNews(allResults)
+            
+            // Paginate the filtered results client-side
+            const pageSize = 12
+            const totalFiltered = allResults.length
+            const totalPagesFiltered = Math.ceil(totalFiltered / pageSize)
+            const startIndex = (1 - 1) * pageSize
+            const endIndex = startIndex + pageSize
+            const paginatedResults = allResults.slice(startIndex, endIndex)
+            
+            setNews(paginatedResults)
+            setTotalPages(totalPagesFiltered > 0 ? totalPagesFiltered : 1)
+            setCurrentPage(1)
+            filtersJustChangedRef.current = false
+          }
+        } catch (e) {
+          console.error("Error fetching news:", e)
+          if (mounted) setError("Không thể tải danh sách tin tức")
+          filtersJustChangedRef.current = false
+        } finally {
+          if (mounted) setLoading(false)
         }
-      } catch (e) {
-        console.error("Error fetching news:", e)
-        if (mounted) setError("Không thể tải danh sách tin tức")
-      } finally {
-        if (mounted) setLoading(false)
+      } else {
+        // No keyword, normal pagination
+        try {
+          const res = await getAllNewsByFilter({
+            keyword: undefined,
+            clubId: selectedClubId !== "all" ? Number(selectedClubId) : undefined,
+            page: 1,
+            size: 12,
+          })
+          if (mounted) {
+            setNews(res.data)
+            setAllFilteredNews([]) // Clear when no keyword search
+            const hasFilters = selectedClubId !== "all"
+            let actualTotal = res.total
+            
+            if (hasFilters && res.count !== undefined && res.count !== null && res.count > 0) {
+              actualTotal = res.count
+            }
+            
+            const serverTotalPages = actualTotal > 0 ? Math.ceil(actualTotal / 12) : 1
+            setTotalPages(serverTotalPages)
+            setCurrentPage(1)
+            filtersJustChangedRef.current = false
+          }
+        } catch (e) {
+          console.error("Error fetching news:", e)
+          if (mounted) setError("Không thể tải danh sách tin tức")
+          filtersJustChangedRef.current = false
+        } finally {
+          if (mounted) setLoading(false)
+        }
       }
     }
 
@@ -71,12 +160,69 @@ export default function NewsPageList() {
       controller.abort()
       clearTimeout(debounce)
     }
-  }, [searchQuery, selectedClubId, currentPage])
-
-  // Reset to page 1 when filters change
-  useEffect(() => {
-    setCurrentPage(1)
   }, [searchQuery, selectedClubId])
+
+  // Handle pagination - use client-side pagination if searching, otherwise server-side
+  useEffect(() => {
+    // Skip if filters just changed (handled by filter effect above)
+    if (filtersJustChangedRef.current) return
+    // Skip if we're on page 1 (already handled by filter effect above)
+    if (currentPage === 1) return
+
+    const hasKeyword = !!searchQuery
+    
+    // If searching, use client-side pagination from allFilteredNews
+    if (hasKeyword && allFilteredNews.length > 0) {
+      const pageSize = 12
+      const startIndex = (currentPage - 1) * pageSize
+      const endIndex = startIndex + pageSize
+      const paginatedResults = allFilteredNews.slice(startIndex, endIndex)
+      setNews(paginatedResults)
+      return
+    }
+
+    // Otherwise, fetch from server
+    let mounted = true
+    const controller = new AbortController()
+
+    const fetchData = async () => {
+      setLoading(true)
+      setError("")
+      
+      try {
+        const res = await getAllNewsByFilter({
+          keyword: undefined,
+          clubId: selectedClubId !== "all" ? Number(selectedClubId) : undefined,
+          page: currentPage,
+          size: 12,
+        })
+        if (mounted) {
+          setNews(res.data)
+          const hasFilters = selectedClubId !== "all"
+          let actualTotal = res.total
+          
+          if (hasFilters && res.count !== undefined && res.count !== null && res.count > 0) {
+            actualTotal = res.count
+          }
+          
+          const serverTotalPages = actualTotal > 0 ? Math.ceil(actualTotal / 12) : 1
+          setTotalPages(serverTotalPages)
+        }
+      } catch (e) {
+        console.error("Error fetching news:", e)
+        if (mounted) setError("Không thể tải danh sách tin tức")
+      } finally {
+        if (mounted) setLoading(false)
+      }
+    }
+
+    fetchData()
+
+    return () => {
+      mounted = false
+      controller.abort()
+    }
+  }, [currentPage, searchQuery, selectedClubId, allFilteredNews])
 
   const handlePageChange = (page: number) => {
     setCurrentPage(page)
@@ -173,35 +319,39 @@ export default function NewsPageList() {
                     key={newsItem.id}
                     className="group overflow-hidden hover:shadow-lg transition-all duration-300 border-border/50"
                   >
-                    <div className="relative overflow-hidden aspect-video">
-                      <img
-                        src={newsItem.thumbnailUrl || "/placeholder.svg"}
-                        alt={newsItem.title}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                      />
-                      {newsItem.clubName && (
-                        <div className="absolute top-3 left-3">
-                          <Badge variant="secondary" className="bg-muted/80 text-foreground border-border">
-                            {newsItem.clubName}
-                          </Badge>
-                        </div>
-                      )}
-                      {newsItem.newsType && (
-                        <div className="absolute top-3 right-3">
-                          <Badge variant="secondary" className="bg-primary/10 text-primary border-primary/20">
-                            {newsItem.newsType}
-                          </Badge>
-                        </div>
-                      )}
-                    </div>
+                    <Link to={`/news/${newsItem.id}`} className="block">
+                      <div className="relative overflow-hidden aspect-video cursor-pointer">
+                        <img
+                          src={newsItem.thumbnailUrl || "/placeholder.svg"}
+                          alt={newsItem.title}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        />
+                        {newsItem.clubName && (
+                          <div className="absolute top-3 left-3">
+                            <Badge variant="secondary" className="bg-muted/80 text-foreground border-border">
+                              {newsItem.clubName}
+                            </Badge>
+                          </div>
+                        )}
+                        {newsItem.newsType && (
+                          <div className="absolute top-3 right-3">
+                            <Badge variant="secondary" className="bg-primary/10 text-primary border-primary/20">
+                              {newsItem.newsType}
+                            </Badge>
+                          </div>
+                        )}
+                      </div>
+                    </Link>
                     <CardContent className="p-6">
                       <div className="flex items-center gap-2 text-sm text-muted-foreground mb-3">
                         <Calendar className="h-4 w-4" />
                         <span>{formattedDate}</span>
                       </div>
-                      <h3 className="text-xl font-bold text-foreground mb-3 line-clamp-2 group-hover:text-primary transition-colors text-balance">
-                        {newsItem.title}
-                      </h3>
+                      <Link to={`/news/${newsItem.id}`} className="block">
+                        <h3 className="text-xl font-bold text-foreground mb-3 line-clamp-2 group-hover:text-primary transition-colors text-balance cursor-pointer hover:underline">
+                          {newsItem.title}
+                        </h3>
+                      </Link>
                       <p className="text-muted-foreground mb-4 line-clamp-2 text-pretty leading-relaxed">
                         {newsItem.content}
                       </p>

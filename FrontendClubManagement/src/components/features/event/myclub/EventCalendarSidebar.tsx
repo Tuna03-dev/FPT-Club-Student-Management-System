@@ -18,6 +18,7 @@ interface Event {
   isMyDraft?: boolean
   requestStatus?: string
   eventTypeName?: string
+  isPendingPublish?: boolean
 }
 
 interface EventCalendarSidebarProps {
@@ -26,7 +27,7 @@ interface EventCalendarSidebarProps {
   loadingPending: boolean
   cancelledEvents: Event[] | null
   loadingCancelled: boolean
-  onRequestClick: (event: Event) => void
+  onRequestClick: (event: Event, meta?: { requestEventId: number; status?: string }) => void
   onRefetch: () => Promise<void>
   determineEventStatus: (startDate: Date, endDate: Date) => "upcoming" | "ongoing" | "completed"
   getRequestStatusInfo: (status: string) => { label: string; className: string }
@@ -51,7 +52,7 @@ export function EventCalendarSidebar({
 }: EventCalendarSidebarProps) {
   return (
     <div>
-      <EventLegend />
+      <EventLegend clubId={clubId} />
       <PendingRequestsCard
         clubId={clubId}
         pendingRequests={pendingRequests}

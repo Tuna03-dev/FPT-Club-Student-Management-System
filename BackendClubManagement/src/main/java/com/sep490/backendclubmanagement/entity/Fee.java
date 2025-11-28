@@ -37,12 +37,15 @@ public class Fee extends BaseEntity {
     private LocalDate dueDate;
 
     @Column(name = "is_mandatory", nullable = false)
+    @Builder.Default
     private Boolean isMandatory = false;
 
     @Column(name = "is_draft", nullable = false)
+    @Builder.Default
     private Boolean isDraft = true;
 
     @Column(name = "has_ever_expired", nullable = false)
+    @Builder.Default
     private Boolean hasEverExpired = false; // Once true, amount can never be edited
 
     @ManyToOne(fetch = FetchType.LAZY)
