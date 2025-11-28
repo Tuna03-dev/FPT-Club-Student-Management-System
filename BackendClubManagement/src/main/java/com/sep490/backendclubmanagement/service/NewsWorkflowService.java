@@ -109,7 +109,7 @@ public class NewsWorkflowService {
         }
 
         // Notification DB:
-        String actionUrl = "/news/requests/" + req.getId();
+        String actionUrl = "/myclub/" + club.getId() + "/news/requests/" + req.getId();
 
         // Nếu trưởng ban tạo request -> gửi Chủ nhiệm/Phó chủ nhiệm
         if (startStatus == RequestStatus.PENDING_CLUB) {
@@ -138,7 +138,7 @@ public class NewsWorkflowService {
             String staffMsg = "CLB " + club.getClubName()
                     + " đã tạo yêu cầu tin tức \"" + req.getRequestTitle() + "\" cần duyệt.";
 
-            String staffActionUrl = "/staff/news/" + req.getId();
+            String staffActionUrl = "/staff/news/requests/" + req.getId();
 
             List<User> staffUsers = userRepo.findBySystemRole_RoleNameIgnoreCase("STAFF");
             List<Long> staffIds = staffUsers.stream().map(User::getId).toList();
@@ -254,7 +254,7 @@ public class NewsWorkflowService {
         String staffTitle = "Yêu cầu tin tức mới từ CLB " + r.getClub().getClubName();
         String staffMsg = "CLB " + r.getClub().getClubName()
                 + " đã gửi yêu cầu tin tức \"" + r.getRequestTitle() + "\" lên cấp trường.";
-        String staffActionUrl = "/staff/news/" + r.getId();
+        String staffActionUrl = "/staff/news/requests/" + r.getId();
 
         List<User> staffUsers = userRepo.findBySystemRole_RoleNameIgnoreCase("STAFF");
         List<Long> staffIds = staffUsers.stream().map(User::getId).toList();
@@ -532,9 +532,12 @@ public class NewsWorkflowService {
     }
 
     private String buildCreatorRequestUrl(RequestNews r) {
-        if (r.getTeam() != null) {
-            return "/teams/" + r.getTeam().getId() + "/news/requests/" + r.getId();
+        Long clubId = r.getClub() != null ? r.getClub().getId() : null;
+
+        if (r.getTeam() != null && clubId != null) {
+            return "/myclub/" + clubId + "/teams/" + r.getTeam().getId() + "/news/requests/" + r.getId();
         }
-        return "/news/requests/" + r.getId();
+        return "/myclub/" + clubId + "/news/requests/" + r.getId();
     }
+
 }

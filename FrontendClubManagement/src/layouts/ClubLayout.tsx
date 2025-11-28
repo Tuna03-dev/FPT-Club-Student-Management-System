@@ -3,7 +3,6 @@ import {
   Home,
   Users,
   Calendar,
-  Bell,
   Search,
   Menu,
   Shield,
@@ -61,10 +60,14 @@ const navItems = [
   { key: "members", url: "/members", icon: Users },
   { key: "events", url: "/events", icon: Calendar },
   { key: "payments", url: "/payments", icon: Wallet },
-  { key: "notifications", url: "/notifications", icon: Bell },
+  // { key: "notifications", url: "/notifications", icon: Bell },
 ];
 
-type PermissionLevel = "CLUB_OFFICER" | "CLUB_TREASURER" | "TEAM_OFFICER" | "MEMBER";
+type PermissionLevel =
+  | "CLUB_OFFICER"
+  | "CLUB_TREASURER"
+  | "TEAM_OFFICER"
+  | "MEMBER";
 
 interface ManagementItem {
   key: string;
@@ -96,6 +99,14 @@ const managementItems: ManagementItem[] = [
     label: "Bài viết chờ duyệt",
     requiredRole: "TEAM_OFFICER",
   },
+  {
+    key: "team_news",
+    url: "/team-news",
+    icon: FileText,
+    label: "Tin tức phòng ban",
+    requiredRole: "TEAM_OFFICER",
+  },
+
   {
     key: "manage_members",
     url: "/members",
@@ -151,6 +162,7 @@ const managementColors: Record<string, string> = {
   manage_reports: "bg-gradient-to-br from-pink-500 to-pink-600",
   club_news: "bg-gradient-to-br from-indigo-500 to-indigo-600",
   manage_information: "bg-gradient-to-br from-indigo-500 to-indigo-600",
+  team_news: "bg-gradient-to-br from-cyan-500 to-cyan-600",
 };
 
 export const ClubLayout = () => {
@@ -505,7 +517,10 @@ export const ClubLayout = () => {
                   <DropdownMenuTrigger asChild>
                     <button className="flex items-center gap-2 rounded-md px-2 py-1 hover:bg-orange-50 transition">
                       <Avatar className="h-9 w-9">
-                        <AvatarImage src={user?.avatarUrl} alt={user?.fullName} />
+                        <AvatarImage
+                          src={user?.avatarUrl}
+                          alt={user?.fullName}
+                        />
                         <AvatarFallback className="bg-orange-100 text-orange-600 text-sm">
                           {user ? getInitials(user.fullName) : "U"}
                         </AvatarFallback>
@@ -524,7 +539,9 @@ export const ClubLayout = () => {
                         <p className="text-[14px] font-semibold text-gray-800">
                           {user?.fullName}
                         </p>
-                        <p className="text-[13px] text-gray-500">{user?.email}</p>
+                        <p className="text-[13px] text-gray-500">
+                          {user?.email}
+                        </p>
                       </div>
                     </DropdownMenuLabel>
                     <DropdownMenuSeparator />

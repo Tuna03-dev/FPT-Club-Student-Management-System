@@ -7,8 +7,15 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { getNewsById } from "@/service/NewsService";
 import { uploadImageOnly } from "@/api/uploads";
 import { staffNewsAdminApi } from "@/api/staffNewsAdmin";
+import { toast } from "sonner";
 
-import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectTrigger,
+  SelectContent,
+  SelectItem,
+  SelectValue,
+} from "@/components/ui/select";
 import { Upload, X, Image as ImageIcon } from "lucide-react";
 
 /** Giữ đúng list như StaffNewsEditor */
@@ -60,7 +67,7 @@ export default function StaffNewsEdit() {
     (async () => {
       try {
         setLoading(true);
-        const d: EditorNews = await getNewsById(id) as EditorNews; // ép về kiểu hẹp
+        const d: EditorNews = (await getNewsById(id)) as EditorNews; // ép về kiểu hẹp
         if (!alive) return;
 
         setTitle(d?.title || "");
@@ -69,7 +76,7 @@ export default function StaffNewsEdit() {
         setThumbnailUrl(d?.thumbnailUrl || "");
         setThumbPreview(d?.thumbnailUrl || "");
       } catch (e: any) {
-        alert(e?.message || "Không tải được tin tức");
+        toast.error(e?.message || "Không tải được tin tức");
       } finally {
         if (alive) setLoading(false);
       }
@@ -82,15 +89,15 @@ export default function StaffNewsEdit() {
 
   const validate = () => {
     if (!title.trim()) {
-      alert("Thiếu tiêu đề");
+      toast.error("Thiếu tiêu đề");
       return false;
     }
     if (!content.trim()) {
-      alert("Thiếu nội dung");
+      toast.error("Thiếu nội dung");
       return false;
     }
     if (!newsType.trim()) {
-      alert("Chọn loại tin");
+      toast.error("Chọn loại tin");
       return false;
     }
     return true;
@@ -112,8 +119,8 @@ export default function StaffNewsEdit() {
       await staffNewsAdminApi.update(id, {
         title: title.trim(),
         content: content.trim(),
-        type: newsType,                          // API của bạn field "type"
-        thumbnailUrl: String(finalThumb || ""),  // required theo validatePayload()
+        type: newsType, // API của bạn field "type"
+        thumbnailUrl: String(finalThumb || ""), // required theo validatePayload()
       });
 
       // Re-apply trạng thái nếu cần (để sửa xong vẫn ẩn / vẫn xóa mềm)
@@ -121,16 +128,20 @@ export default function StaffNewsEdit() {
       const wasDeleted = !!location.state?.deleted;
 
       if (wasHidden) {
-        try { await staffNewsAdminApi.hide(id); } catch {}
+        try {
+          await staffNewsAdminApi.hide(id);
+        } catch {}
       }
       if (wasDeleted) {
-        try { await staffNewsAdminApi.softDelete(id); } catch {}
+        try {
+          await staffNewsAdminApi.softDelete(id);
+        } catch {}
       }
 
-      alert("Đã lưu thay đổi");
+      toast.success("Đã lưu thay đổi");
       nav("/staff/news"); // điều hướng về danh sách news
     } catch (e: any) {
-      alert(e?.message || "Lưu thất bại");
+      toast.error(e?.message || "Lưu thất bại");
     } finally {
       setSaving(false);
     }
@@ -199,7 +210,10 @@ export default function StaffNewsEdit() {
 
         <div className="space-y-3">
           <label className="text-sm font-semibold">Loại tin</label>
-          <Select value={newsType || undefined} onValueChange={(v) => setNewsType(v)}>
+          <Select
+            value={newsType || undefined}
+            onValueChange={(v) => setNewsType(v)}
+          >
             <SelectTrigger className="w-full px-3 py-2 rounded-lg border">
               <SelectValue placeholder="Chọn loại" />
             </SelectTrigger>
@@ -279,19 +293,34 @@ function DropImagePreview({
       className={`relative rounded-lg border-2 border-dashed transition-all ${
         dragOver ? "border-blue-500 bg-blue-50" : "border-slate-300 bg-slate-50"
       } p-3`}
-      onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-      onDragLeave={(e) => { e.preventDefault(); setDragOver(false); }}
+      onDragOver={(e) => {
+        e.preventDefault();
+        setDragOver(true);
+      }}
+      onDragLeave={(e) => {
+        e.preventDefault();
+        setDragOver(false);
+      }}
       onDrop={async (e) => {
-        e.preventDefault(); e.stopPropagation(); setDragOver(false);
+        e.preventDefault();
+        e.stopPropagation();
+        setDragOver(false);
         await handleFile(e.dataTransfer.files?.[0]);
       }}
       onPaste={(e) => {
         if (e.clipboardData?.getData("text/plain")) e.preventDefault(); // chặn dán link
       }}
     >
-      <div className="aspect-[16/9] w-full rounded-md bg-white overflow-hidden cursor-pointer" onClick={open}>
+      <div
+        className="aspect-[16/9] w-full rounded-md bg-white overflow-hidden cursor-pointer"
+        onClick={open}
+      >
         {hasImage ? (
-          <img src={preview} alt="thumbnail" className="w-full h-full object-cover" />
+          <img
+            src={preview}
+            alt="thumbnail"
+            className="w-full h-full object-cover"
+          />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-slate-400">
             <ImageIcon className="h-5 w-5 mr-2" /> Kéo-thả hoặc bấm để chọn ảnh

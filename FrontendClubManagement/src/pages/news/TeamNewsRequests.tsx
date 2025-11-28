@@ -19,8 +19,6 @@ import {
   Eye,
   Pencil,
   XCircle,
-  Info,
-  AlertTriangle,
 } from "lucide-react";
 import { SkeletonRow } from "@/components/common/Skeleton";
 import {
@@ -32,6 +30,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useWebSocket } from "@/hooks/useWebSocket";
+import { toast } from "sonner";
 
 type FilterStatus = RequestStatus | "ALL";
 
@@ -85,10 +84,6 @@ export default function TeamNewsRequests() {
   const [currentPage, setCurrentPage] = useState(1); // 1-based
   const [totalPages, setTotalPages] = useState(1);
 
-  // banners
-  const [infoBanner, setInfoBanner] = useState<string | null>(null);
-  const [errBanner, setErrBanner] = useState<string | null>(null);
-
   // cancel dialog
   const [cancelId, setCancelId] = useState<number | null>(null);
   const [cancelBusy, setCancelBusy] = useState(false);
@@ -98,7 +93,6 @@ export default function TeamNewsRequests() {
     const page = pageArg ?? currentPage;
 
     setLoading(true);
-    setErrBanner(null);
 
     try {
       const params: Record<string, any> = {
@@ -120,7 +114,7 @@ export default function TeamNewsRequests() {
       setTotalPages(Math.max(1, Math.ceil(total / PAGE_SIZE)));
     } catch (e: any) {
       console.error("load TeamNewsRequests error:", e);
-      setErrBanner(e?.message || "Không tải được danh sách yêu cầu.");
+      toast.error(e?.message || "Không tải được danh sách yêu cầu.");
     } finally {
       setLoading(false);
     }
@@ -170,11 +164,11 @@ export default function TeamNewsRequests() {
 
     try {
       await requestsApi.cancel(cancelId);
-      setInfoBanner(`Đã hủy request #${cancelId}.`);
+      toast.success(`Đã hủy request #${cancelId}.`);
       await load(currentPage);
     } catch (e: any) {
       console.error("cancel request error:", e);
-      setErrBanner(e?.message || "Hủy thất bại.");
+      toast.error(e?.message || "Hủy thất bại.");
     } finally {
       setDoing(null);
       setCancelBusy(false);
@@ -207,18 +201,6 @@ export default function TeamNewsRequests() {
 
   return (
     <div className="px-4 sm:px-6 lg:px-4 py-4 max-w-none mx-auto space-y-6">
-      {/* banners */}
-      {infoBanner && (
-        <div className="flex items-center gap-2 bg-blue-50 text-blue-700 px-3 py-2 rounded-lg border border-blue-200">
-          <Info className="h-4 w-4" /> <span>{infoBanner}</span>
-        </div>
-      )}
-      {errBanner && (
-        <div className="flex items-center gap-2 bg-rose-50 text-rose-700 px-3 py-2 rounded-lg border border-rose-200">
-          <AlertTriangle className="h-4 w-4" /> <span>{errBanner}</span>
-        </div>
-      )}
-
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />

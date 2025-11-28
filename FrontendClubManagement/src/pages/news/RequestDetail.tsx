@@ -4,7 +4,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { requestsApi } from "@/api/newsRequests";
-import type { NewsRequest, RequestStatus, UpdateNewsRequestPayload } from "@/types/news";
+import type { NewsRequest, UpdateNewsRequestPayload } from "@/types/news";
 import { uploadImageOnly } from "@/api/uploads";
 import {
   ArrowLeft,
@@ -15,16 +15,22 @@ import {
   Ban,
   Tag,
   Info,
-  AlertTriangle,
   Loader2,
   Image as ImageIcon,
 } from "lucide-react";
 
 // UI
-import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectTrigger,
+  SelectContent,
+  SelectItem,
+  SelectValue,
+} from "@/components/ui/select";
 
 // Realtime
 import { useWebSocket } from "@/hooks/useWebSocket";
+import { toast } from "sonner";
 
 /* ===== helper: lấy user hiện tại ===== */
 function getCurrentUser() {
@@ -32,8 +38,12 @@ function getCurrentUser() {
     const raw = localStorage.getItem("user");
     if (!raw) return { id: null as number | null, sysRole: "OTHER" as string };
     const u = JSON.parse(raw);
-    const sys = (u?.systemRole || u?.role || {}).roleName || u?.systemRole || "";
-    return { id: Number(u?.id) || null, sysRole: String(sys || "").toUpperCase() };
+    const sys =
+      (u?.systemRole || u?.role || {}).roleName || u?.systemRole || "";
+    return {
+      id: Number(u?.id) || null,
+      sysRole: String(sys || "").toUpperCase(),
+    };
   } catch {
     return { id: null as number | null, sysRole: "OTHER" };
   }
@@ -65,6 +75,20 @@ const badgeClass = (s?: string) => {
   }`;
 };
 
+const statusLabel = (s?: string): string => {
+  const map: Record<string, string> = {
+    DRAFT: "Bản nháp",
+    PENDING_CLUB: "Chờ duyệt (CLB)",
+    APPROVED_CLUB: "Đã duyệt (CLB)",
+    REJECTED_CLUB: "Từ chối (CLB)",
+    PENDING_UNIVERSITY: "Chờ duyệt (Trường)",
+    APPROVED_UNIVERSITY: "Đã duyệt (Trường)",
+    REJECTED_UNIVERSITY: "Từ chối (Trường)",
+    CANCELED: "Đã hủy",
+  };
+  return map[s || "CANCELED"] || "—";
+};
+
 type ConfirmKind = "clubApprove" | "staffApprove" | "cancelReq";
 
 export default function RequestDetail() {
@@ -81,11 +105,12 @@ export default function RequestDetail() {
 
   // Realtime
   const token = localStorage.getItem("accessToken");
-  const { isConnected, subscribeToClub, subscribeToUserQueue } = useWebSocket(token);
+  const { isConnected, subscribeToClub, subscribeToUserQueue } =
+    useWebSocket(token);
 
-  // banners
+  // banners (giữ để hiển thị realtime nếu cần)
   const [infoBanner, setInfoBanner] = useState<string | null>(null);
-  const [errBanner, setErrBanner] = useState<string | null>(null);
+  void setInfoBanner; // không dùng nhưng giữ cho sau này
 
   // data & flags
   const [item, setItem] = useState<NewsRequest | null>(null);
@@ -112,7 +137,8 @@ export default function RequestDetail() {
   const [thumbPreview, setThumbPreview] = useState<string>("");
   const [fileObj, setFileObj] = useState<File | null>(null);
 
-  const fmt = (iso?: string | null) => (iso ? new Date(iso).toLocaleString("vi-VN") : "—");
+  const fmt = (iso?: string | null) =>
+    iso ? new Date(iso).toLocaleString("vi-VN") : "—";
   void reason;
   const reload = async () => {
     const rs = await requestsApi.getDetail(id);
@@ -132,10 +158,9 @@ export default function RequestDetail() {
     (async () => {
       try {
         setLoading(true);
-        setErrBanner(null);
         await reload();
       } catch (e: any) {
-        if (alive) setErrBanner(e?.message || "Không tải được request.");
+        if (alive) toast.error(e?.message || "Không tải được request.");
       } finally {
         if (alive) setLoading(false);
       }
@@ -150,10 +175,13 @@ export default function RequestDetail() {
   useEffect(() => {
     if (!item) return;
     const wantEdit = searchParams.get("edit") === "1";
-    const isCreator = !!meId && !!item.createdByUserId && meId === item.createdByUserId;
+    const isCreator =
+      !!meId && !!item.createdByUserId && meId === item.createdByUserId;
     const canEditNow =
       isCreator &&
-      (item.status === "PENDING_CLUB" || item.status === "PENDING_UNIVERSITY" || item.status === "CANCELED");
+      (item.status === "PENDING_CLUB" ||
+        item.status === "PENDING_UNIVERSITY" ||
+        item.status === "CANCELED");
 
     if (wantEdit && canEditNow) {
       setEditing(true);
@@ -191,10 +219,13 @@ export default function RequestDetail() {
               REJECTED_UNIVERSITY: "Request đã bị từ chối ở cấp Trường.",
               CANCELED: "Request đã bị hủy.",
             };
-            setInfoBanner(map[msg.action] || "Request thay đổi trạng thái.");
+            toast.info(map[msg.action] || "Request thay đổi trạng thái.");
           }
         }
-        if (msg.type === "NEWS_DRAFT" && ["SUBMITTED", "DELETED", "UPDATED"].includes(msg.action)) {
+        if (
+          msg.type === "NEWS_DRAFT" &&
+          ["SUBMITTED", "DELETED", "UPDATED"].includes(msg.action)
+        ) {
           reload();
         }
       });
@@ -235,15 +266,18 @@ export default function RequestDetail() {
   };
 
   // ===== permission flags =====
-  const isCreator = !!meId && !!item?.createdByUserId && meId === item?.createdByUserId;
+  const isCreator =
+    !!meId && !!item?.createdByUserId && meId === item?.createdByUserId;
   const isPendingClub = item?.status === "PENDING_CLUB";
   const isPendingUni = item?.status === "PENDING_UNIVERSITY";
   const isCanceled = item?.status === "CANCELED";
 
-  const showClubActions = !!item && isPendingClub && !isStaff && !!item.teamId && !isCreator;
+  const showClubActions =
+    !!item && isPendingClub && !isStaff && !!item.teamId && !isCreator;
   const showStaffActions = !!item && isPendingUni && isStaff;
   const showCancel = !!item && isCreator && (isPendingClub || isPendingUni);
-  const canEdit = !!item && isCreator && (isPendingClub || isPendingUni || isCanceled);
+  const canEdit =
+    !!item && isCreator && (isPendingClub || isPendingUni || isCanceled);
 
   // ===== confirm modal state (đưa hook lên trên, không để sau return) =====
   const [confirmState, setConfirmState] = useState<null | ConfirmKind>(null);
@@ -253,48 +287,52 @@ export default function RequestDetail() {
     const action = confirmState;
     setConfirmState(null);
     setDoing(action);
-    setInfoBanner(null);
-    setErrBanner(null);
     try {
       if (action === "clubApprove") {
         await requestsApi.clubApproveAndSubmit(item.id);
-        setInfoBanner("Đã duyệt & gửi lên cấp Trường.");
+        toast.success("Đã duyệt & gửi lên cấp Trường.");
       } else if (action === "staffApprove") {
         await requestsApi.staffApprovePublish(item.id, {});
-        setInfoBanner("Đã duyệt & đăng tin.");
+        toast.success("Đã duyệt & đăng tin.");
       } else if (action === "cancelReq") {
         await requestsApi.cancel(item.id);
-        setInfoBanner("Đã hủy yêu cầu. Bạn có thể sửa & gửi lại.");
+        toast.success(
+          "Đã hủy yêu cầu. Yêu cầu được lưu về trong mục bản nháp bạn có thể sửa & gửi lại."
+        );
       }
       await reload();
     } catch (e: any) {
-      setErrBanner(e?.message || "Thao tác thất bại.");
+      toast.error(e?.message || "Thao tác thất bại.");
     } finally {
       setDoing(null);
     }
   };
 
-  const handleReject = async (role: "club" | "staff", reasonInput: string, setErr: (s: string | null) => void) => {
+  const handleReject = async (
+    role: "club" | "staff",
+    reasonInput: string,
+    setErr: (s: string | null) => void
+  ) => {
     if (!item) return;
     if (!reasonInput.trim()) {
       setErr("Vui lòng nhập lý do từ chối.");
       return;
     }
     setDoing(role === "club" ? "clubReject" : "staffReject");
-    setInfoBanner(null);
-    setErrBanner(null);
     try {
       if (role === "club") {
-        await requestsApi.clubPresidentReject(item.id, { reason: reasonInput.trim() });
-        setInfoBanner("Đã từ chối ở cấp CLB.");
+        await requestsApi.clubPresidentReject(item.id, {
+          reason: reasonInput.trim(),
+        });
+        toast.success("Đã từ chối ở cấp CLB.");
       } else {
         await requestsApi.staffReject(item.id, { reason: reasonInput.trim() });
-        setInfoBanner("Đã từ chối ở cấp Trường.");
+        toast.success("Đã từ chối ở cấp Trường.");
       }
       setReason("");
       await reload();
     } catch (e: any) {
-      setErrBanner(e?.message || "Không từ chối được.");
+      toast.error(e?.message || "Không từ chối được.");
     } finally {
       setDoing(null);
     }
@@ -333,8 +371,6 @@ export default function RequestDetail() {
     if (!validateAll()) return;
 
     setDoing("save");
-    setInfoBanner(null);
-    setErrBanner(null);
     try {
       let finalThumb = thumbnailUrl || undefined;
       if (fileObj) {
@@ -358,9 +394,9 @@ export default function RequestDetail() {
       setThumbPreview("");
       setFileObj(null);
 
-      setInfoBanner("Đã lưu thay đổi.");
+      toast.success("Đã lưu thay đổi.");
     } catch (e: any) {
-      setErrBanner(e?.message || "Không lưu được.");
+      toast.error(e?.message || "Không lưu được.");
     } finally {
       setDoing(null);
     }
@@ -411,14 +447,12 @@ export default function RequestDetail() {
           <Info className="h-4 w-4" /> <span>{infoBanner}</span>
         </div>
       )}
-      {errBanner && (
-        <div className="flex items-center gap-2 bg-rose-50 text-rose-700 px-3 py-2 rounded-lg border border-rose-200">
-          <AlertTriangle className="h-4 w-4" /> <span>{errBanner}</span>
-        </div>
-      )}
 
       <div className="flex justify-end">
-        <button onClick={goBack} className="inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 hover:bg-slate-50">
+        <button
+          onClick={goBack}
+          className="inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 hover:bg-slate-50"
+        >
           <ArrowLeft className="h-4 w-4" /> Quay lại danh sách
         </button>
       </div>
@@ -483,12 +517,16 @@ export default function RequestDetail() {
               <div className="w-full h-[220px] bg-gradient-to-br from-slate-100 to-slate-200" />
             )}
           </div>
-          {editing && imageErr && <p className="text-xs text-rose-600 mt-1">* {imageErr}</p>}
+          {editing && imageErr && (
+            <p className="text-xs text-rose-600 mt-1">* {imageErr}</p>
+          )}
 
           {/* TITLE + STATUS + TYPE */}
           <div className="space-y-3">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className={badgeClass(item.status)}>{(item.status as RequestStatus) || "—"}</span>
+              <span className={badgeClass(item.status)}>
+                {statusLabel(item.status)}
+              </span>
               {item.newsType && !editing && (
                 <span className="inline-flex items-center gap-1 rounded-full bg-slate-200 text-slate-700 px-2.5 py-0.5 text-xs font-medium">
                   <Tag className="h-3.5 w-3.5" /> {item.newsType}
@@ -498,7 +536,9 @@ export default function RequestDetail() {
 
             {!editing ? (
               <>
-                <h1 className="text-3xl font-extrabold tracking-tight leading-snug">{item.requestTitle || "—"}</h1>
+                <h1 className="text-3xl font-extrabold tracking-tight leading-snug">
+                  {item.requestTitle || "—"}
+                </h1>
                 {metaLine}
               </>
             ) : (
@@ -516,7 +556,9 @@ export default function RequestDetail() {
                       if (titleErr && e.target.value.trim()) setTitleErr(null);
                     }}
                   />
-                  {titleErr && <p className="mt-1 text-xs text-rose-600">{titleErr}</p>}
+                  {titleErr && (
+                    <p className="mt-1 text-xs text-rose-600">{titleErr}</p>
+                  )}
                 </div>
 
                 {/* Content + Type */}
@@ -530,14 +572,19 @@ export default function RequestDetail() {
                       value={content}
                       onChange={(e) => {
                         setContent(e.target.value);
-                        if (contentErr && e.target.value.trim()) setContentErr(null);
+                        if (contentErr && e.target.value.trim())
+                          setContentErr(null);
                       }}
                     />
-                    {contentErr && <p className="mt-1 text-xs text-rose-600">{contentErr}</p>}
+                    {contentErr && (
+                      <p className="mt-1 text-xs text-rose-600">{contentErr}</p>
+                    )}
                   </div>
 
                   <div className="sm:col-span-1">
-                    <label className="text-sm font-medium text-foreground">Loại bản tin</label>
+                    <label className="text-sm font-medium text-foreground">
+                      Loại bản tin
+                    </label>
                     <Select
                       value={newsType || undefined}
                       onValueChange={(v) => {
@@ -545,7 +592,9 @@ export default function RequestDetail() {
                         if (typeErr && v) setTypeErr(null);
                       }}
                     >
-                      <SelectTrigger className={`w-full px-4 py-2.5 rounded-lg border bg-background ${typeErr ? "border-rose-300" : "border-border"}`}>
+                      <SelectTrigger
+                        className={`w-full px-4 py-2.5 rounded-lg border bg-background ${typeErr ? "border-rose-300" : "border-border"}`}
+                      >
                         <SelectValue placeholder="Chọn loại" />
                       </SelectTrigger>
                       <SelectContent>
@@ -556,7 +605,9 @@ export default function RequestDetail() {
                         ))}
                       </SelectContent>
                     </Select>
-                    {typeErr && <p className="mt-1 text-xs text-rose-600">{typeErr}</p>}
+                    {typeErr && (
+                      <p className="mt-1 text-xs text-rose-600">{typeErr}</p>
+                    )}
                   </div>
                 </div>
               </>
@@ -565,14 +616,21 @@ export default function RequestDetail() {
 
           {/* CONTENT (view-mode) */}
           {!editing && (
-            <article className="prose max-w-none leading-relaxed whitespace-pre-wrap">{item.description || "—"}</article>
+            <article className="prose max-w-none leading-relaxed whitespace-pre-wrap">
+              {item.description || "—"}
+            </article>
           )}
 
           {/* INFO */}
           <div className="border-t pt-4 space-y-3">
-            <div className="text-sm font-semibold text-slate-700">Thông tin</div>
+            <div className="text-sm font-semibold text-slate-700">
+              Thông tin
+            </div>
             <div className="grid sm:grid-cols-2 gap-3 text-sm">
-              <InfoBox label="Phản hồi / Ghi chú" value={item.responseMessage || "—"} />
+              <InfoBox
+                label="Phản hồi / Ghi chú"
+                value={item.responseMessage || "—"}
+              />
             </div>
           </div>
 
@@ -584,15 +642,17 @@ export default function RequestDetail() {
                 <button
                   onClick={() => setConfirmState("clubApprove")}
                   disabled={isClubApproveLoading}
-                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 text-white px-3 py-2 hover:bg-emerald-700 disabled:opacity-60"
+                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 text-white px-3 py-1.5 hover:bg-emerald-700 disabled:opacity-60 text-sm h-9"
                 >
-                  <CheckCircle2 className="h-4 w-4" /> {isClubApproveLoading ? "Đang duyệt…" : "Duyệt & gửi lên Staff"}
+                  <CheckCircle2 className="h-4 w-4" />{" "}
+                  {isClubApproveLoading ? "Đang duyệt…" : "Duyệt"}
                 </button>
 
                 <RejectModalTrigger
-                  labelBtn="Từ chối (Chủ nhiệm)"
+                  labelBtn="Từ chối"
                   loading={isClubRejectLoading}
                   onSubmit={(r, setErr) => handleReject("club", r, setErr)}
+                  isSmall
                 />
               </>
             )}
@@ -603,15 +663,17 @@ export default function RequestDetail() {
                 <button
                   onClick={() => setConfirmState("staffApprove")}
                   disabled={isStaffApproveLoading}
-                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 text-white px-3 py-2 hover:bg-indigo-700 disabled:opacity-60"
+                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 text-white px-3 py-1.5 hover:bg-indigo-700 disabled:opacity-60 text-sm h-9"
                 >
-                  <CheckCircle2 className="h-4 w-4" /> {isStaffApproveLoading ? "Đang duyệt…" : "Duyệt & publish"}
+                  <CheckCircle2 className="h-4 w-4" />{" "}
+                  {isStaffApproveLoading ? "Đang duyệt…" : "Duyệt"}
                 </button>
 
                 <RejectModalTrigger
-                  labelBtn="Từ chối (Staff)"
+                  labelBtn="Từ chối"
                   loading={isStaffRejectLoading}
                   onSubmit={(r, setErr) => handleReject("staff", r, setErr)}
+                  isSmall
                 />
               </>
             )}
@@ -624,7 +686,8 @@ export default function RequestDetail() {
                   disabled={isCancelLoading}
                   className="inline-flex items-center justify-center gap-2 rounded-lg border px-3 py-2 hover:bg-slate-50 disabled:opacity-60"
                 >
-                  <Ban className="h-4 w-4" /> {isCancelLoading ? "Đang hủy…" : "Hủy request"}
+                  <Ban className="h-4 w-4" />{" "}
+                  {isCancelLoading ? "Đang hủy…" : "Hủy yêu cầu"}
                 </button>
               )}
               {canEdit && !editing && (
@@ -642,7 +705,11 @@ export default function RequestDetail() {
                     disabled={isSubmitDisabled}
                     className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 text-white px-3 py-2 hover:bg-emerald-700 disabled:opacity-60"
                   >
-                    {isSubmitDisabled ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                    {isSubmitDisabled ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Save className="h-4 w-4" />
+                    )}
                     {isSubmitDisabled ? "Đang lưu…" : "Lưu thay đổi"}
                   </button>
                   <button
@@ -672,18 +739,22 @@ export default function RequestDetail() {
                 confirmState === "clubApprove"
                   ? "Duyệt & gửi lên Staff"
                   : confirmState === "staffApprove"
-                  ? "Duyệt & publish"
-                  : "Hủy request"
+                    ? "Duyệt & đăng tin"
+                    : "Hủy yêu cầu"
               }
               message={
                 confirmState === "clubApprove"
-                  ? "Bạn chắc chắn duyệt và gửi request này lên cấp Trường?"
+                  ? "Bạn chắc chắn duyệt và gửi yêu cầu này lên cấp Trường?"
                   : confirmState === "staffApprove"
-                  ? "Bạn chắc chắn duyệt và đăng tin này?"
-                  : "Bạn chắc chắn muốn hủy request này?"
+                    ? "Bạn chắc chắn duyệt và đăng tin này?"
+                    : "Bạn chắc chắn muốn hủy yêu cầu này?"
               }
               okText={
-                confirmState === "clubApprove" ? "Duyệt & Gửi" : confirmState === "staffApprove" ? "Duyệt & Publish" : "Hủy"
+                confirmState === "clubApprove"
+                  ? "Duyệt & Gửi"
+                  : confirmState === "staffApprove"
+                    ? "Duyệt & đăng tin"
+                    : "Hủy"
               }
               okVariant={confirmState === "cancelReq" ? "danger" : "primary"}
               onOk={handleConfirmOk}
@@ -730,13 +801,18 @@ function ConfirmModal({
         <h3 className="text-base font-semibold text-slate-900">{title}</h3>
         <p className="mt-2 text-sm text-slate-700">{message}</p>
         <div className="mt-4 flex justify-end gap-2">
-          <button className="px-3 py-1.5 rounded-lg border hover:bg-slate-50" onClick={onCancel}>
+          <button
+            className="px-3 py-1.5 rounded-lg border hover:bg-slate-50"
+            onClick={onCancel}
+          >
             {cancelText}
           </button>
           <button
             onClick={onOk}
             className={`px-3 py-1.5 rounded-lg text-white ${
-              okVariant === "danger" ? "bg-rose-600 hover:bg-rose-700" : "bg-indigo-600 hover:bg-indigo-700"
+              okVariant === "danger"
+                ? "bg-rose-600 hover:bg-rose-700"
+                : "bg-indigo-600 hover:bg-indigo-700"
             }`}
           >
             {okText}
@@ -751,10 +827,12 @@ function RejectModalTrigger({
   labelBtn,
   loading,
   onSubmit,
+  isSmall,
 }: {
   labelBtn: string;
   loading?: boolean;
   onSubmit: (reason: string, setReasonErr: (s: string | null) => void) => void;
+  isSmall?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [val, setVal] = useState("");
@@ -765,21 +843,32 @@ function RejectModalTrigger({
       <button
         onClick={() => setOpen(true)}
         disabled={loading}
-        className="inline-flex items-center justify-center gap-2 rounded-lg bg-rose-600 text-white px-3 py-2 hover:bg-rose-700 disabled:opacity-60"
+        className={`inline-flex items-center justify-center gap-2 rounded-lg bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-60 ${
+          isSmall ? "px-3 py-1.5 text-sm h-9" : "px-3 py-2"
+        }`}
       >
         <XCircle className="h-4 w-4" /> {loading ? "Đang từ chối…" : labelBtn}
       </button>
 
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/30" onClick={() => setOpen(false)} />
+          <div
+            className="absolute inset-0 bg-black/30"
+            onClick={() => setOpen(false)}
+          />
           <div className="relative w-full max-w-md rounded-2xl bg-white shadow-xl p-5">
-            <h3 className="text-base font-semibold text-slate-900">{labelBtn}</h3>
+            <h3 className="text-base font-semibold text-slate-900">
+              {labelBtn}
+            </h3>
             <div className="mt-3">
-              <label className="text-sm font-medium text-slate-700">Lý do từ chối</label>
+              <label className="text-sm font-medium text-slate-700">
+                Lý do từ chối
+              </label>
               <textarea
                 className={`mt-1 w-full min-h-[100px] border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 ${
-                  err ? "border-rose-300 focus:ring-rose-200" : "focus:ring-indigo-200"
+                  err
+                    ? "border-rose-300 focus:ring-rose-200"
+                    : "focus:ring-indigo-200"
                 }`}
                 placeholder="Nhập lý do…"
                 value={val}
@@ -791,7 +880,10 @@ function RejectModalTrigger({
               {err && <p className="mt-1 text-xs text-rose-600">{err}</p>}
             </div>
             <div className="mt-4 flex justify-end gap-2">
-              <button className="px-3 py-1.5 rounded-lg border hover:bg-slate-50" onClick={() => setOpen(false)}>
+              <button
+                className="px-3 py-1.5 rounded-lg border hover:bg-slate-50"
+                onClick={() => setOpen(false)}
+              >
                 Hủy
               </button>
               <button
@@ -866,9 +958,16 @@ function DropImagePreview({
         if (e.clipboardData?.getData("text/plain")) e.preventDefault();
       }}
     >
-      <div className="aspect-[16/9] w-full rounded-md bg-white overflow-hidden cursor-pointer" onClick={open}>
+      <div
+        className="aspect-[16/9] w-full rounded-md bg-white overflow-hidden cursor-pointer"
+        onClick={open}
+      >
         {hasImage ? (
-          <img src={preview} alt="thumbnail" className="w-full h-full object-cover" />
+          <img
+            src={preview}
+            alt="thumbnail"
+            className="w-full h-full object-cover"
+          />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-slate-400 text-sm">
             <ImageIcon className="h-4 w-4 mr-2" />
