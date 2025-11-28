@@ -644,6 +644,8 @@ WHERE cm.club.id = :clubId
     """)
     boolean isUserClubOfficer(@Param("userId") Long userId, @Param("clubId") Long clubId);
     List<RoleMemberShip> findByTeamIdAndIsActiveTrue(Long teamId);
+    boolean existsByClubMemberShip_User_IdAndTeam_IdAndSemester_IsCurrentTrue(Long userId, Long teamId);
+
 }
 
 

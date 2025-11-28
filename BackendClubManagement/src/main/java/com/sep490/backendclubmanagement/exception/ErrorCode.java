@@ -24,6 +24,10 @@ public enum ErrorCode {
     NOT_CLUB_OFFICER(HttpStatus.FORBIDDEN, 4002, "Chỉ cán bộ câu lạc bộ mới có quyền thực hiện thao tác này"),
     INVALID_INPUT(HttpStatus.BAD_REQUEST, 1001, "Dữ liệu không hợp lệ"),
     ALREADY_APPLIED(HttpStatus.BAD_REQUEST, 3002, "Bạn đã nộp đơn ứng tuyển cho đợt tuyển dụng này!"),
+    INVALID_FULL_NAME(HttpStatus.BAD_REQUEST, 1001, "Tên không được để trống"),
+    INVALID_PHONE_NUMBER(HttpStatus.BAD_REQUEST, 1001, "Số điện thoại không hợp lệ"),
+    INVALID_DATE_OF_BIRTH(HttpStatus.BAD_REQUEST, 1001, "Ngày sinh không hợp lệ "),
+    POST_NOT_FOUND (HttpStatus.NOT_FOUND, 2001, "Post not found"),
 
     // Transaction related errors
     CLUB_WALLET_NOT_FOUND(HttpStatus.NOT_FOUND, 5000, "Không tìm thấy ví câu lạc bộ"),

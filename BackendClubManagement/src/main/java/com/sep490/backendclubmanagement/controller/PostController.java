@@ -9,6 +9,7 @@ import com.sep490.backendclubmanagement.entity.NotificationType;
 import com.sep490.backendclubmanagement.entity.Post;
 import com.sep490.backendclubmanagement.exception.AppException;
 import com.sep490.backendclubmanagement.repository.PostRepository;
+import com.sep490.backendclubmanagement.security.SecurityConfig;
 import com.sep490.backendclubmanagement.service.NotificationService;
 import com.sep490.backendclubmanagement.service.PostService;
 import com.sep490.backendclubmanagement.service.UserService;
@@ -21,6 +22,7 @@ import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 

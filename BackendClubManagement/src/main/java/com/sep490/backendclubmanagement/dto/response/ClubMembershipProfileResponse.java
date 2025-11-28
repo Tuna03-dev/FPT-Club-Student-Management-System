@@ -2,6 +2,7 @@ package com.sep490.backendclubmanagement.dto.response;
 
 import com.sep490.backendclubmanagement.entity.ClubMemberShipStatus;
 import lombok.*;
+import org.jetbrains.annotations.NotNull;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -26,7 +27,9 @@ public class ClubMembershipProfileResponse {
     private LocalDate endDate;
     private ClubMemberShipStatus membershipStatus;
 
+
     // Các vai trò của user trong CLB này (theo RoleMemberShip)
     private List<RoleInClubResponse> roles;
+
 }
 
