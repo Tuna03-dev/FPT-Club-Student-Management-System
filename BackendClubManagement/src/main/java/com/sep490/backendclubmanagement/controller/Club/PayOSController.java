@@ -11,6 +11,7 @@ import com.sep490.backendclubmanagement.service.PayOSIntegrationService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -21,12 +22,14 @@ public class PayOSController {
     private final PayOSIntegrationService payOSIntegrationService;
 
     @GetMapping("/config")
+    @PreAuthorize("@clubSecurity.isClubOfficerOrTreasureInClub(#clubId)")
     public ResponseEntity<ApiResponse<PayOSConfigResponse>> getConfig(@PathVariable Long clubId) throws AppException {
         PayOSConfigResponse data = payOSIntegrationService.getConfig(clubId);
         return ResponseEntity.ok(ApiResponse.success(data));
     }
 
     @PutMapping("/config")
+    @PreAuthorize("@clubSecurity.isClubOfficerOrTreasureInClub(#clubId)")
     public ResponseEntity<ApiResponse<PayOSConfigResponse>> upsertConfig(
             @PathVariable Long clubId,
             @Valid @RequestBody PayOSConfigRequest request
@@ -38,6 +41,7 @@ public class PayOSController {
 
 
     @PostMapping("/create-payment")
+    @PreAuthorize("@clubSecurity.isMemberOfClub(#clubId)")
     public ResponseEntity<ApiResponse<PayOSCreatePaymentResponse>> createPaymentRequest(
             @PathVariable Long clubId,
             @Valid @RequestBody PayOSCreatePaymentRequest request

@@ -44,7 +44,12 @@ import TeamCreatePage from "@/pages/myclub/teams/TeamCreatePage";
 import RoleManagement from "@/pages/myclub/RoleManagement";
 import PendingPosts from "@/pages/myclub/PendingPosts";
 
-import ClubOfficerGuard from "@/components/guards/ClubOfficerGuard";
+import {
+  ClubOfficerGuard,
+  TeamOfficerGuard,
+  ClubTreasurerGuard,
+  ClubMemberGuard,
+} from "@/components/guards";
 import ForbiddenPage from "@/pages/ForbiddenPage";
 
 import { StaffReportManagement } from "@/pages/myclub/staff/reportManagement/StaffReport";
@@ -184,8 +189,17 @@ export const router = createBrowserRouter([
       </ProtectedRoute>
     ),
     children: [
-      { index: true, element: <Dashboard /> },
+      // Dashboard - chỉ cần là thành viên
+      { 
+        index: true, 
+        element: (
+          <ClubMemberGuard>
+            <Dashboard />
+          </ClubMemberGuard>
+        ) 
+      },
 
+      // ===== CLUB_OFFICER Routes =====
       {
         path: "news",
         element: (
@@ -202,8 +216,6 @@ export const router = createBrowserRouter([
           </ClubOfficerGuard>
         ),
       },
-
-      // === bổ sung từ A: chi tiết draft & request trong context club ===
       {
         path: "news/drafts/:draftId",
         element: (
@@ -220,8 +232,6 @@ export const router = createBrowserRouter([
           </ClubOfficerGuard>
         ),
       },
-
-      { path: "members", element: <MemberList /> },
       {
         path: "roles",
         element: (
@@ -231,33 +241,13 @@ export const router = createBrowserRouter([
         ),
       },
       {
-        path: "pending-posts",
+        path: "recruitments",
         element: (
           <ClubOfficerGuard>
-            <PendingPosts />
+            <RecruitmentManagement />
           </ClubOfficerGuard>
         ),
       },
-      { path: "events", element: <EventList /> },
-      { path: "events/attendance/:eventId", element: <EventAttendancePage /> },
-      { path: "recruitments", element: <RecruitmentManagement /> },
-      { path: "finance", element: <Finance /> },
-      { path: "payments", element: <Payment /> },
-      { path: "notifications", element: <Notifications /> },
-      { path: "settings", element: <Settings /> },
-      { path: "information", element: <ClubInforManagement /> },
-      { path: "teams/:teamId", element: <TeamDetailPage /> },
-      { path: "reports", element: <ClubReportManagement /> },
-
-      // Team-level news
-      { path: "teams/:teamId/news-drafts", element: <TeamNewsDrafts /> },
-      { path: "teams/:teamId/news-requests", element: <TeamNewsRequests /> },
-      { path: "teams/:teamId/news-editor", element: <TeamNewsEditor /> },
-
-      // === bổ sung từ A: chi tiết draft & request trong context team ===
-      { path: "teams/:teamId/news/drafts/:draftId", element: <DraftDetail /> },
-      { path: "teams/:teamId/news/requests/:id", element: <RequestDetail /> },
-
       {
         path: "teams/create",
         element: (
@@ -265,6 +255,140 @@ export const router = createBrowserRouter([
             <TeamCreatePage />
           </ClubOfficerGuard>
         ),
+      },
+
+      // ===== CLUB_TREASURER Routes =====
+      {
+        path: "finance",
+        element: (
+          <ClubTreasurerGuard>
+            <Finance />
+          </ClubTreasurerGuard>
+        ),
+      },
+
+      // ===== TEAM_OFFICER Routes =====
+      {
+        path: "pending-posts",
+        element: (
+          <TeamOfficerGuard>
+            <PendingPosts />
+          </TeamOfficerGuard>
+        ),
+      },
+      {
+        path: "reports",
+        element: (
+          <TeamOfficerGuard>
+            <ClubReportManagement />
+          </TeamOfficerGuard>
+        ),
+      },
+      {
+        path: "teams/:teamId/news-drafts",
+        element: (
+          <TeamOfficerGuard>
+            <TeamNewsDrafts />
+          </TeamOfficerGuard>
+        ),
+      },
+      {
+        path: "teams/:teamId/news-requests",
+        element: (
+          <TeamOfficerGuard>
+            <TeamNewsRequests />
+          </TeamOfficerGuard>
+        ),
+      },
+      {
+        path: "teams/:teamId/news-editor",
+        element: (
+          <TeamOfficerGuard>
+            <TeamNewsEditor />
+          </TeamOfficerGuard>
+        ),
+      },
+      {
+        path: "teams/:teamId/news/drafts/:draftId",
+        element: (
+          <TeamOfficerGuard>
+            <DraftDetail />
+          </TeamOfficerGuard>
+        ),
+      },
+      {
+        path: "teams/:teamId/news/requests/:id",
+        element: (
+          <TeamOfficerGuard>
+            <RequestDetail />
+          </TeamOfficerGuard>
+        ),
+      },
+
+      // ===== CLUB_MEMBER Routes =====
+      { 
+        path: "members", 
+        element: (
+          <ClubMemberGuard>
+            <MemberList />
+          </ClubMemberGuard>
+        ) 
+      },
+      { 
+        path: "events", 
+        element: (
+          <ClubMemberGuard>
+            <EventList />
+          </ClubMemberGuard>
+        ) 
+      },
+      { 
+        path: "events/attendance/:eventId", 
+        element: (
+          <ClubMemberGuard>
+            <EventAttendancePage />
+          </ClubMemberGuard>
+        ) 
+      },
+      { 
+        path: "payments", 
+        element: (
+          <ClubMemberGuard>
+            <Payment />
+          </ClubMemberGuard>
+        ) 
+      },
+      { 
+        path: "notifications", 
+        element: (
+          <ClubMemberGuard>
+            <Notifications />
+          </ClubMemberGuard>
+        ) 
+      },
+      { 
+        path: "settings", 
+        element: (
+          <ClubMemberGuard>
+            <Settings />
+          </ClubMemberGuard>
+        ) 
+      },
+      { 
+        path: "information", 
+        element: (
+          <ClubMemberGuard>
+            <ClubInforManagement />
+          </ClubMemberGuard>
+        ) 
+      },
+      { 
+        path: "teams/:teamId", 
+        element: (
+          <ClubMemberGuard>
+            <TeamDetailPage />
+          </ClubMemberGuard>
+        ) 
       },
     ],
   },

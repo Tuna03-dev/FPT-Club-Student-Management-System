@@ -64,7 +64,7 @@ const navItems = [
   { key: "notifications", url: "/notifications", icon: Bell },
 ];
 
-type PermissionLevel = "CLUB_OFFICER" | "TEAM_OFFICER" | "MEMBER";
+type PermissionLevel = "CLUB_OFFICER" | "CLUB_TREASURER" | "TEAM_OFFICER" | "MEMBER";
 
 interface ManagementItem {
   key: string;
@@ -129,7 +129,7 @@ const managementItems: ManagementItem[] = [
     url: "/finance",
     icon: DollarSign,
     label: "Quản lý tài chính",
-    requiredRole: "CLUB_OFFICER",
+    requiredRole: "CLUB_TREASURER", // CLUB_TREASURER hoặc CLUB_OFFICER (xử lý trong logic filter)
   },
   {
     key: "manage_information",
@@ -243,6 +243,7 @@ export const ClubLayout = () => {
   const {
     isClubOfficer,
     isTeamOfficer,
+    isClubTreasurer,
     loading: permissionsLoading,
   } = useClubPermissions(validClubId ? numericClubId : undefined);
 
@@ -264,12 +265,14 @@ export const ClubLayout = () => {
   }
 
   // Determine user's role level
+  // Permission hierarchy: CLUB_OFFICER > CLUB_TREASURER > TEAM_OFFICER > MEMBER
   const userRoleLevel: PermissionLevel = useMemo(() => {
     if (permissionsLoading) return "MEMBER"; // Default while loading
     if (isClubOfficer) return "CLUB_OFFICER";
+    if (isClubTreasurer) return "CLUB_TREASURER";
     if (isTeamOfficer) return "TEAM_OFFICER";
     return "MEMBER";
-  }, [isClubOfficer, isTeamOfficer, permissionsLoading]);
+  }, [isClubOfficer, isClubTreasurer, isTeamOfficer, permissionsLoading]);
 
   // Sync search input with URL params
   useEffect(() => {
@@ -337,13 +340,29 @@ export const ClubLayout = () => {
     if (permissionsLoading) return [];
 
     const roleHierarchy: Record<PermissionLevel, number> = {
-      CLUB_OFFICER: 3,
+      CLUB_OFFICER: 4,
+      CLUB_TREASURER: 3,
       TEAM_OFFICER: 2,
       MEMBER: 1,
     };
 
     return managementItems
       .filter((item) => {
+        // Special handling for finance: CLUB_TREASURER or CLUB_OFFICER
+        if (item.key === "manage_finance") {
+          return isClubTreasurer || isClubOfficer;
+        }
+
+        // CLUB_TREASURER has all permissions of TEAM_OFFICER
+        // So if item requires TEAM_OFFICER, CLUB_TREASURER can also access it
+        if (item.requiredRole === "TEAM_OFFICER") {
+          return (
+            roleHierarchy[userRoleLevel] >= roleHierarchy[item.requiredRole] ||
+            isClubTreasurer ||
+            isClubOfficer
+          );
+        }
+
         // Check if user has required role level
         return roleHierarchy[userRoleLevel] >= roleHierarchy[item.requiredRole];
       })
@@ -359,7 +378,7 @@ export const ClubLayout = () => {
         }
         return item;
       });
-  }, [userRoleLevel, permissionsLoading]);
+  }, [userRoleLevel, permissionsLoading, isClubTreasurer, isClubOfficer]);
   // CHỈ hiện "Quản lí tin tức" khi amOfficer === true
 
   const getInitials = (name: string) =>
@@ -655,11 +674,11 @@ export const ClubLayout = () => {
                   <DropdownMenuContent align="end" className="w-64">
                     <div className="px-2 py-1.5">
                       <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-                        {userRoleLevel === "CLUB_OFFICER"
+                        {userRoleLevel === "CLUB_OFFICER" ||
+                        userRoleLevel === "CLUB_TREASURER" ||
+                        userRoleLevel === "TEAM_OFFICER"
                           ? "QUẢN LÝ"
-                          : userRoleLevel === "TEAM_OFFICER"
-                            ? "QUẢN LÝ"
-                            : "DANH MỤC"}
+                          : "DANH MỤC"}
                       </h3>
                       {filteredManagementItems.map((item) => (
                         <DropdownMenuItem key={item.key} asChild>
@@ -695,11 +714,11 @@ export const ClubLayout = () => {
                   <div>
                     <div className="px-3 mb-4">
                       <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                        {userRoleLevel === "CLUB_OFFICER"
+                        {userRoleLevel === "CLUB_OFFICER" ||
+                        userRoleLevel === "CLUB_TREASURER" ||
+                        userRoleLevel === "TEAM_OFFICER"
                           ? "QUẢN LÝ"
-                          : userRoleLevel === "TEAM_OFFICER"
-                            ? "QUẢN LÝ"
-                            : "DANH MỤC"}
+                          : "DANH MỤC"}
                       </h2>
                       {!permissionsLoading && userRoleLevel === "MEMBER" && (
                         <p className="text-[10px] text-muted-foreground mt-1">

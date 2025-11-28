@@ -85,7 +85,7 @@ public class FeeController {
     }
 
     @PutMapping("/{feeId}")
-//    @PreAuthorize("@clubSecurity.isClubOfficerInClub(@feeService.getClubIdByFeeId(#feeId)) or @clubSecurity.isTreasureInClub(@feeService.getClubIdByFeeId(#feeId))")
+    @PreAuthorize("@clubSecurity.isClubOfficerOrTreasureInClub(#clubId)")
     public ApiResponse<FeeDetailResponse> updateFee(
             @PathVariable Long clubId,
             @PathVariable Long feeId,
@@ -99,7 +99,7 @@ public class FeeController {
     }
 
     @DeleteMapping("/{feeId}")
-//    @PreAuthorize("@clubSecurity.isClubOfficerInClub(@feeService.getClubIdByFeeId(#feeId)) or @clubSecurity.isTreasureInClub(@feeService.getClubIdByFeeId(#feeId))")
+    @PreAuthorize("@clubSecurity.isClubOfficerOrTreasureInClub(#clubId)")
     public ApiResponse<Void> deleteFee(
             @PathVariable Long clubId,
             @PathVariable Long feeId) {
@@ -112,7 +112,7 @@ public class FeeController {
     }
 
     @PostMapping("/{feeId}/generate-payment")
-//    @PreAuthorize("@clubSecurity.isMemberOfClub(@feeService.getClubIdByFeeId(#feeId))")
+    @PreAuthorize("@clubSecurity.isMemberOfClub(#clubId)")
     public ApiResponse<PayOSCreatePaymentResponse> generatePaymentQR(
             @PathVariable Long clubId,
             @PathVariable Long feeId,
@@ -130,7 +130,7 @@ public class FeeController {
     }
 
     @PatchMapping("/{feeId}/publish")
-//    @PreAuthorize("@clubSecurity.isClubOfficerInClub(@feeService.getClubIdByFeeId(#feeId)) or @clubSecurity.isTreasureInClub(@feeService.getClubIdByFeeId(#feeId))")
+    @PreAuthorize("@clubSecurity.isClubOfficerOrTreasureInClub(#clubId)")
     public ApiResponse<FeeDetailResponse> publishFee(
             @PathVariable Long clubId,
             @PathVariable Long feeId
@@ -144,7 +144,7 @@ public class FeeController {
     }
 
     @GetMapping("/{feeId}/paid-members")
-//    @PreAuthorize("@clubSecurity.isMemberOfClub(@feeService.getClubIdByFeeId(#feeId))")
+    @PreAuthorize("@clubSecurity.isMemberOfClub(#clubId)")
     public ApiResponse<PageResponse<com.sep490.backendclubmanagement.dto.response.FeePaidMemberResponse>> getPaidMembers(
             @PathVariable Long clubId,
             @PathVariable Long feeId,

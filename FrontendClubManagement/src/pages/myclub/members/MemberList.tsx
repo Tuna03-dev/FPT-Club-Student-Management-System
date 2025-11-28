@@ -743,32 +743,17 @@ const Members = () => {
                       className="border-primary/20 bg-card/80 backdrop-blur-sm overflow-hidden relative"
                     >
                       <CardContent className="p-6">
-                        <div className="flex flex-col lg:flex-row gap-6">
-                          {/* Member Info Skeleton */}
-                          <div className="flex items-start gap-3 sm:gap-4 flex-1">
-                            <div className="h-16 w-16 rounded-full bg-muted animate-pulse" />
-                            <div className="flex-1 space-y-2">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <div className="h-6 w-32 bg-muted animate-pulse rounded" />
-                                <div className="h-4 w-20 bg-muted animate-pulse rounded" />
-                              </div>
-                              <div className="flex items-center gap-3 flex-wrap">
-                                <div className="h-6 w-24 bg-muted animate-pulse rounded" />
-                                <div className="h-6 w-20 bg-muted animate-pulse rounded" />
-                              </div>
-                              <div className="flex items-center gap-4 flex-wrap">
-                                <div className="h-4 w-40 bg-muted animate-pulse rounded" />
-                                <div className="h-4 w-24 bg-muted animate-pulse rounded" />
-                              </div>
+                        <div className="flex items-start gap-3 sm:gap-4">
+                          <div className="h-16 w-16 rounded-full bg-muted animate-pulse" />
+                          <div className="flex-1 space-y-2">
+                            <div className="flex items-center gap-3 flex-wrap">
+                              <div className="h-6 w-24 bg-muted animate-pulse rounded" />
+                              <div className="h-6 w-20 bg-muted animate-pulse rounded" />
                             </div>
-                          </div>
-
-                          {/* Stats Skeleton */}
-                          <div className="flex items-center gap-3 sm:gap-6 flex-wrap lg:flex-nowrap">
-                            <div className="h-16 w-16 rounded-xl bg-muted animate-pulse" />
-                            <div className="h-16 w-20 rounded-xl bg-muted animate-pulse" />
-                            <div className="h-16 w-24 rounded-xl bg-muted animate-pulse" />
-                            <div className="h-8 w-24 bg-muted animate-pulse rounded" />
+                            <div className="flex items-center gap-4 flex-wrap">
+                              <div className="h-4 w-40 bg-muted animate-pulse rounded" />
+                              <div className="h-4 w-24 bg-muted animate-pulse rounded" />
+                            </div>
                           </div>
                         </div>
                       </CardContent>
@@ -905,14 +890,7 @@ const Members = () => {
 
                         {/* Stats */}
                         <div className="flex items-center gap-3 sm:gap-6 flex-wrap lg:flex-nowrap">
-                          <div className="text-center p-3 rounded-xl bg-gradient-to-br from-primary/10 to-primary-glow/10 border border-primary/20 min-w-[70px]">
-                            <div className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-primary to-primary-glow bg-clip-text text-transparent">
-                              {member.totalAttendanceRate}%
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              điểm danh
-                            </div>
-                          </div>
+                          
                           <div className="hidden sm:block text-center p-3 rounded-xl bg-secondary/50 border border-border min-w-[90px]">
                             <div className="text-sm font-medium flex items-center justify-center gap-1">
                               <Calendar className="h-3 w-3" />
