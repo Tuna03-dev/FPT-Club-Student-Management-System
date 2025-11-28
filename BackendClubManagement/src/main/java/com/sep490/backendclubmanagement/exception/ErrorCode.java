@@ -21,11 +21,15 @@ public enum ErrorCode {
     SEMESTER_NOT_FOUND(HttpStatus.NOT_FOUND, 2004, "Semester not found"),
     UNAUTHENTICATED(HttpStatus.UNAUTHORIZED, 401, "User is not authenticated"),
     RECRUITMENT_CLOSED(HttpStatus.BAD_REQUEST, 3000, "Không thể chỉnh sửa đợt tuyển dụng đã đóng"),
+    RECRUITMENT_ENDED(HttpStatus.BAD_REQUEST, 3003, "Không thể chỉnh sửa đợt tuyển dụng đã kết thúc"),
     ALREADY_CLUB_MEMBER(HttpStatus.BAD_REQUEST, 3001, "Bạn đã là thành viên của câu lạc bộ này"),
     INSUFFICIENT_PERMISSIONS(HttpStatus.FORBIDDEN, 4001, "Bạn không có quyền thực hiện thao tác này"),
     NOT_CLUB_OFFICER(HttpStatus.FORBIDDEN, 4002, "Chỉ cán bộ câu lạc bộ mới có quyền thực hiện thao tác này"),
     INVALID_INPUT(HttpStatus.BAD_REQUEST, 1001, "Dữ liệu không hợp lệ"),
     ALREADY_APPLIED(HttpStatus.BAD_REQUEST, 3002, "Bạn đã nộp đơn ứng tuyển cho đợt tuyển dụng này!"),
+    INTERVIEW_NOT_YET(HttpStatus.BAD_REQUEST, 3004, "Không thể review application khi chưa đến thời gian phỏng vấn"),
+    INTERVIEW_TIME_PASSED(HttpStatus.BAD_REQUEST, 3005, "Không thể chỉnh sửa lịch phỏng vấn khi đã qua thời gian phỏng vấn"),
+    FILE_TOO_LARGE(HttpStatus.BAD_REQUEST, 1002, "Kích thước tập tin vượt quá giới hạn 20MB"),
 
     // Transaction related errors
     CLUB_WALLET_NOT_FOUND(HttpStatus.NOT_FOUND, 5000, "Không tìm thấy ví câu lạc bộ"),

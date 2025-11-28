@@ -33,8 +33,7 @@ export interface RecruitmentData {
   id: number;
   title: string;
   description: string;
-  startDate: string; // ISO string
-  endDate: string; // ISO string
+  endDate: string; // ISO string - backend only has endDate
   status: "DRAFT" | "OPEN" | "CLOSED" | "CANCELLED";
   requirements?: string;
   clubId: number;
@@ -55,8 +54,14 @@ export interface RecruitmentApplicationData {
   userPhone?: string;
   studentId: string;
   teamId?: number;
+  clubName?: string;
+  recruitmentTitle?: string;
+  teamName?: string;
   submittedDate: string;
   reviewedDate?: string;
+  interviewTime?: string; // ISO string
+  interviewAddress?: string;
+  interviewPreparationRequirements?: string;
   status: "UNDER_REVIEW" | "ACCEPTED" | "REJECTED" | "INTERVIEW";
   reviewNotes?: string;
   score?: number;
@@ -102,8 +107,7 @@ export interface RecruitmentQuestionRequest {
 export interface RecruitmentCreateRequest {
   title: string;
   description: string;
-  startDate: string; // ISO datetime string
-  endDate: string; // ISO datetime string
+  endDate: string; // ISO datetime string - backend only has endDate
   requirements?: string;
   status?: "DRAFT" | "OPEN"; // Status of recruitment
   questions?: RecruitmentQuestionRequest[];
@@ -120,7 +124,7 @@ export async function getRecruitmentsByClubId(
     keyword,
     page = 0,
     size = 10,
-    sort = "startDate,desc",
+    sort = "endDate,desc",
   } = params;
 
   const queryParams = new URLSearchParams();
@@ -148,7 +152,7 @@ export async function getOpenRecruitmentsByClubId(
     keyword,
     page = 0,
     size = 10,
-    sort = "startDate,desc",
+    sort = "endDate,desc",
   } = params;
 
   const queryParams = new URLSearchParams();
@@ -248,7 +252,7 @@ export async function deleteRecruitment(id: number): Promise<void> {
 export interface FormAnswerRequest {
   questionId: number;
   answerText?: string;
-  fileUrl?: string;
+  hasFile?: boolean; // Indicates whether this answer should use the uploaded file
 }
 
 export interface ApplicationSubmitRequest {
@@ -259,7 +263,7 @@ export interface ApplicationSubmitRequest {
 
 export async function submitApplication(
   request: ApplicationSubmitRequest,
-  filesByQuestionId?: Map<number, File>
+  file?: File
 ): Promise<RecruitmentApplicationData> {
   const formData = new FormData();
 
@@ -269,11 +273,9 @@ export async function submitApplication(
     new Blob([JSON.stringify(request)], { type: "application/json" })
   );
 
-  // Add files with questionId mapping if provided
-  if (filesByQuestionId && filesByQuestionId.size > 0) {
-    filesByQuestionId.forEach((file, questionId) => {
-      formData.append(`file_${questionId}`, file);
-    });
+  // Add single file if provided
+  if (file) {
+    formData.append("file", file);
   }
 
   const res = await axiosClient.post<RecruitmentApplicationData>(
@@ -333,17 +335,26 @@ export interface ApplicationReviewRequest {
   applicationId: number;
   status: "UNDER_REVIEW" | "ACCEPTED" | "REJECTED" | "INTERVIEW";
   reviewNotes?: string;
+  interviewTime?: string; // ISO datetime string
+  interviewAddress?: string;
+  interviewPreparationRequirements?: string;
 }
 
 export async function updateApplicationStatus(
   applicationId: number,
   status: "UNDER_REVIEW" | "ACCEPTED" | "REJECTED" | "INTERVIEW",
-  reviewNotes?: string
+  reviewNotes?: string,
+  interviewTime?: string,
+  interviewAddress?: string,
+  interviewPreparationRequirements?: string
 ): Promise<RecruitmentApplicationData> {
   const requestData: ApplicationReviewRequest = {
     applicationId,
     status,
     reviewNotes,
+    interviewTime,
+    interviewAddress,
+    interviewPreparationRequirements,
   };
 
   const res = await axiosClient.post<RecruitmentApplicationData>(
@@ -353,5 +364,35 @@ export async function updateApplicationStatus(
 
   // axiosClient returns ApiResponse<T>, so we need to access res.data for the actual data
   if (!res.data) throw new Error("Failed to update application status");
+  return res.data;
+}
+
+// Update interview schedule
+export interface InterviewUpdateRequest {
+  applicationId: number;
+  interviewTime?: string; // ISO datetime string
+  interviewAddress?: string;
+  interviewPreparationRequirements?: string;
+}
+
+export async function updateInterviewSchedule(
+  applicationId: number,
+  interviewTime?: string,
+  interviewAddress?: string,
+  interviewPreparationRequirements?: string
+): Promise<RecruitmentApplicationData> {
+  const requestData: InterviewUpdateRequest = {
+    applicationId,
+    interviewTime,
+    interviewAddress,
+    interviewPreparationRequirements,
+  };
+
+  const res = await axiosClient.put<RecruitmentApplicationData>(
+    `/recruitments/applications/interview`,
+    requestData
+  );
+
+  if (!res.data) throw new Error("Failed to update interview schedule");
   return res.data;
 }

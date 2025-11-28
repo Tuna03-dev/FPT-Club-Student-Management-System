@@ -33,6 +33,7 @@ import {
   Eye,
   MessageSquare,
   Calendar,
+  Edit,
 } from "lucide-react";
 import {
   Pagination,
@@ -43,6 +44,7 @@ import {
   PaginationPrevious,
   PaginationEllipsis,
 } from "@/components/ui/pagination";
+import { toast } from "sonner";
 
 type ApplicationStatus = "under_review" | "accepted" | "rejected" | "interview";
 type QuestionType = "TEXT" | "MCQ" | "CHECKBOX" | "FILE";
@@ -69,6 +71,11 @@ interface RecruitmentApplication {
   score?: number;
   notes?: string;
   avatar?: string;
+  interviewTime?: string;
+  interviewAddress?: string;
+  interviewPreparationRequirements?: string;
+  teamId?: string;
+  teamName?: string;
 }
 
 interface Recruitment {
@@ -85,7 +92,16 @@ interface ApplicationsListProps {
   onUpdateApplicationStatus: (
     applicationId: string,
     newStatus: ApplicationStatus,
-    notes?: string
+    notes?: string,
+    interviewTime?: string,
+    interviewAddress?: string,
+    interviewPreparationRequirements?: string
+  ) => void;
+  onUpdateInterview: (
+    applicationId: string,
+    interviewTime?: string,
+    interviewAddress?: string,
+    interviewPreparationRequirements?: string
   ) => void;
   // Pagination props
   currentPage?: number;
@@ -124,6 +140,7 @@ export function ApplicationsList({
   applications,
   applicationsLoading,
   onUpdateApplicationStatus,
+  onUpdateInterview,
   currentPage = 0,
   totalPages = 1,
   totalElements = 0,
@@ -141,60 +158,68 @@ export function ApplicationsList({
     useState<StatusChangeDialogData | null>(null);
   const [notes, setNotes] = useState("");
 
-  // Notes-only dialog state
-  const [notesDialog, setNotesDialog] = useState<{
+  // Interview dialog state (for editing existing interview info)
+  const [interviewDialog, setInterviewDialog] = useState<{
     applicationId: string;
     applicationName: string;
-    currentStatus: ApplicationStatus;
-    currentNotes?: string;
+    currentInterviewTime?: string;
+    currentInterviewAddress?: string;
+    currentInterviewPreparationRequirements?: string;
   } | null>(null);
 
-  // TRƯỚC: gọi onUpdateApplicationStatus(..., notes.trim() || undefined)
-  // SAU (với trường phỏng vấn): gộp trường thành notesText
-  const [interviewDatetime, setInterviewDatetime] = useState("");
-  const [interviewLocation, setInterviewLocation] = useState("");
-  const [interviewLink, setInterviewLink] = useState("");
-  const [interviewNote, setInterviewNote] = useState("");
+  // Interview fields for status change
+  const [interviewTime, setInterviewTime] = useState("");
+  const [interviewAddress, setInterviewAddress] = useState("");
+  const [
+    interviewPreparationRequirements,
+    setInterviewPreparationRequirements,
+  ] = useState("");
 
   const handleStatusChange = (
     applicationId: string,
     applicationName: string,
-    newStatus: ApplicationStatus
+    newStatus: ApplicationStatus,
+    currentApplication?: RecruitmentApplication
   ) => {
     setStatusChangeDialog({ applicationId, applicationName, newStatus });
     setNotes("");
     if (newStatus === "interview") {
-      setInterviewDatetime("");
-      setInterviewLocation("");
-      setInterviewLink("");
-      setInterviewNote("");
+      setInterviewTime("");
+      setInterviewAddress("");
+      setInterviewPreparationRequirements("");
+    } else if (currentApplication?.interviewTime) {
+      // Keep existing interview info when reviewing from interview status
+      setInterviewTime(currentApplication.interviewTime.slice(0, 16));
+      setInterviewAddress(currentApplication.interviewAddress || "");
+      setInterviewPreparationRequirements(
+        currentApplication.interviewPreparationRequirements || ""
+      );
     }
   };
 
   const handleConfirmStatusChange = () => {
     if (!statusChangeDialog) return;
 
-    // Kiểm tra riêng cho mode phỏng vấn
+    // Validate interview fields if status is INTERVIEW
     if (statusChangeDialog.newStatus === "interview") {
-      if (!interviewDatetime.trim() || !interviewLocation.trim()) {
-        return; // Không gửi nếu thiếu
+      if (!interviewTime.trim() || !interviewAddress.trim()) {
+        toast.error("Vui lòng nhập đầy đủ thời gian và địa điểm phỏng vấn");
+        return;
       }
     }
 
-    const notesText =
-      statusChangeDialog?.newStatus === "interview"
-        ? (
-            (interviewDatetime ? `Ngày giờ: ${interviewDatetime}\n` : "") +
-            (interviewLocation ? `Địa điểm: ${interviewLocation}\n` : "") +
-            (interviewLink ? `Link: ${interviewLink}\n` : "") +
-            (interviewNote ? `Yêu cầu chuẩn bị: ${interviewNote}` : "")
-          ).trim()
-        : notes.trim() || undefined;
+    // Always send interview info if it exists (to preserve it in database)
+    const hasInterviewData = interviewTime.trim() && interviewAddress.trim();
 
     onUpdateApplicationStatus(
       statusChangeDialog.applicationId,
       statusChangeDialog.newStatus,
-      notesText
+      notes.trim() || undefined,
+      hasInterviewData ? interviewTime : undefined,
+      hasInterviewData ? interviewAddress : undefined,
+      hasInterviewData
+        ? interviewPreparationRequirements.trim() || undefined
+        : undefined
     );
 
     setStatusChangeDialog(null);
@@ -204,43 +229,62 @@ export function ApplicationsList({
   const handleCancelStatusChange = () => {
     setStatusChangeDialog(null);
     setNotes("");
-    setInterviewDatetime("");
-    setInterviewLocation("");
-    setInterviewLink("");
-    setInterviewNote("");
+    setInterviewTime("");
+    setInterviewAddress("");
+    setInterviewPreparationRequirements("");
   };
 
-  const handleOpenNotesDialog = (
+  const handleOpenInterviewDialog = (
     applicationId: string,
     applicationName: string,
-    currentStatus: ApplicationStatus,
-    currentNotes?: string
+    currentInterviewTime?: string,
+    currentInterviewAddress?: string,
+    currentInterviewPreparationRequirements?: string
   ) => {
-    setNotesDialog({
+    setInterviewDialog({
       applicationId,
       applicationName,
-      currentStatus,
-      currentNotes,
+      currentInterviewTime,
+      currentInterviewAddress,
+      currentInterviewPreparationRequirements,
     });
-    setNotes(currentNotes || "");
+
+    // Format datetime for datetime-local input (YYYY-MM-DDTHH:mm)
+    const formattedTime = currentInterviewTime
+      ? currentInterviewTime.slice(0, 16)
+      : "";
+
+    setInterviewTime(formattedTime);
+    setInterviewAddress(currentInterviewAddress || "");
+    setInterviewPreparationRequirements(
+      currentInterviewPreparationRequirements || ""
+    );
   };
 
-  const handleSaveNotes = () => {
-    if (!notesDialog) return;
+  const handleSaveInterview = () => {
+    if (!interviewDialog) return;
 
-    onUpdateApplicationStatus(
-      notesDialog.applicationId,
-      notesDialog.currentStatus,
-      notes.trim() || undefined
+    if (!interviewTime.trim() || !interviewAddress.trim()) {
+      toast.error("Vui lòng nhập đầy đủ thời gian và địa điểm phỏng vấn");
+      return;
+    }
+
+    onUpdateInterview(
+      interviewDialog.applicationId,
+      interviewTime,
+      interviewAddress,
+      interviewPreparationRequirements.trim() || undefined
     );
 
-    setNotesDialog(null);
+    setInterviewDialog(null);
     setSelectedApplication(null);
   };
 
-  const handleCancelNotesDialog = () => {
-    setNotesDialog(null);
-    setNotes("");
+  const handleCancelInterviewDialog = () => {
+    setInterviewDialog(null);
+    setInterviewTime("");
+    setInterviewAddress("");
+    setInterviewPreparationRequirements("");
   };
 
   return (
@@ -261,7 +305,7 @@ export function ApplicationsList({
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
             <Input
-              placeholder="Tìm kiếm ứng viên..."
+              placeholder="Tìm kiếm theo tên, email, MSSV của ứng viên"
               value={searchQuery}
               onChange={(e) => onSearchChange?.(e.target.value)}
               className="pl-10"
@@ -383,8 +427,15 @@ export function ApplicationsList({
                         {applicationStatusLabels[application.status]}
                       </Badge>
                       <span className="text-xs text-muted-foreground">
-                        {new Date(application.submitted_at).toLocaleDateString(
-                          "vi-VN"
+                        {new Date(application.submitted_at).toLocaleString(
+                          "vi-VN",
+                          {
+                            year: "numeric",
+                            month: "2-digit",
+                            day: "2-digit",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          }
                         )}
                       </span>
                     </div>
@@ -401,19 +452,64 @@ export function ApplicationsList({
                       </div>
                     )}
 
-                    {application.notes && (
-                      <div className="text-sm border-l-2 border-blue-400 pl-3 py-2">
-                        <div className="text-muted-foreground font-medium flex items-center gap-1 mb-1">
-                          <MessageSquare className="h-3 w-3" />
-                          {application.status === "interview"
-                            ? "Thông tin PV:"
-                            : "Phản hồi:"}
+                    {application.status === "interview" &&
+                      application.interviewTime && (
+                        <div className="text-sm border-l-2 border-purple-400 pl-3 py-2 bg-purple-50 rounded">
+                          <div className="text-muted-foreground font-medium flex items-center gap-1 mb-1">
+                            <Calendar className="h-3 w-3" />
+                            Lịch phỏng vấn:
+                          </div>
+                          <div className="text-xs space-y-1">
+                            <div>
+                              <span className="font-medium">Thời gian:</span>{" "}
+                              {new Date(
+                                application.interviewTime
+                              ).toLocaleString("vi-VN", {
+                                year: "numeric",
+                                month: "2-digit",
+                                day: "2-digit",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </div>
+                            {application.interviewAddress && (
+                              <div>
+                                <span className="font-medium">Địa điểm:</span>{" "}
+                                {application.interviewAddress}
+                              </div>
+                            )}
+                          </div>
                         </div>
-                        <div className="text-xs bg-blue-50 rounded p-2 line-clamp-2">
-                          {application.notes}
+                      )}
+
+                    {application.notes &&
+                      application.status !== "interview" && (
+                        <div
+                          className={`text-sm border-l-2 pl-3 py-2 ${
+                            application.status === "rejected"
+                              ? "border-red-400"
+                              : application.status === "accepted"
+                                ? "border-green-400"
+                                : "border-blue-400"
+                          }`}
+                        >
+                          <div className="text-muted-foreground font-medium flex items-center gap-1 mb-1">
+                            <MessageSquare className="h-3 w-3" />
+                            Phản hồi:
+                          </div>
+                          <div
+                            className={`text-xs rounded p-2 line-clamp-2 ${
+                              application.status === "rejected"
+                                ? "bg-red-50 text-red-700"
+                                : application.status === "accepted"
+                                  ? "bg-green-50 text-green-700"
+                                  : "bg-blue-50 text-blue-700"
+                            }`}
+                          >
+                            {application.notes}
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      )}
 
                     <div className="flex gap-2 pt-2">
                       <Button
@@ -639,11 +735,25 @@ export function ApplicationsList({
                           <strong>SĐT:</strong> {selectedApplication.user_phone}
                         </div>
                       )}
+                      {selectedApplication.teamName && (
+                        <div>
+                          <strong>Phòng ban ứng tuyển:</strong>{" "}
+                          <span className="font-medium text-blue-600">
+                            {selectedApplication.teamName}
+                          </span>
+                        </div>
+                      )}
                       <div>
                         <strong>Nộp đơn:</strong>{" "}
                         {new Date(
                           selectedApplication.submitted_at
-                        ).toLocaleString("vi-VN")}
+                        ).toLocaleString("vi-VN", {
+                          year: "numeric",
+                          month: "2-digit",
+                          day: "2-digit",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
                       </div>
                     </div>
                   </div>
@@ -661,22 +771,82 @@ export function ApplicationsList({
                   </div>
                 </div>
 
-                {/* Notes Section */}
-                {selectedApplication.notes && (
+                {/* Interview Info Section - show if interview data exists */}
+                {selectedApplication.interviewTime && (
                   <div className="border-t pt-4">
                     <h4 className="font-medium mb-3 flex items-center gap-2">
-                      <MessageSquare className="h-4 w-4" />
-                      {selectedApplication.status === "interview"
-                        ? "Thông tin phỏng vấn"
-                        : "Phản hồi đánh giá"}
+                      <Calendar className="h-4 w-4 text-purple-600" />
+                      Thông tin lịch phỏng vấn
                     </h4>
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                      <p className="text-sm text-gray-700 whitespace-pre-wrap">
-                        {selectedApplication.notes}
-                      </p>
+                    <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 space-y-3">
+                      <div>
+                        <strong className="text-sm">Thời gian:</strong>
+                        <p className="text-sm mt-1">
+                          {new Date(
+                            selectedApplication.interviewTime
+                          ).toLocaleString("vi-VN", {
+                            year: "numeric",
+                            month: "2-digit",
+                            day: "2-digit",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                            weekday: "long",
+                          })}
+                        </p>
+                      </div>
+                      {selectedApplication.interviewAddress && (
+                        <div>
+                          <strong className="text-sm">Địa điểm:</strong>
+                          <p className="text-sm mt-1">
+                            {selectedApplication.interviewAddress}
+                          </p>
+                        </div>
+                      )}
+                      {selectedApplication.interviewPreparationRequirements && (
+                        <div>
+                          <strong className="text-sm">Yêu cầu chuẩn bị:</strong>
+                          <p className="text-sm mt-1 whitespace-pre-wrap">
+                            {
+                              selectedApplication.interviewPreparationRequirements
+                            }
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
+
+                {/* Notes Section - only show for accepted/rejected */}
+                {selectedApplication.notes &&
+                  selectedApplication.status !== "interview" && (
+                    <div className="border-t pt-4">
+                      <h4 className="font-medium mb-3 flex items-center gap-2">
+                        <MessageSquare className="h-4 w-4" />
+                        Phản hồi đánh giá
+                      </h4>
+                      <div
+                        className={`rounded-lg p-4 ${
+                          selectedApplication.status === "rejected"
+                            ? "bg-red-50 border border-red-200"
+                            : selectedApplication.status === "accepted"
+                              ? "bg-green-50 border border-green-200"
+                              : "bg-blue-50 border border-blue-200"
+                        }`}
+                      >
+                        <p
+                          className={`text-sm whitespace-pre-wrap ${
+                            selectedApplication.status === "rejected"
+                              ? "text-red-700"
+                              : selectedApplication.status === "accepted"
+                                ? "text-green-700"
+                                : "text-gray-700"
+                          }`}
+                        >
+                          {selectedApplication.notes}
+                        </p>
+                      </div>
+                    </div>
+                  )}
 
                 {/* Answers */}
                 <div>
@@ -695,10 +865,10 @@ export function ApplicationsList({
                           {question.question_type === "TEXT"
                             ? "Văn bản"
                             : question.question_type === "MCQ"
-                            ? "Trắc nghiệm (1 đáp án)"
-                            : question.question_type === "CHECKBOX"
-                            ? "Trắc nghiệm (nhiều đáp án)"
-                            : "Tải lên file"}
+                              ? "Trắc nghiệm (1 đáp án)"
+                              : question.question_type === "CHECKBOX"
+                                ? "Trắc nghiệm (nhiều đáp án)"
+                                : "Tải lên file"}
                         </div>
                         <div className="bg-muted/30 rounded p-3">
                           {question.question_type === "FILE" ? (
@@ -767,51 +937,65 @@ export function ApplicationsList({
                   )}
                   {selectedApplication.status === "interview" && (
                     <>
-                      <Button
-                        onClick={() =>
-                          handleStatusChange(
-                            selectedApplication.application_id,
-                            selectedApplication.user_name,
-                            "accepted"
-                          )
-                        }
-                        className="bg-green-600 hover:bg-green-700"
-                      >
-                        <CheckCircle className="h-4 w-4 mr-2" />
-                        Chấp nhận
-                      </Button>
-                      <Button
-                        onClick={() =>
-                          handleStatusChange(
-                            selectedApplication.application_id,
-                            selectedApplication.user_name,
-                            "rejected"
-                          )
-                        }
-                        variant="destructive"
-                      >
-                        <XCircle className="h-4 w-4 mr-2" />
-                        Từ chối
-                      </Button>
+                      {/* Only show accept/reject buttons if interview time has passed */}
+                      {selectedApplication.interviewTime &&
+                        new Date(selectedApplication.interviewTime) <=
+                          new Date() && (
+                          <>
+                            <Button
+                              onClick={() =>
+                                handleStatusChange(
+                                  selectedApplication.application_id,
+                                  selectedApplication.user_name,
+                                  "accepted",
+                                  selectedApplication
+                                )
+                              }
+                              className="bg-green-600 hover:bg-green-700"
+                            >
+                              <CheckCircle className="h-4 w-4 mr-2" />
+                              Chấp nhận
+                            </Button>
+                            <Button
+                              onClick={() =>
+                                handleStatusChange(
+                                  selectedApplication.application_id,
+                                  selectedApplication.user_name,
+                                  "rejected",
+                                  selectedApplication
+                                )
+                              }
+                              variant="destructive"
+                            >
+                              <XCircle className="h-4 w-4 mr-2" />
+                              Từ chối
+                            </Button>
+                          </>
+                        )}
                     </>
                   )}
-                  <Button
-                    variant="outline"
-                    className="bg-transparent"
-                    onClick={() =>
-                      handleOpenNotesDialog(
-                        selectedApplication.application_id,
-                        selectedApplication.user_name,
-                        selectedApplication.status,
-                        selectedApplication.notes
-                      )
-                    }
-                  >
-                    <MessageSquare className="h-4 w-4 mr-2" />
-                    {selectedApplication.notes
-                      ? "Chỉnh sửa Phản hồi"
-                      : "Thêm Phản hồi"}
-                  </Button>
+                  {/* Show edit interview button only for interview status and before interview time */}
+                  {selectedApplication.status === "interview" &&
+                    selectedApplication.interviewTime &&
+                    new Date(selectedApplication.interviewTime) >
+                      new Date() && (
+                      <Button
+                        variant="outline"
+                        className="bg-transparent"
+                        onClick={() =>
+                          handleOpenInterviewDialog(
+                            selectedApplication.application_id,
+                            selectedApplication.user_name,
+                            selectedApplication.interviewTime,
+                            selectedApplication.interviewAddress,
+                            selectedApplication.interviewPreparationRequirements
+                          )
+                        }
+                      >
+                        <Edit className="h-4 w-4 mr-2" />
+                        Chỉnh sửa lịch PV
+                      </Button>
+                    )}
                   <Button
                     variant="outline"
                     className="ml-auto"
@@ -846,60 +1030,53 @@ export function ApplicationsList({
 
           <div className="space-y-4 py-4">
             {statusChangeDialog?.newStatus === "interview" ? (
-              <div className="space-y-2">
-                <div>
-                  <Label htmlFor="interviewDatetime">
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="interviewTime">
                     Ngày giờ phỏng vấn <span className="text-red-500">*</span>
                   </Label>
                   <Input
-                    id="interviewDatetime"
+                    id="interviewTime"
                     type="datetime-local"
-                    value={interviewDatetime}
-                    onChange={(e) => setInterviewDatetime(e.target.value)}
+                    value={interviewTime}
+                    onChange={(e) => setInterviewTime(e.target.value)}
                     min={new Date().toISOString().slice(0, 16)}
                     required
                   />
                 </div>
-                <div>
-                  <Label htmlFor="interviewLocation">
+                <div className="space-y-2">
+                  <Label htmlFor="interviewAddress">
                     Địa điểm <span className="text-red-500">*</span>
                   </Label>
                   <Input
-                    id="interviewLocation"
-                    placeholder="Nhập địa điểm (offline/online)"
-                    value={interviewLocation}
-                    onChange={(e) => setInterviewLocation(e.target.value)}
+                    id="interviewAddress"
+                    placeholder="Nhập địa điểm phỏng vấn"
+                    value={interviewAddress}
+                    onChange={(e) => setInterviewAddress(e.target.value)}
                     required
                   />
                 </div>
-                <div>
-                  <Label htmlFor="interviewLink">Link meeting (nếu có)</Label>
-                  <Input
-                    id="interviewLink"
-                    placeholder="Ví dụ: https://meet.google.com/..."
-                    value={interviewLink}
-                    onChange={(e) => setInterviewLink(e.target.value)}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="interviewNote">
+                <div className="space-y-2">
+                  <Label htmlFor="interviewPreparationRequirements">
                     Yêu cầu chuẩn bị (nếu có)
                   </Label>
                   <Textarea
-                    id="interviewNote"
+                    id="interviewPreparationRequirements"
                     placeholder="Ví dụ: chuẩn bị CV, bài test..."
-                    value={interviewNote}
-                    onChange={(e) => setInterviewNote(e.target.value)}
+                    value={interviewPreparationRequirements}
+                    onChange={(e) =>
+                      setInterviewPreparationRequirements(e.target.value)
+                    }
                     rows={3}
                   />
                 </div>
                 {/* Hiển thị lỗi nếu thiếu bắt buộc */}
-                {(!interviewDatetime.trim() ||
-                  !interviewLocation.trim() ||
-                  (interviewDatetime.trim() &&
-                    new Date(interviewDatetime) <= new Date())) && (
+                {(!interviewTime.trim() ||
+                  !interviewAddress.trim() ||
+                  (interviewTime.trim() &&
+                    new Date(interviewTime) <= new Date())) && (
                   <p className="text-sm text-red-500">
-                    {!interviewDatetime.trim() || !interviewLocation.trim()
+                    {!interviewTime.trim() || !interviewAddress.trim()
                       ? "Vui lòng nhập đủ ngày giờ và địa điểm phỏng vấn"
                       : "Thời gian phỏng vấn phải lớn hơn thời gian hiện tại"}
                   </p>
@@ -927,18 +1104,18 @@ export function ApplicationsList({
               disabled={
                 !!(
                   statusChangeDialog?.newStatus === "interview" &&
-                  (!interviewDatetime.trim() ||
-                    !interviewLocation.trim() ||
-                    (interviewDatetime.trim() &&
-                      new Date(interviewDatetime) <= new Date()))
+                  (!interviewTime.trim() ||
+                    !interviewAddress.trim() ||
+                    (interviewTime.trim() &&
+                      new Date(interviewTime) <= new Date()))
                 )
               }
               className={
                 statusChangeDialog?.newStatus === "interview"
                   ? "bg-purple-600 hover:bg-purple-700"
                   : statusChangeDialog?.newStatus === "accepted"
-                  ? "bg-green-600 hover:bg-green-700"
-                  : "bg-red-600 hover:bg-red-700"
+                    ? "bg-green-600 hover:bg-green-700"
+                    : "bg-red-600 hover:bg-red-700"
               }
             >
               {statusChangeDialog?.newStatus === "interview" &&
@@ -952,66 +1129,98 @@ export function ApplicationsList({
         </DialogContent>
       </Dialog>
 
-      {/* Notes-Only Dialog */}
+      {/* Interview Edit Dialog */}
       <Dialog
-        open={!!notesDialog}
-        onOpenChange={(open) => !open && handleCancelNotesDialog()}
+        open={!!interviewDialog}
+        onOpenChange={(open) => !open && handleCancelInterviewDialog()}
       >
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>
-              {notesDialog?.currentNotes
-                ? "Chỉnh sửa Phản hồi"
-                : "Thêm Phản hồi"}
+            <DialogTitle className="flex items-center gap-2">
+              <Calendar className="h-5 w-5" />
+              Chỉnh sửa thông tin phỏng vấn
             </DialogTitle>
             <DialogDescription>
-              {notesDialog?.currentStatus === "interview"
-                ? "Cập nhật thông tin phỏng vấn cho "
-                : "Thêm Phản hồi đánh giá cho "}
-              <strong>{notesDialog?.applicationName}</strong>
+              Cập nhật lịch phỏng vấn cho{" "}
+              <strong>{interviewDialog?.applicationName}</strong>
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="notes-edit" className="flex items-center gap-2">
-                <MessageSquare className="h-4 w-4" />
-                {notesDialog?.currentStatus === "interview"
-                  ? "Thông tin về cuộc phỏng vấn"
-                  : "Phản hồi"}
+              <Label htmlFor="editInterviewTime">
+                Ngày giờ phỏng vấn <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id="editInterviewTime"
+                type="datetime-local"
+                value={interviewTime}
+                onChange={(e) => {
+                  const selectedDate = new Date(e.target.value);
+                  const now = new Date();
+                  if (selectedDate > now) {
+                    setInterviewTime(e.target.value);
+                  } else {
+                    toast.error("Không thể chọn thời gian trong quá khứ");
+                  }
+                }}
+                min={new Date().toISOString().slice(0, 16)}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="editInterviewAddress">
+                Địa điểm <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id="editInterviewAddress"
+                placeholder="Nhập địa điểm phỏng vấn"
+                value={interviewAddress}
+                onChange={(e) => setInterviewAddress(e.target.value)}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="editInterviewPreparationRequirements">
+                Yêu cầu chuẩn bị (nếu có)
               </Label>
               <Textarea
-                id="notes-edit"
-                placeholder={
-                  notesDialog?.currentStatus === "interview"
-                    ? "Nhập thông tin về cuộc phỏng vấn (ngày giờ, địa điểm, link meeting, yêu cầu chuẩn bị...)..."
-                    : notesDialog?.currentStatus === "accepted"
-                    ? "Phản hồi về việc chấp nhận đơn..."
-                    : notesDialog?.currentStatus === "rejected"
-                    ? "Lý do từ chối hoặc Phản hồi..."
-                    : "Phản hồi đánh giá..."
+                id="editInterviewPreparationRequirements"
+                placeholder="Ví dụ: chuẩn bị CV, bài test..."
+                value={interviewPreparationRequirements}
+                onChange={(e) =>
+                  setInterviewPreparationRequirements(e.target.value)
                 }
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                rows={5}
+                rows={3}
               />
-              <p className="text-xs text-muted-foreground">
-                {notes.trim()
-                  ? `${notes.trim().length} ký tự`
-                  : "Để trống để xóa Phản hồi"}
-              </p>
             </div>
+            {(!interviewTime.trim() ||
+              !interviewAddress.trim() ||
+              (interviewTime.trim() &&
+                new Date(interviewTime) <= new Date())) && (
+              <p className="text-sm text-red-500">
+                {!interviewTime.trim() || !interviewAddress.trim()
+                  ? "Vui lòng nhập đủ ngày giờ và địa điểm phỏng vấn"
+                  : "Thời gian phỏng vấn phải lớn hơn thời gian hiện tại"}
+              </p>
+            )}
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={handleCancelNotesDialog}>
+            <Button variant="outline" onClick={handleCancelInterviewDialog}>
               Hủy
             </Button>
             <Button
-              onClick={handleSaveNotes}
-              className="bg-blue-600 hover:bg-blue-700"
+              onClick={handleSaveInterview}
+              disabled={
+                !interviewTime.trim() ||
+                !interviewAddress.trim() ||
+                (interviewTime.trim() !== "" &&
+                  new Date(interviewTime) <= new Date())
+              }
+              className="bg-purple-600 hover:bg-purple-700"
             >
-              {notesDialog?.currentNotes ? "Cập nhật" : "Lưu Phản hồi"}
+              Cập nhật
             </Button>
           </DialogFooter>
         </DialogContent>
