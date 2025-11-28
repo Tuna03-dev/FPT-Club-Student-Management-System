@@ -56,7 +56,7 @@ import { StaffReportManagement } from "@/pages/myclub/staff/reportManagement/Sta
 import { PeriodicReportClubs } from "@/pages/myclub/staff/reportManagement/PeriodicReportClubs";
 import { ClubReportManagement } from "@/pages/myclub/report/ReportManagement";
 import ProfileSettings from "@/pages/ProfileSettings";
-
+import TeamNewsManagementPage from "@/pages/myclub/teams/TeamNewsManagementPage";
 // === BỔ SUNG từ A ===
 import DraftDetail from "@/pages/news/DraftDetail";
 import RequestDetail from "@/pages/news/RequestDetail";
@@ -97,6 +97,14 @@ export const router = createBrowserRouter([
           { index: true, element: <ClubsPage /> },
           { path: ":id", element: <ClubDetailPage /> }, // bổ sung từ A
         ],
+      },
+      {
+        path: "notifications",
+        element: (
+          <ProtectedRoute>
+            <Notifications />
+          </ProtectedRoute>
+        ),
       },
 
       // B vẫn giữ các biến thể cũ để không phá link đang dùng
@@ -190,13 +198,13 @@ export const router = createBrowserRouter([
     ),
     children: [
       // Dashboard - chỉ cần là thành viên
-      { 
-        index: true, 
+      {
+        index: true,
         element: (
           <ClubMemberGuard>
             <Dashboard />
           </ClubMemberGuard>
-        ) 
+        ),
       },
 
       // ===== CLUB_OFFICER Routes =====
@@ -293,6 +301,15 @@ export const router = createBrowserRouter([
         ),
       },
       {
+        path: "team-news",
+        element: (
+          <TeamOfficerGuard>
+            <TeamNewsManagementPage />
+          </TeamOfficerGuard>
+        ),
+      },
+
+      {
         path: "teams/:teamId/news-requests",
         element: (
           <TeamOfficerGuard>
@@ -326,69 +343,69 @@ export const router = createBrowserRouter([
       },
 
       // ===== CLUB_MEMBER Routes =====
-      { 
-        path: "members", 
+      {
+        path: "members",
         element: (
           <ClubMemberGuard>
             <MemberList />
           </ClubMemberGuard>
-        ) 
+        ),
       },
-      { 
-        path: "events", 
+      {
+        path: "events",
         element: (
           <ClubMemberGuard>
             <EventList />
           </ClubMemberGuard>
-        ) 
+        ),
       },
-      { 
-        path: "events/attendance/:eventId", 
+      {
+        path: "events/attendance/:eventId",
         element: (
           <ClubMemberGuard>
             <EventAttendancePage />
           </ClubMemberGuard>
-        ) 
+        ),
       },
-      { 
-        path: "payments", 
+      {
+        path: "payments",
         element: (
           <ClubMemberGuard>
             <Payment />
           </ClubMemberGuard>
-        ) 
+        ),
       },
-      { 
-        path: "notifications", 
-        element: (
-          <ClubMemberGuard>
-            <Notifications />
-          </ClubMemberGuard>
-        ) 
-      },
-      { 
-        path: "settings", 
+      // {
+      //   path: "notifications",
+      //   element: (
+      //     <ClubMemberGuard>
+      //       <Notifications />
+      //     </ClubMemberGuard>
+      //   ),
+      // },
+      {
+        path: "settings",
         element: (
           <ClubMemberGuard>
             <Settings />
           </ClubMemberGuard>
-        ) 
+        ),
       },
-      { 
-        path: "information", 
+      {
+        path: "information",
         element: (
           <ClubMemberGuard>
             <ClubInforManagement />
           </ClubMemberGuard>
-        ) 
+        ),
       },
-      { 
-        path: "teams/:teamId", 
+      {
+        path: "teams/:teamId",
         element: (
           <ClubMemberGuard>
             <TeamDetailPage />
           </ClubMemberGuard>
-        ) 
+        ),
       },
     ],
   },

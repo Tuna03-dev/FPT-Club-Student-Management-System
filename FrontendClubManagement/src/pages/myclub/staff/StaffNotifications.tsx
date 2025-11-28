@@ -60,7 +60,7 @@ export default function StaffNotifications() {
     }
 
     if (n.actionUrl) {
-      navigate(`/staff${n.actionUrl}`);
+      navigate(n.actionUrl);
     }
   };
 
@@ -76,11 +76,7 @@ export default function StaffNotifications() {
             Các thông báo hệ thống gửi cho tài khoản Staff
           </p>
         </div>
-        <Button
-          variant="outline"
-          className="gap-2"
-          onClick={handleMarkAll}
-        >
+        <Button variant="outline" className="gap-2" onClick={handleMarkAll}>
           <CheckCheck className="h-4 w-4" />
           Đánh dấu tất cả đã đọc
         </Button>
@@ -112,9 +108,7 @@ export default function StaffNotifications() {
 
       {/* List */}
       <div className="space-y-4">
-        {loading && (
-          <p className="text-sm text-muted-foreground">Đang tải…</p>
-        )}
+        {loading && <p className="text-sm text-muted-foreground">Đang tải…</p>}
         {!loading && notifications.length === 0 && (
           <p className="text-sm text-muted-foreground">
             Không có thông báo nào.
@@ -144,9 +138,7 @@ export default function StaffNotifications() {
 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-2">
-                    <h3 className="font-semibold text-foreground">
-                      {n.title}
-                    </h3>
+                    <h3 className="font-semibold text-foreground">{n.title}</h3>
                     {!n.read && (
                       <div className="h-2 w-2 rounded-full bg-primary flex-shrink-0 mt-2" />
                     )}

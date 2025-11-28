@@ -113,13 +113,18 @@ const Header: React.FC = () => {
           </Link>
 
           {/* Navbar */}
-          <nav className="hidden md:flex items-center gap-7">
+          {/* Navbar */}
+          <nav className="flex items-center gap-7 flex-wrap">
             {[
               { path: "/", label: "Trang chủ" },
               { path: "/clubs", label: "Câu lạc bộ" },
               { path: "/events", label: "Sự kiện" },
               { path: "/news", label: "Tin tức" },
               { path: "/about", label: "Giới thiệu" },
+              // 👇 Chỉ add mục Thông báo khi đã đăng nhập
+              ...(isAuthenticated && user
+                ? [{ path: "/notifications", label: "Thông báo" }]
+                : []),
             ].map((item) => (
               <Link
                 key={item.path}
@@ -133,9 +138,7 @@ const Header: React.FC = () => {
 
           {/* Avatar / Login */}
           <div className="flex items-center gap-3">
-            {isAuthenticated && user && (
-              <NotificationBell />
-            )}
+            {isAuthenticated && user && <NotificationBell />}
             {isAuthenticated && user ? (
               <DropdownMenu
                 onOpenChange={(open) => {
