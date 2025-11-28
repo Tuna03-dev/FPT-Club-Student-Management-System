@@ -8,6 +8,7 @@ import com.sep490.backendclubmanagement.dto.response.MyDraftEventDto;
 import com.sep490.backendclubmanagement.dto.response.PendingRequestDto;
 import com.sep490.backendclubmanagement.dto.websocket.EventWebSocketPayload;
 import com.sep490.backendclubmanagement.entity.*;
+import com.sep490.backendclubmanagement.exception.AppException;
 import com.sep490.backendclubmanagement.exception.ForbiddenException;
 import com.sep490.backendclubmanagement.exception.NotFoundException;
 import com.sep490.backendclubmanagement.mapper.EventMapper;
@@ -19,8 +20,10 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
@@ -38,6 +41,10 @@ public class EventManagementService {
     private final CloudinaryService cloudinaryService;
     private final WebSocketService webSocketService;
     private final NotificationService notificationService;
+    private final ClubMemberShipRepository clubMemberShipRepository;
+
+    private static final DateTimeFormatter MEETING_TIME_FORMATTER =
+            DateTimeFormatter.ofPattern("HH:mm dd/MM/yyyy");
 
 
     @Transactional
@@ -95,6 +102,11 @@ public class EventManagementService {
         
         if (isMeeting) {
             log.info("Event created directly (MEETING)");
+            if (club != null) {
+                notifyClubMembersAboutMeeting(savedEvent, club, user);
+            } else {
+                log.warn("MEETING event {} does not belong to a club - skip notification", savedEvent.getId());
+            }
             return eventMapper.toDto(savedEvent);
         } else if (isStaff) {
             log.info("Event created as draft (STAFF)");
@@ -268,6 +280,87 @@ public class EventManagementService {
         throw new ForbiddenException("Role không được hỗ trợ cho việc tạo sự kiện này.");
     }
     
+
+    private void notifyClubMembersAboutMeeting(Event event, Club club, User creator) {
+        try {
+            List<ClubMemberShip> activeMembers = clubMemberShipRepository.findByClubIdAndStatus(
+                    club.getId(),
+                    ClubMemberShipStatus.ACTIVE
+            );
+
+            if (activeMembers == null || activeMembers.isEmpty()) {
+                log.info("No active members to notify for club {}", club.getId());
+                return;
+            }
+
+            List<Long> recipientIds = activeMembers.stream()
+                    .map(ClubMemberShip::getUser)
+                    .filter(Objects::nonNull)
+                    .map(User::getId)
+                    .filter(id -> creator == null || !Objects.equals(id, creator.getId()))
+                    .distinct()
+                    .toList();
+
+            if (recipientIds.isEmpty()) {
+                log.info("No recipients remain after filtering creator for club {}", club.getId());
+            } else {
+                String title = String.format("CLB %s có buổi meeting mới", club.getClubName());
+                String formattedStart = event.getStartTime() != null
+                        ? event.getStartTime().format(MEETING_TIME_FORMATTER)
+                        : "thời gian sẽ cập nhật";
+                String location = event.getLocation() != null ? event.getLocation() : "địa điểm sẽ cập nhật";
+                String message = String.format("Buổi meeting \"%s\" sẽ diễn ra lúc %s tại %s.",
+                        event.getTitle(),
+                        formattedStart,
+                        location);
+                String actionUrl = String.format("/clubs/%d/events/%d", club.getId(), event.getId());
+                for (Long recipientId : recipientIds) {
+                    try {
+                        notificationService.sendToUser(
+                                recipientId,
+                                creator != null ? creator.getId() : null,
+                                title,
+                                message,
+                                NotificationType.EVENT_CREATED,
+                                NotificationPriority.HIGH,
+                                actionUrl,
+                                club.getId(),
+                                null,
+                                null,
+                                null,
+                                event.getId()
+                        );
+                    } catch (AppException appException) {
+                        log.warn("Failed to send meeting notification to user {}: {}", recipientId, appException.getMessage());
+                    }
+                }
+                log.info("Sent meeting notifications to {} members of club {}", recipientIds.size(), club.getId());
+            }
+
+            EventWebSocketPayload payload = EventWebSocketPayload.builder()
+                    .eventId(event.getId())
+                    .eventTitle(event.getTitle())
+                    .clubId(club.getId())
+                    .clubName(club.getClubName())
+                    .creatorId(creator != null ? creator.getId() : null)
+                    .creatorName(creator != null ? creator.getFullName() : null)
+                    .creatorEmail(creator != null ? creator.getEmail() : null)
+                    .startTime(event.getStartTime())
+                    .endTime(event.getEndTime())
+                    .location(event.getLocation())
+                    .eventTypeName(event.getEventType() != null ? event.getEventType().getTypeName() : "MEETING")
+                    .message(String.format("CLB %s vừa tạo buổi meeting \"%s\".",
+                            club.getClubName(),
+                            event.getTitle()))
+                    .build();
+
+            webSocketService.broadcastToClub(club.getId(), "EVENT", "MEETING_CREATED", payload);
+            log.info("Broadcast MEETING_CREATED websocket for event {} to club {}", event.getId(), club.getId());
+        } catch (Exception e) {
+            log.error("Failed to notify members about meeting event {}: {}", event.getId(), e.getMessage(), e);
+        }
+    }
+
 
     private User getUserById(Long userId) {
         return userRepository.findById(userId)

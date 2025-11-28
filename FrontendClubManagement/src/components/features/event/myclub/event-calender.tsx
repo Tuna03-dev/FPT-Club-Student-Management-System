@@ -685,67 +685,96 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
     if (clubId && clubId > 0) {
       const clubRole = authService.getClubRole(clubId);
       const systemRoleInClub = clubRole?.systemRole?.toUpperCase();
-      const canSubscribeToClub =
+      const isPrivilegedInClub =
         systemRoleInClub && EVENT_PRIVILEGED_ROLES.includes(systemRoleInClub);
-      
-      if (canSubscribeToClub) {
-        console.log(`[EventCalendar] Subscribing to club ${clubId} for role ${systemRoleInClub}`);
-        unsubscribeClub = subscribeToClub(clubId, (msg) => {
-          console.log(`[EventCalendar] Received message from club ${clubId}:`, msg);
-          if (msg.type !== "EVENT") return;
 
-          const payload = msg.payload as EventWebSocketPayload;
+      console.log(
+        `[EventCalendar] Subscribing to club ${clubId} (role=${systemRoleInClub ?? "UNKNOWN"})`
+      );
+      unsubscribeClub = subscribeToClub(clubId, (msg) => {
+        console.log(`[EventCalendar] Received message from club ${clubId}:`, msg);
+        if (msg.type !== "EVENT") return;
 
-          switch (msg.action) {
-            case "REQUEST_SUBMITTED":
-              toast.info("Yêu cầu tạo sự kiện mới", {
-                description: payload.message || `Có yêu cầu tạo sự kiện "${payload.eventTitle}" chờ duyệt`,
+        const payload = msg.payload as EventWebSocketPayload;
+
+        switch (msg.action) {
+          case "REQUEST_SUBMITTED":
+            if (!isPrivilegedInClub) {
+              return;
+            }
+            toast.info("Yêu cầu tạo sự kiện mới", {
+              description:
+                payload.message || `Có yêu cầu tạo sự kiện "${payload.eventTitle}" chờ duyệt`,
+            });
+            getPendingRequests(clubId && clubId > 0 ? clubId : undefined)
+              .then((list) => {
+                console.log("[EventCalendar] Refreshed pending requests:", list);
+                setPendingRequests(list);
+              })
+              .catch((err) => {
+                console.error("[EventCalendar] Error refreshing pending requests:", err);
               });
-              // Refresh pending requests
-              getPendingRequests(clubId && clubId > 0 ? clubId : undefined)
-                .then((list) => {
-                  console.log("[EventCalendar] Refreshed pending requests:", list);
-                  setPendingRequests(list);
-                })
-                .catch((err) => {
-                  console.error("[EventCalendar] Error refreshing pending requests:", err);
-                });
-              break;
-            case "CANCELLED_BY_STAFF":
-              console.log("[EventCalendar] Received CANCELLED_BY_STAFF event from club topic:", payload);
-              toast.warning("Sự kiện đã bị hủy", {
-                description: payload.message || `Sự kiện "${payload.eventTitle}" đã bị Staff hủy`,
+            break;
+          case "CANCELLED_BY_STAFF":
+            console.log(
+              "[EventCalendar] Received CANCELLED_BY_STAFF event from club topic:",
+              payload
+            );
+            toast.warning("Sự kiện đã bị hủy", {
+              description: payload.message || `Sự kiện "${payload.eventTitle}" đã bị Staff hủy`,
+            });
+            console.log(
+              "[EventCalendar] Calling refetchEvents after CANCELLED_BY_STAFF event from club topic"
+            );
+            refetchEvents()
+              .then(() => {
+                console.log(
+                  "[EventCalendar] Successfully refetched events after CANCELLED_BY_STAFF"
+                );
+              })
+              .catch((err) => {
+                console.error("[EventCalendar] Error refetching events:", err);
               });
-              // Refresh events
-              console.log("[EventCalendar] Calling refetchEvents after CANCELLED_BY_STAFF event from club topic");
-              refetchEvents()
-                .then(() => {
-                  console.log("[EventCalendar] Successfully refetched events after CANCELLED_BY_STAFF");
-                })
-                .catch((err) => {
-                  console.error("[EventCalendar] Error refetching events:", err);
-                });
-              break;
-            case "RESTORED_BY_STAFF":
-              console.log("[EventCalendar] Received RESTORED_BY_STAFF event from club topic:", payload);
-              toast.success("Sự kiện đã được khôi phục", {
-                description: payload.message || `Sự kiện "${payload.eventTitle}" đã được Staff khôi phục`,
+            break;
+          case "RESTORED_BY_STAFF":
+            console.log(
+              "[EventCalendar] Received RESTORED_BY_STAFF event from club topic:",
+              payload
+            );
+            toast.success("Sự kiện đã được khôi phục", {
+              description:
+                payload.message || `Sự kiện "${payload.eventTitle}" đã được Staff khôi phục`,
+            });
+            console.log(
+              "[EventCalendar] Calling refetchEvents after RESTORED_BY_STAFF event from club topic"
+            );
+            refetchEvents()
+              .then(() => {
+                console.log(
+                  "[EventCalendar] Successfully refetched events after RESTORED_BY_STAFF"
+                );
+              })
+              .catch((err) => {
+                console.error("[EventCalendar] Error refetching events:", err);
               });
-              // Refresh events
-              console.log("[EventCalendar] Calling refetchEvents after RESTORED_BY_STAFF event from club topic");
-              refetchEvents()
-                .then(() => {
-                  console.log("[EventCalendar] Successfully refetched events after RESTORED_BY_STAFF");
-                })
-                .catch((err) => {
-                  console.error("[EventCalendar] Error refetching events:", err);
-                });
-              break;
-          }
-        });
-      } else {
-        console.log(`[EventCalendar] Cannot subscribe to club ${clubId}: systemRoleInClub=${systemRoleInClub}`);
-      }
+            break;
+          case "MEETING_CREATED":
+            toast.success("CLB có buổi meeting mới", {
+              description:
+                payload.message || `Buổi meeting "${payload.eventTitle}" vừa được tạo`,
+            });
+            refetchEvents()
+              .then(() => {
+                console.log(
+                  "[EventCalendar] Successfully refetched events after MEETING_CREATED"
+                );
+              })
+              .catch((err) => {
+                console.error("[EventCalendar] Error refetching events:", err);
+              });
+            break;
+        }
+      });
     }
 
     return () => {
