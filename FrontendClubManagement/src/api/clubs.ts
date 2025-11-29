@@ -48,11 +48,34 @@ export async function getClubInfo(clubId: number): Promise<ClubDetailData> {
  */
 export async function updateClubInfo(
   clubId: number,
-  request: UpdateClubInfoRequest
+  request: UpdateClubInfoRequest,
+  logoFile?: File,
+  bannerFile?: File
 ): Promise<ClubDetailData> {
+  const formData = new FormData();
+
+  // Add request data as JSON blob
+  const requestBlob = new Blob([JSON.stringify(request)], {
+    type: "application/json",
+  });
+  formData.append("request", requestBlob);
+
+  // Add files if provided
+  if (logoFile) {
+    formData.append("logoFile", logoFile);
+  }
+  if (bannerFile) {
+    formData.append("bannerFile", bannerFile);
+  }
+
   const res = await axiosClient.put<ClubDetailData>(
     `/clubInfo/${clubId}/officer-update`,
-    request
+    formData,
+    {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    }
   );
   if (res.code !== 200) {
     // Throw object with errors so the UI can render field errors

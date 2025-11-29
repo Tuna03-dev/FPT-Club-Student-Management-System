@@ -65,8 +65,6 @@ export interface UpdateClubInfoRequest {
   clubName?: string;
   clubCode?: string;
   description?: string;
-  logoUrl?: string;
-  bannerUrl?: string;
   email?: string;
   phone?: string;
   fbUrl?: string;
@@ -74,4 +72,6 @@ export interface UpdateClubInfoRequest {
   ttUrl?: string;
   ytUrl?: string;
   categoryId?: number;
+  removeLogo?: boolean;
+  removeBanner?: boolean;
 }

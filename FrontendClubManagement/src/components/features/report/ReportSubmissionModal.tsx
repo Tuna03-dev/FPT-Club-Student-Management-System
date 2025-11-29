@@ -32,6 +32,7 @@ import {
 import { getAllClubs, type ClubDto } from "@/service/EventService";
 import { getEventsWithoutReportRequirement } from "@/services/reportService";
 import { type EventWithoutReportRequirementDto } from "@/types/dto/reportRequirement.dto";
+import { toast } from "sonner";
 type ReportType = "periodic" | "post-event" | "other";
 
 interface ReportSubmissionModalProps {
@@ -215,7 +216,17 @@ export function ReportSubmissionModal({
     if (!formData.dueDate) {
       newErrors.dueDate = "Vui lòng chọn ngày hạn chót";
     }
-
+    // If dueDate includes time (datetime-local), ensure it's not in the past
+    if (formData.dueDate) {
+      try {
+        const selected = new Date(formData.dueDate);
+        if (selected < new Date()) {
+          newErrors.dueDate = "Không được chọn thời gian trong quá khứ";
+        }
+      } catch {
+        // ignore parse errors, existing error will cover empty/invalid values
+      }
+    }
     if (!formData.content.trim()) {
       newErrors.content = "Nội dung báo cáo không được để trống";
     }
@@ -370,6 +381,13 @@ export function ReportSubmissionModal({
     return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i];
   };
 
+  // Get current local datetime in format suitable for `datetime-local` input
+  const getCurrentDateTimeLocal = () => {
+    const now = new Date();
+    const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
+    return local.toISOString().slice(0, 16);
+  };
+
   // Reset form when modal closes
   useEffect(() => {
     if (!open) {
@@ -474,14 +492,28 @@ export function ReportSubmissionModal({
                 </Label>
                 <Input
                   id="dueDate"
-                  type="date"
+                  type="datetime-local"
                   value={formData.dueDate}
                   onChange={(e) => {
-                    setFormData({ ...formData, dueDate: e.target.value });
-                    if (errors.dueDate) setErrors({ ...errors, dueDate: "" });
+                    const value = e.target.value;
+                    setFormData({ ...formData, dueDate: value });
+                    try {
+                      const selected = new Date(value);
+                      if (selected < new Date()) {
+                        setErrors({
+                          ...errors,
+                          dueDate: "Không được chọn thời gian trong quá khứ",
+                        });
+                        toast.error("Không được chọn thời gian trong quá khứ");
+                      } else if (errors.dueDate) {
+                        setErrors({ ...errors, dueDate: "" });
+                      }
+                    } catch {
+                      if (errors.dueDate) setErrors({ ...errors, dueDate: "" });
+                    }
                   }}
                   className={errors.dueDate ? "border-red-500" : ""}
-                  min={new Date().toISOString().split("T")[0]}
+                  min={getCurrentDateTimeLocal()}
                 />
                 {errors.dueDate && (
                   <p className="text-xs text-red-500 flex items-center gap-1">
@@ -825,7 +857,20 @@ export function ReportSubmissionModal({
                   • Loại báo cáo:{" "}
                   {REPORT_TYPES.find((t) => t.value === formData.type)?.label}
                 </li>
-                <li>• Ngày hạn chót: {formData.dueDate || "Chưa có"}</li>
+                <li>
+                  • Ngày hạn chót:{" "}
+                  {formData.dueDate
+                    ? new Date(formData.dueDate).toLocaleString("vi-VN", {
+                        timeZone: "Asia/Ho_Chi_Minh",
+                        year: "numeric",
+                        month: "2-digit",
+                        day: "2-digit",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        second: "2-digit",
+                      })
+                    : "Chưa có"}
+                </li>
                 {formData.type === "post-event" && formData.selectedEventId && (
                   <li>
                     • Sự kiện:{" "}

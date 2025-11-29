@@ -6,7 +6,7 @@ export type ReportType = "SEMESTER" | "EVENT" | "OTHER";
 export interface CreateReportRequirementRequest {
   title: string;
   description?: string;
-  dueDate: string; // ISO date string (YYYY-MM-DD)
+  dueDate: string; // ISO datetime string (YYYY-MM-DDTHH:mm:ss)
   reportType?: ReportType;
   templateUrl?: string;
   clubIds: number[];

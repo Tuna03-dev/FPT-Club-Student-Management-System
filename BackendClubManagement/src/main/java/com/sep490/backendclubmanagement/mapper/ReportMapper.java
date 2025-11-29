@@ -113,9 +113,7 @@ public interface ReportMapper {
                     .id(submissionRequirement.getId())
                     .title(submissionRequirement.getTitle())
                     .description(submissionRequirement.getDescription())
-                    .dueDate(submissionRequirement.getDueDate() != null
-                            ? submissionRequirement.getDueDate().atStartOfDay()
-                            : null)
+                    .dueDate(submissionRequirement.getDueDate())
                     .reportType(submissionRequirement.getReportType())
                     .templateUrl(submissionRequirement.getTemplateUrl())
                     .createdBy(requirementCreatedByInfo)

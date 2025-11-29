@@ -23,17 +23,20 @@ import {
   ClipboardList,
   Download,
 } from "lucide-react";
+import { formatDateTimeVN } from "@/lib/dateUtils";
 import { Textarea } from "@/components/ui/textarea";
-import { reviewReportByStaff, type ReviewReportByStaffRequest } from "@/services/reportService";
+import {
+  reviewReportByStaff,
+  type ReviewReportByStaffRequest,
+} from "@/services/reportService";
 import { toast } from "sonner";
 
 type ReportStatus =
   | "draft"
-  | "updated"
   | "submitted"
   | "approved"
   | "rejected"
-  | "needs-review"
+  | "resubmitted"
   | "not-submitted";
 
 interface Club {
@@ -90,23 +93,18 @@ const statusConfig: Record<
   ReportStatus,
   { label: string; color: string; icon: any }
 > = {
-  draft: { 
-    label: "Bản nháp", 
-    color: "bg-gray-100 text-gray-700", 
-    icon: null 
-  },
-  updated: {
-    label: "Đã cập nhật",
-    color: "bg-yellow-100 text-yellow-700",
-    icon: <AlertCircle className="h-4 w-4" />,
+  draft: {
+    label: "Bản nháp",
+    color: "bg-gray-100 text-gray-700",
+    icon: null,
   },
   submitted: {
-    label: "Đã nộp",
+    label: "Chờ phê duyệt",
     color: "bg-blue-100 text-blue-700",
     icon: <CheckCircle className="h-4 w-4" />,
   },
-  "needs-review": {
-    label: "Cần xem xét",
+  resubmitted: {
+    label: "Đã nộp lại",
     color: "bg-yellow-100 text-yellow-700",
     icon: <AlertCircle className="h-4 w-4" />,
   },
@@ -163,7 +161,32 @@ export function ClubReportModal({
       onOpenChange(false); // Close modal after successful review
     } catch (error: any) {
       console.error("Error approving report:", error);
-      toast.error(error.message || "Không thể chấp nhận báo cáo");
+
+      // Extract error message from BE response
+      let errorMessage = "Không thể chấp nhận báo cáo";
+
+      if (error.response?.data) {
+        const responseData = error.response.data;
+
+        // Check for validation errors
+        if (
+          responseData.errors &&
+          Array.isArray(responseData.errors) &&
+          responseData.errors.length > 0
+        ) {
+          errorMessage = responseData.errors
+            .map((err: any) => err.errorMessage || err.message)
+            .join(", ");
+        }
+        // Check for general error message
+        else if (responseData.message) {
+          errorMessage = responseData.message;
+        }
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+
+      toast.error(errorMessage);
     } finally {
       setIsSubmitting(false);
     }
@@ -189,7 +212,32 @@ export function ClubReportModal({
       onOpenChange(false); // Close modal after successful review
     } catch (error: any) {
       console.error("Error rejecting report:", error);
-      toast.error(error.message || "Không thể từ chối báo cáo");
+
+      // Extract error message from BE response
+      let errorMessage = "Không thể từ chối báo cáo";
+
+      if (error.response?.data) {
+        const responseData = error.response.data;
+
+        // Check for validation errors
+        if (
+          responseData.errors &&
+          Array.isArray(responseData.errors) &&
+          responseData.errors.length > 0
+        ) {
+          errorMessage = responseData.errors
+            .map((err: any) => err.errorMessage || err.message)
+            .join(", ");
+        }
+        // Check for general error message
+        else if (responseData.message) {
+          errorMessage = responseData.message;
+        }
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+
+      toast.error(errorMessage);
     } finally {
       setIsSubmitting(false);
     }
@@ -232,13 +280,15 @@ export function ClubReportModal({
                       </div>
                       {report.reportRequirement.reportType && (
                         <div>
-                          <p className="text-muted-foreground mb-0.5">Loại báo cáo</p>
+                          <p className="text-muted-foreground mb-0.5">
+                            Loại báo cáo
+                          </p>
                           <p className="font-medium text-foreground">
                             {report.reportRequirement.reportType === "SEMESTER"
                               ? "Báo cáo Định kỳ"
                               : report.reportRequirement.reportType === "EVENT"
-                              ? "Báo cáo Sau sự kiện"
-                              : "Loại khác"}
+                                ? "Báo cáo Sau sự kiện"
+                                : "Loại khác"}
                           </p>
                         </div>
                       )}
@@ -248,12 +298,14 @@ export function ClubReportModal({
                           Hạn nộp
                         </p>
                         <p className="font-medium text-foreground">
-                          {new Date(report.reportRequirement.dueDate).toLocaleDateString("vi-VN")}
+                          {formatDateTimeVN(report.reportRequirement.dueDate)}
                         </p>
                       </div>
                       {report.reportRequirement.createdBy && (
                         <div>
-                          <p className="text-muted-foreground mb-0.5">Người tạo</p>
+                          <p className="text-muted-foreground mb-0.5">
+                            Người tạo
+                          </p>
                           <p className="font-medium text-foreground truncate">
                             {report.reportRequirement.createdBy.fullName}
                           </p>
@@ -262,7 +314,9 @@ export function ClubReportModal({
                     </div>
                     {report.reportRequirement.description && (
                       <div className="pt-1 border-t">
-                        <p className="text-muted-foreground mb-0.5 text-xs">Mô tả</p>
+                        <p className="text-muted-foreground mb-0.5 text-xs">
+                          Mô tả
+                        </p>
                         <p className="text-xs text-foreground line-clamp-2">
                           {report.reportRequirement.description}
                         </p>
@@ -273,12 +327,19 @@ export function ClubReportModal({
                         <div className="flex items-center gap-1.5">
                           <FileText className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
                           <span className="text-xs text-foreground truncate flex-1">
-                            {report.reportRequirement.templateUrl.split("/").pop() || "Template file"}
+                            {report.reportRequirement.templateUrl
+                              .split("/")
+                              .pop() || "Template file"}
                           </span>
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => window.open(report.reportRequirement!.templateUrl, "_blank")}
+                            onClick={() =>
+                              window.open(
+                                report.reportRequirement!.templateUrl,
+                                "_blank"
+                              )
+                            }
                             className="h-6 px-2 flex-shrink-0"
                           >
                             <Download className="h-3 w-3" />
@@ -307,7 +368,7 @@ export function ClubReportModal({
                 <p className="font-medium">{report.submittedBy}</p>
               </div>
               <div>
-                <p className="text-muted-foreground mb-1">Bộ phận</p>
+                <p className="text-muted-foreground mb-1">Câu lạc bộ</p>
                 <p className="font-medium">{report.department}</p>
               </div>
               <div>
@@ -497,8 +558,8 @@ export function ClubReportModal({
                   {isSubmitting
                     ? "Đang xử lý..."
                     : showFeedback === "approve"
-                    ? "Chấp nhận"
-                    : "Từ chối"}
+                      ? "Chấp nhận"
+                      : "Từ chối"}
                 </Button>
               </div>
             </div>
@@ -507,7 +568,7 @@ export function ClubReportModal({
           {/* Actions */}
           {!showFeedback &&
             (report.status === "submitted" ||
-              report.status === "needs-review") && (
+              report.status === "resubmitted") && (
               <div className="flex gap-2 justify-end pt-4 border-t">
                 <Button
                   onClick={() => setShowFeedback("reject")}

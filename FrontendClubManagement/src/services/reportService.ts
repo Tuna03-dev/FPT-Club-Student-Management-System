@@ -55,6 +55,56 @@ export async function createReportRequirement(
 }
 
 /**
+ * Update report requirement request
+ */
+export interface UpdateReportRequirementRequest {
+  title: string;
+  description?: string;
+  dueDate: string; // ISO datetime string (YYYY-MM-DDTHH:mm:ss)
+}
+
+/**
+ * Update an existing report requirement
+ * @param requirementId - Report requirement ID
+ * @param request - Updated report requirement data
+ * @param file - Optional template file to upload
+ */
+export async function updateReportRequirement(
+  requirementId: number,
+  request: UpdateReportRequirementRequest,
+  file?: File
+): Promise<ReportRequirementResponse> {
+  // Always use FormData since backend endpoint requires multipart/form-data
+  const formData = new FormData();
+
+  // Create a Blob for the JSON request with correct content-type
+  const requestBlob = new Blob([JSON.stringify(request)], {
+    type: "application/json",
+  });
+  formData.append("request", requestBlob);
+
+  // Only append file if provided (file is optional)
+  if (file) {
+    formData.append("file", file);
+  }
+
+  const response = await axiosClient.put<ReportRequirementResponse>(
+    `/reports/staff/requirements/${requirementId}`,
+    formData,
+    {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+      timeout: 60000, // Increase timeout for file uploads
+    }
+  );
+  if (!response.data) {
+    throw new Error("Failed to update report requirement");
+  }
+  return response.data;
+}
+
+/**
  * Get events without report requirement
  */
 export async function getEventsWithoutReportRequirement(): Promise<
@@ -109,12 +159,23 @@ export async function getAllReportRequirements(
 
 /**
  * Get list of clubs that need to submit reports for a specific report requirement
+ * Supports pagination and search by club name or code
  */
 export async function getClubsByReportRequirement(
-  requirementId: number
-): Promise<ClubRequirementInfo[]> {
-  const response = await axiosClient.get<ClubRequirementInfo[]>(
-    `/reports/staff/requirements/${requirementId}/clubs`
+  requirementId: number,
+  page: number = 0,
+  size: number = 10,
+  keyword?: string
+): Promise<PageResponse<ClubRequirementInfo>> {
+  const params = new URLSearchParams();
+  params.append("page", page.toString());
+  params.append("size", size.toString());
+  if (keyword) {
+    params.append("keyword", keyword);
+  }
+
+  const response = await axiosClient.get<PageResponse<ClubRequirementInfo>>(
+    `/reports/staff/requirements/${requirementId}/clubs?${params.toString()}`
   );
   if (!response.data) {
     throw new Error("Failed to get clubs by report requirement");
@@ -343,7 +404,7 @@ export async function deleteReport(reportId: number): Promise<void> {
  */
 export interface ReviewReportByClubRequest {
   reportId: number;
-  status: "APPROVED_CLUB" | "REJECTED_CLUB";
+  status: "PENDING_UNIVERSITY" | "REJECTED_CLUB";
   reviewerFeedback?: string;
 }
 

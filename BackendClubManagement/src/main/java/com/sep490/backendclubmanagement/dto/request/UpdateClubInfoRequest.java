@@ -40,5 +40,8 @@ public class UpdateClubInfoRequest {
 
     @Size(max = 500, message = "YouTube URL không được quá 500 ký tự")
     private String ytUrl;
+
+    private Boolean removeLogo;
+    private Boolean removeBanner;
 }
 

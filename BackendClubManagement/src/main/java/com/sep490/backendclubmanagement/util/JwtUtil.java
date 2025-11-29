@@ -1,8 +1,6 @@
 package com.sep490.backendclubmanagement.util;
 
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtException;
@@ -39,8 +37,6 @@ public class JwtUtil {
 
     @Autowired(required = false)
     private com.sep490.backendclubmanagement.service.TokenBlacklistService tokenBlacklistService;
-
-    private final ObjectMapper objectMapper = new ObjectMapper();
 
     /**
      * Generate access token with user details and authorities
@@ -184,25 +180,6 @@ public class JwtUtil {
         }
     }
 
-    /**
-     * Extract club roles from token
-     */
-    public List<com.sep490.backendclubmanagement.dto.response.ClubRoleInfo> extractClubRoles(String token) {
-        try {
-            Claims claims = extractAllClaims(token);
-            Object clubRolesObj = claims.get("clubRoles");
-
-            if (clubRolesObj == null) {
-                return Collections.emptyList();
-            }
-
-            return objectMapper.convertValue(clubRolesObj,
-                new TypeReference<List<com.sep490.backendclubmanagement.dto.response.ClubRoleInfo>>() {});
-        } catch (Exception e) {
-            log.warn("Failed to extract club roles from token: {}", e.getMessage());
-            return Collections.emptyList();
-        }
-    }
 
 
     private SecretKey getSignInKey() {

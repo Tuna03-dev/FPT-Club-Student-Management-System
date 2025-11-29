@@ -7,8 +7,6 @@ import com.sep490.backendclubmanagement.dto.response.RecruitmentQuestionData;
 import com.sep490.backendclubmanagement.entity.*;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
-import org.mapstruct.AfterMapping;
-import org.mapstruct.MappingTarget;
 
 import java.util.List;
 import java.util.Set;
@@ -122,5 +120,38 @@ public interface RecruitmentMapper {
                 })
                 .map(QuestionOption::getOptionText)
                 .collect(Collectors.toList());
+    }
+
+    // Minimal DTO for listing - without questions and teamOptions
+    default RecruitmentData toDtoForList(Recruitment recruitment) {
+        if (recruitment == null) {
+            return null;
+        }
+
+        // Calculate application statistics
+        int totalApplications = 0;
+        int acceptedApplications = 0;
+        if (recruitment.getApplications() != null) {
+            totalApplications = recruitment.getApplications().size();
+            acceptedApplications = (int) recruitment.getApplications().stream()
+                    .filter(app -> app.getStatus() == RecruitmentApplicationStatus.ACCEPTED)
+                    .count();
+        }
+
+        return RecruitmentData.builder()
+                .id(recruitment.getId())
+                .title(recruitment.getTitle())
+                .description(recruitment.getDescription())
+                .endDate(recruitment.getEndDate())
+                .status(recruitment.getStatus())
+                .requirements(recruitment.getRequirements())
+                .clubId(recruitment.getClub() != null ? recruitment.getClub().getId() : null)
+                .totalApplications(totalApplications)
+                .acceptedApplications(acceptedApplications)
+                .createdAt(recruitment.getCreatedAt())
+                .updatedAt(recruitment.getUpdatedAt())
+                .questions(null)  // Don't map questions for list
+                .teamOptions(null)  // Don't map teamOptions for list
+                .build();
     }
 }
