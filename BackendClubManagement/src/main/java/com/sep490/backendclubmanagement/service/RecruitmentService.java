@@ -114,7 +114,8 @@ public class RecruitmentService implements RecruitmentServiceInterface {
                     : recruitmentRepository.findByClub_IdAndStatus(clubId, status, pageable);
         }
 
-        Page<RecruitmentData> dataPage = page.map(recruitmentMapper::toDto);
+        // Use toDtoForList instead of toDto to exclude questions and teamOptions
+        Page<RecruitmentData> dataPage = page.map(recruitmentMapper::toDtoForList);
         return PagedResponse.of(dataPage);
     }
 
