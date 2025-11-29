@@ -29,6 +29,10 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     @Query("SELECT u.id FROM User u WHERE LOWER(u.email) = LOWER(:email)")
     Optional<Long> findIdByEmail(@Param("email") String email);
+
+    @Query("SELECT u.systemRole.roleName FROM User u WHERE u.id = :userId AND u.isActive = TRUE")
+    Optional<String> findSystemRoleNameByUserId(@Param("userId") Long userId);
+
     List<User> findByIdIn(List<Long> ids);
 
     List<User> findBySystemRole_RoleNameIgnoreCase(String roleName);

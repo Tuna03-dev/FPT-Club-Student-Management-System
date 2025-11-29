@@ -12,9 +12,11 @@ import com.sep490.backendclubmanagement.dto.response.TeamResponse;
 import com.sep490.backendclubmanagement.util.SecurityUtils;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -78,15 +80,19 @@ public class ClubController {
      * Only club officers can update club information
      * @param id Club ID
      * @param request Update request with club information
+     * @param logoFile Logo file (optional)
+     * @param bannerFile Banner file (optional)
      * @return Updated club detail data
      */
     @PreAuthorize("@clubSecurity.isClubOfficerInClub(#id)")
-    @PutMapping("/{id}/officer-update")
+    @PutMapping(value = "/{id}/officer-update", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ApiResponse<ClubDetailData>> updateClubInfo(
             @PathVariable Long id,
-            @Valid @RequestBody UpdateClubInfoRequest request) throws AppException {
+            @Valid @RequestPart("request") UpdateClubInfoRequest request,
+            @RequestPart(value = "logoFile", required = false) MultipartFile logoFile,
+            @RequestPart(value = "bannerFile", required = false) MultipartFile bannerFile) throws AppException {
         Long userId = SecurityUtils.getCurrentUserId();
-        ClubDetailData data = clubService.updateClubInfo(id, request, userId);
+        ClubDetailData data = clubService.updateClubInfo(id, request, userId, logoFile, bannerFile);
         return ResponseEntity.ok(ApiResponse.success(data));
     }
 

@@ -114,7 +114,8 @@ public class RecruitmentService implements RecruitmentServiceInterface {
                     : recruitmentRepository.findByClub_IdAndStatus(clubId, status, pageable);
         }
 
-        Page<RecruitmentData> dataPage = page.map(recruitmentMapper::toDto);
+        // Use toDtoForList instead of toDto to exclude questions and teamOptions
+        Page<RecruitmentData> dataPage = page.map(recruitmentMapper::toDtoForList);
         return PagedResponse.of(dataPage);
     }
 
@@ -348,49 +349,28 @@ public class RecruitmentService implements RecruitmentServiceInterface {
         // Check permission: must be CLUB_PRESIDENT and a member of the club
         checkClubOfficerPermission(userId, recruitment.getClub().getId());
         
-        Page<RecruitmentApplication> page;
+        // Use single dynamic query that handles all parameter combinations
+        Page<RecruitmentApplication> page = applicationRepository.findApplicationsByRecruitment(recruitmentId, status, keyword, pageable);
 
-        // If keyword is provided, use client-side filtering with Vietnamese normalization
-        if (keyword != null && !keyword.trim().isEmpty()) {
-            String trimmedKeyword = keyword.trim();
-            // Get all applications without keyword filter
-            page = (status == null)
-                    ? applicationRepository.findByRecruitment_Id(recruitmentId, PageRequest.of(0, Integer.MAX_VALUE))
-                    : applicationRepository.findByRecruitment_IdAndStatus(recruitmentId, status, PageRequest.of(0, Integer.MAX_VALUE));
+        // Batch load team names to avoid N+1 queries
+        Set<Long> teamIds = page.getContent().stream()
+                .map(RecruitmentApplication::getTeamId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
 
-            // Filter using Vietnamese normalization
-            List<RecruitmentApplication> filteredList = page.getContent().stream()
-                    .filter(app -> {
-                        String fullName = normalizeVietnamese(app.getApplicant().getFullName() != null ? app.getApplicant().getFullName() : "");
-                        String email = normalizeVietnamese(app.getApplicant().getEmail() != null ? app.getApplicant().getEmail() : "");
-                        String studentCode = normalizeVietnamese(app.getApplicant().getStudentCode() != null ? app.getApplicant().getStudentCode() : "");
-
-                        // Split keyword into individual words for better matching
-                        String[] keywords = trimmedKeyword.split("\\s+");
-                        for (String kw : keywords) {
-                            String normalizedKw = normalizeVietnamese(kw);
-                            if (fullName.contains(normalizedKw) || email.contains(normalizedKw) || studentCode.contains(normalizedKw)) {
-                                return true;
-                            }
-                        }
-                        return false;
-                    })
-                    .collect(Collectors.toList());
-
-            // Apply pagination manually
-            int start = (int) pageable.getOffset();
-            int end = Math.min((start + pageable.getPageSize()), filteredList.size());
-            List<RecruitmentApplication> paginatedList = start >= filteredList.size() ?
-                    Collections.emptyList() : filteredList.subList(start, end);
-            page = new PageImpl<>(paginatedList, pageable, filteredList.size());
-        } else {
-            // Use single dynamic query that handles all parameter combinations
-            page = applicationRepository.findApplicationsByRecruitment(recruitmentId, status, keyword, pageable);
+        Map<Long, String> teamNameMap = new HashMap<>();
+        if (!teamIds.isEmpty()) {
+            teamRepository.findAllById(teamIds).forEach(team ->
+                teamNameMap.put(team.getId(), team.getTeamName())
+            );
         }
 
+        // Map to DTO with batch-loaded team names
         Page<RecruitmentApplicationData> dataPage = page.map(app -> {
             RecruitmentApplicationData data = recruitmentApplicationMapper.toDto(app);
-            setTeamName(data, app.getTeamId());
+            if (app.getTeamId() != null) {
+                data.setTeamName(teamNameMap.get(app.getTeamId()));
+            }
             return data;
         });
         return PagedResponse.of(dataPage);
@@ -398,48 +378,28 @@ public class RecruitmentService implements RecruitmentServiceInterface {
 
     @Override
     public PagedResponse<RecruitmentApplicationData> listMyApplications(Long applicantId, RecruitmentApplicationStatus status, String keyword, Pageable pageable) {
-        Page<RecruitmentApplication> page;
+        // Use single dynamic query that handles all parameter combinations
+        Page<RecruitmentApplication> page = applicationRepository.findMyApplications(applicantId, status, keyword, pageable);
 
-        // If keyword is provided, use client-side filtering with Vietnamese normalization
-        if (keyword != null && !keyword.trim().isEmpty()) {
-            String trimmedKeyword = keyword.trim();
-            // Get all applications without keyword filter
-            page = (status == null)
-                    ? applicationRepository.findMyApplications(applicantId, null, null, PageRequest.of(0, Integer.MAX_VALUE))
-                    : applicationRepository.findMyApplications(applicantId, status, null, PageRequest.of(0, Integer.MAX_VALUE));
+        // Batch load team names to avoid N+1 queries
+        Set<Long> teamIds = page.getContent().stream()
+                .map(RecruitmentApplication::getTeamId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
 
-            // Filter using Vietnamese normalization
-            List<RecruitmentApplication> filteredList = page.getContent().stream()
-                    .filter(app -> {
-                        String recruitmentTitle = normalizeVietnamese(app.getRecruitment().getTitle() != null ? app.getRecruitment().getTitle() : "");
-                        String clubName = normalizeVietnamese(app.getRecruitment().getClub().getClubName() != null ? app.getRecruitment().getClub().getClubName() : "");
-
-                        // Split keyword into individual words for better matching
-                        String[] keywords = trimmedKeyword.split("\\s+");
-                        for (String kw : keywords) {
-                            String normalizedKw = normalizeVietnamese(kw);
-                            if (recruitmentTitle.contains(normalizedKw) || clubName.contains(normalizedKw)) {
-                                return true;
-                            }
-                        }
-                        return false;
-                    })
-                    .collect(Collectors.toList());
-
-            // Apply pagination manually
-            int start = (int) pageable.getOffset();
-            int end = Math.min((start + pageable.getPageSize()), filteredList.size());
-            List<RecruitmentApplication> paginatedList = start >= filteredList.size() ?
-                    Collections.emptyList() : filteredList.subList(start, end);
-            page = new PageImpl<>(paginatedList, pageable, filteredList.size());
-        } else {
-            // Use single dynamic query that handles all parameter combinations
-            page = applicationRepository.findMyApplications(applicantId, status, keyword, pageable);
+        Map<Long, String> teamNameMap = new HashMap<>();
+        if (!teamIds.isEmpty()) {
+            teamRepository.findAllById(teamIds).forEach(team ->
+                teamNameMap.put(team.getId(), team.getTeamName())
+            );
         }
 
+        // Map to DTO with batch-loaded team names
         Page<RecruitmentApplicationData> dataPage = page.map(app -> {
             RecruitmentApplicationData data = recruitmentApplicationMapper.toDto(app);
-            setTeamName(data, app.getTeamId());
+            if (app.getTeamId() != null) {
+                data.setTeamName(teamNameMap.get(app.getTeamId()));
+            }
             return data;
         });
         return PagedResponse.of(dataPage);
@@ -473,7 +433,7 @@ public class RecruitmentService implements RecruitmentServiceInterface {
         // Validate file size (max 20 MB)
         final long MAX_FILE_SIZE = 20L * 1024 * 1024; // 20 MB
         if (file != null && !file.isEmpty() && file.getSize() > MAX_FILE_SIZE) {
-            throw new AppException(ErrorCode.FILE_TOO_LARGE);
+            throw new AppException(ErrorCode.FILE_TOO_LARGE, "Kích thước tập tin vượt quá giới hạn 20MB");
         }
 
         User applicant = userRepository.findById(applicantId)

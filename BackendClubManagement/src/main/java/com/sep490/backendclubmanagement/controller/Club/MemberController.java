@@ -100,7 +100,7 @@ public class MemberController {
 
     // Update member team
     @PutMapping("/{clubId}/members/{userId}/team")
-    @PreAuthorize("@clubSecurity.isTeamOfficerOrClubOfficerInClub(#clubId)")
+    @PreAuthorize("@clubSecurity.isTeamOfficerOrClubOfficerOrTreasurerInClub(#clubId)")
     public ApiResponse<String> updateMemberTeam(
             @PathVariable Long clubId,
             @PathVariable Long userId,
@@ -111,7 +111,7 @@ public class MemberController {
 
     // Update member status (active/inactive)
     @PutMapping("/{clubId}/members/{userId}/status")
-    @PreAuthorize("@clubSecurity.isTeamOfficerOrClubOfficerInClub(#clubId)")
+    @PreAuthorize("@clubSecurity.isTeamOfficerOrClubOfficerOrTreasurerInClub(#clubId)")
     public ApiResponse<String> updateMemberStatus(
             @PathVariable Long clubId,
             @PathVariable Long userId,

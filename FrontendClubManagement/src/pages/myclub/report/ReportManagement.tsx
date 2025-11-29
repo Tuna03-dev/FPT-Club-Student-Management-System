@@ -95,6 +95,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { formatDateTimeVN } from "@/lib/dateUtils";
 
 type ReportType = "periodic" | "post_event";
 type ReportStatusFilter =
@@ -102,7 +103,6 @@ type ReportStatusFilter =
   | "UNSUBMITTED"
   | "DRAFT"
   | "PENDING_CLUB"
-  | "APPROVED_CLUB"
   | "REJECTED_CLUB"
   | "UPDATED_PENDING_CLUB"
   | "PENDING_UNIVERSITY"
@@ -181,7 +181,6 @@ const requirementStatusLabels: Record<string, string> = {
   // ReportStatus enum values from backend
   DRAFT: "Bản nháp",
   PENDING_CLUB: "Chờ phê duyệt từ CLB",
-  APPROVED_CLUB: "Đã duyệt từ CLB",
   REJECTED_CLUB: "Bị từ chối từ CLB",
   UPDATED_PENDING_CLUB: "Đã cập nhật - Chờ phê duyệt từ CLB",
   PENDING_UNIVERSITY: "Chờ phê duyệt từ nhà trường",
@@ -194,7 +193,6 @@ const requirementStatusColors: Record<string, string> = {
   UNSUBMITTED: "bg-red-100 text-red-700",
   DRAFT: "bg-gray-600 text-white",
   PENDING_CLUB: "bg-yellow-100 text-yellow-700",
-  APPROVED_CLUB: "bg-green-100 text-green-700",
   REJECTED_CLUB: "bg-red-100 text-red-700",
   UPDATED_PENDING_CLUB: "bg-yellow-100 text-yellow-700",
   PENDING_UNIVERSITY: "bg-blue-100 text-blue-700",
@@ -207,20 +205,18 @@ const requirementStatusColors: Record<string, string> = {
 // Used for displaying report status in detail views
 const reportStatusLabels: Record<string, string> = {
   DRAFT: "Bản nháp",
-  PENDING_CLUB: "Chờ phê duyệt CLB",
-  APPROVED_CLUB: "Đã duyệt CLB",
-  REJECTED_CLUB: "Bị từ chối CLB",
-  UPDATED_PENDING_CLUB: "Đã cập nhật - Chờ phê duyệt CLB",
-  PENDING_UNIVERSITY: "Chờ phê duyệt nhà trường",
-  APPROVED_UNIVERSITY: "Đã duyệt nhà trường",
-  REJECTED_UNIVERSITY: "Bị từ chối nhà trường",
-  RESUBMITTED_UNIVERSITY: "Đã nộp lại nhà trường",
+  PENDING_CLUB: "Chờ phê duyệt từ CLB",
+  REJECTED_CLUB: "Bị từ chối từ CLB",
+  UPDATED_PENDING_CLUB: "Đã cập nhật - Chờ phê duyệt từ CLB",
+  PENDING_UNIVERSITY: "Chờ phê duyệt từ nhà trường",
+  APPROVED_UNIVERSITY: "Đã duyệt từ nhà trường",
+  REJECTED_UNIVERSITY: "Bị từ chối từ nhà trường",
+  RESUBMITTED_UNIVERSITY: "Đã nộp lại lên nhà trường",
 };
 
 const reportStatusColors: Record<string, string> = {
   DRAFT: "bg-gray-600 text-white",
   PENDING_CLUB: "bg-yellow-100 text-yellow-700",
-  APPROVED_CLUB: "bg-green-100 text-green-700",
   REJECTED_CLUB: "bg-red-100 text-red-700",
   UPDATED_PENDING_CLUB: "bg-yellow-100 text-yellow-700",
   PENDING_UNIVERSITY: "bg-blue-100 text-blue-700",
@@ -235,7 +231,6 @@ const reportStatusFilterOptions: ReportStatusFilter[] = [
   "UNSUBMITTED",
   "DRAFT",
   "PENDING_CLUB",
-  "APPROVED_CLUB",
   "REJECTED_CLUB",
   "UPDATED_PENDING_CLUB",
   "PENDING_UNIVERSITY",
@@ -249,17 +244,17 @@ const reportStatusFilterLabels: Record<ReportStatusFilter, string> = {
   OVERDUE: "Quá hạn",
   UNSUBMITTED: "Chưa nộp",
   DRAFT: "Bản nháp",
-  PENDING_CLUB: "Chờ phê duyệt CLB",
-  APPROVED_CLUB: "Đã duyệt CLB",
-  REJECTED_CLUB: "Bị từ chối CLB",
-  UPDATED_PENDING_CLUB: "Đã cập nhật - Chờ phê duyệt CLB",
-  PENDING_UNIVERSITY: "Chờ phê duyệt nhà trường",
-  APPROVED_UNIVERSITY: "Đã duyệt nhà trường",
-  REJECTED_UNIVERSITY: "Bị từ chối nhà trường",
-  RESUBMITTED_UNIVERSITY: "Đã nộp lại nhà trường",
+  PENDING_CLUB: "Chờ phê duyệt từ CLB",
+  REJECTED_CLUB: "Bị từ chối từ CLB",
+  UPDATED_PENDING_CLUB: "Đã cập nhật - Chờ phê duyệt từ CLB",
+  PENDING_UNIVERSITY: "Chờ phê duyệt từ nhà trường",
+  APPROVED_UNIVERSITY: "Đã duyệt từ nhà trường",
+  REJECTED_UNIVERSITY: "Bị từ chối từ nhà trường",
+  RESUBMITTED_UNIVERSITY: "Đã nộp lại lên nhà trường",
 };
 
 export function ClubReportManagement() {
+  // Use shared `formatDateTimeVN` from `src/lib/dateUtils`
   const params = useParams();
   const clubIdParam = params.clubId;
   const clubId = clubIdParam ? Number(clubIdParam) : undefined;
@@ -405,6 +400,12 @@ export function ClubReportManagement() {
     useState<ReportRequest | null>(null);
   const [selectedTeamId, setSelectedTeamId] = useState<number | null>(null);
   const [assigningTeam, setAssigningTeam] = useState(false);
+
+  // State for delete confirmation dialog (replace window.confirm)
+  const [showDeleteConfirmDialog, setShowDeleteConfirmDialog] = useState(false);
+  const [deleteTargetReportId, setDeleteTargetReportId] = useState<
+    number | null
+  >(null);
 
   // Fetch semesters from API
   useEffect(() => {
@@ -615,6 +616,13 @@ export function ClubReportManagement() {
     if (!clubId) return;
 
     try {
+      // Set loading states to show skeleton
+      setLoading(true);
+      setLoadingMyReports(true);
+      if (isClubOfficer) {
+        setLoadingAllClubReports(true);
+      }
+
       // Always refresh requests tab (use paginated API to match backend)
       // Note: Backend already filters by teamId for team officers
       const requestsFilter: ClubReportRequirementFilterRequest = {
@@ -645,6 +653,7 @@ export function ClubReportManagement() {
       setTotalElements(requestsResponse.totalElements);
       setHasNext(requestsResponse.hasNext);
       setHasPrevious(requestsResponse.hasPrevious);
+      setLoading(false);
 
       // Always refresh submissions tab (my reports)
       const myReportsFilter: ReportFilterRequest = {
@@ -656,6 +665,7 @@ export function ClubReportManagement() {
       const myReportsResponse = await getMyReports(myReportsFilter);
       setMyReports(myReportsResponse.content);
       setTotalPagesMyReports(myReportsResponse.totalPages);
+      setLoadingMyReports(false);
 
       // Always refresh approval tab (all club reports) if user is club president
       if (isClubOfficer) {
@@ -668,9 +678,14 @@ export function ClubReportManagement() {
         const clubReportsResponse = await getClubReports(clubReportsFilter);
         setAllClubReports(clubReportsResponse.content);
         setTotalPagesClubReports(clubReportsResponse.totalPages);
+        setLoadingAllClubReports(false);
       }
     } catch (err) {
       console.error("Error refreshing tabs data:", err);
+      // Reset loading states on error
+      setLoading(false);
+      setLoadingMyReports(false);
+      setLoadingAllClubReports(false);
       // Don't show error toast here as it might be called multiple times
     }
   };
@@ -1140,9 +1155,7 @@ export function ClubReportManagement() {
                             <span>
                               Hạn nộp:{" "}
                               <strong>
-                                {new Date(request.deadline).toLocaleDateString(
-                                  "vi-VN"
-                                )}
+                                {formatDateTimeVN(request.deadline)}
                               </strong>
                             </span>
                             {isDeadlineExp && (
@@ -1208,21 +1221,6 @@ export function ClubReportManagement() {
                               </div>
                             ))}
 
-                          {/* Báo cáo đã được CLB phê duyệt, đang chờ nhà trường */}
-                          {request.status === "APPROVED_CLUB" &&
-                            (isClubOfficer ? (
-                              <div className="p-3 bg-green-50 border border-green-200 rounded text-sm text-green-800">
-                                <CheckCircle className="h-4 w-4 inline mr-2" />
-                                Báo cáo đang chờ phê duyệt từ nhà trường
-                              </div>
-                            ) : (
-                              <div className="p-3 bg-green-50 border border-green-200 rounded text-sm text-green-800">
-                                <CheckCircle className="h-4 w-4 inline mr-2" />
-                                Báo cáo đã được CLB phê duyệt, đang chờ phê
-                                duyệt từ nhà trường
-                              </div>
-                            ))}
-
                           {/* Báo cáo bị CLB từ chối */}
                           {request.status === "REJECTED_CLUB" &&
                             (isClubOfficer ? (
@@ -1284,18 +1282,15 @@ export function ClubReportManagement() {
                             </div>
                           )}
 
-                          {/* Hiển thị thông báo khi báo cáo đã được giao cho phòng ban - chỉ hiển thị cho club officer hoặc team officer không phải team được gán */}
-                          {request.teamId &&
-                            (isClubOfficer ||
-                              (isTeamOfficer &&
-                                request.teamId !== currentUserTeamId)) && (
-                              <div className="p-3 bg-green-50 border border-green-200 rounded text-sm text-green-800">
-                                <UserPlus className="h-4 w-4 inline mr-2" />
-                                Báo cáo đã được giao cho phòng{" "}
-                                {teams?.find((t) => t.teamId === request.teamId)
-                                  ?.teamName || ""}
-                              </div>
-                            )}
+                          {/* Hiển thị thông báo khi báo cáo đã được giao cho phòng ban */}
+                          {request.teamId && isClubOfficer && (
+                            <div className="p-3 bg-green-50 border border-green-200 rounded text-sm text-green-800">
+                              <UserPlus className="h-4 w-4 inline mr-2" />
+                              Báo cáo đã được giao cho phòng{" "}
+                              {teams?.find((t) => t.teamId === request.teamId)
+                                ?.teamName || ""}
+                            </div>
+                          )}
 
                           {/* Hiển thị thông báo khi báo cáo ở trạng thái DRAFT và user không phải người tạo */}
                           {request.status === "DRAFT" &&
@@ -1309,8 +1304,8 @@ export function ClubReportManagement() {
                                 return (
                                   <div className="p-3 bg-gray-50 border border-gray-200 rounded text-sm text-gray-800">
                                     <FileText className="h-4 w-4 inline mr-2" />
-                                    Người {request.report.createdBy.fullName} đã
-                                    tạo báo cáo ở trạng thái bản nháp
+                                    {request.report.createdBy.fullName} đã tạo
+                                    báo cáo ở trạng thái bản nháp
                                   </div>
                                 );
                               }
@@ -1457,15 +1452,11 @@ export function ClubReportManagement() {
                                   }
                                   className="bg-blue-600 hover:bg-blue-700"
                                   disabled={
-                                    request.status === "APPROVED_UNIVERSITY" ||
-                                    request.status === "APPROVED_CLUB"
+                                    request.status === "APPROVED_UNIVERSITY"
                                   }
                                 >
                                   <Plus className="h-4 w-4 mr-1" />
-                                  {request.status === "APPROVED_UNIVERSITY" ||
-                                  request.status === "APPROVED_CLUB"
-                                    ? "Đã duyệt"
-                                    : "Tạo báo cáo"}
+                                  {"Tạo báo cáo"}
                                 </Button>
                               )
                             )}
@@ -1765,17 +1756,13 @@ export function ClubReportManagement() {
 
                           <TableCell>
                             <span className="text-sm text-muted-foreground">
-                              {new Date(report.createdAt).toLocaleDateString(
-                                "vi-VN"
-                              )}
+                              {formatDateTimeVN(report.createdAt)}
                             </span>
                           </TableCell>
                           <TableCell>
                             <span className="text-sm text-muted-foreground">
                               {report.submittedDate
-                                ? new Date(
-                                    report.submittedDate
-                                  ).toLocaleDateString("vi-VN")
+                                ? formatDateTimeVN(report.submittedDate)
                                 : "—"}
                             </span>
                           </TableCell>
@@ -2061,17 +2048,13 @@ export function ClubReportManagement() {
 
                           <TableCell>
                             <span className="text-sm text-muted-foreground">
-                              {new Date(report.createdAt).toLocaleDateString(
-                                "vi-VN"
-                              )}
+                              {formatDateTimeVN(report.createdAt)}
                             </span>
                           </TableCell>
                           <TableCell>
                             <span className="text-sm text-muted-foreground">
                               {report.submittedDate
-                                ? new Date(
-                                    report.submittedDate
-                                  ).toLocaleDateString("vi-VN")
+                                ? formatDateTimeVN(report.submittedDate)
                                 : "—"}
                             </span>
                           </TableCell>
@@ -2308,18 +2291,14 @@ export function ClubReportManagement() {
                 <div>
                   <span className="text-muted-foreground">Ngày tạo:</span>
                   <div className="font-medium">
-                    {new Date(
-                      selectedReportDetail.createdAt
-                    ).toLocaleDateString("vi-VN")}
+                    {formatDateTimeVN(selectedReportDetail.createdAt)}
                   </div>
                 </div>
                 {selectedReportDetail.submittedDate && (
                   <div>
                     <span className="text-muted-foreground">Ngày nộp:</span>
                     <div className="font-medium">
-                      {new Date(
-                        selectedReportDetail.submittedDate
-                      ).toLocaleDateString("vi-VN")}
+                      {formatDateTimeVN(selectedReportDetail.submittedDate)}
                     </div>
                   </div>
                 )}
@@ -2371,13 +2350,9 @@ export function ClubReportManagement() {
                       </span>
                       <span className="text-blue-800 flex items-center gap-1">
                         <Calendar className="h-3 w-3" />
-                        {new Date(
+                        {formatDateTimeVN(
                           selectedReportDetail.reportRequirement.dueDate
-                        ).toLocaleDateString("vi-VN", {
-                          year: "numeric",
-                          month: "long",
-                          day: "numeric",
-                        })}
+                        )}
                       </span>
                       {selectedReportDetail.reportRequirement.createdBy && (
                         <>
@@ -2445,10 +2420,8 @@ export function ClubReportManagement() {
               )}
 
               {/* Hiển thị phản hồi phê duyệt cho các status đã được duyệt */}
-              {(selectedReportDetail.status?.toUpperCase() ===
-                "APPROVED_CLUB" ||
-                selectedReportDetail.status?.toUpperCase() ===
-                  "APPROVED_UNIVERSITY") &&
+              {selectedReportDetail.status?.toUpperCase() ===
+                "APPROVED_UNIVERSITY" &&
                 selectedReportDetail.reviewerFeedback &&
                 selectedReportDetail.reviewedDate && (
                   <div>
@@ -2460,9 +2433,7 @@ export function ClubReportManagement() {
                     </div>
                     <p className="text-xs text-muted-foreground mt-2">
                       Ngày phê duyệt:{" "}
-                      {new Date(
-                        selectedReportDetail.reviewedDate
-                      ).toLocaleDateString("vi-VN")}
+                      {formatDateTimeVN(selectedReportDetail.reviewedDate)}
                     </p>
                   </div>
                 )}
@@ -2483,9 +2454,7 @@ export function ClubReportManagement() {
                     {selectedReportDetail.reviewedDate && (
                       <p className="text-xs text-muted-foreground mt-2">
                         Ngày từ chối:{" "}
-                        {new Date(
-                          selectedReportDetail.reviewedDate
-                        ).toLocaleDateString("vi-VN")}
+                        {formatDateTimeVN(selectedReportDetail.reviewedDate)}
                       </p>
                     )}
                   </div>
@@ -2560,7 +2529,7 @@ export function ClubReportManagement() {
                             setApprovingReport(true);
                             const reviewRequest = {
                               reportId: selectedReportDetail.id,
-                              status: "APPROVED_CLUB" as const,
+                              status: "PENDING_UNIVERSITY" as const,
                             };
                             await reviewReportByClub(reviewRequest);
                             toast.success("Báo cáo đã được nộp lên trường");
@@ -2614,37 +2583,13 @@ export function ClubReportManagement() {
                       </Button>
                       <Button
                         variant="outline"
-                        onClick={async () => {
-                          if (
-                            !confirm(
-                              "Bạn có chắc chắn muốn xóa bản nháp này? Hành động này không thể hoàn tác."
-                            )
-                          ) {
+                        onClick={() => {
+                          if (!selectedReportDetail?.id) {
+                            toast.error("Không tìm thấy thông tin báo cáo");
                             return;
                           }
-                          try {
-                            if (!selectedReportDetail.id) {
-                              toast.error("Không tìm thấy thông tin báo cáo");
-                              return;
-                            }
-                            setDeletingReport(true);
-                            await deleteReport(selectedReportDetail.id);
-                            toast.success("Báo cáo đã được xóa thành công");
-                            setShowDetailModal(false);
-                            setSelectedReportDetail(null);
-
-                            // Refresh all tabs data to update status
-                            await refreshAllTabsData();
-                          } catch (err) {
-                            console.error("Error deleting report:", err);
-                            const errorMessage =
-                              err instanceof Error
-                                ? err.message
-                                : "Không thể xóa báo cáo";
-                            toast.error(errorMessage);
-                          } finally {
-                            setDeletingReport(false);
-                          }
+                          setDeleteTargetReportId(selectedReportDetail.id);
+                          setShowDeleteConfirmDialog(true);
                         }}
                         className="text-red-600 hover:text-red-700 hover:bg-red-50"
                         disabled={deletingReport}
@@ -2728,37 +2673,13 @@ export function ClubReportManagement() {
                       </Button>
                       <Button
                         variant="outline"
-                        onClick={async () => {
-                          if (
-                            !confirm(
-                              "Bạn có chắc chắn muốn xóa bản nháp này? Hành động này không thể hoàn tác."
-                            )
-                          ) {
+                        onClick={() => {
+                          if (!selectedReportDetail?.id) {
+                            toast.error("Không tìm thấy thông tin báo cáo");
                             return;
                           }
-                          try {
-                            if (!selectedReportDetail.id) {
-                              toast.error("Không tìm thấy thông tin báo cáo");
-                              return;
-                            }
-                            setDeletingReport(true);
-                            await deleteReport(selectedReportDetail.id);
-                            toast.success("Báo cáo đã được xóa thành công");
-                            setShowDetailModal(false);
-                            setSelectedReportDetail(null);
-
-                            // Refresh all tabs data to update status
-                            await refreshAllTabsData();
-                          } catch (err) {
-                            console.error("Error deleting report:", err);
-                            const errorMessage =
-                              err instanceof Error
-                                ? err.message
-                                : "Không thể xóa báo cáo";
-                            toast.error(errorMessage);
-                          } finally {
-                            setDeletingReport(false);
-                          }
+                          setDeleteTargetReportId(selectedReportDetail.id);
+                          setShowDeleteConfirmDialog(true);
                         }}
                         disabled={deletingReport}
                       >
@@ -2830,7 +2751,7 @@ export function ClubReportManagement() {
                             setApprovingReport(true);
                             const reviewRequest: ReviewReportByClubRequest = {
                               reportId: selectedReportDetail.id,
-                              status: "APPROVED_CLUB",
+                              status: "PENDING_UNIVERSITY",
                             };
 
                             await reviewReportByClub(reviewRequest);
@@ -3101,6 +3022,74 @@ export function ClubReportManagement() {
           </Card>
         </div>
       )}
+
+      {/* Delete confirmation dialog (replaces window.confirm) */}
+      <Dialog
+        open={showDeleteConfirmDialog}
+        onOpenChange={(open) => {
+          if (!open) {
+            setShowDeleteConfirmDialog(false);
+            setDeleteTargetReportId(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Xóa báo cáo</DialogTitle>
+            <DialogDescription>
+              Bạn có chắc chắn muốn xóa bản nháp này? Hành động này không thể
+              hoàn tác.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4" />
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowDeleteConfirmDialog(false);
+                setDeleteTargetReportId(null);
+              }}
+              disabled={deletingReport}
+            >
+              Hủy
+            </Button>
+            <Button
+              variant="outline"
+              onClick={async () => {
+                if (!deleteTargetReportId) {
+                  toast.error("Không tìm thấy thông tin báo cáo");
+                  return;
+                }
+                try {
+                  setDeletingReport(true);
+                  await deleteReport(deleteTargetReportId);
+                  toast.success("Báo cáo đã được xóa thành công");
+                  setShowDeleteConfirmDialog(false);
+                  setShowDetailModal(false);
+                  setSelectedReportDetail(null);
+                  setDeleteTargetReportId(null);
+
+                  // Refresh all tabs data to update status
+                  await refreshAllTabsData();
+                } catch (err) {
+                  console.error("Error deleting report:", err);
+                  const errorMessage =
+                    err instanceof Error
+                      ? err.message
+                      : "Không thể xóa báo cáo";
+                  toast.error(errorMessage);
+                } finally {
+                  setDeletingReport(false);
+                }
+              }}
+              className="text-red-600"
+              disabled={deletingReport}
+            >
+              {deletingReport ? "Đang xóa..." : "Xác nhận xóa"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Reject Dialog */}
       {showRejectDialog && selectedReportDetail && (
@@ -3508,14 +3497,14 @@ export function ClubReportManagement() {
                           }
 
                           // Nếu report đang ở PENDING_CLUB hoặc UPDATED_PENDING_CLUB,
-                          // gọi reviewReportByClub với status APPROVED_CLUB để nộp lên trường (PENDING_UNIVERSITY)
+                          // gọi reviewReportByClub  để nộp lên trường (PENDING_UNIVERSITY)
                           if (
                             currentReportStatus === "PENDING_CLUB" ||
                             currentReportStatus === "UPDATED_PENDING_CLUB"
                           ) {
                             const reviewRequest = {
                               reportId: reportIdToSubmit,
-                              status: "APPROVED_CLUB" as const,
+                              status: "PENDING_UNIVERSITY" as const,
                             };
                             await reviewReportByClub(reviewRequest);
                           }
@@ -3972,11 +3961,11 @@ export function ClubReportManagement() {
                                     draftFile || undefined
                                   );
 
-                                  // Sau đó gọi API reviewReportByClub với status APPROVED_CLUB để nộp lên trường
+                                  // Sau đó gọi API reviewReportByClub để nộp lên trường
                                   const reviewRequest: ReviewReportByClubRequest =
                                     {
                                       reportId: editingReportId,
-                                      status: "APPROVED_CLUB",
+                                      status: "PENDING_UNIVERSITY",
                                     };
                                   await reviewReportByClub(reviewRequest);
                                   toast.success(

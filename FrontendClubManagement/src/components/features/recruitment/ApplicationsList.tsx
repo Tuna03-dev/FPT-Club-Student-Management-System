@@ -979,22 +979,27 @@ export function ApplicationsList({
                     selectedApplication.interviewTime &&
                     new Date(selectedApplication.interviewTime) >
                       new Date() && (
-                      <Button
-                        variant="outline"
-                        className="bg-transparent"
-                        onClick={() =>
-                          handleOpenInterviewDialog(
-                            selectedApplication.application_id,
-                            selectedApplication.user_name,
-                            selectedApplication.interviewTime,
-                            selectedApplication.interviewAddress,
-                            selectedApplication.interviewPreparationRequirements
-                          )
-                        }
-                      >
-                        <Edit className="h-4 w-4 mr-2" />
-                        Chỉnh sửa lịch PV
-                      </Button>
+                      <>
+                        <Button
+                          variant="outline"
+                          className="bg-transparent"
+                          onClick={() =>
+                            handleOpenInterviewDialog(
+                              selectedApplication.application_id,
+                              selectedApplication.user_name,
+                              selectedApplication.interviewTime,
+                              selectedApplication.interviewAddress,
+                              selectedApplication.interviewPreparationRequirements
+                            )
+                          }
+                        >
+                          <Edit className="h-4 w-4 mr-2" />
+                          Chỉnh sửa lịch PV
+                        </Button>
+                        <span className="text-sm font-bold self-center text-orange-500 mr-2">
+                          Có thể thực hiện đánh giá khi đến thời gian phỏng vấn
+                        </span>
+                      </>
                     )}
                   <Button
                     variant="outline"
