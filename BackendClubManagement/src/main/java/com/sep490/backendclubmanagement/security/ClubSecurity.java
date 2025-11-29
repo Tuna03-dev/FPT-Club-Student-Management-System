@@ -4,17 +4,19 @@ import com.sep490.backendclubmanagement.dto.response.ClubRoleInfo;
 import com.sep490.backendclubmanagement.repository.RecruitmentApplicationRepository;
 import com.sep490.backendclubmanagement.repository.RecruitmentRepository;
 import com.sep490.backendclubmanagement.repository.ReportRepository;
+import com.sep490.backendclubmanagement.repository.UserRepository;
+import com.sep490.backendclubmanagement.service.ClubManagementService;
+import com.sep490.backendclubmanagement.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 
+import java.util.Collections;
 import java.util.List;
 
 /**
  * Security helper component for checking club-based permissions and system roles
- * Uses club roles stored in JWT token (from SecurityContext authentication details)
+ * Uses club roles fetched from database in real-time instead of JWT token
  * and system roles from Spring Security authorities
  */
 @Component("clubSecurity")
@@ -25,6 +27,8 @@ public class ClubSecurity {
     private final RecruitmentRepository recruitmentRepository;
     private final RecruitmentApplicationRepository recruitmentApplicationRepository;
     private final ReportRepository reportRepository;
+    private final UserRepository userRepository;
+    private final ClubManagementService clubManagementService;
 
     /**
      * Check if current user has a specific club role in the given club
@@ -34,7 +38,7 @@ public class ClubSecurity {
      */
     public boolean hasClubRole(Long clubId, String expectedClubRole) {
         try {
-            List<ClubRoleInfo> roles = getClubRolesFromAuth();
+            List<ClubRoleInfo> roles = getClubRolesFromDatabase();
             if (roles == null || roles.isEmpty()) {
                 log.debug("No club roles found for current user");
                 return false;
@@ -60,7 +64,7 @@ public class ClubSecurity {
      */
     public boolean hasSystemRoleInClub(Long clubId, String expectedSystemRole) {
         try {
-            List<ClubRoleInfo> roles = getClubRolesFromAuth();
+            List<ClubRoleInfo> roles = getClubRolesFromDatabase();
             if (roles == null || roles.isEmpty()) {
                 log.debug("No club roles found for current user");
                 return false;
@@ -141,7 +145,7 @@ public class ClubSecurity {
      */
     public boolean isMemberOfClub(Long clubId) {
         try {
-            List<ClubRoleInfo> roles = getClubRolesFromAuth();
+            List<ClubRoleInfo> roles = getClubRolesFromDatabase();
             if (roles == null || roles.isEmpty()) {
                 log.debug("No club roles found for current user");
                 return false;
@@ -166,7 +170,7 @@ public class ClubSecurity {
      */
     public boolean hasAnyClubRole(Long clubId, String... clubRoles) {
         try {
-            List<ClubRoleInfo> roles = getClubRolesFromAuth();
+            List<ClubRoleInfo> roles = getClubRolesFromDatabase();
             if (roles == null || roles.isEmpty()) {
                 return false;
             }
@@ -187,24 +191,43 @@ public class ClubSecurity {
     // ============= SYSTEM ROLE CHECKS (User's global system role, not club-specific) =============
 
     /**
+     * Get current user's system role from database
+     * @return System role name or null if not available
+     */
+    private String getSystemRoleFromDatabase() {
+        try {
+            Long userId = SecurityUtils.getCurrentUserId();
+            if (userId == null) {
+                log.debug("Cannot get user ID, returning null system role");
+                return null;
+            }
+
+            // Query system role from database
+            String systemRole = userRepository.findSystemRoleNameByUserId(userId).orElse(null);
+            log.debug("Fetched system role from database for user ID {}: {}", userId, systemRole);
+
+            return systemRole;
+        } catch (Exception e) {
+            log.error("Error fetching system role from database", e);
+            return null;
+        }
+    }
+
+    /**
      * Check if current user has a specific system role (e.g., ADMIN, STAFF, STUDENT)
-     * This checks the user's global system role, NOT the system role within a club
+     * This checks the user's global system role from database in real-time
      * @param expectedSystemRole System role name (e.g., "ADMIN", "STAFF", "STUDENT")
      * @return true if user has the system role, false otherwise
      */
     public boolean hasSystemRole(String expectedSystemRole) {
         try {
-            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-            if (auth == null || !auth.isAuthenticated()) {
-                log.debug("No authentication found in SecurityContext");
+            String systemRole = getSystemRoleFromDatabase();
+            if (systemRole == null) {
+                log.debug("No system role found for current user");
                 return false;
             }
 
-            // Check authorities for ROLE_XXX format
-            String roleWithPrefix = "ROLE_" + expectedSystemRole.toUpperCase();
-            boolean hasRole = auth.getAuthorities().stream()
-                    .anyMatch(a -> roleWithPrefix.equals(a.getAuthority()));
-
+            boolean hasRole = expectedSystemRole.equalsIgnoreCase(systemRole);
             log.debug("User has system role '{}': {}", expectedSystemRole, hasRole);
             return hasRole;
         } catch (Exception e) {
@@ -282,30 +305,27 @@ public class ClubSecurity {
     }
 
     /**
-     * Extract club roles from current authentication details
-     * @return List of ClubRoleInfo or null if not available
+     * Fetch club roles from database in real-time for current user
+     * @return List of ClubRoleInfo or empty list if not available
      */
-    @SuppressWarnings("unchecked")
-    private List<ClubRoleInfo> getClubRolesFromAuth() {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null || !auth.isAuthenticated()) {
-            log.debug("No authentication found in SecurityContext");
-            return null;
-        }
-
-        Object details = auth.getDetails();
-        if (details instanceof List<?>) {
-            try {
-                return (List<ClubRoleInfo>) details;
-            } catch (ClassCastException e) {
-                log.warn("Authentication details is a List but not of ClubRoleInfo type");
-                return null;
+    private List<ClubRoleInfo> getClubRolesFromDatabase() {
+        try {
+            Long userId = SecurityUtils.getCurrentUserId();
+            if (userId == null) {
+                log.debug("Cannot get user ID, returning empty roles");
+                return Collections.emptyList();
             }
-        }
 
-        log.debug("Authentication details is not a List, type: {}",
-            details != null ? details.getClass().getName() : "null");
-        return null;
+            // Fetch club roles from database using ClubManagementService
+            List<ClubRoleInfo> roles = clubManagementService.getUserClubRoles(userId);
+            log.debug("Fetched {} club roles from database for user ID: {}",
+                roles != null ? roles.size() : 0, userId);
+
+            return roles != null ? roles : Collections.emptyList();
+        } catch (Exception e) {
+            log.error("Error fetching club roles from database", e);
+            return Collections.emptyList();
+        }
     }
 
     // ============= RECRUITMENT-BASED CHECKS =============
