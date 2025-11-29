@@ -17,6 +17,7 @@ import {
   getMyDraftEvents,
   type MyDraftEventDto,
   getStaffCancelledEvents,
+  getRegistrationStatus,
 } from "@/service/EventService";
 import {
   Dialog,
@@ -59,6 +60,7 @@ interface Event {
   isPendingPublish?: boolean;
   clubId?: number;
   clubName?: string;
+  isRegistered?: boolean; // Cache registration status
 }
 interface EventFormValues {
   title: string;
@@ -246,6 +248,38 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
             console.warn("Failed to fetch my draft events", e);
           }
         }
+        
+        // Load registration status cho tất cả events (không phải draft, chưa kết thúc) - gọi song song
+        const now = new Date();
+        const eventsToCheck = all.filter(
+          (e) => !e.isMyDraft && new Date(e.endDate) > now && !isStaff
+        );
+        
+        if (eventsToCheck.length > 0) {
+          try {
+            const registrationStatuses = await Promise.allSettled(
+              eventsToCheck.map((e) => getRegistrationStatus(Number(e.id)))
+            );
+            
+            // Tạo Map để cập nhật registration status
+            const registrationMap = new Map<string, boolean>();
+            eventsToCheck.forEach((e, index) => {
+              const result = registrationStatuses[index];
+              if (result.status === 'fulfilled') {
+                registrationMap.set(e.id, result.value);
+              }
+            });
+            
+            // Cập nhật events với registration status
+            all = all.map((e) => {
+              const registered = registrationMap.get(e.id);
+              return registered !== undefined ? { ...e, isRegistered: registered } : e;
+            });
+          } catch (e: unknown) {
+            console.warn("Failed to fetch registration statuses", e);
+          }
+        }
+        
         setEvents(all);
       } catch (err: unknown) {
         console.error("Error fetching events:", err);
@@ -399,6 +433,37 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
           all = Array.from(byId.values());
         } catch (e: unknown) {
           console.warn("Failed to fetch my draft events", e);
+        }
+      }
+
+      // Load registration status cho tất cả events (không phải draft, chưa kết thúc) - gọi song song
+      const nowRefetch = new Date();
+      const eventsToCheckRefetch = all.filter(
+        (e) => !e.isMyDraft && new Date(e.endDate) > nowRefetch && !isStaffRefetch
+      );
+      
+      if (eventsToCheckRefetch.length > 0) {
+        try {
+          const registrationStatuses = await Promise.allSettled(
+            eventsToCheckRefetch.map((e) => getRegistrationStatus(Number(e.id)))
+          );
+          
+          // Tạo Map để cập nhật registration status
+          const registrationMap = new Map<string, boolean>();
+          eventsToCheckRefetch.forEach((e, index) => {
+            const result = registrationStatuses[index];
+            if (result.status === 'fulfilled') {
+              registrationMap.set(e.id, result.value);
+            }
+          });
+          
+          // Cập nhật events với registration status
+          all = all.map((e) => {
+            const registered = registrationMap.get(e.id);
+            return registered !== undefined ? { ...e, isRegistered: registered } : e;
+          });
+        } catch (e: unknown) {
+          console.warn("Failed to fetch registration statuses", e);
         }
       }
 
