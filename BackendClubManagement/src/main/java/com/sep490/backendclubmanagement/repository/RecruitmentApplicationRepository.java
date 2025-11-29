@@ -11,30 +11,33 @@ import org.springframework.data.repository.query.Param;
 import java.util.Optional;
 
 public interface RecruitmentApplicationRepository extends JpaRepository<RecruitmentApplication, Long> {
-    Page<RecruitmentApplication> findByRecruitment_Id(Long recruitmentId, Pageable pageable);
-    Page<RecruitmentApplication> findByRecruitment_IdAndStatus(Long recruitmentId, RecruitmentApplicationStatus status, Pageable pageable);
     Optional<RecruitmentApplication> findByApplicant_IdAndRecruitment_Id(Long applicantId, Long recruitmentId);
     
     // Dynamic search for my applications - supports all combinations of parameters
+    // Uses database function to handle Vietnamese text search efficiently
     @Query("SELECT ra FROM RecruitmentApplication ra " +
+           "LEFT JOIN FETCH ra.recruitment r " +
+           "LEFT JOIN FETCH r.club " +
            "WHERE ra.applicant.id = :applicantId " +
            "AND (:status IS NULL OR ra.status = :status) " +
            "AND (:keyword IS NULL OR :keyword = '' OR " +
-           "     LOWER(ra.recruitment.title) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
-           "     LOWER(ra.recruitment.club.clubName) LIKE LOWER(CONCAT('%', :keyword, '%')))")
+           "     LOWER(REPLACE(REPLACE(ra.recruitment.title, 'đ', 'd'), 'Đ', 'd')) LIKE LOWER(CONCAT('%', REPLACE(REPLACE(:keyword, 'đ', 'd'), 'Đ', 'd'), '%')) OR " +
+           "     LOWER(REPLACE(REPLACE(ra.recruitment.club.clubName, 'đ', 'd'), 'Đ', 'd')) LIKE LOWER(CONCAT('%', REPLACE(REPLACE(:keyword, 'đ', 'd'), 'Đ', 'd'), '%')))")
     Page<RecruitmentApplication> findMyApplications(@Param("applicantId") Long applicantId,
                                                      @Param("status") RecruitmentApplicationStatus status,
                                                      @Param("keyword") String keyword,
                                                      Pageable pageable);
 
     // Dynamic search for applications by recruitment - supports all combinations of parameters
+    // Uses database function to handle Vietnamese text search efficiently
     @Query("SELECT ra FROM RecruitmentApplication ra " +
+           "LEFT JOIN FETCH ra.applicant " +
            "WHERE ra.recruitment.id = :recruitmentId " +
            "AND (:status IS NULL OR ra.status = :status) " +
            "AND (:keyword IS NULL OR :keyword = '' OR " +
-           "     LOWER(ra.applicant.fullName) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
-           "     LOWER(ra.applicant.email) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
-           "     LOWER(ra.applicant.studentCode) LIKE LOWER(CONCAT('%', :keyword, '%')))")
+           "     LOWER(REPLACE(REPLACE(ra.applicant.fullName, 'đ', 'd'), 'Đ', 'd')) LIKE LOWER(CONCAT('%', REPLACE(REPLACE(:keyword, 'đ', 'd'), 'Đ', 'd'), '%')) OR " +
+           "     LOWER(REPLACE(REPLACE(ra.applicant.email, 'đ', 'd'), 'Đ', 'd')) LIKE LOWER(CONCAT('%', REPLACE(REPLACE(:keyword, 'đ', 'd'), 'Đ', 'd'), '%')) OR " +
+           "     LOWER(REPLACE(REPLACE(ra.applicant.studentCode, 'đ', 'd'), 'Đ', 'd')) LIKE LOWER(CONCAT('%', REPLACE(REPLACE(:keyword, 'đ', 'd'), 'Đ', 'd'), '%')))")
     Page<RecruitmentApplication> findApplicationsByRecruitment(@Param("recruitmentId") Long recruitmentId,
                                                                 @Param("status") RecruitmentApplicationStatus status,
                                                                 @Param("keyword") String keyword,
