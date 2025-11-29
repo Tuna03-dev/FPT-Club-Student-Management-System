@@ -357,11 +357,11 @@ export default function RequestDetail() {
       ok = false;
     } else setTypeErr(null);
 
-    const hasImage = Boolean(thumbPreview || thumbnailUrl);
-    if (!hasImage) {
-      setImageErr("Vui lòng chọn ảnh bìa.");
-      ok = false;
-    } else setImageErr(null);
+    // const hasImage = Boolean(thumbPreview || thumbnailUrl);
+    // if (!hasImage) {
+    //   setImageErr("Vui lòng chọn ảnh bìa.");
+    //   ok = false;
+    // } else setImageErr(null);
 
     return ok;
   };
@@ -382,7 +382,7 @@ export default function RequestDetail() {
       const payload: UpdateNewsRequestPayload = {
         title: title.trim(),
         content: content.trim(),
-        thumbnailUrl: finalThumb,
+        thumbnailUrl: finalThumb ?? null,
         newsType: newsType || undefined,
       };
 
@@ -504,7 +504,7 @@ export default function RequestDetail() {
                 onClear={() => {
                   setFileObj(null);
                   setThumbPreview("");
-                  setThumbnailUrl("");
+                  setThumbnailUrl(null as any);
                 }}
               />
             ) : thumbPreview || thumbnailUrl ? (
