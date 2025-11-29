@@ -90,8 +90,8 @@ export const StaffNotificationBell: React.FC = () => {
     try {
       const list = await getLatestNotifications({ limit: 10 });
       setItems(list);
-    } catch {}
-    finally {
+    } catch {
+    } finally {
       setLoading(false);
     }
   }, []);
@@ -112,7 +112,7 @@ export const StaffNotificationBell: React.FC = () => {
       try {
         if (msg.type !== "NOTIFICATION") return;
 
-        // có thông báo mới
+        // thông báo mới
         if (msg.action === "NEW" || msg.action === "CREATED") {
           refreshUnreadCount();
           setNewPing(true);
@@ -126,10 +126,10 @@ export const StaffNotificationBell: React.FC = () => {
           }
         }
 
-        // cập nhật trạng thái đọc
-        if (msg.action === "READ-UPDATE") {
+        // đánh dấu 1 cái hoặc tất cả đã đọc
+        if (msg.action === "READ-UPDATE" || msg.action === "READ-ALL") {
           refreshUnreadCount();
-          if (open) loadLatest();
+          if (open) loadLatest(); // popup đang mở thì reload list
         }
       } catch (err) {
         console.error("[StaffNotificationBell] socket error:", err);
@@ -140,8 +140,7 @@ export const StaffNotificationBell: React.FC = () => {
   }, [isConnected, subscribeToUserQueue, open, loadLatest, refreshUnreadCount]);
 
   // ===== FILTER =====
-  const filteredItems =
-    tab === "all" ? items : items.filter((n) => !n.read);
+  const filteredItems = tab === "all" ? items : items.filter((n) => !n.read);
 
   // ===== CLICK ITEM =====
   const handleItemClick = async (n: NotificationItem) => {
@@ -156,29 +155,28 @@ export const StaffNotificationBell: React.FC = () => {
     } catch {}
 
     if (n.actionUrl) {
-  let target = n.actionUrl;
+      let target = n.actionUrl;
 
-  try {
-    const url = new URL(target, window.location.origin);
-    target = url.pathname + url.search + url.hash; 
-  } catch {
-  }
+      try {
+        const url = new URL(target, window.location.origin);
+        target = url.pathname + url.search + url.hash;
+      } catch {}
 
-  if (!target.startsWith("/staff")) {
-    target = `/staff${target.startsWith("/") ? target : `/${target}`}`;
-  }
+      // if (!target.startsWith("/staff")) {
+      //   target = `/staff${target.startsWith("/") ? target : `/${target}`}`;
+      // }
 
-  console.log("NAVIGATE STAFF TO:", target);
-  navigate(target);
-  setOpen(false);
-}
+      console.log("NAVIGATE STAFF TO:", target);
+      navigate(target);
+      setOpen(false);
+    }
   };
 
   const goToAll = () => {
     navigate("/staff/notifications");
     setOpen(false);
   };
-  
+
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
@@ -258,9 +256,7 @@ export const StaffNotificationBell: React.FC = () => {
                 key={n.id}
                 onClick={() => handleItemClick(n)}
                 className={`w-full text-left px-4 py-3 flex gap-3 transition-all duration-150 hover:bg-gray-100 ${
-                  !n.read
-                    ? "bg-blue-50 border-l-4 border-blue-400"
-                    : "bg-white"
+                  !n.read ? "bg-blue-50 border-l-4 border-blue-400" : "bg-white"
                 } animate-fade-in`}
               >
                 <div
@@ -276,9 +272,7 @@ export const StaffNotificationBell: React.FC = () => {
                 </div>
 
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">
-                    {n.title}
-                  </p>
+                  <p className="text-sm font-medium truncate">{n.title}</p>
                   <p className="text-xs text-gray-600 line-clamp-2">
                     {n.message}
                   </p>

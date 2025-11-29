@@ -224,7 +224,7 @@ public class NewsDraftService {
 
         // Notification DB: trưởng ban submit -> gửi Chủ nhiệm/Phó (PENDING_CLUB)
         if (startStatus == RequestStatus.PENDING_CLUB && clubId != null) {
-            String actionUrl = "/news/requests/" + req.getId();
+            String actionUrl = "/myclub/" + clubId + "/news/requests/" + req.getId();
             String title = "Yêu cầu tin tức mới từ ban trong CLB";
             String message = actor.getFullName() + " đã gửi yêu cầu tin tức cần duyệt trong CLB.";
 
@@ -250,7 +250,7 @@ public class NewsDraftService {
             String staffMessage = "CLB " + draft.getClub().getClubName()
                     + " đã gửi yêu cầu tin tức \"" + req.getRequestTitle() + "\" cần duyệt.";
 
-            String staffActionUrl = "/staff/news/" + req.getId();
+            String staffActionUrl = "/staff/news/requests/" + req.getId();
 
             List<User> staffUsers = userRepo.findBySystemRole_RoleNameIgnoreCase("STAFF");
             List<Long> staffIds = staffUsers.stream().map(User::getId).toList();

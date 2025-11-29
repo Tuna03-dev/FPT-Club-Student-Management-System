@@ -197,23 +197,17 @@ public class NotificationServiceImpl implements NotificationService {
     @Override
     @Transactional
     public void markAllAsRead(Long userId) {
-        List<Notification> list =
-                notificationRepo.findTop10ByRecipientIdAndIsReadFalseOrderByCreatedAtDesc(userId);
+        int updated = notificationRepo.markAllAsReadByUserId(userId);
 
-        for (Notification n : list) {
-            n.markAsRead();
-        }
-        notificationRepo.saveAll(list);
-
-        // 🔥 ADD: báo Bell
         userRepo.findById(userId).ifPresent(u -> {
             webSocketService.sendToUser(
                     u.getEmail(),
                     "NOTIFICATION",
-                    "READ-UPDATE",
-                    "BULK"
+                    "READ-ALL",
+                    updated + ""
             );
         });
     }
+
 
 }

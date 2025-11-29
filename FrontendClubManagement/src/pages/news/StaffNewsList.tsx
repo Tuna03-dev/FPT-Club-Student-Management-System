@@ -41,8 +41,7 @@ import {
   Trash2,
   RotateCcw,
   Send,
-  Info,
-  AlertTriangle,
+  Plus,
 } from "lucide-react";
 
 import {
@@ -52,29 +51,32 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 // Realtime
 import { useWebSocket } from "@/hooks/useWebSocket";
 
 const fmt = (dt?: string | null) =>
   dt ? new Date(dt).toLocaleString("vi-VN") : "—";
+
 const reqBadge = (s?: string) => {
   const map: Record<string, string> = {
     DRAFT: "bg-slate-100 text-slate-700 ring-1 ring-slate-200",
-    PENDING_CLUB: "bg-violet-50 text-violet-700 ring-1 ring-violet-200",
-    APPROVED_CLUB: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200",
-    REJECTED_CLUB: "bg-rose-50 text-rose-700 ring-1 ring-rose-200",
-    PENDING_UNIVERSITY: "bg-amber-50 text-amber-700 ring-1 ring-amber-200",
-    APPROVED_UNIVERSITY:
-      "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200",
-    REJECTED_UNIVERSITY: "bg-rose-50 text-rose-700 ring-1 ring-rose-200",
+    PENDING_CLUB: "bg-yellow-100 text-yellow-800 ring-1 ring-yellow-200",
+    APPROVED_CLUB: "bg-green-100 text-green-800 ring-1 ring-green-200",
+    REJECTED_CLUB: "bg-red-100 text-red-800 ring-1 ring-red-200",
+    PENDING_UNIVERSITY: "bg-yellow-100 text-yellow-800 ring-1 ring-yellow-200",
+    APPROVED_UNIVERSITY: "bg-green-100 text-green-800 ring-1 ring-green-200",
+    REJECTED_UNIVERSITY: "bg-red-100 text-red-800 ring-1 ring-red-200",
     CANCELED: "bg-slate-100 text-slate-600 ring-1 ring-slate-200",
   };
   return `inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${
     map[s || "CANCELED"] || "bg-slate-100"
   }`;
 };
+
 const reqLabel: Record<RequestStatus | "CANCELED" | "DRAFT", string> = {
   DRAFT: "Bản nháp",
   PENDING_CLUB: "Chờ duyệt (CLB)",
@@ -85,6 +87,7 @@ const reqLabel: Record<RequestStatus | "CANCELED" | "DRAFT", string> = {
   REJECTED_UNIVERSITY: "Từ chối (Trường)",
   CANCELED: "Đã hủy",
 };
+
 type TabKey = "news" | "requests" | "drafts";
 type FilterStatus = RequestStatus | "ALL";
 
@@ -106,10 +109,6 @@ export default function StaffNewsList() {
   const token = localStorage.getItem("accessToken") || null;
   const { isConnected, subscribeToSystemWide, subscribeToUserQueue } =
     useWebSocket(token);
-
-  // banners
-  const [infoBanner, setInfoBanner] = useState<string | null>(null);
-  const [errBanner, setErrBanner] = useState<string | null>(null);
 
   const tabInUrl = (sp.get("tab") as TabKey) || "news";
   const [tab, setTab] = useState<TabKey>(tabInUrl);
@@ -136,7 +135,7 @@ export default function StaffNewsList() {
     try {
       setClubs((await getAllClubs()) || []);
     } catch (e: any) {
-      setErrBanner(e?.message || "Không tải được danh sách CLB.");
+      toast.error(e?.message || "Không tải được danh sách CLB.");
     }
   };
 
@@ -165,7 +164,7 @@ export default function StaffNewsList() {
       setNewsTotalPages(Math.max(1, Math.ceil(total / STAFF_NEWS_PAGE_SIZE)));
     } catch (e: any) {
       console.error("loadNews error:", e);
-      setErrBanner(e?.message || "Không tải được danh sách tin.");
+      toast.error(e?.message || "Không tải được danh sách tin.");
     } finally {
       setNewsLoading(false);
     }
@@ -190,10 +189,10 @@ export default function StaffNewsList() {
     try {
       if (nextHidden) await staffNewsAdminApi.hide(n.id);
       else await staffNewsAdminApi.unhide(n.id);
-      setInfoBanner(nextHidden ? "Đã ẩn bài." : "Đã hiện bài.");
+      toast.success(nextHidden ? "Đã ẩn bài." : "Đã hiện bài.");
     } catch (e: any) {
       patchNewsLocal(n.id, { hidden: !nextHidden });
-      setErrBanner(e?.message || "Ẩn/hiện thất bại.");
+      toast.error(e?.message || "Ẩn/hiện thất bại.");
     } finally {
       setToggleBusyId(null);
     }
@@ -212,10 +211,10 @@ export default function StaffNewsList() {
     patchNewsLocal(id, { deleted: true });
     try {
       await staffNewsAdminApi.softDelete(id);
-      setInfoBanner(`Đã xóa mềm news #${id}.`);
+      toast.success(`Đã xóa mềm news #${id}.`);
     } catch (e: any) {
       patchNewsLocal(id, { deleted: prev });
-      setErrBanner(e?.message || "Xóa mềm thất bại.");
+      toast.error(e?.message || "Xóa mềm thất bại.");
     } finally {
       setSoftDeleteBusy(false);
       setSoftDeleteId(null);
@@ -227,10 +226,10 @@ export default function StaffNewsList() {
     patchNewsLocal(n.id, { deleted: false });
     try {
       await staffNewsAdminApi.restore(n.id);
-      setInfoBanner(`Đã khôi phục news #${n.id}.`);
+      toast.success(`Đã khôi phục news #${n.id}.`);
     } catch (e: any) {
       patchNewsLocal(n.id, { deleted: true });
-      setErrBanner(e?.message || "Khôi phục thất bại.");
+      toast.error(e?.message || "Khôi phục thất bại.");
     } finally {
       setRestoreBusyId(null);
     }
@@ -292,7 +291,7 @@ export default function StaffNewsList() {
       setReqTotalPages(Math.max(1, Math.ceil(total / STAFF_REQ_PAGE_SIZE)));
     } catch (e: any) {
       console.error("loadRequests error:", e);
-      setErrBanner(e?.message || "Không tải được danh sách yêu cầu.");
+      toast.error(e?.message || "Không tải được danh sách yêu cầu.");
     } finally {
       setReqLoading(false);
     }
@@ -304,10 +303,10 @@ export default function StaffNewsList() {
     try {
       await requestsApi.staffApprovePublish(approveId, {});
       setApproveId(null);
-      setInfoBanner(`Đã duyệt & đăng yêu cầu #${approveId}.`);
+      toast.success(`Đã duyệt & đăng yêu cầu #${approveId}.`);
       await loadRequests();
     } catch (e: any) {
-      setErrBanner(e?.message || "Không duyệt được.");
+      toast.error(e?.message || "Không duyệt được.");
     } finally {
       setDoingApprove(false);
     }
@@ -321,10 +320,10 @@ export default function StaffNewsList() {
       await requestsApi.staffReject(rejectId, { reason: rejectReason.trim() });
       setRejectId(null);
       setRejectReason("");
-      setInfoBanner(`Đã từ chối yêu cầu #${rejectId}.`);
+      toast.success(`Đã từ chối yêu cầu #${rejectId}.`);
       await loadRequests();
     } catch (e: any) {
-      setErrBanner(e?.message || "Không từ chối được.");
+      toast.error(e?.message || "Không từ chối được.");
     } finally {
       setDoingReject(false);
     }
@@ -366,7 +365,7 @@ export default function StaffNewsList() {
       }
     } catch (e: any) {
       console.error("loadDrafts error:", e);
-      setErrBanner(e?.message || "Không tải được danh sách nháp.");
+      toast.error(e?.message || "Không tải được danh sách nháp.");
     } finally {
       setDraftsLoading(false);
     }
@@ -379,10 +378,10 @@ export default function StaffNewsList() {
       if ((res as any)?.code && (res as any).code !== 200) {
         throw new Error((res as any).message || "Publish draft failed");
       }
-      setInfoBanner(`Đã publish nháp #${id}.`);
+      toast.success(`Đã publish nháp #${id}.`);
       await loadDrafts();
     } catch (e: any) {
-      setErrBanner(e?.message || "Không publish được nháp.");
+      toast.error(e?.message || "Không publish được nháp.");
     } finally {
       setDoingDraftId(null);
     }
@@ -394,10 +393,10 @@ export default function StaffNewsList() {
     const id = deleteDraftId;
     try {
       await draftsApi.remove(id);
-      setInfoBanner(`Đã xóa nháp #${id}.`);
+      toast.success(`Đã xóa nháp #${id}.`);
       await loadDrafts();
     } catch (e: any) {
-      setErrBanner(e?.message || "Không xóa được nháp.");
+      toast.error(e?.message || "Không xóa được nháp.");
     } finally {
       setDeleteDraftBusy(false);
       setDeleteDraftId(null);
@@ -510,6 +509,15 @@ export default function StaffNewsList() {
             ))}
           </SelectContent>
         </Select>
+      </div>
+      <div className="flex items-center">
+        <Link
+          to="/staff/news-editor"
+          className="px-3 py-2 rounded bg-amber-500 hover:bg-amber-600 text-white flex items-center gap-2"
+        >
+          <Plus className="h-4 w-4" />
+          Tạo tin tức
+        </Link>
       </div>
     </div>
   );
@@ -667,7 +675,7 @@ export default function StaffNewsList() {
                       <div className="w-14 h-14 rounded-lg bg-slate-100 overflow-hidden flex items-center justify-center">
                         {n.thumbnailUrl ? (
                           <img
-                            src={n.thumbnailUrl}
+                            src={n.thumbnailUrl || "/placeholder.svg"}
                             className="w-full h-full object-cover"
                           />
                         ) : (
@@ -694,17 +702,17 @@ export default function StaffNewsList() {
                     <td className="px-6 py-4 text-center">
                       <div className="flex items-center justify-center gap-2">
                         {n.hidden && (
-                          <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 ring-1 ring-amber-200">
+                          <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-800 ring-1 ring-yellow-200">
                             ĐÃ ẨN
                           </span>
                         )}
                         {n.deleted && (
-                          <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 ring-1 ring-rose-200">
+                          <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-800 ring-1 ring-red-200">
                             ĐÃ XÓA
                           </span>
                         )}
                         {!n.hidden && !n.deleted && (
-                          <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200">
+                          <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-800 ring-1 ring-green-200">
                             HIỆN
                           </span>
                         )}
@@ -739,7 +747,7 @@ export default function StaffNewsList() {
                         {!n.deleted && (
                           <button
                             className={`p-2 rounded-lg hover:bg-slate-100 ${
-                              n.hidden ? "text-emerald-600" : "text-slate-600"
+                              n.hidden ? "text-green-600" : "text-slate-600"
                             }`}
                             title={n.hidden ? "Hiện lại" : "Ẩn bài"}
                             onClick={() => handleToggleHide(n)}
@@ -758,7 +766,7 @@ export default function StaffNewsList() {
                         {/* Xóa mềm / Khôi phục */}
                         {!n.deleted ? (
                           <button
-                            className="p-2 rounded-lg text-rose-600 hover:bg-rose-50"
+                            className="p-2 rounded-lg text-red-600 hover:bg-red-50"
                             title="Xóa mềm"
                             onClick={() => setSoftDeleteId(n.id)}
                             disabled={busy}
@@ -767,7 +775,7 @@ export default function StaffNewsList() {
                           </button>
                         ) : (
                           <button
-                            className="p-2 rounded-lg text-emerald-600 hover:bg-emerald-50"
+                            className="p-2 rounded-lg text-green-600 hover:bg-green-50"
                             title="Khôi phục"
                             onClick={() => handleRestore(n)}
                             disabled={busy}
@@ -957,7 +965,7 @@ export default function StaffNewsList() {
                         </button>
                         {r.status === "PENDING_UNIVERSITY" && (
                           <button
-                            className="p-2 rounded-lg text-emerald-600 hover:bg-emerald-50"
+                            className="p-2 rounded-lg text-green-600 hover:bg-green-50"
                             title="Duyệt & đăng tin tức"
                             onClick={() => setApproveId(r.id)}
                           >
@@ -966,7 +974,7 @@ export default function StaffNewsList() {
                         )}
                         {r.status === "PENDING_UNIVERSITY" && (
                           <button
-                            className="p-2 rounded-lg text-rose-600 hover:bg-rose-50"
+                            className="p-2 rounded-lg text-red-600 hover:bg-red-50"
                             title="Từ chối"
                             onClick={() => setRejectId(r.id)}
                           >
@@ -1075,7 +1083,7 @@ export default function StaffNewsList() {
               onChange={(e) => setRejectReason(e.target.value)}
             />
             {!rejectReason.trim() && (
-              <p className="text-xs text-rose-600">* Vui lòng nhập lý do.</p>
+              <p className="text-xs text-red-600">* Vui lòng nhập lý do.</p>
             )}
           </div>
           <DialogFooter className="gap-2">
@@ -1176,7 +1184,7 @@ export default function StaffNewsList() {
                     <div className="w-14 h-14 rounded-lg bg-slate-100 overflow-hidden flex items-center justify-center">
                       {d.thumbnailUrl ? (
                         <img
-                          src={d.thumbnailUrl}
+                          src={d.thumbnailUrl || "/placeholder.svg"}
                           className="w-full h-full object-cover"
                         />
                       ) : (
@@ -1225,7 +1233,7 @@ export default function StaffNewsList() {
                         )}
                       </button>
                       <button
-                        className="p-2 rounded-lg text-emerald-600 hover:bg-emerald-50 disabled:opacity-50"
+                        className="p-2 rounded-lg text-green-600 hover:bg-green-50 disabled:opacity-50"
                         title="Publish"
                         onClick={() => onDraftPublish(d.id)}
                         disabled={doingDraftId === d.id}
@@ -1237,7 +1245,7 @@ export default function StaffNewsList() {
                         )}
                       </button>
                       <button
-                        className="p-2 rounded-lg text-rose-600 hover:bg-rose-50 disabled:opacity-50"
+                        className="p-2 rounded-lg text-red-600 hover:bg-red-50 disabled:opacity-50"
                         title="Xóa nháp"
                         onClick={() => setDeleteDraftId(d.id)}
                         disabled={doingDraftId === d.id}
@@ -1342,116 +1350,84 @@ export default function StaffNewsList() {
 
   /* ===================== RENDER ===================== */
   return (
-    <div className="px-4 sm:px-6 lg:px-8 py-4 space-y-6 max-w-none mx-auto">
-      {/* Banners */}
-      {infoBanner && (
-        <div className="flex items-center gap-2 bg-blue-50 text-blue-700 px-3 py-2 rounded-lg border border-blue-200">
-          <Info className="h-4 w-4" /> <span>{infoBanner}</span>
-        </div>
-      )}
-      {errBanner && (
-        <div className="flex items-center gap-2 bg-rose-50 text-rose-700 px-3 py-2 rounded-lg border border-rose-200">
-          <AlertTriangle className="h-4 w-4" /> <span>{errBanner}</span>
-        </div>
-      )}
-
-      <header className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">News • Staff</h1>
-        <Link
-          to="/staff/news-editor"
-          className="px-3 py-2 rounded bg-emerald-600 text-white hover:bg-emerald-700"
-        >
-          + Tạo News
-        </Link>
-      </header>
-
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex gap-2">
-          <button
-            className={`px-3 py-2 rounded-lg border text-sm ${
-              tab === "news"
-                ? "bg-indigo-600 text-white border-indigo-600"
-                : "bg-white"
-            }`}
-            onClick={() => setTab("news")}
-          >
-            Tin tức
-          </button>
-          <button
-            className={`px-3 py-2 rounded-lg border text-sm ${
-              tab === "requests"
-                ? "bg-indigo-600 text-white border-indigo-600"
-                : "bg-white"
-            }`}
-            onClick={() => setTab("requests")}
-          >
-            Yêu cầu
-          </button>
-          <button
-            className={`px-3 py-2 rounded-lg border text-sm ${
-              tab === "drafts"
-                ? "bg-indigo-600 text-white border-indigo-600"
-                : "bg-white"
-            }`}
-            onClick={() => setTab("drafts")}
-          >
-            Bản nháp của bạn
-          </button>
-        </div>
-        {tab === "news" && NewsToolbar}
-        {tab === "requests" && RequestsToolbar}
-      </div>
-
-      <section className="space-y-3">
-        <h2 className="font-semibold">
-          {tab === "news"
-            ? "Danh sách News"
-            : tab === "requests"
-              ? "Requests từ các CLB"
-              : "Bản nháp của tôi"}
-        </h2>
-        {tab === "news"
-          ? NewsTable
-          : tab === "requests"
-            ? RequestsTable
-            : DraftsTable}
-      </section>
-
-      {/* Soft delete News dialog */}
-      <Dialog
-        open={softDeleteId !== null}
-        onOpenChange={(open) => {
-          if (!open) setSoftDeleteId(null);
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Xóa mềm news #{softDeleteId}</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-slate-600">
-            Bài sẽ được đánh dấu “đã xóa” và có thể khôi phục sau.
+    <div className="min-h-screen bg-background p-6">
+      <div className="max-w-7xl mx-auto">
+        <div className="mb-8">
+          <div className="flex items-center justify-between">
+            <h1 className="text-3xl font-bold text-foreground">TIN TỨC</h1>
+          </div>
+          <p className="text-muted-foreground">
+            Quản lý tin tức và yêu cầu từ CLB
           </p>
-          <DialogFooter className="gap-2">
-            <Button
-              variant="outline"
-              onClick={() => setSoftDeleteId(null)}
-              disabled={softDeleteBusy}
-            >
-              Hủy
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={confirmSoftDelete}
-              disabled={softDeleteBusy}
-            >
-              {softDeleteBusy ? (
-                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-              ) : null}
-              Xóa mềm
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        </div>
+
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <Tabs
+            value={tab}
+            onValueChange={(v) => setTab(v as TabKey)}
+            className=""
+          >
+            <TabsList className="grid w-max grid-cols-3 gap-2">
+              <TabsTrigger value="news">Tin tức</TabsTrigger>
+              <TabsTrigger value="requests">Yêu cầu</TabsTrigger>
+              <TabsTrigger value="drafts">Bản nháp của bạn</TabsTrigger>
+            </TabsList>
+          </Tabs>
+          {tab === "news" && NewsToolbar}
+          {tab === "requests" && RequestsToolbar}
+        </div>
+
+        <section className="space-y-3">
+          <h2 className="font-semibold">
+            {tab === "news"
+              ? "Danh sách News"
+              : tab === "requests"
+                ? "Requests từ các CLB"
+                : "Bản nháp của tôi"}
+          </h2>
+          {tab === "news"
+            ? NewsTable
+            : tab === "requests"
+              ? RequestsTable
+              : DraftsTable}
+        </section>
+
+        {/* Soft delete News dialog */}
+        <Dialog
+          open={softDeleteId !== null}
+          onOpenChange={(open) => {
+            if (!open) setSoftDeleteId(null);
+          }}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Xóa mềm news #{softDeleteId}</DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-slate-600">
+              Bài sẽ được đánh dấu "đã xóa" và có thể khôi phục sau.
+            </p>
+            <DialogFooter className="gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setSoftDeleteId(null)}
+                disabled={softDeleteBusy}
+              >
+                Hủy
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={confirmSoftDelete}
+                disabled={softDeleteBusy}
+              >
+                {softDeleteBusy ? (
+                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                ) : null}
+                Xóa mềm
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
     </div>
   );
 }
