@@ -33,10 +33,13 @@ interface EventDetailModalProps {
     images: string[]
     isMyDraft?: boolean
     requestStatus?: string
+    clubId?: number
+    clubName?: string
+    eventTypeName?: string
   }
   clubId?: number
   onClose: () => void
-  onUpdated?: (updated: { id: string; title: string; description: string; startDate: Date; endDate: Date; location: string; attendees: number; status: "upcoming" | "ongoing" | "completed"; images: string[]; isMyDraft?: boolean; requestStatus?: string }) => void
+  onUpdated?: (updated: { id: string; title: string; description: string; startDate: Date; endDate: Date; location: string; attendees: number; status: "upcoming" | "ongoing" | "completed"; images: string[]; isMyDraft?: boolean; requestStatus?: string; clubId?: number; clubName?: string; eventTypeName?: string }) => void
   onDeleted?: (id: string) => void
   readOnly?: boolean
   pendingRequest?: { requestEventId: number; status?: string }
@@ -55,9 +58,10 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
   const [mediaTypes, setMediaTypes] = useState<string[]>([])
   const [isRegistered, setIsRegistered] = useState(false)
   const [isRegistering, setIsRegistering] = useState(false)
-  const [clubName, setClubName] = useState<string | null>(null)
-  const [eventTypeName, setEventTypeName] = useState<string | null>(null)
-  const [eventClubId, setEventClubId] = useState<number | null>(null)
+  const [clubName, setClubName] = useState<string | null>(event.clubName || null)
+  const [eventTypeName, setEventTypeName] = useState<string | null>(event.eventTypeName || null)
+  const [eventClubId, setEventClubId] = useState<number | null>(event.clubId ?? null)
+  const [isLoadingDetails, setIsLoadingDetails] = useState(false)
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false)
   const [cancelReason, setCancelReason] = useState("")
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
@@ -151,38 +155,55 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
   // Kiểm tra sự kiện đang diễn ra (thời gian hiện tại nằm giữa startDate và endDate)
   const isEventOngoing = new Date() >= event.startDate && new Date() < event.endDate
 
-  // Fetch full event details to get clubName and mediaUrls
+  // Fetch full event details to get clubName and mediaUrls - gọi song song để tối ưu
   React.useEffect(() => {
     let cancelled = false
-    getEventById(Number(event.id))
-      .then((full) => {
-        if (!cancelled) {
+    setIsLoadingDetails(true)
+    
+    // Gọi API song song thay vì tuần tự
+    const fetchDetails = async () => {
+      try {
+        const [fullEventData, registrationData] = await Promise.allSettled([
+          getEventById(Number(event.id)),
+          !event.isMyDraft && !isEventEnded 
+            ? getRegistrationStatus(Number(event.id))
+            : Promise.resolve(false)
+        ])
+        
+        if (cancelled) return
+        
+        // Xử lý kết quả getEventById
+        if (fullEventData.status === 'fulfilled') {
+          const full = fullEventData.value
           if (!images || images.length === 0) {
             setImages(full.mediaUrls ?? [])
           }
           setMediaTypes(full.mediaTypes ?? [])
-          setClubName(full.clubName || null)
-          setEventTypeName(full.eventTypeName || null)
-          setEventClubId(full.clubId ?? null)
+          // Chỉ cập nhật nếu chưa có từ props
+          if (!clubName) setClubName(full.clubName || null)
+          if (!eventTypeName) setEventTypeName(full.eventTypeName || null)
+          if (eventClubId === null) setEventClubId(full.clubId ?? null)
         }
-      })
-      .catch(() => {})
+        
+        // Xử lý kết quả getRegistrationStatus
+        if (registrationData.status === 'fulfilled') {
+          setIsRegistered(registrationData.value as boolean)
+        } else if (registrationData.status === 'rejected') {
+          setIsRegistered(false)
+        }
+      } catch (error) {
+        console.error("Error fetching event details:", error)
+      } finally {
+        if (!cancelled) {
+          setIsLoadingDetails(false)
+        }
+      }
+    }
+    
+    fetchDetails()
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [event.id])
-
-  // Kiểm tra trạng thái đăng ký khi không phải draft
-  React.useEffect(() => {
-    if (!event.isMyDraft && !isEventEnded) {
-      getRegistrationStatus(Number(event.id))
-        .then((registered) => {
-          setIsRegistered(registered)
-        })
-        .catch(() => {
-          setIsRegistered(false)
-        })
-    }
-  }, [event.id, event.isMyDraft, isEventEnded])
 
   const handlePrevImage = () => {
     setCurrentImageIndex((prev) => (prev === 0 ? images.length - 1 : prev - 1))
@@ -389,6 +410,9 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
                         images: published.mediaUrls || [],
                         isMyDraft: false,
                         requestStatus: undefined,
+                        clubId: published.clubId,
+                        clubName: published.clubName,
+                        eventTypeName: published.eventTypeName,
                       })
                       // Thông báo cho calendar refetch lại dữ liệu
                       try {
@@ -508,16 +532,28 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
                 </>
               )}
                   {/* STAFF: Hủy sự kiện CLB (đưa về nháp) trước khi bắt đầu */}
-              {isStaff && eventClubId != null && isEventUpcoming && (
-                    <Button
-                      className="flex-1 bg-amber-500 hover:bg-amber-600 text-white h-10 text-sm gap-2"
-                      onClick={() => {
-                        setCancelReason("");
-                        setCancelDialogOpen(true);
-                      }}
-                    >
-                      Hủy sự kiện
-                    </Button>
+              {isStaff && isEventUpcoming && (
+                    <>
+                      {isLoadingDetails && eventClubId === null ? (
+                        <Button
+                          className="flex-1 bg-amber-500 hover:bg-amber-600 text-white h-10 text-sm gap-2"
+                          disabled
+                        >
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Đang tải...
+                        </Button>
+                      ) : eventClubId != null ? (
+                        <Button
+                          className="flex-1 bg-amber-500 hover:bg-amber-600 text-white h-10 text-sm gap-2"
+                          onClick={() => {
+                            setCancelReason("");
+                            setCancelDialogOpen(true);
+                          }}
+                        >
+                          Hủy sự kiện
+                        </Button>
+                      ) : null}
+                    </>
                   )}
               {/* Nút Điểm danh/Xem điểm danh - chỉ hiện cho CLUB_OFFICER và TEAM_OFFICER */}
               {canMarkAttendance && currentClubId && (
@@ -675,6 +711,9 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
                   images: updated.mediaUrls || [],
                   isMyDraft: event.isMyDraft,
                   requestStatus: event.requestStatus,
+                  clubId: updated.clubId,
+                  clubName: updated.clubName,
+                  eventTypeName: updated.eventTypeName,
                 })
               } catch (error: unknown) {
                 console.error("Error updating event:", error)

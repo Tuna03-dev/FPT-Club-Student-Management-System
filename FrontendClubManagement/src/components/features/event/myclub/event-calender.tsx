@@ -57,6 +57,8 @@ interface Event {
   requestStatus?: string;
   eventTypeName?: string;
   isPendingPublish?: boolean;
+  clubId?: number;
+  clubName?: string;
 }
 interface EventFormValues {
   title: string;
@@ -171,6 +173,8 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
           ),
           images: event.mediaUrls || [],
           eventTypeName: event.eventTypeName,
+          clubId: event.clubId,
+          clubName: event.clubName,
         }));
         let all: Event[] = mappedEvents;
         // Check if user can see draft events: STAFF or has CLUB_OFFICER/TEAM_OFFICER role in this club
@@ -213,6 +217,8 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
                 requestStatus: d.requestStatus,
                 eventTypeName: d.event.eventTypeName,
             isPendingPublish: d.requestStatus === null,
+                clubId: d.event.clubId,
+                clubName: d.event.clubName,
               }));
             const byId = new Map<string, Event>();
             for (const e of all) byId.set(e.id, e);
@@ -313,6 +319,8 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
         images: event.mediaUrls || [],
         eventTypeName: event.eventTypeName,
         isPendingPublish: false,
+        clubId: event.clubId,
+        clubName: event.clubName,
       }));
 
       let all: Event[] = mappedEvents;
@@ -358,6 +366,8 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
               requestStatus: d.requestStatus,
               eventTypeName: d.event.eventTypeName,
               isPendingPublish: d.requestStatus === null,
+              clubId: d.event.clubId,
+              clubName: d.event.clubName,
             }));
           const byId = new Map<string, Event>();
           // First add all regular events
