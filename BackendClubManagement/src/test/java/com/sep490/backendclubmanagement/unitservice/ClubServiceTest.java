@@ -21,6 +21,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
 import java.util.*;
@@ -70,6 +72,9 @@ class ClubServiceTest {
 
     @Mock
     private NotificationService notificationService;
+
+    @Mock
+    private CloudinaryService cloudinaryService;
 
     @InjectMocks
     private ClubService clubService;
@@ -633,7 +638,7 @@ class ClubServiceTest {
         when(clubRepository.hasActiveRecruitment(testClubId)).thenReturn(false);
 
         // Act
-        ClubDetailData result = clubService.updateClubInfo(testClubId, request, testUserId);
+        ClubDetailData result = clubService.updateClubInfo(testClubId, request, testUserId, null, null);
 
         // Assert
         assertNotNull(result);
@@ -649,7 +654,7 @@ class ClubServiceTest {
 
         // Act & Assert
         AppException exception = assertThrows(AppException.class, () ->
-                clubService.updateClubInfo(testClubId, request, testUserId));
+                clubService.updateClubInfo(testClubId, request, testUserId, null, null));
         assertEquals(ErrorCode.FORBIDDEN, exception.getErrorCode());
 
         verify(clubRepository, never()).save(any());
@@ -666,7 +671,7 @@ class ClubServiceTest {
 
         // Act & Assert
         AppException exception = assertThrows(AppException.class, () ->
-                clubService.updateClubInfo(testClubId, request, testUserId));
+                clubService.updateClubInfo(testClubId, request, testUserId, null, null));
         assertEquals(ErrorCode.CLUB_NOT_ACTIVE, exception.getErrorCode());
 
         verify(clubRepository, never()).save(any());
@@ -689,7 +694,7 @@ class ClubServiceTest {
 
         // Act & Assert
         assertThrows(RuntimeException.class, () ->
-                clubService.updateClubInfo(testClubId, request, testUserId));
+                clubService.updateClubInfo(testClubId, request, testUserId, null, null));
     }
 
     @Test
@@ -709,7 +714,244 @@ class ClubServiceTest {
 
         // Act & Assert
         assertThrows(RuntimeException.class, () ->
-                clubService.updateClubInfo(testClubId, request, testUserId));
+                clubService.updateClubInfo(testClubId, request, testUserId, null, null));
+    }
+
+    @Test
+    void updateClubInfo_validLogoUpload_success() throws AppException {
+        // Arrange
+        UpdateClubInfoRequest request = new UpdateClubInfoRequest();
+        request.setDescription("Updated description");
+
+        // Create a mock file under 10MB (e.g., 5MB)
+        byte[] content = new byte[5 * 1024 * 1024]; // 5MB
+        MockMultipartFile logoFile = new MockMultipartFile(
+                "logoFile",
+                "logo.png",
+                "image/png",
+                content
+        );
+
+        CloudinaryService.UploadResult uploadResult = new CloudinaryService.UploadResult(
+                "https://cloudinary.com/logo.png",
+                "public_id_logo",
+                "png",
+                5L * 1024L * 1024L
+        );
+
+        when(roleMemberShipRepository.existsClubAdmin(testUserId, testClubId)).thenReturn(true);
+        when(clubRepository.findById(testClubId)).thenReturn(Optional.of(testClub));
+        when(cloudinaryService.uploadImage(any(MultipartFile.class), eq("club/logos")))
+                .thenReturn(uploadResult);
+        when(clubRepository.save(testClub)).thenReturn(testClub);
+        when(clubRepository.findByIdWithDetails(testClubId)).thenReturn(Optional.of(testClub));
+        when(clubMapper.toClubDetailData(testClub)).thenReturn(testClubDetailData);
+        when(clubRepository.countMembersByClubId(testClubId)).thenReturn(10L);
+        when(clubRepository.countEventsByClubId(testClubId)).thenReturn(5L);
+        when(clubRepository.countNewsByClubId(testClubId)).thenReturn(3L);
+        when(clubRepository.hasActiveRecruitment(testClubId)).thenReturn(false);
+
+        // Act
+        ClubDetailData result = clubService.updateClubInfo(testClubId, request, testUserId, logoFile, null);
+
+        // Assert
+        assertNotNull(result);
+        verify(cloudinaryService, times(1)).uploadImage(any(MultipartFile.class), eq("club/logos"));
+        verify(clubRepository, times(1)).save(testClub);
+        assertEquals("https://cloudinary.com/logo.png", testClub.getLogoUrl());
+    }
+
+    @Test
+    void updateClubInfo_logoFileTooLarge_throwsAppException() {
+        // Arrange
+        UpdateClubInfoRequest request = new UpdateClubInfoRequest();
+        request.setDescription("Updated description");
+
+        // Create a mock file over 10MB (e.g., 15MB)
+        byte[] content = new byte[15 * 1024 * 1024]; // 15MB
+        MockMultipartFile logoFile = new MockMultipartFile(
+                "logoFile",
+                "logo.png",
+                "image/png",
+                content
+        );
+
+        when(roleMemberShipRepository.existsClubAdmin(testUserId, testClubId)).thenReturn(true);
+        when(clubRepository.findById(testClubId)).thenReturn(Optional.of(testClub));
+
+        // Act & Assert
+        AppException exception = assertThrows(AppException.class, () ->
+                clubService.updateClubInfo(testClubId, request, testUserId, logoFile, null));
+
+        assertEquals(ErrorCode.FILE_TOO_LARGE, exception.getErrorCode());
+        assertTrue(exception.getMessage().contains("10MB"));
+        verify(cloudinaryService, never()).uploadImage(any(), any());
+        verify(clubRepository, never()).save(any());
+    }
+
+    @Test
+    void updateClubInfo_validBannerUpload_success() throws AppException {
+        // Arrange
+        UpdateClubInfoRequest request = new UpdateClubInfoRequest();
+        request.setDescription("Updated description");
+
+        // Create a mock file under 10MB (e.g., 8MB)
+        byte[] content = new byte[8 * 1024 * 1024]; // 8MB
+        MockMultipartFile bannerFile = new MockMultipartFile(
+                "bannerFile",
+                "banner.png",
+                "image/png",
+                content
+        );
+
+        CloudinaryService.UploadResult uploadResult = new CloudinaryService.UploadResult(
+                "https://cloudinary.com/banner.png",
+                "public_id_banner",
+                "png",
+                8L * 1024L * 1024L
+        );
+
+        when(roleMemberShipRepository.existsClubAdmin(testUserId, testClubId)).thenReturn(true);
+        when(clubRepository.findById(testClubId)).thenReturn(Optional.of(testClub));
+        when(cloudinaryService.uploadImage(any(MultipartFile.class), eq("club/banners")))
+                .thenReturn(uploadResult);
+        when(clubRepository.save(testClub)).thenReturn(testClub);
+        when(clubRepository.findByIdWithDetails(testClubId)).thenReturn(Optional.of(testClub));
+        when(clubMapper.toClubDetailData(testClub)).thenReturn(testClubDetailData);
+        when(clubRepository.countMembersByClubId(testClubId)).thenReturn(10L);
+        when(clubRepository.countEventsByClubId(testClubId)).thenReturn(5L);
+        when(clubRepository.countNewsByClubId(testClubId)).thenReturn(3L);
+        when(clubRepository.hasActiveRecruitment(testClubId)).thenReturn(false);
+
+        // Act
+        ClubDetailData result = clubService.updateClubInfo(testClubId, request, testUserId, null, bannerFile);
+
+        // Assert
+        assertNotNull(result);
+        verify(cloudinaryService, times(1)).uploadImage(any(MultipartFile.class), eq("club/banners"));
+        verify(clubRepository, times(1)).save(testClub);
+        assertEquals("https://cloudinary.com/banner.png", testClub.getBannerUrl());
+    }
+
+    @Test
+    void updateClubInfo_bannerFileTooLarge_throwsAppException() {
+        // Arrange
+        UpdateClubInfoRequest request = new UpdateClubInfoRequest();
+        request.setDescription("Updated description");
+
+        // Create a mock file over 10MB (e.g., 20MB)
+        byte[] content = new byte[20 * 1024 * 1024]; // 20MB
+        MockMultipartFile bannerFile = new MockMultipartFile(
+                "bannerFile",
+                "banner.png",
+                "image/png",
+                content
+        );
+
+        when(roleMemberShipRepository.existsClubAdmin(testUserId, testClubId)).thenReturn(true);
+        when(clubRepository.findById(testClubId)).thenReturn(Optional.of(testClub));
+
+        // Act & Assert
+        AppException exception = assertThrows(AppException.class, () ->
+                clubService.updateClubInfo(testClubId, request, testUserId, null, bannerFile));
+
+        assertEquals(ErrorCode.FILE_TOO_LARGE, exception.getErrorCode());
+        assertTrue(exception.getMessage().contains("10MB"));
+        verify(cloudinaryService, never()).uploadImage(any(), any());
+        verify(clubRepository, never()).save(any());
+    }
+
+    @Test
+    void updateClubInfo_removeLogo_success() throws AppException {
+        // Arrange
+        UpdateClubInfoRequest request = new UpdateClubInfoRequest();
+        request.setRemoveLogo(true);
+        testClub.setLogoUrl("https://cloudinary.com/old-logo.png");
+
+        when(roleMemberShipRepository.existsClubAdmin(testUserId, testClubId)).thenReturn(true);
+        when(clubRepository.findById(testClubId)).thenReturn(Optional.of(testClub));
+        when(clubRepository.save(testClub)).thenReturn(testClub);
+        when(clubRepository.findByIdWithDetails(testClubId)).thenReturn(Optional.of(testClub));
+        when(clubMapper.toClubDetailData(testClub)).thenReturn(testClubDetailData);
+        when(clubRepository.countMembersByClubId(testClubId)).thenReturn(10L);
+        when(clubRepository.countEventsByClubId(testClubId)).thenReturn(5L);
+        when(clubRepository.countNewsByClubId(testClubId)).thenReturn(3L);
+        when(clubRepository.hasActiveRecruitment(testClubId)).thenReturn(false);
+
+        // Act
+        ClubDetailData result = clubService.updateClubInfo(testClubId, request, testUserId, null, null);
+
+        // Assert
+        assertNotNull(result);
+        assertNull(testClub.getLogoUrl());
+        verify(clubRepository, times(1)).save(testClub);
+    }
+
+    @Test
+    void updateClubInfo_removeBanner_success() throws AppException {
+        // Arrange
+        UpdateClubInfoRequest request = new UpdateClubInfoRequest();
+        request.setRemoveBanner(true);
+        testClub.setBannerUrl("https://cloudinary.com/old-banner.png");
+
+        when(roleMemberShipRepository.existsClubAdmin(testUserId, testClubId)).thenReturn(true);
+        when(clubRepository.findById(testClubId)).thenReturn(Optional.of(testClub));
+        when(clubRepository.save(testClub)).thenReturn(testClub);
+        when(clubRepository.findByIdWithDetails(testClubId)).thenReturn(Optional.of(testClub));
+        when(clubMapper.toClubDetailData(testClub)).thenReturn(testClubDetailData);
+        when(clubRepository.countMembersByClubId(testClubId)).thenReturn(10L);
+        when(clubRepository.countEventsByClubId(testClubId)).thenReturn(5L);
+        when(clubRepository.countNewsByClubId(testClubId)).thenReturn(3L);
+        when(clubRepository.hasActiveRecruitment(testClubId)).thenReturn(false);
+
+        // Act
+        ClubDetailData result = clubService.updateClubInfo(testClubId, request, testUserId, null, null);
+
+        // Assert
+        assertNotNull(result);
+        assertNull(testClub.getBannerUrl());
+        verify(clubRepository, times(1)).save(testClub);
+    }
+
+    @Test
+    void updateClubInfo_uploadBothLogoAndBanner_success() throws AppException {
+        // Arrange
+        UpdateClubInfoRequest request = new UpdateClubInfoRequest();
+        request.setDescription("Updated description");
+
+        // Create mock files under 10MB
+        byte[] logoContent = new byte[5 * 1024 * 1024]; // 5MB
+        byte[] bannerContent = new byte[8 * 1024 * 1024]; // 8MB
+        MockMultipartFile logoFile = new MockMultipartFile("logoFile", "logo.png", "image/png", logoContent);
+        MockMultipartFile bannerFile = new MockMultipartFile("bannerFile", "banner.png", "image/png", bannerContent);
+
+        CloudinaryService.UploadResult logoUploadResult = new CloudinaryService.UploadResult(
+                "https://cloudinary.com/logo.png", "public_id_logo", "png", 5L * 1024L * 1024L);
+        CloudinaryService.UploadResult bannerUploadResult = new CloudinaryService.UploadResult(
+                "https://cloudinary.com/banner.png", "public_id_banner", "png", 8L * 1024L * 1024L);
+
+        when(roleMemberShipRepository.existsClubAdmin(testUserId, testClubId)).thenReturn(true);
+        when(clubRepository.findById(testClubId)).thenReturn(Optional.of(testClub));
+        when(cloudinaryService.uploadImage(eq(logoFile), eq("club/logos"))).thenReturn(logoUploadResult);
+        when(cloudinaryService.uploadImage(eq(bannerFile), eq("club/banners"))).thenReturn(bannerUploadResult);
+        when(clubRepository.save(testClub)).thenReturn(testClub);
+        when(clubRepository.findByIdWithDetails(testClubId)).thenReturn(Optional.of(testClub));
+        when(clubMapper.toClubDetailData(testClub)).thenReturn(testClubDetailData);
+        when(clubRepository.countMembersByClubId(testClubId)).thenReturn(10L);
+        when(clubRepository.countEventsByClubId(testClubId)).thenReturn(5L);
+        when(clubRepository.countNewsByClubId(testClubId)).thenReturn(3L);
+        when(clubRepository.hasActiveRecruitment(testClubId)).thenReturn(false);
+
+        // Act
+        ClubDetailData result = clubService.updateClubInfo(testClubId, request, testUserId, logoFile, bannerFile);
+
+        // Assert
+        assertNotNull(result);
+        verify(cloudinaryService, times(1)).uploadImage(eq(logoFile), eq("club/logos"));
+        verify(cloudinaryService, times(1)).uploadImage(eq(bannerFile), eq("club/banners"));
+        verify(clubRepository, times(1)).save(testClub);
+        assertEquals("https://cloudinary.com/logo.png", testClub.getLogoUrl());
+        assertEquals("https://cloudinary.com/banner.png", testClub.getBannerUrl());
     }
 }
 

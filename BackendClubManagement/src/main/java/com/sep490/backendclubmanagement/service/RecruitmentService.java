@@ -474,7 +474,7 @@ public class RecruitmentService implements RecruitmentServiceInterface {
         // Validate file size (max 20 MB)
         final long MAX_FILE_SIZE = 20L * 1024 * 1024; // 20 MB
         if (file != null && !file.isEmpty() && file.getSize() > MAX_FILE_SIZE) {
-            throw new AppException(ErrorCode.FILE_TOO_LARGE);
+            throw new AppException(ErrorCode.FILE_TOO_LARGE, "Kích thước tập tin vượt quá giới hạn 20MB");
         }
 
         User applicant = userRepository.findById(applicantId)

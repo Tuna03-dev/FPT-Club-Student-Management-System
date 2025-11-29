@@ -29,7 +29,7 @@ public enum ErrorCode {
     ALREADY_APPLIED(HttpStatus.BAD_REQUEST, 3002, "Bạn đã nộp đơn ứng tuyển cho đợt tuyển dụng này!"),
     INTERVIEW_NOT_YET(HttpStatus.BAD_REQUEST, 3004, "Không thể review application khi chưa đến thời gian phỏng vấn"),
     INTERVIEW_TIME_PASSED(HttpStatus.BAD_REQUEST, 3005, "Không thể chỉnh sửa lịch phỏng vấn khi đã qua thời gian phỏng vấn"),
-    FILE_TOO_LARGE(HttpStatus.BAD_REQUEST, 1002, "Kích thước tập tin vượt quá giới hạn 20MB"),
+    FILE_TOO_LARGE(HttpStatus.BAD_REQUEST, 1002, "Kích thước tập tin vượt quá giới hạn"),
 
     // Transaction related errors
     CLUB_WALLET_NOT_FOUND(HttpStatus.NOT_FOUND, 5000, "Không tìm thấy ví câu lạc bộ"),
