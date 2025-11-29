@@ -47,40 +47,47 @@ public class NewsWorkflowService {
         Club club    = clubRepo.findById(dto.getClubId()).orElseThrow();
 
         boolean isStaff      = guard.isStaff(me);
-        boolean isManager    = guard.canApproveAtClub(me, club.getId());
-        boolean isLeadInClub = guard.isLead(me, club.getId());
+        boolean isManager    = guard.canApproveAtClub(me, club.getId()); // chủ nhiệm / phó
+        boolean isLeadInClub = guard.isLead(me, club.getId());           // trưởng ban
 
         RequestStatus startStatus;
-        News attachedNews = null;   
+        News attachedNews = null;
         Team team = null;
 
         if (isStaff) {
             startStatus = RequestStatus.PENDING_UNIVERSITY;
+
         } else if (isManager) {
+            // CHỦ NHIỆM / PHÓ -> không gán team
+            dto.setTeamId(null);
             startStatus = RequestStatus.PENDING_UNIVERSITY;
+
             attachedNews = News.builder()
                     .title(title)
                     .content(desc)
-                    .thumbnailUrl(dto.getThumbnailUrl())
+                    .thumbnailUrl(dto.getThumbnailUrl()) // có thể null
                     .newsType(dto.getNewsType())
                     .isDraft(false)
                     .createdBy(creator)
                     .club(club)
                     .build();
             newsRepo.save(attachedNews);
+
         } else if (isLeadInClub) {
-            if (dto.getTeamId() == null) {
+            // TRƯỞNG BAN -> bắt buộc team
+            if (dto.getTeamId() == null)
                 throw new IllegalArgumentException("Thiếu teamId cho trưởng ban.");
-            }
-            if (!guard.isTeamLead(me, club.getId(), dto.getTeamId())) {
+            if (!guard.isTeamLead(me, club.getId(), dto.getTeamId()))
                 throw new SecurityException("Bạn không có quyền tạo request cho team này.");
-            }
-            team = teamRepo.findById(dto.getTeamId()).orElseThrow();
+
             startStatus = RequestStatus.PENDING_CLUB;
+            team = teamRepo.findById(dto.getTeamId()).orElseThrow();
+
         } else {
             throw new SecurityException("Bạn không có quyền tạo request trong CLB này.");
         }
 
+        // === TẠO REQUEST ===
         RequestNews req = RequestNews.builder()
                 .requestTitle(title)
                 .description(desc)
@@ -88,20 +95,21 @@ public class NewsWorkflowService {
                 .status(startStatus)
                 .createdBy(creator)
                 .club(club)
-                .team(team)
-                .news(attachedNews)
+                .team(team) // null nếu manager
                 .thumbnailUrl(dto.getThumbnailUrl())
                 .newsType(dto.getNewsType())
+                .news(attachedNews)
                 .build();
 
         requestRepo.save(req);
 
-        // Realtime: thông báo cho người duyệt cấp trên
+        // ==== NOTIFICATION & REALTIME ====
         Map<String, Object> payload = Map.of(
                 "requestId", req.getId(),
                 "clubId", club.getId(),
                 "status", req.getStatus().name()
         );
+
         if (startStatus == RequestStatus.PENDING_CLUB) {
             webSocketService.broadcastToClub(club.getId(), "NEWS_REQUEST", "CREATED", payload);
         } else {

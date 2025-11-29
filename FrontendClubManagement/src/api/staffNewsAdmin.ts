@@ -7,7 +7,7 @@ export interface StaffUpdateNewsPayload {
   title: string;
   content: string;
   type: string;
-  thumbnailUrl: string;
+  thumbnailUrl: string | null;
 }
 
 export interface NewsData {

@@ -185,10 +185,15 @@ public class NewsDraftService {
         if (guard.isStaff(me)) {
             startStatus = RequestStatus.PENDING_UNIVERSITY;
         } else if (clubId != null && guard.isClubManager(me, clubId)) {
+            // Chủ nhiệm / Phó → không có team
             startStatus = RequestStatus.PENDING_UNIVERSITY;
+            team = null;  // ép null ngay tại đây
+
         } else if (clubId != null && guard.isLead(me, clubId)) {
+            // Trưởng ban → phải có team
             startStatus = RequestStatus.PENDING_CLUB;
-            team = guard.findLeadTeamInClub(me, clubId).orElse(null);
+            team = guard.findLeadTeamInClub(me, clubId)
+                    .orElseThrow(() -> new SecurityException("Không tìm thấy team trưởng ban."));
         } else {
             throw new SecurityException("Bạn không có quyền submit nháp này.");
         }

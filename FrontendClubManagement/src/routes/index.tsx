@@ -301,7 +301,7 @@ export const router = createBrowserRouter([
         ),
       },
       {
-        path: "team-news",
+        path: "teams/:teamId/team-news",
         element: (
           <TeamOfficerGuard>
             <TeamNewsManagementPage />
