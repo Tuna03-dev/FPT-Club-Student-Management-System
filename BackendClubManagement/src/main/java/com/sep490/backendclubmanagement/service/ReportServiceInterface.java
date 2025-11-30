@@ -6,11 +6,16 @@ import com.sep490.backendclubmanagement.dto.request.ReportFilterRequest;
 import com.sep490.backendclubmanagement.dto.request.ReportReviewRequest;
 import com.sep490.backendclubmanagement.dto.request.SubmitReportRequest;
 import com.sep490.backendclubmanagement.dto.request.UpdateReportRequest;
+import com.sep490.backendclubmanagement.dto.request.UpdateReportRequirementRequest;
 import com.sep490.backendclubmanagement.dto.response.PageResponse;
 import com.sep490.backendclubmanagement.dto.response.ReportDetailResponse;
 import com.sep490.backendclubmanagement.dto.response.ReportListItemResponse;
 import com.sep490.backendclubmanagement.dto.response.ReportRequirementResponse;
+import com.sep490.backendclubmanagement.entity.ReportStatus;
+import com.sep490.backendclubmanagement.entity.ReportType;
+import com.sep490.backendclubmanagement.exception.AppException;
 import jakarta.validation.Valid;
+import org.springframework.data.domain.Pageable;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -23,11 +28,18 @@ public interface ReportServiceInterface {
 
     /**
      * Get all reports with filters and pagination (for staff only)
-     * @param request Filter request containing status, clubId, semesterId, reportType, keyword, and pagination
+     * @param status Report status filter
+     * @param clubId Club ID filter
+     * @param semesterId Semester ID filter
+     * @param reportType Report type filter
+     * @param keyword Keyword for searching
+     * @param pageable Pageable object for pagination and sorting
      * @param userId Current user ID
      * @return Page response containing list of reports
      */
-    PageResponse<ReportListItemResponse> getAllReports(ReportFilterRequest request, Long userId);
+    PageResponse<ReportListItemResponse> getAllReports(
+            ReportStatus status, Long clubId, Long semesterId, ReportType reportType,
+            String keyword, Pageable pageable, Long userId);
 
     /**
      * Get report detail by ID (for staff only)
@@ -54,15 +66,15 @@ public interface ReportServiceInterface {
     ReportRequirementResponse createReportRequirement(CreateReportRequirementRequest request, MultipartFile file, Long userId);
 
     /**
-     * Create a report (draft for team officer, can submit for club president)
-     * If autoSubmit is true (or null/default) and user is club president, the report will be automatically submitted.
-     * If autoSubmit is false and user is club president, the report will be created as draft.
-     * Team officer can only create draft reports regardless of autoSubmit flag.
-     * @param request Create request containing report details and optional autoSubmit flag
+     * Update report requirement basic information (for staff only)
+     * @param requirementId Submission report requirement ID
+     * @param request Update request containing updated title, description, dueDate, and templateUrl
+     * @param file Optional template file to upload
      * @param userId Current user ID
-     * @return Created report detail response
+     * @return Updated report requirement response
      */
-    ReportDetailResponse createReport(CreateReportRequest request, Long userId);
+    ReportRequirementResponse updateReportRequirement(Long requirementId, UpdateReportRequirementRequest request, MultipartFile file, Long userId);
+
 
     /**
      * Create a report with file upload (draft for team officer, can submit for club president)
@@ -74,16 +86,8 @@ public interface ReportServiceInterface {
      * @param userId Current user ID
      * @return Created report detail response
      */
-    ReportDetailResponse createReportWithFile(CreateReportRequest request, MultipartFile file, Long userId);
+    ReportDetailResponse createReport(CreateReportRequest request, MultipartFile file, Long userId) throws  AppException;
 
-    /**
-     * Update a draft report
-     * @param reportId Report ID
-     * @param request Update request containing report details
-     * @param userId Current user ID
-     * @return Updated report detail response
-     */
-    ReportDetailResponse updateReport(Long reportId, UpdateReportRequest request, Long userId);
 
     /**
      * Update a draft report with file upload
@@ -93,7 +97,7 @@ public interface ReportServiceInterface {
      * @param userId Current user ID
      * @return Updated report detail response
      */
-    ReportDetailResponse updateReportWithFile(Long reportId, UpdateReportRequest request, MultipartFile file, Long userId);
+    ReportDetailResponse updateReport(Long reportId, UpdateReportRequest request, MultipartFile file, Long userId) throws  AppException;
 
     /**
      * Submit a draft report (club president or team officer who is the creator)
@@ -101,42 +105,60 @@ public interface ReportServiceInterface {
      * @param userId Current user ID
      * @return Submitted report detail response
      */
-    ReportDetailResponse submitReport(SubmitReportRequest request, Long userId);
+    ReportDetailResponse submitReport(SubmitReportRequest request, Long userId) throws AppException;
 
     /**
      * Get all reports for a club (club president can see all, team officer can see their own)
      * @param clubId Club ID
+     * @param status Report status filter
+     * @param semesterId Semester ID filter
+     * @param reportType Report type filter
+     * @param keyword Keyword for searching
+     * @param pageable Pageable object for pagination and sorting
      * @param userId Current user ID
      * @return List of report list item responses
      */
-    PageResponse<ReportListItemResponse> getClubReports(ReportFilterRequest request, Long userId);
+    PageResponse<ReportListItemResponse> getClubReports(
+            Long clubId, ReportStatus status, Long semesterId, ReportType reportType,
+            String keyword, Pageable pageable, Long userId);
 
     /**
      * Get my draft reports for a club
-     * @param request Filter request containing status, clubId, semesterId, reportType, keyword, and pagination
+     * @param clubId Club ID
+     * @param status Report status filter
+     * @param semesterId Semester ID filter
+     * @param reportType Report type filter
+     * @param keyword Keyword for searching
+     * @param pageable Pageable object for pagination and sorting
      * @param userId Current user ID
      * @return List of draft report list item responses
      */
-    PageResponse<ReportListItemResponse> getMyReports(ReportFilterRequest request, Long userId);
+    PageResponse<ReportListItemResponse> getMyReports(
+            Long clubId, ReportStatus status, Long semesterId, ReportType reportType,
+            String keyword, Pageable pageable, Long userId);
 
     /**
      * Get all report requirements with filters and pagination (for staff only)
-     * @param request Filter request containing reportType, clubId, keyword, and pagination
+     * @param reportType Report type filter
+     * @param clubId Club ID filter
+     * @param keyword Keyword for searching
+     * @param pageable Pageable object for pagination and sorting
      * @param userId Current user ID
      * @return Page response containing list of report requirements
      */
     PageResponse<ReportRequirementResponse> getAllReportRequirements(
-            com.sep490.backendclubmanagement.dto.request.ReportRequirementFilterRequest request,
-            Long userId
-    );
+            ReportType reportType, Long clubId, String keyword, Pageable pageable, Long userId);
 
     /**
      * Get list of clubs that need to submit reports for a specific report requirement (for staff only)
      * @param requirementId Submission report requirement ID
+     * @param keyword Keyword for searching club name or code
+     * @param pageable Pageable object for pagination and sorting
      * @param userId Current user ID
-     * @return List of club requirement info containing club details and status
+     * @return Page response containing list of club requirement info with club details and status
      */
-    List<ReportRequirementResponse.ClubRequirementInfo> getClubsByReportRequirement(Long requirementId, Long userId);
+    PageResponse<ReportRequirementResponse.ClubRequirementInfo> getClubsByReportRequirement(
+            Long requirementId, String keyword, Pageable pageable, Long userId);
 
     /**
      * Get report of a specific club for a specific report requirement (for staff only)
@@ -150,16 +172,18 @@ public interface ReportServiceInterface {
 
     /**
      * Get all report requirements for a club with filters and pagination (for CLUB_OFFICER or TEAM_OFFICER)
-     * @param request Filter request containing status, semesterId, keyword, and pagination
      * @param clubId Club ID
+     * @param status Status filter (OVERDUE, UNSUBMITTED, DRAFT, PENDING_CLUB, etc.)
+     * @param semesterId Semester ID filter
+     * @param keyword Keyword for searching
+     * @param teamId Team ID filter
+     * @param pageable Pageable object for pagination and sorting
      * @param userId Current user ID
      * @return Page response containing list of report requirement responses assigned to the club
      */
     PageResponse<ReportRequirementResponse> getClubReportRequirementsForOfficerWithFilters(
-            com.sep490.backendclubmanagement.dto.request.ClubReportRequirementFilterRequest request,
-            Long clubId,
-            Long userId
-    );
+            Long clubId, String status, Long semesterId, String keyword, Long teamId,
+            Pageable pageable, Long userId);
 
     /**
      * Get report of a specific club for a specific report requirement (for CLUB_OFFICER or TEAM_OFFICER)
@@ -175,7 +199,7 @@ public interface ReportServiceInterface {
      * @param reportId Report ID
      * @param userId Current user ID
      */
-    void deleteReport(Long reportId, Long userId);
+    void deleteReport(Long reportId, Long userId) throws AppException;
 
     /**
      * Review (approve/reject) a report at club level (for club president only)
@@ -185,7 +209,7 @@ public interface ReportServiceInterface {
      * @param userId Current user ID
      * @return Updated report detail response
      */
-    ReportDetailResponse reviewReportByClub(ReportReviewRequest request, Long userId);
+    ReportDetailResponse reviewReportByClub(ReportReviewRequest request, Long userId) throws AppException;
 
     /**
      * Get report detail by report ID for club officers (CLUB_OFFICER or TEAM_OFFICER)
@@ -204,6 +228,6 @@ public interface ReportServiceInterface {
      * @param userId Current user ID
      * @return Updated report requirement response
      */
-    ReportRequirementResponse assignTeamToReportRequirement(Long clubReportRequirementId, Long teamId, Long clubId, Long userId);
+    ReportRequirementResponse assignTeamToReportRequirement(Long clubReportRequirementId, Long teamId, Long clubId, Long userId) throws AppException;
 }
 

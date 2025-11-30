@@ -369,14 +369,7 @@ const MemberDetailDialog = ({
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-3 text-sm">
-                    <div className="flex items-start justify-between">
-                      <span className="text-muted-foreground">
-                        Điểm danh TB:
-                      </span>
-                      <span className="text-xl font-bold bg-gradient-to-r from-primary to-primary-glow bg-clip-text text-transparent">
-                        {member.totalAttendanceRate}%
-                      </span>
-                    </div>
+                    {/* Ẩn điểm danh TB */}
                     <div className="flex items-start justify-between">
                       <span className="text-muted-foreground">
                         Số kỳ tham gia:
@@ -485,16 +478,8 @@ const MemberDetailDialog = ({
                     </span>
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                  <div className="text-center p-3 rounded-xl bg-card/80 backdrop-blur-sm border border-primary/20">
-                    <div className="text-xs text-muted-foreground mb-2">
-                      Điểm danh
-                    </div>
-                    <div className="text-2xl font-bold bg-gradient-to-r from-primary to-primary-glow bg-clip-text text-transparent flex items-center justify-center gap-1">
-                      {member.currentTerm?.attendanceRate || 0}%
-                      <TrendingUp className="h-4 w-4 text-primary" />
-                    </div>
-                  </div>
+                <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  
                   <div className="text-center p-3 rounded-xl bg-card/80 backdrop-blur-sm border border-primary/20">
                     <div className="text-xs text-muted-foreground mb-2">
                       Vai trò
@@ -583,16 +568,7 @@ const MemberDetailDialog = ({
                               </span>
                             </div>
                           </div>
-                          <div className="flex items-center gap-3">
-                            <div className="text-center p-2 rounded-lg bg-primary/10 border border-primary/20 min-w-[70px]">
-                              <div className="text-lg font-bold text-primary">
-                                {term.attendanceRate || 0}%
-                              </div>
-                              <div className="text-xs text-muted-foreground">
-                                ĐD
-                              </div>
-                            </div>
-                          </div>
+                          {/* Ẩn điểm danh lịch sử */}
                         </div>
                       </CardContent>
                     </Card>

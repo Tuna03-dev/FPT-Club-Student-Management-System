@@ -68,7 +68,10 @@ public class SecurityConfig {
             "/api/recruitments/clubs/{id}/open",
             "api/news/clubs/{clubId}/published",
             "/api/events/clubs/{clubId}/published",
-            "/api/clubs/{id}/teams/dto"
+            "/api/clubInfo/{id}/teams/dto",
+            "/api/clubInfo/{id}",
+            "/api/clubInfo/code/{clubCode}",
+            "/api/clubInfo",
 
     };
 

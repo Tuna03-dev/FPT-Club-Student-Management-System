@@ -460,8 +460,8 @@ export default function ClubsPage() {
                 </p>
                 <div className="bg-red-50 border border-red-200 rounded-lg p-4">
                   <p className="text-sm text-red-800">
-                    Vui lòng đợi kết quả xét tuyển trước khi nộp lại hoặc liên
-                    hệ ban quản lý câu lạc bộ nếu cần hỗ trợ.
+                    Vui lòng đợi kết quả xét tuyển liên hệ ban quản lý câu lạc
+                    bộ nếu cần hỗ trợ.
                   </p>
                 </div>
               </div>

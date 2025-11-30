@@ -52,16 +52,16 @@ export default function PendingPosts() {
   const { data: teams, loading: teamsLoading } = useTeams(numericClubId);
 
   // Filter teams based on role
+  // CLUB_OFFICER sees all teams, others only see teams where they are officers
   const visibleTeams = useMemo(() => {
     if (!teams) return [];
 
     // Club officer sees all teams
     if (isClubOfficer) return teams;
 
-    // Team officer/treasurer only sees their team
-    // For now, we'll show all teams but load logic will be restricted
-    // In a real implementation, you'd filter teams by userTeamIds
-    return teams;
+    // Team officer/treasurer only sees teams where they have roles (myRoles.length > 0)
+    // This means they are officers of those teams
+    return teams.filter((team) => team.myRoles && team.myRoles.length > 0);
   }, [teams, isClubOfficer]);
 
   // Set initial tab based on role - chỉ chạy 1 lần

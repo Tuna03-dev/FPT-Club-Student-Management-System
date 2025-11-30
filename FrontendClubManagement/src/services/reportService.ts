@@ -31,7 +31,7 @@ export async function createReportRequirement(
   const requestBlob = new Blob([JSON.stringify(request)], {
     type: "application/json",
   });
-  formData.append("request", requestBlob, "request.json");
+  formData.append("request", requestBlob);
 
   // Only append file if provided (file is optional)
   if (file) {
@@ -50,6 +50,56 @@ export async function createReportRequirement(
   );
   if (!response.data) {
     throw new Error("Failed to create report requirement");
+  }
+  return response.data;
+}
+
+/**
+ * Update report requirement request
+ */
+export interface UpdateReportRequirementRequest {
+  title: string;
+  description?: string;
+  dueDate: string; // ISO datetime string (YYYY-MM-DDTHH:mm:ss)
+}
+
+/**
+ * Update an existing report requirement
+ * @param requirementId - Report requirement ID
+ * @param request - Updated report requirement data
+ * @param file - Optional template file to upload
+ */
+export async function updateReportRequirement(
+  requirementId: number,
+  request: UpdateReportRequirementRequest,
+  file?: File
+): Promise<ReportRequirementResponse> {
+  // Always use FormData since backend endpoint requires multipart/form-data
+  const formData = new FormData();
+
+  // Create a Blob for the JSON request with correct content-type
+  const requestBlob = new Blob([JSON.stringify(request)], {
+    type: "application/json",
+  });
+  formData.append("request", requestBlob);
+
+  // Only append file if provided (file is optional)
+  if (file) {
+    formData.append("file", file);
+  }
+
+  const response = await axiosClient.put<ReportRequirementResponse>(
+    `/reports/staff/requirements/${requirementId}`,
+    formData,
+    {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+      timeout: 60000, // Increase timeout for file uploads
+    }
+  );
+  if (!response.data) {
+    throw new Error("Failed to update report requirement");
   }
   return response.data;
 }
@@ -86,9 +136,23 @@ export async function getAllClubsForReport(): Promise<ClubDto[]> {
 export async function getAllReportRequirements(
   request: ReportRequirementFilterRequest
 ): Promise<PageResponse<ReportRequirementResponse>> {
-  const response = await axiosClient.post<
+  const params = new URLSearchParams();
+
+  if (request.reportType) params.append("reportType", request.reportType);
+  if (request.clubId !== undefined)
+    params.append("clubId", request.clubId.toString());
+  if (request.keyword) params.append("keyword", request.keyword);
+  if (request.page !== undefined)
+    params.append("page", request.page.toString());
+  if (request.size !== undefined)
+    params.append("size", request.size.toString());
+  if (request.sort) params.append("sort", request.sort);
+
+  const response = await axiosClient.get<
     PageResponse<ReportRequirementResponse>
-  >("/reports/staff/requirements/filter", request);
+  >(`/reports/staff/requirements/filter?${params.toString()}`, {
+    timeout: 30000, // Increase timeout for file uploads
+  });
   if (!response.data) {
     throw new Error("Failed to get report requirements");
   }
@@ -97,12 +161,23 @@ export async function getAllReportRequirements(
 
 /**
  * Get list of clubs that need to submit reports for a specific report requirement
+ * Supports pagination and search by club name or code
  */
 export async function getClubsByReportRequirement(
-  requirementId: number
-): Promise<ClubRequirementInfo[]> {
-  const response = await axiosClient.get<ClubRequirementInfo[]>(
-    `/reports/staff/requirements/${requirementId}/clubs`
+  requirementId: number,
+  page: number = 0,
+  size: number = 10,
+  keyword?: string
+): Promise<PageResponse<ClubRequirementInfo>> {
+  const params = new URLSearchParams();
+  params.append("page", page.toString());
+  params.append("size", size.toString());
+  if (keyword) {
+    params.append("keyword", keyword);
+  }
+
+  const response = await axiosClient.get<PageResponse<ClubRequirementInfo>>(
+    `/reports/staff/requirements/${requirementId}/clubs?${params.toString()}`
   );
   if (!response.data) {
     throw new Error("Failed to get clubs by report requirement");
@@ -130,7 +205,7 @@ export async function getClubReportByRequirement(
 export interface ClubReportRequirementFilterRequest {
   page?: number;
   size?: number;
-  sort?: string[];
+  sort?: string;
   keyword?: string;
   status?: string; // OVERDUE, UNSUBMITTED, DRAFT, PENDING_CLUB, etc.
   semesterId?: number;
@@ -144,9 +219,28 @@ export async function getClubReportRequirementsForOfficerWithFilters(
   clubId: number,
   request: ClubReportRequirementFilterRequest
 ): Promise<PageResponse<ReportRequirementResponse>> {
-  const response = await axiosClient.post<
+  const params = new URLSearchParams();
+
+  if (request.status) params.append("status", request.status);
+  if (request.semesterId !== undefined)
+    params.append("semesterId", request.semesterId.toString());
+  if (request.keyword) params.append("keyword", request.keyword);
+  if (request.teamId !== undefined)
+    params.append("teamId", request.teamId.toString());
+  if (request.page !== undefined)
+    params.append("page", request.page.toString());
+  if (request.size !== undefined)
+    params.append("size", request.size.toString());
+  if (request.sort) params.append("sort", request.sort);
+
+  const response = await axiosClient.get<
     PageResponse<ReportRequirementResponse>
-  >(`/reports/club/${clubId}/requirements/officer/filter`, request);
+  >(
+    `/reports/club/${clubId}/requirements/officer/filter?${params.toString()}`,
+    {
+      timeout: 30000, // Increase timeout for file uploads
+    }
+  );
   if (!response.data) {
     throw new Error(
       "Failed to get club report requirements for officer with filters"
@@ -164,7 +258,10 @@ export async function getClubReportByRequirementForOfficer(
   clubId: number
 ): Promise<ReportDetailResponse | null> {
   const response = await axiosClient.get<ReportDetailResponse | null>(
-    `/reports/club/${clubId}/requirements/${requirementId}/report`
+    `/reports/club/${clubId}/requirements/${requirementId}/report`,
+    {
+      timeout: 30000, // Increase timeout for file uploads
+    }
   );
   return response.data ?? null;
 }
@@ -195,7 +292,7 @@ export async function createReport(
     const requestBlob = new Blob([JSON.stringify(request)], {
       type: "application/json",
     });
-    formData.append("request", requestBlob, "request.json");
+    formData.append("request", requestBlob);
     formData.append("file", file);
 
     const response = await axiosClient.post<ReportDetailResponse>(
@@ -218,7 +315,7 @@ export async function createReport(
     const requestBlob = new Blob([JSON.stringify(request)], {
       type: "application/json",
     });
-    formData.append("request", requestBlob, "request.json");
+    formData.append("request", requestBlob);
 
     const response = await axiosClient.post<ReportDetailResponse>(
       "/reports/club",
@@ -259,7 +356,7 @@ export async function updateReport(
   const requestBlob = new Blob([JSON.stringify(request)], {
     type: "application/json",
   });
-  formData.append("request", requestBlob, "request.json");
+  formData.append("request", requestBlob);
 
   // Only append file if provided (file is optional)
   if (file) {
@@ -317,7 +414,7 @@ export async function deleteReport(reportId: number): Promise<void> {
  */
 export interface ReviewReportByClubRequest {
   reportId: number;
-  status: "APPROVED_CLUB" | "REJECTED_CLUB";
+  status: "PENDING_UNIVERSITY" | "REJECTED_CLUB";
   reviewerFeedback?: string;
 }
 
@@ -362,9 +459,23 @@ export async function reviewReportByStaff(
 export async function getAllReports(
   request: ReportFilterRequest
 ): Promise<PageResponse<ReportListItemResponse>> {
-  const response = await axiosClient.post<PageResponse<ReportListItemResponse>>(
-    "/reports/staff/filter",
-    request
+  const params = new URLSearchParams();
+
+  if (request.status) params.append("status", request.status.toString());
+  if (request.clubId !== undefined)
+    params.append("clubId", request.clubId.toString());
+  if (request.semesterId !== undefined)
+    params.append("semesterId", request.semesterId.toString());
+  if (request.reportType) params.append("reportType", request.reportType);
+  if (request.keyword) params.append("keyword", request.keyword);
+  if (request.page !== undefined)
+    params.append("page", request.page.toString());
+  if (request.size !== undefined)
+    params.append("size", request.size.toString());
+  if (request.sort) params.append("sort", request.sort);
+
+  const response = await axiosClient.get<PageResponse<ReportListItemResponse>>(
+    `/reports/staff/filter?${params.toString()}`
   );
   if (!response.data) {
     throw new Error("Failed to get reports");
@@ -389,14 +500,29 @@ export async function getReportDetail(
 
 /**
  * Get all reports for a club (club president can see all, team officer can see their own)
- * Now supports filtering and pagination via POST request
+ * Now supports filtering and pagination via GET request
  */
 export async function getClubReports(
   request: ReportFilterRequest
 ): Promise<PageResponse<ReportListItemResponse>> {
-  const response = await axiosClient.post<PageResponse<ReportListItemResponse>>(
-    `/reports/club/${request.clubId}`,
-    request
+  const params = new URLSearchParams();
+
+  if (request.status) params.append("status", request.status.toString());
+  if (request.semesterId !== undefined)
+    params.append("semesterId", request.semesterId.toString());
+  if (request.reportType) params.append("reportType", request.reportType);
+  if (request.keyword) params.append("keyword", request.keyword);
+  if (request.page !== undefined)
+    params.append("page", request.page.toString());
+  if (request.size !== undefined)
+    params.append("size", request.size.toString());
+  if (request.sort) params.append("sort", request.sort);
+
+  const response = await axiosClient.get<PageResponse<ReportListItemResponse>>(
+    `/reports/club/${request.clubId}?${params.toString()}`,
+    {
+      timeout: 30000, // Increase timeout for file uploads
+    }
   );
   if (!response.data) {
     throw new Error("Failed to get club reports");
@@ -406,14 +532,26 @@ export async function getClubReports(
 
 /**
  * Get my reports for a club (all reports created by current user)
- * Now supports filtering and pagination via POST request
+ * Now supports filtering and pagination via GET request
  */
 export async function getMyReports(
   request: ReportFilterRequest
 ): Promise<PageResponse<ReportListItemResponse>> {
-  const response = await axiosClient.post<PageResponse<ReportListItemResponse>>(
-    `/reports/club/${request.clubId}/my-reports`,
-    request
+  const params = new URLSearchParams();
+
+  if (request.status) params.append("status", request.status.toString());
+  if (request.semesterId !== undefined)
+    params.append("semesterId", request.semesterId.toString());
+  if (request.reportType) params.append("reportType", request.reportType);
+  if (request.keyword) params.append("keyword", request.keyword);
+  if (request.page !== undefined)
+    params.append("page", request.page.toString());
+  if (request.size !== undefined)
+    params.append("size", request.size.toString());
+  if (request.sort) params.append("sort", request.sort);
+
+  const response = await axiosClient.get<PageResponse<ReportListItemResponse>>(
+    `/reports/club/${request.clubId}/my-reports?${params.toString()}`
   );
   if (!response.data) {
     throw new Error("Failed to get my reports");

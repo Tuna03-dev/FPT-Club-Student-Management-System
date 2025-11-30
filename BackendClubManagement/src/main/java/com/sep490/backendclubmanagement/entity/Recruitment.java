@@ -25,9 +25,6 @@ public class Recruitment extends BaseEntity {
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
 
-    @Column(name = "start_date", nullable = false)
-    private LocalDateTime startDate;
-
     @Column(name = "end_date", nullable = false)
     private LocalDateTime endDate;
 

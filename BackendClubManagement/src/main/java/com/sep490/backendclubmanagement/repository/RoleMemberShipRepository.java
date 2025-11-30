@@ -580,13 +580,14 @@ WHERE cm.club.id = :clubId
           AND cm.club.id = :clubId
           AND rm.semester.id = :semesterId
           AND COALESCE(rm.isActive, TRUE) = TRUE
+          AND COALESCE(cm.user.isActive, TRUE) = TRUE
           AND cr IS NOT NULL
           AND (
-              UPPER(TRIM(cr.roleCode)) ='TEAM_OFFICER'
-              OR (sr IS NOT NULL AND UPPER(TRIM(sr.roleName)) = 'TEAM_OFFICER')
+              UPPER(TRIM(cr.roleCode)) IN ('TREASURER', 'TEAM_OFFICER')
+              OR (sr IS NOT NULL AND UPPER(TRIM(sr.roleName)) IN ('TREASURER', 'TEAM_OFFICER'))
           )
     """)
-    boolean isTeamOfficerInCurrentSemester(@Param("userId") Long userId,
+    boolean isTeamOfficerOrTreasurerInCurrentSemester(@Param("userId") Long userId,
                                              @Param("clubId") Long clubId,
                                              @Param("semesterId") Long semesterId);
 
@@ -603,6 +604,7 @@ WHERE cm.club.id = :clubId
           AND cm.club.id = :clubId
           AND rm.semester.id = :semesterId
           AND COALESCE(rm.isActive, TRUE) = TRUE
+          AND COALESCE(cm.user.isActive, TRUE) = TRUE
           AND cr IS NOT NULL
           AND (
               UPPER(TRIM(cr.roleCode)) ='CLUB_OFFICER'
@@ -627,13 +629,14 @@ WHERE cm.club.id = :clubId
           AND cm.club.id = :clubId
           AND rm.semester.id = :semesterId
           AND COALESCE(rm.isActive, TRUE) = TRUE
+          AND COALESCE(cm.user.isActive, TRUE) = TRUE
           AND cr IS NOT NULL
           AND (
-              UPPER(TRIM(cr.roleCode)) IN ('CLUB_OFFICER', 'TEAM_OFFICER')
-              OR (sr IS NOT NULL AND UPPER(TRIM(sr.roleName)) IN ('CLUB_OFFICER', 'TEAM_OFFICER'))
+              UPPER(TRIM(cr.roleCode)) IN ('TREASURER', 'CLUB_OFFICER', 'TEAM_OFFICER')
+              OR (sr IS NOT NULL AND UPPER(TRIM(sr.roleName)) IN ('TREASURER', 'CLUB_OFFICER', 'TEAM_OFFICER'))
           )
     """)
-    boolean isClubOfficerOrTeamOfficerInCurrentSemester(@Param("userId") Long userId,
+    boolean isClubOfficerOrTeamOfficerOrTreasurerInCurrentSemester(@Param("userId") Long userId,
                                            @Param("clubId") Long clubId,
                                            @Param("semesterId") Long semesterId);
     
@@ -664,6 +667,56 @@ WHERE cm.club.id = :clubId
             @Param("clubId") Long clubId,
             @Param("semesterId") Long semesterId
     );
+
+    /**
+     * Get list of user IDs who are Club Officers in a specific club and semester
+     * Club Officers are users with CLUB_OFFICER role (not team-specific)
+     */
+    @Query("""
+        SELECT DISTINCT cm.user.id
+        FROM RoleMemberShip rm
+        JOIN rm.clubMemberShip cm
+        JOIN rm.clubRole cr
+        LEFT JOIN cr.systemRole sr
+        WHERE cm.club.id = :clubId
+          AND rm.semester.id = :semesterId
+          AND COALESCE(rm.isActive, TRUE) = TRUE
+          AND cr IS NOT NULL
+          AND (
+              UPPER(TRIM(cr.roleCode)) IN ('CLUB_OFFICER')
+              OR (sr IS NOT NULL AND UPPER(TRIM(sr.roleName)) IN ('CLUB_OFFICER'))
+          )
+    """)
+    List<Long> findClubOfficerUserIdsByClubIdAndSemesterId(
+            @Param("clubId") Long clubId,
+            @Param("semesterId") Long semesterId
+    );
+
+    /**
+     * Get list of user IDs who are Club Officers in a specific club and semester
+     * Club Officers are users with CLUB_OFFICER role (not team-specific)
+     */
+    @Query("""
+        SELECT DISTINCT cm.user.id
+        FROM RoleMemberShip rm
+        JOIN rm.clubMemberShip cm
+        JOIN rm.team t
+        JOIN rm.clubRole cr
+        LEFT JOIN cr.systemRole sr
+        WHERE t.id = :teamId
+          AND rm.semester.id = :semesterId
+          AND COALESCE(rm.isActive, TRUE) = TRUE
+          AND cr IS NOT NULL
+          AND (
+              UPPER(TRIM(cr.roleCode)) IN ('TEAM_OFFICER')
+              OR (sr IS NOT NULL AND UPPER(TRIM(sr.roleName)) IN ('TEAM_OFFICER'))
+          )
+    """)
+    List<Long> findTeamOfficerUserIdsByClubIdAndSemesterId(
+            @Param("teamId") Long teamId,
+            @Param("semesterId") Long semesterId
+    );
+
     @Query("""
         SELECT CASE WHEN COUNT(rm) > 0 THEN true ELSE false END
         FROM RoleMemberShip rm
@@ -685,5 +738,3 @@ WHERE cm.club.id = :clubId
     boolean isUserClubOfficer(@Param("userId") Long userId, @Param("clubId") Long clubId);
     List<RoleMemberShip> findByTeamIdAndIsActiveTrue(Long teamId);
 }
-
-

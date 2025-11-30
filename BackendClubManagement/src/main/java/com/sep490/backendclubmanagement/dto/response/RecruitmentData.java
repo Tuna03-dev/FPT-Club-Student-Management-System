@@ -11,7 +11,6 @@ public class RecruitmentData {
     private Long id;
     private String title;
     private String description;
-    private LocalDateTime startDate;
     private LocalDateTime endDate;
     private RecruitmentStatus status;
     private String requirements;

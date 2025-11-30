@@ -31,11 +31,11 @@ export async function getClubDetail(clubId: number): Promise<ClubDetailDTO> {
 
 /**
  * Get club information for members to view
- * GET /api/clubs/{id}/club-info
+ * GET /api/clubs/info/{id}/club-info
  */
 export async function getClubInfo(clubId: number): Promise<ClubDetailData> {
   const res = await axiosClient.get<ClubDetailData>(
-    `/clubs/${clubId}/club-info`
+    `/clubInfo/${clubId}/club-info`
   );
   if (res.code !== 200)
     throw new Error(res.message || "Failed to fetch club info");
@@ -44,15 +44,39 @@ export async function getClubInfo(clubId: number): Promise<ClubDetailData> {
 
 /**
  * Update club information (Club Officer only)
- * PUT /api/clubs/{id}/officer-update
+ * PUT /api/clubs/info/{id}/officer-update
  */
 export async function updateClubInfo(
   clubId: number,
-  request: UpdateClubInfoRequest
+  request: UpdateClubInfoRequest,
+  logoFile?: File,
+  bannerFile?: File
 ): Promise<ClubDetailData> {
+  const formData = new FormData();
+
+  // Add request data as JSON blob
+  const requestBlob = new Blob([JSON.stringify(request)], {
+    type: "application/json",
+  });
+  formData.append("request", requestBlob);
+
+  // Add files if provided
+  if (logoFile) {
+    formData.append("logoFile", logoFile);
+  }
+  if (bannerFile) {
+    formData.append("bannerFile", bannerFile);
+  }
+
   const res = await axiosClient.put<ClubDetailData>(
-    `/clubs/${clubId}/officer-update`,
-    request
+    `/clubInfo/${clubId}/officer-update`,
+    formData,
+    {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+      timeout: 60000, // 60 seconds
+    }
   );
   if (res.code !== 200) {
     // Throw object with errors so the UI can render field errors

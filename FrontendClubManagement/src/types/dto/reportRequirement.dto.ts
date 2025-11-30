@@ -6,7 +6,7 @@ export type ReportType = "SEMESTER" | "EVENT" | "OTHER";
 export interface CreateReportRequirementRequest {
   title: string;
   description?: string;
-  dueDate: string; // ISO date string (YYYY-MM-DD)
+  dueDate: string; // ISO datetime string (YYYY-MM-DDTHH:mm:ss)
   reportType?: ReportType;
   templateUrl?: string;
   clubIds: number[];
@@ -110,7 +110,7 @@ export type FrontendReportType = "periodic" | "post-event" | "other";
 export interface ReportRequirementFilterRequest {
   page?: number;
   size?: number;
-  sort?: string[];
+  sort?: string;
   reportType?: ReportType;
   clubId?: number;
   keyword?: string;
@@ -192,7 +192,7 @@ export interface ReportListItemResponse {
 export interface ReportFilterRequest {
   page?: number;
   size?: number;
-  sort?: string[];
+  sort?: string;
   status?: ReportStatus | string; // Can be ReportStatus enum or string
   clubId?: number;
   semesterId?: number;

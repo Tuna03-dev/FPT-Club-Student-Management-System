@@ -185,10 +185,15 @@ public class NewsDraftService {
         if (guard.isStaff(me)) {
             startStatus = RequestStatus.PENDING_UNIVERSITY;
         } else if (clubId != null && guard.isClubManager(me, clubId)) {
+            // Chủ nhiệm / Phó → không có team
             startStatus = RequestStatus.PENDING_UNIVERSITY;
+            team = null;  // ép null ngay tại đây
+
         } else if (clubId != null && guard.isLead(me, clubId)) {
+            // Trưởng ban → phải có team
             startStatus = RequestStatus.PENDING_CLUB;
-            team = guard.findLeadTeamInClub(me, clubId).orElse(null);
+            team = guard.findLeadTeamInClub(me, clubId)
+                    .orElseThrow(() -> new SecurityException("Không tìm thấy team trưởng ban."));
         } else {
             throw new SecurityException("Bạn không có quyền submit nháp này.");
         }
@@ -224,7 +229,7 @@ public class NewsDraftService {
 
         // Notification DB: trưởng ban submit -> gửi Chủ nhiệm/Phó (PENDING_CLUB)
         if (startStatus == RequestStatus.PENDING_CLUB && clubId != null) {
-            String actionUrl = "/news/requests/" + req.getId();
+            String actionUrl = "/myclub/" + clubId + "/news/requests/" + req.getId();
             String title = "Yêu cầu tin tức mới từ ban trong CLB";
             String message = actor.getFullName() + " đã gửi yêu cầu tin tức cần duyệt trong CLB.";
 
@@ -250,7 +255,7 @@ public class NewsDraftService {
             String staffMessage = "CLB " + draft.getClub().getClubName()
                     + " đã gửi yêu cầu tin tức \"" + req.getRequestTitle() + "\" cần duyệt.";
 
-            String staffActionUrl = "/staff/news/" + req.getId();
+            String staffActionUrl = "/staff/news/requests/" + req.getId();
 
             List<User> staffUsers = userRepo.findBySystemRole_RoleNameIgnoreCase("STAFF");
             List<Long> staffIds = staffUsers.stream().map(User::getId).toList();

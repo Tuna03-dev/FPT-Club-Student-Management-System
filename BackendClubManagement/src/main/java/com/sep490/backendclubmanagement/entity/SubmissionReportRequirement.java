@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Set;
 
 @Entity
@@ -26,7 +27,7 @@ public class SubmissionReportRequirement extends BaseEntity {
     private String description;
 
     @Column(name = "due_date", nullable = false)
-    private LocalDate dueDate;
+    private LocalDateTime dueDate;
 
     @Column(name = "report_type", length = 100)
     @Enumerated(EnumType.STRING)

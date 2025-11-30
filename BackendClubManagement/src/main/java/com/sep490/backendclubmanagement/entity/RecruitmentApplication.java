@@ -36,6 +36,15 @@ public class RecruitmentApplication extends BaseEntity {
     @Column(name = "reviewed_date")
     private LocalDateTime reviewedDate;
 
+    @Column(name = "interview_time")
+    private LocalDateTime interviewTime;
+
+    @Column(name = "interview_address", columnDefinition = "TEXT")
+    private String interviewAddress;
+
+    @Column(name = "interview_preparation_requirements", columnDefinition = "TEXT")
+    private String interviewPreparationRequirements;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "recruitment_id", nullable = false)
     private Recruitment recruitment;

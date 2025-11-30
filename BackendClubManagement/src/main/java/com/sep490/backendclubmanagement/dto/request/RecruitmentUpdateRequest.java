@@ -13,8 +13,6 @@ public class RecruitmentUpdateRequest {
     @NotBlank
     public String title;
     public String description;
-    @NotNull
-    public LocalDateTime startDate;
     @NotNull @Future
     public LocalDateTime endDate;
     public String requirements;

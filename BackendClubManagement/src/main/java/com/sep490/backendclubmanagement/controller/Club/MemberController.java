@@ -15,6 +15,7 @@ import com.sep490.backendclubmanagement.service.MemberService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -29,6 +30,7 @@ public class MemberController {
 
     // Consolidated endpoint for all member filtering needs
     @GetMapping("/{clubId}/members")
+    @PreAuthorize("@clubSecurity.isMemberOfClub(#clubId)")
     public ApiResponse<PageResponse<MemberResponse>> getMembers(
             @PathVariable Long clubId,
             @RequestParam(defaultValue = "ACTIVE") String status, // "ACTIVE" or "LEFT"
@@ -58,6 +60,7 @@ public class MemberController {
 
     // Dedicated endpoint for left members
     @GetMapping("/{clubId}/members/left")
+    @PreAuthorize("@clubSecurity.isMemberOfClub(#clubId)")
     public ApiResponse<PageResponse<MemberResponse>> getLeftMembers(
             @PathVariable Long clubId,
             @RequestParam(required = false) String searchTerm, // Search by name or student code
@@ -74,6 +77,7 @@ public class MemberController {
 
     // Get all active members for selection (e.g., fee assignment)
     @GetMapping("/{clubId}/members/all-active")
+    @PreAuthorize("@clubSecurity.isMemberOfClub(#clubId)")
     public ApiResponse<List<SimpleMemberResponse>> getAllActiveMembers(
             @PathVariable Long clubId) {
 
@@ -84,6 +88,7 @@ public class MemberController {
 
     // Update member role
     @PutMapping("/{clubId}/members/{userId}/role")
+    @PreAuthorize("@clubSecurity.isClubOfficerInClub(#clubId)")
     public ApiResponse<String> updateMemberRole(
             @PathVariable Long clubId,
             @PathVariable Long userId,
@@ -95,6 +100,7 @@ public class MemberController {
 
     // Update member team
     @PutMapping("/{clubId}/members/{userId}/team")
+    @PreAuthorize("@clubSecurity.isTeamOfficerOrClubOfficerOrTreasurerInClub(#clubId)")
     public ApiResponse<String> updateMemberTeam(
             @PathVariable Long clubId,
             @PathVariable Long userId,
@@ -105,6 +111,7 @@ public class MemberController {
 
     // Update member status (active/inactive)
     @PutMapping("/{clubId}/members/{userId}/status")
+    @PreAuthorize("@clubSecurity.isTeamOfficerOrClubOfficerOrTreasurerInClub(#clubId)")
     public ApiResponse<String> updateMemberStatus(
             @PathVariable Long clubId,
             @PathVariable Long userId,
@@ -115,6 +122,7 @@ public class MemberController {
 
     // Remove member from club
     @DeleteMapping("/{clubId}/members/{userId}")
+    @PreAuthorize("@clubSecurity.isClubOfficerInClub(#clubId)")
     public ApiResponse<String> removeMember(
             @PathVariable Long clubId,
             @PathVariable Long userId,
@@ -125,6 +133,7 @@ public class MemberController {
 
     // Import members from Excel with history across all semesters
     @PostMapping("/{clubId}/members/import")
+    @PreAuthorize("@clubSecurity.isClubOfficerInClub(#clubId)")
     public ApiResponse<ImportMembersResponse> importMembersFromExcel(
             @PathVariable Long clubId,
             @RequestParam("file") MultipartFile file,

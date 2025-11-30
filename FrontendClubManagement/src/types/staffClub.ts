@@ -4,11 +4,10 @@ export interface ClubFilterRequest {
   keyword?: string;
   campusId?: number;
   categoryId?: number;
-  semester?: number;
   status?: string;
   page?: number;
   size?: number;
-  sort?: string[];
+  sort?: string;
 }
 
 export interface CreateClubRequest {

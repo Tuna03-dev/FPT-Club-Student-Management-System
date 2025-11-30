@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
+import { formatDateTimeVN } from "@/lib/dateUtils";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -20,9 +21,11 @@ import {
   FileText,
   Users,
   Download,
+  Edit,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { ClubReportModal } from "@/components/features/report/ClubReportModal";
+import { UpdateReportRequirementDialog } from "@/components/features/report/UpdateReportRequirementDialog";
 import {
   getClubsByReportRequirement,
   getClubReportByRequirement,
@@ -31,13 +34,23 @@ import {
 import type { ReportRequirementResponse } from "@/types/dto/reportRequirement.dto";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
+import { useDebounce } from "@/hooks/useDebounce";
 
 type ReportStatus =
   | "draft"
   | "submitted"
   | "approved"
   | "rejected"
-  | "needs-review"
+  | "resubmitted"
   | "not-submitted";
 
 // Helper function to check if status is a university status (from school)
@@ -65,7 +78,7 @@ function mapBackendStatusToFrontend(
       case "REJECTED_UNIVERSITY":
         return "rejected"; // Bị từ chối nhà trường
       case "RESUBMITTED_UNIVERSITY":
-        return "submitted"; // Đã nộp lại nhà trường
+        return "resubmitted"; // Đã nộp lại nhà trường
       default:
         return "not-submitted";
     }
@@ -119,6 +132,11 @@ export function PeriodicReportClubs() {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchQuery, setSearchQuery] = useState("");
+  const debouncedSearchQuery = useDebounce(searchQuery, 500);
+  const [currentPage, setCurrentPage] = useState(0);
+  const [pageSize] = useState(10);
+  const [totalPages, setTotalPages] = useState(0);
+  const [totalElements, setTotalElements] = useState(0);
   const [selectedReport, setSelectedReport] = useState<Report | null>(null);
   const [selectedClub, setSelectedClub] = useState<Club | null>(null);
   const [isClubReportModalOpen, setIsClubReportModalOpen] = useState(false);
@@ -129,33 +147,79 @@ export function PeriodicReportClubs() {
   );
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingReport, setIsLoadingReport] = useState(false);
+  const [isUpdateDialogOpen, setIsUpdateDialogOpen] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isRefreshingClubs, setIsRefreshingClubs] = useState(false);
+  const [hasReviewedSuccessfully, setHasReviewedSuccessfully] = useState(false);
 
   // Function to refresh clubs data
   const refreshClubsData = async () => {
     if (!reportId) return;
 
+    setIsRefreshingClubs(true);
     try {
       const requirementId = parseInt(reportId);
-      const clubs = await getClubsByReportRequirement(requirementId);
+      const response = await getClubsByReportRequirement(
+        requirementId,
+        currentPage,
+        pageSize,
+        debouncedSearchQuery || undefined
+      );
 
-      const clubsWithReportsData: ClubWithReport[] = clubs.map((club) => ({
-        id: club.clubId.toString(),
-        name: club.clubName,
-        code: club.clubCode,
-        avatar: "",
-        description: "",
-        reportStatus: mapBackendStatusToFrontend(club.status),
-        backendStatus: club.status || null,
-        mustResubmit: club.report?.mustResubmit || false, // Store mustResubmit flag
-        hasReport: isUniversityStatus(club.status),
-        clubRequirementId: club.id,
-        clubId: club.clubId,
-      }));
+      const clubsWithReportsData: ClubWithReport[] = response.content.map(
+        (club) => ({
+          id: club.clubId.toString(),
+          name: club.clubName,
+          code: club.clubCode,
+          avatar: "",
+          description: "",
+          reportStatus: mapBackendStatusToFrontend(club.status),
+          backendStatus: club.status || null,
+          mustResubmit: club.report?.mustResubmit || false,
+          hasReport: isUniversityStatus(club.status),
+          clubRequirementId: club.id,
+          clubId: club.clubId,
+        })
+      );
 
       setClubsWithReports(clubsWithReportsData);
+      setTotalPages(response.totalPages);
+      setTotalElements(response.totalElements);
     } catch (error: any) {
       console.error("Error refreshing clubs data:", error);
       toast.error("Không thể làm mới dữ liệu");
+    } finally {
+      setIsRefreshingClubs(false);
+    }
+  };
+
+  // Function to refresh requirement data
+  const refreshRequirementData = async () => {
+    if (!reportId) return;
+
+    setIsRefreshing(true);
+    try {
+      const requirementId = parseInt(reportId);
+
+      // Fetch report requirement details
+      const requirementsResponse = await getAllReportRequirements({
+        page: 0,
+        size: 1000,
+      });
+
+      const requirement = requirementsResponse.content.find(
+        (r) => r.id === requirementId
+      );
+
+      if (requirement) {
+        setPeriodicReport(requirement);
+        toast.success("Đã cập nhật thông tin yêu cầu");
+      }
+    } catch (error: any) {
+      console.error("Error refreshing requirement data:", error);
+      toast.error("Không thể làm mới dữ liệu yêu cầu");
+    } finally {
+      setIsRefreshing(false);
     }
   };
 
@@ -180,7 +244,7 @@ export function PeriodicReportClubs() {
 
         // Fetch report requirement details
         const requirementsResponse = await getAllReportRequirements({
-          page: 1,
+          page: 0,
           size: 1000, // Get all to find the one we need
         });
 
@@ -196,27 +260,35 @@ export function PeriodicReportClubs() {
 
         setPeriodicReport(requirement);
 
-        // Fetch clubs for this specific requirement
-        // This API call will return only clubs that are assigned to this requirement
-        const clubs = await getClubsByReportRequirement(requirementId);
+        // Fetch clubs for this specific requirement with pagination
+        const response = await getClubsByReportRequirement(
+          requirementId,
+          currentPage,
+          pageSize,
+          debouncedSearchQuery || undefined
+        );
 
         // Map to ClubWithReport format
-        const clubsWithReportsData: ClubWithReport[] = clubs.map((club) => ({
-          id: club.clubId.toString(),
-          name: club.clubName,
-          code: club.clubCode,
-          avatar: "",
-          description: "",
-          reportStatus: mapBackendStatusToFrontend(club.status),
-          backendStatus: club.status || null, // Store the original backend status
-          mustResubmit: club.report?.mustResubmit || false, // Store mustResubmit flag
-          // Only allow viewing report if status is from university (school)
-          hasReport: isUniversityStatus(club.status),
-          clubRequirementId: club.id,
-          clubId: club.clubId,
-        }));
+        const clubsWithReportsData: ClubWithReport[] = response.content.map(
+          (club) => ({
+            id: club.clubId.toString(),
+            name: club.clubName,
+            code: club.clubCode,
+            avatar: "",
+            description: "",
+            reportStatus: mapBackendStatusToFrontend(club.status),
+            backendStatus: club.status || null, // Store the original backend status
+            mustResubmit: club.report?.mustResubmit || false, // Store mustResubmit flag
+            // Only allow viewing report if status is from university (school)
+            hasReport: isUniversityStatus(club.status),
+            clubRequirementId: club.id,
+            clubId: club.clubId,
+          })
+        );
 
         setClubsWithReports(clubsWithReportsData);
+        setTotalPages(response.totalPages);
+        setTotalElements(response.totalElements);
       } catch (error: any) {
         console.error("Error fetching data:", error);
         toast.error(error.message || "Không thể tải dữ liệu");
@@ -227,44 +299,16 @@ export function PeriodicReportClubs() {
     };
 
     fetchData();
-  }, [reportId, navigate]);
+  }, [reportId, navigate, currentPage, pageSize, debouncedSearchQuery]);
 
-  const filteredClubs = clubsWithReports.filter((club) => {
-    const matchesSearch =
-      club.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      club.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      club.description.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesSearch;
-  });
+  // Reset to first page when search query changes
+  useEffect(() => {
+    setCurrentPage(0);
+  }, [debouncedSearchQuery]);
 
-  const handleApproveReport = (
-    reportId: string,
-    feedback: string,
-    approve: boolean
-  ) => {
-    // Update report status
-    // This should be an API call in production
-    setClubsWithReports((prevClubs) =>
-      prevClubs.map((club) => {
-        if (club.report?.id === reportId) {
-          return {
-            ...club,
-            report: {
-              ...club.report,
-              status: approve ? "approved" : "rejected",
-              reviewer: "Người đánh giá hiện tại",
-              reviewDate: new Date().toISOString().split("T")[0],
-              approvalNotes: approve ? feedback : undefined,
-              rejectionReason: !approve ? feedback : undefined,
-            },
-            reportStatus: approve ? "approved" : "rejected",
-          };
-        }
-        return club;
-      })
-    );
-    alert(approve ? "Báo cáo đã được chấp nhận" : "Báo cáo đã bị từ chối");
-    setIsClubReportModalOpen(false);
+  const handleApproveReport = () => {
+    // Mark that review was successful
+    setHasReviewedSuccessfully(true);
   };
 
   const getStatusLabel = (
@@ -275,13 +319,13 @@ export function PeriodicReportClubs() {
     if (backendStatus && isUniversityStatus(backendStatus)) {
       switch (backendStatus) {
         case "PENDING_UNIVERSITY":
-          return "Chờ phê duyệt nhà trường";
+          return "Chờ phê duyệt";
         case "APPROVED_UNIVERSITY":
           return "Đã duyệt nhà trường";
         case "REJECTED_UNIVERSITY":
           return "Bị từ chối nhà trường";
         case "RESUBMITTED_UNIVERSITY":
-          return "Đã nộp lại nhà trường";
+          return "Đã nộp lại";
         default:
           return "Đang yêu cầu nộp lại";
       }
@@ -310,7 +354,7 @@ export function PeriodicReportClubs() {
         case "REJECTED_UNIVERSITY":
           return "bg-red-100 text-red-700";
         case "RESUBMITTED_UNIVERSITY":
-          return "bg-blue-100 text-blue-700";
+          return "bg-yellow-100 text-yellow-700";
         default:
           return "bg-orange-100 text-orange-700"; // Đang yêu cầu nộp lại
       }
@@ -325,18 +369,7 @@ export function PeriodicReportClubs() {
     return "bg-red-100 text-red-700";
   };
 
-  const formatDate = (dateString: string) => {
-    try {
-      const date = new Date(dateString);
-      return date.toLocaleDateString("vi-VN", {
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-      });
-    } catch {
-      return dateString;
-    }
-  };
+  const formatDate = (dateString: string) => formatDateTimeVN(dateString);
 
   const getReportTypeLabel = (reportType?: string) => {
     switch (reportType) {
@@ -381,9 +414,24 @@ export function PeriodicReportClubs() {
         </div>
 
         {/* Report Requirement Info Card */}
-        {periodicReport ? (
+        {periodicReport && !isRefreshing ? (
           <Card>
             <CardContent className="p-4">
+              {/* Header with Update Button */}
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold text-foreground">
+                  Thông tin yêu cầu
+                </h3>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsUpdateDialogOpen(true)}
+                  className="gap-2"
+                >
+                  <Edit className="h-3.5 w-3.5" />
+                  Cập nhật
+                </Button>
+              </div>
               <div className="space-y-3">
                 {/* Info Grid - Compact layout */}
                 <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
@@ -549,11 +597,13 @@ export function PeriodicReportClubs() {
 
         {/* Clubs List */}
         <div className="space-y-4">
-          <p className="text-sm text-muted-foreground">
-            Hiển thị {filteredClubs.length} câu lạc bộ
-          </p>
+          <div className="flex justify-between items-center">
+            <p className="text-sm text-muted-foreground">
+              Hiển thị {clubsWithReports.length} / {totalElements} câu lạc bộ
+            </p>
+          </div>
 
-          {isLoading ? (
+          {isLoading || isRefreshingClubs ? (
             <Card>
               <Table>
                 <TableHeader className="bg-muted/50">
@@ -592,7 +642,7 @@ export function PeriodicReportClubs() {
                 </TableBody>
               </Table>
             </Card>
-          ) : filteredClubs.length > 0 ? (
+          ) : clubsWithReports.length > 0 ? (
             <Card>
               <Table>
                 <TableHeader className="bg-muted/50">
@@ -612,7 +662,7 @@ export function PeriodicReportClubs() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredClubs.map((club) => (
+                  {clubsWithReports.map((club) => (
                     <TableRow key={club.id}>
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-2">
@@ -675,19 +725,19 @@ export function PeriodicReportClubs() {
                                     department:
                                       reportDetail.club?.clubName || "",
                                     createdAt: reportDetail.submittedDate
-                                      ? new Date(
+                                      ? formatDateTimeVN(
                                           reportDetail.submittedDate
-                                        ).toLocaleDateString("vi-VN")
+                                        )
                                       : reportDetail.createdAt
-                                      ? new Date(
-                                          reportDetail.createdAt
-                                        ).toLocaleDateString("vi-VN")
-                                      : "",
+                                        ? formatDateTimeVN(
+                                            reportDetail.createdAt
+                                          )
+                                        : "",
                                     dueDate: reportDetail.reportRequirement
                                       ?.dueDate
-                                      ? new Date(
+                                      ? formatDateTimeVN(
                                           reportDetail.reportRequirement.dueDate
-                                        ).toLocaleDateString("vi-VN")
+                                        )
                                       : "",
                                     content: reportDetail.content || "",
                                     fileUrl: reportDetail.fileUrl,
@@ -695,9 +745,9 @@ export function PeriodicReportClubs() {
                                       ? "Staff"
                                       : undefined,
                                     reviewDate: reportDetail.reviewedDate
-                                      ? new Date(
+                                      ? formatDateTimeVN(
                                           reportDetail.reviewedDate
-                                        ).toLocaleDateString("vi-VN")
+                                        )
                                       : undefined,
                                     approvalNotes:
                                       reportDetail.status !==
@@ -751,9 +801,86 @@ export function PeriodicReportClubs() {
           ) : (
             <Card>
               <CardContent className="p-8 text-center text-muted-foreground">
-                Không tìm thấy câu lạc bộ nào phù hợp với tìm kiếm của bạn
+                {searchQuery
+                  ? "Không tìm thấy câu lạc bộ nào phù hợp với tìm kiếm của bạn"
+                  : "Không có câu lạc bộ nào được yêu cầu nộp báo cáo"}
               </CardContent>
             </Card>
+          )}
+
+          {/* Pagination */}
+          {!isLoading && !isRefreshingClubs && totalPages > 1 && (
+            <div className="flex justify-center mt-4">
+              <Pagination>
+                <PaginationContent>
+                  <PaginationItem>
+                    <PaginationPrevious
+                      onClick={() =>
+                        setCurrentPage((prev) => Math.max(0, prev - 1))
+                      }
+                      className={
+                        currentPage === 0
+                          ? "pointer-events-none opacity-50 cursor-not-allowed"
+                          : "cursor-pointer"
+                      }
+                    />
+                  </PaginationItem>
+
+                  {/* Page numbers */}
+                  {Array.from({ length: totalPages }, (_, i) => i)
+                    .filter((pageNum) => {
+                      // Show first page, last page, current page, and pages around current
+                      if (
+                        pageNum === 0 ||
+                        pageNum === totalPages - 1 ||
+                        Math.abs(pageNum - currentPage) <= 1
+                      ) {
+                        return true;
+                      }
+                      return false;
+                    })
+                    .map((pageNum, idx, arr) => {
+                      // Add ellipsis if there's a gap
+                      const showEllipsisBefore =
+                        idx > 0 && pageNum - arr[idx - 1] > 1;
+
+                      return (
+                        <React.Fragment key={pageNum}>
+                          {showEllipsisBefore && (
+                            <PaginationItem>
+                              <PaginationEllipsis />
+                            </PaginationItem>
+                          )}
+                          <PaginationItem>
+                            <PaginationLink
+                              onClick={() => setCurrentPage(pageNum)}
+                              isActive={currentPage === pageNum}
+                              className="cursor-pointer"
+                            >
+                              {pageNum + 1}
+                            </PaginationLink>
+                          </PaginationItem>
+                        </React.Fragment>
+                      );
+                    })}
+
+                  <PaginationItem>
+                    <PaginationNext
+                      onClick={() =>
+                        setCurrentPage((prev) =>
+                          Math.min(totalPages - 1, prev + 1)
+                        )
+                      }
+                      className={
+                        currentPage === totalPages - 1
+                          ? "pointer-events-none opacity-50 cursor-not-allowed"
+                          : "cursor-pointer"
+                      }
+                    />
+                  </PaginationItem>
+                </PaginationContent>
+              </Pagination>
+            </div>
           )}
         </div>
 
@@ -763,18 +890,30 @@ export function PeriodicReportClubs() {
             open={isClubReportModalOpen}
             onOpenChange={(open) => {
               setIsClubReportModalOpen(open);
-              // Refresh data when modal closes (after successful review)
+              // Refresh data only when modal closes and review was successful
               if (!open) {
-                refreshClubsData();
+                if (hasReviewedSuccessfully) {
+                  refreshClubsData();
+                  setHasReviewedSuccessfully(false); // Reset flag
+                }
               }
             }}
             club={selectedClub}
             report={selectedReport}
-            onApprove={(feedback) => {
-              handleApproveReport(selectedReport.id, feedback, true);
-            }}
-            onReject={(feedback) => {
-              handleApproveReport(selectedReport.id, feedback, false);
+            onApprove={handleApproveReport}
+            onReject={handleApproveReport}
+          />
+        )}
+
+        {/* Update Report Requirement Dialog */}
+        {periodicReport && (
+          <UpdateReportRequirementDialog
+            open={isUpdateDialogOpen}
+            onOpenChange={setIsUpdateDialogOpen}
+            reportRequirement={periodicReport}
+            onSuccess={async () => {
+              // Refresh the requirement data after update without reloading page
+              await refreshRequirementData();
             }}
           />
         )}

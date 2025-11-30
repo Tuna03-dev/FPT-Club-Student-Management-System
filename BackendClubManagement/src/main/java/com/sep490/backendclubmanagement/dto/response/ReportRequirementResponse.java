@@ -6,7 +6,6 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -18,7 +17,7 @@ public class ReportRequirementResponse {
     private Long id;
     private String title;
     private String description;
-    private LocalDate dueDate;
+    private LocalDateTime dueDate;
     private ReportType reportType;
     private String templateUrl;
     private LocalDateTime createdAt;

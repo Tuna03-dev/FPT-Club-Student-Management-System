@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,7 +13,15 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Mail, Phone, Save, Undo2, Users } from "lucide-react";
+import {
+  Mail,
+  Phone,
+  Save,
+  Undo2,
+  Users,
+  X,
+  Image as ImageIcon,
+} from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { useClubPermissions } from "@/hooks/useClubPermissions";
@@ -49,8 +57,6 @@ interface ClubFormData {
   igUrl: string;
   ttUrl: string;
   ytUrl: string;
-  logoUrl: string;
-  bannerUrl: string;
   categoryName: string;
   categoryId: number;
 }
@@ -77,8 +83,6 @@ export function ClubInforManagement() {
     igUrl: "",
     ttUrl: "",
     ytUrl: "",
-    logoUrl: "",
-    bannerUrl: "",
     categoryName: "",
     categoryId: 0,
   });
@@ -87,6 +91,19 @@ export function ClubInforManagement() {
 
   const [categories, setCategories] = useState<ClubCategoryDTO[]>([]);
   const [loadingCategories, setLoadingCategories] = useState(false);
+
+  // File state for logo and banner
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [bannerFile, setBannerFile] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [bannerPreview, setBannerPreview] = useState<string | null>(null);
+  // Note: drag-and-drop removed; clicking the wrappers opens file picker
+  // Refs for hidden file inputs so descriptive text can open file picker
+  const logoInputRef = useRef<HTMLInputElement | null>(null);
+  const bannerInputRef = useRef<HTMLInputElement | null>(null);
+  // Track explicit removal (user clicked X) to send removal flags
+  const [logoRemoved, setLogoRemoved] = useState(false);
+  const [bannerRemoved, setBannerRemoved] = useState(false);
 
   // stable sorted presidents list to avoid swapping when clubData updates
   const presidents = useMemo(() => {
@@ -124,11 +141,14 @@ export function ClubInforManagement() {
           igUrl: data.igUrl || "",
           ttUrl: data.ttUrl || "",
           ytUrl: data.ytUrl || "",
-          logoUrl: data.logoUrl || "",
-          bannerUrl: data.bannerUrl || "",
           categoryName: data.categoryName || "",
           categoryId: data.categoryId || 0,
         });
+        // Set initial previews from existing URLs
+        setLogoPreview(data.logoUrl || null);
+        setBannerPreview(data.bannerUrl || null);
+        setLogoRemoved(false);
+        setBannerRemoved(false);
       } catch (error) {
         console.error("Error fetching club data:", error);
         toast.error("Không thể tải thông tin câu lạc bộ");
@@ -145,6 +165,76 @@ export function ClubInforManagement() {
       ...prev,
       [field]: value,
     }));
+    setHasChanges(true);
+  };
+
+  const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+
+  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (!file.type.startsWith("image/")) {
+        toast.error("Vui lòng chọn file ảnh");
+        return;
+      }
+      if (file.size > MAX_FILE_SIZE) {
+        toast.error("Kích thước file phải nhỏ hơn hoặc bằng 10MB");
+        return;
+      }
+      setLogoFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setLogoPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+      setHasChanges(true);
+      setLogoRemoved(false);
+    }
+  };
+
+  // (removed drag handlers)
+
+  const handleBannerChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (!file.type.startsWith("image/")) {
+        toast.error("Vui lòng chọn file ảnh");
+        return;
+      }
+      if (file.size > MAX_FILE_SIZE) {
+        toast.error("Kích thước file phải nhỏ hơn hoặc bằng 10MB");
+        return;
+      }
+      setBannerFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setBannerPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+      setHasChanges(true);
+      setBannerRemoved(false);
+    }
+  };
+
+  // (removed drag handlers)
+
+  const isUrl = (value?: string) => {
+    if (!value) return false;
+    return /^https?:\/\//i.test(value.trim());
+  };
+
+  // Handlers to remove selected previews/files (UI only)
+  const removeLogo = () => {
+    setLogoFile(null);
+    setLogoPreview(null);
+    setLogoRemoved(true);
+    setHasChanges(true);
+  };
+
+  const removeBanner = () => {
+    setBannerFile(null);
+    setBannerPreview(null);
+    setBannerRemoved(true);
     setHasChanges(true);
   };
 
@@ -184,15 +274,28 @@ export function ClubInforManagement() {
         igUrl: formData.igUrl,
         ttUrl: formData.ttUrl,
         ytUrl: formData.ytUrl,
-        logoUrl: formData.logoUrl,
-        bannerUrl: formData.bannerUrl,
         categoryId: formData.categoryId || undefined,
+        removeLogo: logoRemoved || undefined,
+        removeBanner: bannerRemoved || undefined,
       };
 
-      const updatedData = await updateClubInfo(clubIdNum, request);
+      const updatedData = await updateClubInfo(
+        clubIdNum,
+        request,
+        logoFile || undefined,
+        bannerFile || undefined
+      );
       setClubData(updatedData);
       setIsEditing(false);
       setHasChanges(false);
+
+      // Reset file states and update previews
+      setLogoFile(null);
+      setBannerFile(null);
+      setLogoRemoved(false);
+      setBannerRemoved(false);
+      setLogoPreview(updatedData.logoUrl || null);
+      setBannerPreview(updatedData.bannerUrl || null);
 
       toast.success("Đã cập nhật thông tin câu lạc bộ thành công");
     } catch (error: any) {
@@ -236,12 +339,16 @@ export function ClubInforManagement() {
         igUrl: clubData.igUrl || "",
         ttUrl: clubData.ttUrl || "",
         ytUrl: clubData.ytUrl || "",
-        logoUrl: clubData.logoUrl || "",
-        bannerUrl: clubData.bannerUrl || "",
-
         categoryName: clubData.categoryName || "",
         categoryId: clubData.categoryId || 0,
       });
+      // Reset file states and previews
+      setLogoFile(null);
+      setBannerFile(null);
+      setLogoRemoved(false);
+      setBannerRemoved(false);
+      setLogoPreview(clubData.logoUrl || null);
+      setBannerPreview(clubData.bannerUrl || null);
     }
     setIsEditing(false);
     setHasChanges(false);
@@ -366,6 +473,7 @@ export function ClubInforManagement() {
             Quản lý thông tin chung của câu lạc bộ
           </p>
         </div>
+
         <div className="flex gap-2">
           {isEditing ? (
             <>
@@ -374,11 +482,10 @@ export function ClubInforManagement() {
                 onClick={handleCancel}
                 disabled={isSaving}
               >
-                <Undo2 className="h-4 w-4 mr-2" />
-                Hủy
+                <Undo2 className="h-4 w-4 mr-2" /> Hủy
               </Button>
               <Button onClick={handleSave} disabled={isSaving || !hasChanges}>
-                <Save className="h-4 w-4 mr-2" />
+                <Save className="h-4 w-4 mr-2" />{" "}
                 {isSaving ? "Đang lưu..." : "Lưu thay đổi"}
               </Button>
             </>
@@ -390,6 +497,7 @@ export function ClubInforManagement() {
           )}
         </div>
       </div>
+
       {/* Confirm Save Dialog */}
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <DialogContent className="sm:max-w-lg rounded-xl border bg-card shadow-lg">
@@ -420,7 +528,132 @@ export function ClubInforManagement() {
         </DialogContent>
       </Dialog>
 
-      {/* Single Card for All Content */}
+      {/* Logo & Banner */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Logo và Banner</CardTitle>
+          <CardDescription>Hình ảnh đại diện cho câu lạc bộ</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
+            <div className="space-y-4 md:col-span-1">
+              <Label htmlFor="logo">Logo câu lạc bộ</Label>
+              <div className="flex items-center justify-center py-6">
+                <div
+                  className="border-2 border-dashed rounded-full p-4 flex items-center justify-center w-52 h-52 cursor-pointer"
+                  onClick={() => isEditing && logoInputRef.current?.click()}
+                >
+                  {isEditing && (
+                    <input
+                      ref={logoInputRef}
+                      id="logo"
+                      type="file"
+                      accept="image/*"
+                      onChange={handleLogoChange}
+                      className="hidden"
+                    />
+                  )}
+
+                  {logoPreview ? (
+                    <div className="space-y-3 flex flex-col items-center">
+                      <div className="relative">
+                        <img
+                          src={logoPreview}
+                          alt="Club Logo"
+                          className="h-40 w-40 object-cover rounded-full"
+                        />
+                        {isEditing && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              removeLogo();
+                            }}
+                            className="absolute -top-2 -right-2 bg-white rounded-full p-1 shadow hover:bg-destructive/90"
+                            aria-label="Xóa logo"
+                          >
+                            <X className="h-4 w-4 text-destructive" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center text-center px-2 gap-1">
+                      <div className="h-24 w-24 rounded-full bg-muted/20 flex items-center justify-center">
+                        <ImageIcon className="h-10 w-10 text-muted-foreground" />
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        Chưa có logo
+                      </p>
+                      {isEditing && (
+                        <p className="text-xs text-muted-foreground">
+                          Bấm để chọn file tải lên
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-4 md:col-span-2">
+              <Label htmlFor="banner">Banner câu lạc bộ</Label>
+              <div
+                className="border-2 border-dashed rounded-lg p-4 flex items-center justify-center min-h-[12rem] w-full cursor-pointer"
+                onClick={() => isEditing && bannerInputRef.current?.click()}
+              >
+                {isEditing && (
+                  <input
+                    ref={bannerInputRef}
+                    id="banner"
+                    type="file"
+                    accept="image/*"
+                    onChange={handleBannerChange}
+                    className="hidden"
+                  />
+                )}
+
+                {bannerPreview ? (
+                  <div className="relative w-full">
+                    <img
+                      src={bannerPreview}
+                      alt="Club Banner"
+                      className="h-48 w-full object-cover rounded"
+                    />
+                    {isEditing && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeBanner();
+                        }}
+                        className="absolute top-2 right-2 bg-white rounded-full p-1 shadow hover:bg-destructive/90"
+                        aria-label="Xóa banner"
+                      >
+                        <X className="h-4 w-4 text-destructive" />
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="w-full text-center py-8">
+                    <ImageIcon className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
+                    <p className="text-sm text-muted-foreground mb-3">
+                      Chưa có banner
+                    </p>
+                    {isEditing && (
+                      <p className="text-sm text-muted-foreground">
+                        Bấm để chọn file tải lên
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Main Info */}
       <Card>
         <CardHeader>
           <CardTitle>Thông tin chung</CardTitle>
@@ -430,13 +663,11 @@ export function ClubInforManagement() {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Left Column: Basic Info */}
             <div className="space-y-4">
               <h3 className="font-semibold text-sm text-muted-foreground">
                 Thông tin cơ bản
               </h3>
 
-              {/* Club Name */}
               <div className="space-y-2">
                 <Label htmlFor="club-name">Tên câu lạc bộ</Label>
                 <Input
@@ -445,12 +676,11 @@ export function ClubInforManagement() {
                   onChange={(e) =>
                     handleInputChange("clubName", e.target.value)
                   }
-                  disabled={!isEditing}
-                  placeholder="Nhập tên câu lạc bộ"
+                  readOnly={!isEditing}
+                  placeholder={isEditing ? "Nhập tên câu lạc bộ" : undefined}
                 />
               </div>
 
-              {/* Club Code */}
               <div className="space-y-2">
                 <Label htmlFor="club-code">Mã câu lạc bộ</Label>
                 <Input
@@ -459,24 +689,25 @@ export function ClubInforManagement() {
                   onChange={(e) =>
                     handleInputChange("clubCode", e.target.value)
                   }
-                  disabled={!isEditing}
-                  placeholder="Nhập mã câu lạc bộ"
+                  readOnly={!isEditing}
+                  placeholder={isEditing ? "Nhập mã câu lạc bộ" : undefined}
                 />
               </div>
 
-              {/* Category */}
               <div className="space-y-2">
                 <Label htmlFor="category">Thể loại</Label>
                 {!isEditing ? (
                   <Input
                     id="category"
                     value={clubData?.categoryName || ""}
-                    disabled={true}
-                    placeholder="Thể loại câu lạc bộ"
+                    readOnly
+                    placeholder={isEditing ? "Thể loại câu lạc bộ" : undefined}
                   />
                 ) : (
                   <Select
-                    value={formData.categoryId ? String(formData.categoryId) : ""}
+                    value={
+                      formData.categoryId ? String(formData.categoryId) : ""
+                    }
                     onValueChange={(value) =>
                       handleInputChange("categoryId", Number(value))
                     }
@@ -501,25 +732,22 @@ export function ClubInforManagement() {
               </div>
             </div>
 
-            {/* Right Column: Contact Info */}
             <div className="space-y-4">
               <h3 className="font-semibold text-sm text-muted-foreground">
                 Thông tin liên hệ
               </h3>
 
-              {/* Email */}
               <div className="space-y-2">
                 <Label htmlFor="email" className="flex items-center gap-2">
-                  <Mail className="h-4 w-4" />
-                  Email
+                  <Mail className="h-4 w-4" /> Email
                 </Label>
                 <Input
                   id="email"
                   type="email"
                   value={formData.email}
                   onChange={(e) => handleInputChange("email", e.target.value)}
-                  disabled={!isEditing}
-                  placeholder="club@example.com"
+                  readOnly={!isEditing}
+                  placeholder={isEditing ? "club@example.com" : undefined}
                 />
                 {fieldErrors.email && (
                   <p className="text-xs text-destructive mt-1">
@@ -528,19 +756,17 @@ export function ClubInforManagement() {
                 )}
               </div>
 
-              {/* Phone */}
               <div className="space-y-2">
                 <Label htmlFor="phone" className="flex items-center gap-2">
-                  <Phone className="h-4 w-4" />
-                  Số điện thoại
+                  <Phone className="h-4 w-4" /> Số điện thoại
                 </Label>
                 <Input
                   id="phone"
                   type="tel"
                   value={formData.phone}
                   onChange={(e) => handleInputChange("phone", e.target.value)}
-                  disabled={!isEditing}
-                  placeholder="0123456789"
+                  readOnly={!isEditing}
+                  placeholder={isEditing ? "0123456789" : undefined}
                 />
                 {fieldErrors.phone && (
                   <p className="text-xs text-destructive mt-1">
@@ -551,58 +777,132 @@ export function ClubInforManagement() {
             </div>
           </div>
 
-          {/* Full Width: Social Media Links and Description */}
           <div className="space-y-4 mt-6 pt-6 border-t">
-            {/* Social Media Links */}
             <h3 className="font-semibold text-sm text-muted-foreground">
               Mạng xã hội
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="fbUrl">Facebook</Label>
-                <Input
-                  id="fbUrl"
-                  value={formData.fbUrl || ""}
-                  onChange={(e) => handleInputChange("fbUrl", e.target.value)}
-                  disabled={!isEditing}
-                  placeholder="https://facebook.com/..."
-                />
+                {isEditing ? (
+                  <Input
+                    id="fbUrl"
+                    value={formData.fbUrl || ""}
+                    onChange={(e) => handleInputChange("fbUrl", e.target.value)}
+                    placeholder="https://facebook.com/..."
+                  />
+                ) : isUrl(formData.fbUrl) ? (
+                  <a
+                    href={formData.fbUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary underline break-all"
+                  >
+                    {formData.fbUrl}
+                  </a>
+                ) : (
+                  <Input
+                    id="fbUrl"
+                    value={formData.fbUrl || ""}
+                    readOnly
+                    placeholder={
+                      isEditing ? "https://facebook.com/..." : undefined
+                    }
+                  />
+                )}
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="igUrl">Instagram</Label>
-                <Input
-                  id="igUrl"
-                  value={formData.igUrl || ""}
-                  onChange={(e) => handleInputChange("igUrl", e.target.value)}
-                  disabled={!isEditing}
-                  placeholder="https://instagram.com/..."
-                />
+                {isEditing ? (
+                  <Input
+                    id="igUrl"
+                    value={formData.igUrl || ""}
+                    onChange={(e) => handleInputChange("igUrl", e.target.value)}
+                    placeholder="https://instagram.com/..."
+                  />
+                ) : isUrl(formData.igUrl) ? (
+                  <a
+                    href={formData.igUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary underline break-all"
+                  >
+                    {formData.igUrl}
+                  </a>
+                ) : (
+                  <Input
+                    id="igUrl"
+                    value={formData.igUrl || ""}
+                    readOnly
+                    placeholder={
+                      isEditing ? "https://instagram.com/..." : undefined
+                    }
+                  />
+                )}
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="ttUrl">TikTok</Label>
-                <Input
-                  id="ttUrl"
-                  value={formData.ttUrl || ""}
-                  onChange={(e) => handleInputChange("ttUrl", e.target.value)}
-                  disabled={!isEditing}
-                  placeholder="https://tiktok.com/@..."
-                />
+                {isEditing ? (
+                  <Input
+                    id="ttUrl"
+                    value={formData.ttUrl || ""}
+                    onChange={(e) => handleInputChange("ttUrl", e.target.value)}
+                    placeholder="https://tiktok.com/@..."
+                  />
+                ) : isUrl(formData.ttUrl) ? (
+                  <a
+                    href={formData.ttUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary underline break-all"
+                  >
+                    {formData.ttUrl}
+                  </a>
+                ) : (
+                  <Input
+                    id="ttUrl"
+                    value={formData.ttUrl || ""}
+                    readOnly
+                    placeholder={
+                      isEditing ? "https://tiktok.com/@..." : undefined
+                    }
+                  />
+                )}
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="ytUrl">YouTube</Label>
-                <Input
-                  id="ytUrl"
-                  value={formData.ytUrl || ""}
-                  onChange={(e) => handleInputChange("ytUrl", e.target.value)}
-                  disabled={!isEditing}
-                  placeholder="https://youtube.com/@..."
-                />
+                {isEditing ? (
+                  <Input
+                    id="ytUrl"
+                    value={formData.ytUrl || ""}
+                    onChange={(e) => handleInputChange("ytUrl", e.target.value)}
+                    placeholder="https://youtube.com/@..."
+                  />
+                ) : isUrl(formData.ytUrl) ? (
+                  <a
+                    href={formData.ytUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary underline break-all"
+                  >
+                    {formData.ytUrl}
+                  </a>
+                ) : (
+                  <Input
+                    id="ytUrl"
+                    value={formData.ytUrl || ""}
+                    readOnly
+                    placeholder={
+                      isEditing ? "https://youtube.com/@..." : undefined
+                    }
+                  />
+                )}
               </div>
             </div>
-            {/* Description */}
+
             <div className="space-y-2">
               <Label htmlFor="description">Mô tả</Label>
               <Textarea
@@ -611,8 +911,8 @@ export function ClubInforManagement() {
                 onChange={(e) =>
                   handleInputChange("description", e.target.value)
                 }
-                disabled={!isEditing}
-                placeholder="Mô tả về câu lạc bộ..."
+                readOnly={!isEditing}
+                placeholder={isEditing ? "Mô tả về câu lạc bộ..." : undefined}
                 rows={4}
               />
             </div>
@@ -620,12 +920,11 @@ export function ClubInforManagement() {
         </CardContent>
       </Card>
 
-      {/* Presidents Information Card */}
+      {/* Presidents */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Users className="h-5 w-5" />
-            Chủ tịch câu lạc bộ
+            <Users className="h-5 w-5" /> Chủ tịch câu lạc bộ
           </CardTitle>
           <CardDescription>
             Danh sách các chủ tịch hiện tại của câu lạc bộ
@@ -641,7 +940,6 @@ export function ClubInforManagement() {
                 ).toUpperCase();
                 const name = president?.fullName ?? "—";
                 const email = president?.email ?? "—";
-
                 return (
                   <div
                     key={key}
@@ -655,7 +953,7 @@ export function ClubInforManagement() {
                     <div className="flex-1 min-w-0">
                       <h4 className="font-medium text-sm truncate">{name}</h4>
                       <p className="text-xs text-muted-foreground truncate flex items-center gap-1">
-                        <Mail className="h-3 w-3 flex-shrink-0" />
+                        <Mail className="h-3 w-3 flex-shrink-0" />{" "}
                         <span className="truncate">{email}</span>
                       </p>
                     </div>
