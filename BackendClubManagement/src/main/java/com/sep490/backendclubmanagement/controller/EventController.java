@@ -70,7 +70,7 @@ public class EventController {
                                                           @RequestParam(value = "endTime", required = false) String endTime) {
         Long userId = SecurityUtils.getCurrentUserId();
         if (!roleService.isStaff(userId)) {
-            throw new ForbiddenException("Chỉ STAFF mới có quyền truy cập");
+            throw new ForbiddenException("Chỉ Nhân viên phòng IC-PDP mới có quyền truy cập");
         }
         return ApiResponse.success(eventService.getStaffAllEvents(startTime, endTime));
     }
@@ -82,7 +82,7 @@ public class EventController {
                                                                @RequestParam(value = "endTime", required = false) String endTime) {
         Long userId = SecurityUtils.getCurrentUserId();
         if (!roleService.isStaff(userId)) {
-            throw new ForbiddenException("Chỉ STAFF mới có quyền truy cập");
+            throw new ForbiddenException("Chỉ Nhân viên phòng IC-PDP mới có quyền truy cập");
         }
         return ApiResponse.success(eventService.getStaffEventsByClubId(clubId, startTime, endTime));
     }
@@ -229,7 +229,9 @@ public class EventController {
             throw new ForbiddenException("Event không thuộc về club nào");
         }
 
-        if (!roleService.isClubPresident(userId, clubId) && !roleService.isClubOfficer(userId, clubId)) {
+        if (!roleService.isClubPresident(userId, clubId)
+                && !roleService.isClubOfficer(userId, clubId)
+                && !roleService.isClubTreasurer(userId, clubId)) {
             throw new ForbiddenException("Chỉ ban cán sự của CLB này mới có quyền xem danh sách đăng ký");
         }
         
@@ -247,7 +249,9 @@ public class EventController {
             throw new ForbiddenException("Event không thuộc về club nào");
         }
 
-        if (!roleService.isClubPresident(userId, clubId) && !roleService.isClubOfficer(userId, clubId)) {
+        if (!roleService.isClubPresident(userId, clubId)
+                && !roleService.isClubOfficer(userId, clubId)
+                && !roleService.isClubTreasurer(userId, clubId)) {
             throw new ForbiddenException("Chỉ ban cán sự của CLB này mới có quyền điểm danh");
         }
         
@@ -294,7 +298,9 @@ public class EventController {
         }
 
         // Chỉ ban cán sự của CLB mới có quyền xuất Excel
-        if (!roleService.isClubPresident(userId, clubId) && !roleService.isClubOfficer(userId, clubId)) {
+        if (!roleService.isClubPresident(userId, clubId)
+                && !roleService.isClubOfficer(userId, clubId)
+                && !roleService.isClubTreasurer(userId, clubId)) {
             throw new ForbiddenException("Chỉ ban cán sự của CLB này mới có quyền xuất Excel điểm danh");
         }
 

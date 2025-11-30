@@ -6,6 +6,7 @@ import com.sep490.backendclubmanagement.dto.request.ReportFilterRequest;
 import com.sep490.backendclubmanagement.dto.request.ReportReviewRequest;
 import com.sep490.backendclubmanagement.dto.request.SubmitReportRequest;
 import com.sep490.backendclubmanagement.dto.request.UpdateReportRequest;
+import com.sep490.backendclubmanagement.dto.request.UpdateReportRequirementRequest;
 import com.sep490.backendclubmanagement.dto.response.PageResponse;
 import com.sep490.backendclubmanagement.dto.response.ReportDetailResponse;
 import com.sep490.backendclubmanagement.dto.response.ReportListItemResponse;
@@ -62,7 +63,17 @@ public interface ReportServiceInterface {
      * @param userId Current user ID
      * @return Created report requirement response with club requirements
      */
-    ReportRequirementResponse createReportRequirement(CreateReportRequirementRequest request, MultipartFile file, Long userId);
+    ReportRequirementResponse createReportRequirement(CreateReportRequirementRequest request, MultipartFile file, Long userId) throws  AppException;
+
+    /**
+     * Update report requirement basic information (for staff only)
+     * @param requirementId Submission report requirement ID
+     * @param request Update request containing updated title, description, dueDate, and templateUrl
+     * @param file Optional template file to upload
+     * @param userId Current user ID
+     * @return Updated report requirement response
+     */
+    ReportRequirementResponse updateReportRequirement(Long requirementId, UpdateReportRequirementRequest request, MultipartFile file, Long userId) throws AppException;
 
 
     /**
@@ -141,10 +152,13 @@ public interface ReportServiceInterface {
     /**
      * Get list of clubs that need to submit reports for a specific report requirement (for staff only)
      * @param requirementId Submission report requirement ID
+     * @param keyword Keyword for searching club name or code
+     * @param pageable Pageable object for pagination and sorting
      * @param userId Current user ID
-     * @return List of club requirement info containing club details and status
+     * @return Page response containing list of club requirement info with club details and status
      */
-    List<ReportRequirementResponse.ClubRequirementInfo> getClubsByReportRequirement(Long requirementId, Long userId);
+    PageResponse<ReportRequirementResponse.ClubRequirementInfo> getClubsByReportRequirement(
+            Long requirementId, String keyword, Pageable pageable, Long userId);
 
     /**
      * Get report of a specific club for a specific report requirement (for staff only)

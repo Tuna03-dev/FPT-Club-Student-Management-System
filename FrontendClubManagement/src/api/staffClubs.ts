@@ -28,7 +28,10 @@ export async function getStaffClubs(
   if (filter.sort) params.append("sort", filter.sort);
 
   const res = await axiosClient.get<PageResponse<ClubManagementResponse>>(
-    `/staff/clubs?${params.toString()}`
+    `/staff/clubs?${params.toString()}`,
+    {
+      timeout: 30000, // 30 seconds
+    }
   );
 
   if (res.code !== 200) {
@@ -65,7 +68,10 @@ export async function createStaffClub(
 ): Promise<ClubManagementResponse> {
   const res = await axiosClient.post<ClubManagementResponse>(
     "/staff/clubs",
-    request
+    request,
+    {
+      timeout: 60000, // 60 seconds
+    }
   );
 
   if (res.code !== 200) {
@@ -85,7 +91,10 @@ export async function updateStaffClub(
 ): Promise<ClubManagementResponse> {
   const res = await axiosClient.put<ClubManagementResponse>(
     `/staff/clubs/${clubId}`,
-    request
+    request,
+    {
+      timeout: 60000, // 60 seconds
+    }
   );
 
   if (res.code !== 200) {

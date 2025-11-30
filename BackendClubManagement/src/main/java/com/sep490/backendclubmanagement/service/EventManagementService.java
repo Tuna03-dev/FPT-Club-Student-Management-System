@@ -8,6 +8,7 @@ import com.sep490.backendclubmanagement.dto.response.MyDraftEventDto;
 import com.sep490.backendclubmanagement.dto.response.PendingRequestDto;
 import com.sep490.backendclubmanagement.dto.websocket.EventWebSocketPayload;
 import com.sep490.backendclubmanagement.entity.*;
+import com.sep490.backendclubmanagement.exception.AppException;
 import com.sep490.backendclubmanagement.exception.ForbiddenException;
 import com.sep490.backendclubmanagement.exception.NotFoundException;
 import com.sep490.backendclubmanagement.mapper.EventMapper;
@@ -19,8 +20,10 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
@@ -38,6 +41,10 @@ public class EventManagementService {
     private final CloudinaryService cloudinaryService;
     private final WebSocketService webSocketService;
     private final NotificationService notificationService;
+    private final ClubMemberShipRepository clubMemberShipRepository;
+
+    private static final DateTimeFormatter MEETING_TIME_FORMATTER =
+            DateTimeFormatter.ofPattern("HH:mm dd/MM/yyyy");
 
 
     @Transactional
@@ -56,12 +63,12 @@ public class EventManagementService {
         }
 
         boolean isClubPresident = request.getClubId() != null && roleService.isClubPresident(userId, request.getClubId());
-        boolean isClubOfficer = request.getClubId() != null && roleService.isClubOfficer(userId, request.getClubId());
+        boolean isClubOfficer = request.getClubId() != null && hasEventOfficerPrivileges(userId, request.getClubId());
         boolean isMeeting = eventType != null && "MEETING".equalsIgnoreCase(eventType.getTypeName());
         
-        // STAFF không được tạo sự kiện MEETING
+        // Nhân viên phòng IC-PDP không được tạo sự kiện MEETING
         if (isStaff && isMeeting) {
-            throw new ForbiddenException("STAFF không được tạo sự kiện loại MEETING");
+            throw new ForbiddenException("Nhân viên phòng IC-PDP không được tạo sự kiện loại MEETING");
         }
         
         Club club = null;
@@ -72,7 +79,7 @@ public class EventManagementService {
             club = getClubById(request.getClubId());
         }
 
-        // STAFF tạo event ở trạng thái draft, cần publish sau
+        // Nhân viên phòng IC-PDP tạo event ở trạng thái draft, cần publish sau
         // MEETING vẫn public ngay
         boolean shouldBeDraft = isStaff && !isMeeting;
         
@@ -95,12 +102,17 @@ public class EventManagementService {
         
         if (isMeeting) {
             log.info("Event created directly (MEETING)");
+            if (club != null) {
+                notifyClubMembersAboutMeeting(savedEvent, club, user);
+            } else {
+                log.warn("MEETING event {} does not belong to a club - skip notification", savedEvent.getId());
+            }
             return eventMapper.toDto(savedEvent);
         } else if (isStaff) {
-            log.info("Event created as draft (STAFF)");
+            log.info("Event created as draft (Nhân viên phòng IC-PDP)");
             return eventMapper.toDto(savedEvent);
         } else if (isClubPresident) {
-            // CLUB_OFFICER: Gửi lên STAFF
+            // CLUB_OFFICER: Gửi lên Nhân viên phòng IC-PDP
             savedEvent.setIsDraft(true);
             eventRepository.save(savedEvent);
             
@@ -116,7 +128,7 @@ public class EventManagementService {
             requestEventRepository.save(requestEvent);
             requestEventRepository.flush();
             
-            // 🔔 WebSocket: Gửi cho tất cả Staff
+            // 🔔 WebSocket: Gửi cho tất cả Nhân viên phòng IC-PDP
             try {
                 EventWebSocketPayload payload = EventWebSocketPayload.builder()
                         .eventId(savedEvent.getId())
@@ -144,7 +156,7 @@ public class EventManagementService {
                 log.error("Failed to send WebSocket notification for event request submission: {}", e.getMessage(), e);
             }
             
-            // 🔔 Notification: Gửi cho tất cả Staff
+            // 🔔 Notification: Gửi cho tất cả Nhân viên phòng IC-PDP
             try {
                 List<User> staffUsers = userRepository.findBySystemRole_RoleNameIgnoreCase("STAFF");
                 if (!staffUsers.isEmpty()) {
@@ -269,6 +281,87 @@ public class EventManagementService {
     }
     
 
+    private void notifyClubMembersAboutMeeting(Event event, Club club, User creator) {
+        try {
+            List<ClubMemberShip> activeMembers = clubMemberShipRepository.findByClubIdAndStatus(
+                    club.getId(),
+                    ClubMemberShipStatus.ACTIVE
+            );
+
+            if (activeMembers == null || activeMembers.isEmpty()) {
+                log.info("No active members to notify for club {}", club.getId());
+                return;
+            }
+
+            List<Long> recipientIds = activeMembers.stream()
+                    .map(ClubMemberShip::getUser)
+                    .filter(Objects::nonNull)
+                    .map(User::getId)
+                    .filter(id -> creator == null || !Objects.equals(id, creator.getId()))
+                    .distinct()
+                    .toList();
+
+            if (recipientIds.isEmpty()) {
+                log.info("No recipients remain after filtering creator for club {}", club.getId());
+            } else {
+                String title = String.format("CLB %s có buổi meeting mới", club.getClubName());
+                String formattedStart = event.getStartTime() != null
+                        ? event.getStartTime().format(MEETING_TIME_FORMATTER)
+                        : "thời gian sẽ cập nhật";
+                String location = event.getLocation() != null ? event.getLocation() : "địa điểm sẽ cập nhật";
+                String message = String.format("Buổi meeting \"%s\" sẽ diễn ra lúc %s tại %s.",
+                        event.getTitle(),
+                        formattedStart,
+                        location);
+                String actionUrl = String.format("/clubs/%d/events/%d", club.getId(), event.getId());
+                for (Long recipientId : recipientIds) {
+                    try {
+                        notificationService.sendToUser(
+                                recipientId,
+                                creator != null ? creator.getId() : null,
+                                title,
+                                message,
+                                NotificationType.EVENT_CREATED,
+                                NotificationPriority.HIGH,
+                                actionUrl,
+                                club.getId(),
+                                null,
+                                null,
+                                null,
+                                event.getId()
+                        );
+                    } catch (AppException appException) {
+                        log.warn("Failed to send meeting notification to user {}: {}", recipientId, appException.getMessage());
+                    }
+                }
+                log.info("Sent meeting notifications to {} members of club {}", recipientIds.size(), club.getId());
+            }
+
+            EventWebSocketPayload payload = EventWebSocketPayload.builder()
+                    .eventId(event.getId())
+                    .eventTitle(event.getTitle())
+                    .clubId(club.getId())
+                    .clubName(club.getClubName())
+                    .creatorId(creator != null ? creator.getId() : null)
+                    .creatorName(creator != null ? creator.getFullName() : null)
+                    .creatorEmail(creator != null ? creator.getEmail() : null)
+                    .startTime(event.getStartTime())
+                    .endTime(event.getEndTime())
+                    .location(event.getLocation())
+                    .eventTypeName(event.getEventType() != null ? event.getEventType().getTypeName() : "MEETING")
+                    .message(String.format("CLB %s vừa tạo buổi meeting \"%s\".",
+                            club.getClubName(),
+                            event.getTitle()))
+                    .build();
+
+            webSocketService.broadcastToClub(club.getId(), "EVENT", "MEETING_CREATED", payload);
+            log.info("Broadcast MEETING_CREATED websocket for event {} to club {}", event.getId(), club.getId());
+        } catch (Exception e) {
+            log.error("Failed to notify members about meeting event {}: {}", event.getId(), e.getMessage(), e);
+        }
+    }
+
+
     private User getUserById(Long userId) {
         return userRepository.findById(userId)
                 .orElseThrow(() -> new NotFoundException("User not found with ID: " + userId));
@@ -392,7 +485,7 @@ public class EventManagementService {
                         .location(event != null ? event.getLocation() : null)
                         .eventTypeName(event != null && event.getEventType() != null ? event.getEventType().getTypeName() : null)
                         .responseMessage(requestEvent.getResponseMessage())
-                        .message(String.format("Yêu cầu tạo sự kiện của bạn đã được %s (Chủ nhiệm CLB %s) duyệt và đã chuyển lên Staff",
+                        .message(String.format("Yêu cầu tạo sự kiện của bạn đã được %s (Chủ nhiệm CLB %s) duyệt và đã chuyển lên Nhân viên phòng IC-PDP",
                                 approver.getFullName(),
                                 club != null ? club.getClubName() : "N/A"))
                         .build();
@@ -408,7 +501,7 @@ public class EventManagementService {
             try {
                 if (creator != null) {
                     String title = "Yêu cầu tạo sự kiện đã được duyệt";
-                    String message = String.format("Yêu cầu tạo sự kiện \"%s\" của bạn đã được %s (Chủ nhiệm CLB %s) duyệt và đã chuyển lên Staff để xem xét",
+                    String message = String.format("Yêu cầu tạo sự kiện \"%s\" của bạn đã được %s (Chủ nhiệm CLB %s) duyệt và đã chuyển lên Nhân viên phòng IC-PDP để xem xét",
                             event != null ? event.getTitle() : "N/A",
                             approver.getFullName(),
                             club != null ? club.getClubName() : "N/A");
@@ -432,7 +525,7 @@ public class EventManagementService {
                 log.error("Failed to send notification for event approval by club: {}", e.getMessage(), e);
             }
             
-            // 🔔 WebSocket + Notification: Gửi cho tất cả Staff (vì request đã chuyển sang PENDING_UNIVERSITY)
+            // 🔔 WebSocket + Notification: Gửi cho tất cả Nhân viên phòng IC-PDP (vì request đã chuyển sang PENDING_UNIVERSITY)
             try {
                 EventWebSocketPayload staffPayload = EventWebSocketPayload.builder()
                         .eventId(event != null ? event.getId() : null)
@@ -551,8 +644,17 @@ public class EventManagementService {
                 log.error("Failed to send notification for event rejection by club: {}", e.getMessage(), e);
             }
         }
+
     }
-    
+
+    private boolean hasEventOfficerPrivileges(Long userId, Long clubId) {
+        return roleService.isClubOfficer(userId, clubId) || roleService.isClubTreasurer(userId, clubId);
+    }
+
+    private boolean hasEventOfficerPrivileges(Long userId) {
+        return roleService.isClubOfficer(userId) || roleService.isClubTreasurer(userId);
+    }
+
 
     @Transactional
     public void approveEventByStaff(EventApprovalRequest request, Long userId) {
@@ -560,7 +662,7 @@ public class EventManagementService {
                 .orElseThrow(() -> new NotFoundException("Request event not found"));
         
         if (!roleService.isStaff(userId)) {
-            throw new ForbiddenException("Chỉ STAFF mới có quyền duyệt");
+            throw new ForbiddenException("Chỉ Nhân viên phòng IC-PDP mới có quyền duyệt");
         }
         
         // Kiểm tra status
@@ -592,7 +694,7 @@ public class EventManagementService {
         
         Club club = event != null ? event.getClub() : null;
         User creator = requestEvent.getCreatedBy();
-        User approver = getUserById(userId); // Người duyệt (Staff)
+        User approver = getUserById(userId); // Người duyệt (Nhân viên phòng IC-PDP)
         
         // 🔔 WebSocket + Notification
         if (request.getStatus() == RequestStatus.APPROVED_UNIVERSITY) {
@@ -613,7 +715,7 @@ public class EventManagementService {
                         .location(event != null ? event.getLocation() : null)
                         .eventTypeName(event != null && event.getEventType() != null ? event.getEventType().getTypeName() : null)
                         .responseMessage(requestEvent.getResponseMessage())
-                        .message(String.format("Yêu cầu tạo sự kiện của bạn đã được %s (Staff) duyệt và sự kiện đã được công bố",
+                        .message(String.format("Yêu cầu tạo sự kiện của bạn đã được %s (Nhân viên phòng IC-PDP) duyệt và sự kiện đã được công bố",
                                 approver.getFullName()))
                         .build();
                 
@@ -628,7 +730,7 @@ public class EventManagementService {
             try {
                 if (creator != null) {
                     String title = "Yêu cầu tạo sự kiện đã được duyệt";
-                    String message = String.format("Yêu cầu tạo sự kiện \"%s\" của bạn đã được %s (Staff) duyệt và sự kiện đã được công bố",
+                    String message = String.format("Yêu cầu tạo sự kiện \"%s\" của bạn đã được %s (Nhân viên phòng IC-PDP) duyệt và sự kiện đã được công bố",
                             event != null ? event.getTitle() : "N/A",
                             approver.getFullName());
                     String actionUrl = "/events/" + (event != null ? event.getId() : "");
@@ -672,7 +774,7 @@ public class EventManagementService {
                         .approverId(userId)
                         .approverName(approver.getFullName())
                         .approverRole("STAFF")
-                        .message(String.format("Yêu cầu tạo sự kiện \"%s\" của bạn đã bị %s (Staff) từ chối. Lý do: %s",
+                        .message(String.format("Yêu cầu tạo sự kiện \"%s\" của bạn đã bị %s (Nhân viên phòng IC-PDP) từ chối. Lý do: %s",
                                 event != null ? event.getTitle() : "N/A",
                                 approver.getFullName(),
                                 requestEvent.getResponseMessage() != null ? requestEvent.getResponseMessage() : "Không có lý do"))
@@ -689,7 +791,7 @@ public class EventManagementService {
             try {
                 if (creator != null) {
                     String title = "Yêu cầu tạo sự kiện đã bị từ chối";
-                    String message = String.format("Yêu cầu tạo sự kiện \"%s\" của bạn đã bị %s (Staff) từ chối. Lý do: %s",
+                    String message = String.format("Yêu cầu tạo sự kiện \"%s\" của bạn đã bị %s (Nhân viên phòng IC-PDP) từ chối. Lý do: %s",
                             event != null ? event.getTitle() : "N/A",
                             approver.getFullName(),
                             requestEvent.getResponseMessage() != null ? requestEvent.getResponseMessage() : "Không có lý do");
@@ -750,24 +852,24 @@ public class EventManagementService {
 
     /**
      * Lấy các event và trạng thái request chờ duyệt mà user này tạo (theo club)
-     * Hoặc draft events của STAFF (không có club)
+     * Hoặc draft events của Nhân viên phòng IC-PDP (không có club)
      */
     public List<MyDraftEventDto> getMyDraftEvents(Long userId, Long clubId) {
-        // STAFF: Lấy draft events không có club (toàn trường)
-        // STAFF tạo event không có RequestEvent, chỉ có isDraft = true và clubId = null
+        // Nhân viên phòng IC-PDP: Lấy draft events không có club (toàn trường)
+        // Nhân viên phòng IC-PDP tạo event không có RequestEvent, chỉ có isDraft = true và clubId = null
         if (roleService.isStaff(userId)) {
             List<Event> staffDrafts = eventRepository.findByIsDraftTrueAndClubIsNull();
             return staffDrafts.stream()
                 .filter(e -> {
                     // Chỉ lấy events do user này tạo (thông qua RequestEvent hoặc trực tiếp)
-                    // Vì STAFF tạo event không có RequestEvent, cần check creator
+                    // Vì Nhân viên phòng IC-PDP tạo event không có RequestEvent, cần check creator
                     // Tạm thời lấy tất cả draft events không có club (vì không có createdBy trong Event)
                     // Có thể cần thêm field createdBy vào Event entity sau
                     return true;
                 })
                 .map(e -> MyDraftEventDto.builder()
                     .event(eventMapper.toDto(e))
-                    .requestStatus(null) // STAFF draft events không có RequestStatus
+                    .requestStatus(null) // Nhân viên phòng IC-PDP draft events không có RequestStatus
                     .build())
                 .toList();
         }
@@ -779,7 +881,7 @@ public class EventManagementService {
         // Check role theo clubId nếu có, nếu không thì check global role
         if (clubId != null && clubId > 0) {
             isClubPresident = roleService.isClubPresident(userId, clubId);
-            isClubOfficer = roleService.isClubOfficer(userId, clubId);
+            isClubOfficer = hasEventOfficerPrivileges(userId, clubId);
             
             if (isClubPresident) {
                 statuses = List.of(RequestStatus.PENDING_UNIVERSITY);
@@ -791,7 +893,7 @@ public class EventManagementService {
         } else {
             // Fallback: check global role (for backward compatibility)
             isClubPresident = roleService.isClubPresident(userId);
-            isClubOfficer = roleService.isClubOfficer(userId);
+            isClubOfficer = hasEventOfficerPrivileges(userId);
             
             if (isClubPresident) {
                 statuses = List.of(RequestStatus.PENDING_UNIVERSITY);
@@ -840,7 +942,7 @@ public class EventManagementService {
         // Lấy clubId từ event
         Long clubId = event.getClub() != null ? event.getClub().getId() : null;
 
-        // STAFF: Update draft events (isDraft = true, club = null) hoặc published events (isDraft = false, club = null)
+        // Nhân viên phòng IC-PDP: Update draft events (isDraft = true, club = null) hoặc published events (isDraft = false, club = null)
         if (event.getClub() == null && roleService.isStaff(userId)) {
             // Draft events: cho phép update bất cứ lúc nào
             // Published events: chỉ cho update trước khi bắt đầu
@@ -882,7 +984,8 @@ public class EventManagementService {
             boolean isCreator = requestEventRepository
                     .findByEventIdAndCreatedById(eventId, userId)
                     .isPresent();
-            boolean isClubLeader = (clubId != null) && (roleService.isClubPresident(userId, clubId) || roleService.isClubOfficer(userId, clubId));
+            boolean isClubLeader = (clubId != null) && (roleService.isClubPresident(userId, clubId)
+                    || hasEventOfficerPrivileges(userId, clubId));
             if (!isCreator && !isClubLeader) {
                 throw new ForbiddenException("Bạn không có quyền cập nhật sự kiện này");
             }
@@ -924,7 +1027,7 @@ public class EventManagementService {
         if (clubId != null && clubId > 0) {
             // Check role theo clubId
             isClubPresident = roleService.isClubPresident(userId, clubId);
-            isClubOfficer = roleService.isClubOfficer(userId, clubId);
+            isClubOfficer = hasEventOfficerPrivileges(userId, clubId);
             
             if (isClubPresident) {
                 allowedStatuses = List.of(RequestStatus.PENDING_UNIVERSITY);
@@ -936,7 +1039,7 @@ public class EventManagementService {
         } else {
             // Event toàn trường hoặc không có club - check global role
             isClubPresident = roleService.isClubPresident(userId);
-            isClubOfficer = roleService.isClubOfficer(userId);
+            isClubOfficer = hasEventOfficerPrivileges(userId);
             
             if (isClubPresident) {
                 allowedStatuses = List.of(RequestStatus.PENDING_UNIVERSITY);
@@ -1076,7 +1179,7 @@ public class EventManagementService {
         // Lấy clubId từ event
         Long clubId = event.getClub() != null ? event.getClub().getId() : null;
 
-        // STAFF: Delete draft events (isDraft = true, club = null) hoặc published events (isDraft = false, club = null)
+        // Nhân viên phòng IC-PDP: Delete draft events (isDraft = true, club = null) hoặc published events (isDraft = false, club = null)
         if (event.getClub() == null && roleService.isStaff(userId)) {
             // Draft events: cho phép xóa bất cứ lúc nào
             // Published events: chỉ cho xóa trước khi bắt đầu
@@ -1099,7 +1202,8 @@ public class EventManagementService {
             boolean isCreator = requestEventRepository
                     .findByEventIdAndCreatedById(eventId, userId)
                     .isPresent();
-            boolean isClubLeader = (clubId != null) && (roleService.isClubPresident(userId, clubId) || roleService.isClubOfficer(userId, clubId));
+            boolean isClubLeader = (clubId != null) && (roleService.isClubPresident(userId, clubId)
+                    || hasEventOfficerPrivileges(userId, clubId));
             if (!isCreator && !isClubLeader) {
                 throw new ForbiddenException("Bạn không có quyền xóa sự kiện này");
             }
@@ -1118,7 +1222,7 @@ public class EventManagementService {
         if (clubId != null && clubId > 0) {
             // Check role theo clubId
             isClubPresident = roleService.isClubPresident(userId, clubId);
-            isClubOfficer = roleService.isClubOfficer(userId, clubId);
+            isClubOfficer = hasEventOfficerPrivileges(userId, clubId);
             
             if (isClubPresident) {
                 allowedStatuses = List.of(RequestStatus.PENDING_UNIVERSITY);
@@ -1130,7 +1234,7 @@ public class EventManagementService {
         } else {
             // Event toàn trường hoặc không có club - check global role
             isClubPresident = roleService.isClubPresident(userId);
-            isClubOfficer = roleService.isClubOfficer(userId);
+            isClubOfficer = hasEventOfficerPrivileges(userId);
             
             if (isClubPresident) {
                 allowedStatuses = List.of(RequestStatus.PENDING_UNIVERSITY);
@@ -1165,11 +1269,11 @@ public class EventManagementService {
         eventRepository.delete(event);
     }
 
-    // ================= STAFF Cancel/Restore =================
+    // ================= Nhân viên phòng IC-PDP Cancel/Restore =================
     @Transactional
     public void cancelClubEventByStaff(Long eventId, Long userId, String reason) {
         if (!roleService.isStaff(userId)) {
-            throw new ForbiddenException("Chỉ STAFF mới có quyền hủy sự kiện");
+            throw new ForbiddenException("Chỉ Nhân viên phòng IC-PDP mới có quyền hủy sự kiện");
         }
         Event event = eventRepository.findById(eventId)
                 .orElseThrow(() -> new NotFoundException("Không tìm thấy sự kiện"));
@@ -1227,7 +1331,7 @@ public class EventManagementService {
                         .approverId(userId)
                         .approverName(getUserById(userId).getFullName())
                         .approverRole("STAFF")
-                        .message("Sự kiện \"" + event.getTitle() + "\" đã bị Staff hủy" + (reason != null ? ". Lý do: " + reason : ""))
+                        .message("Sự kiện \"" + event.getTitle() + "\" đã bị Nhân viên phòng IC-PDP hủy" + (reason != null ? ". Lý do: " + reason : ""))
                         .build();
                 
                 // Gửi WebSocket cho từng recipient (giống như RESTORED_BY_STAFF)
@@ -1241,7 +1345,7 @@ public class EventManagementService {
                 
                 // Gửi Notification cho từng Club Officer
                 String title = "Sự kiện đã bị hủy";
-                String message = String.format("Sự kiện \"%s\" của CLB %s đã bị Staff hủy%s",
+                String message = String.format("Sự kiện \"%s\" của CLB %s đã bị Nhân viên phòng IC-PDP hủy%s",
                         event.getTitle(),
                         club != null ? club.getClubName() : "N/A",
                         reason != null ? ". Lý do: " + reason : "");
@@ -1275,7 +1379,7 @@ public class EventManagementService {
     @Transactional
     public void restoreCancelledEventByStaff(Long eventId, Long userId) {
         if (!roleService.isStaff(userId)) {
-            throw new ForbiddenException("Chỉ STAFF mới có quyền khôi phục sự kiện");
+            throw new ForbiddenException("Chỉ Nhân viên phòng IC-PDP mới có quyền khôi phục sự kiện");
         }
         Event event = eventRepository.findById(eventId)
                 .orElseThrow(() -> new NotFoundException("Không tìm thấy sự kiện"));
@@ -1323,7 +1427,7 @@ public class EventManagementService {
                         .endTime(event.getEndTime())
                         .location(event.getLocation())
                         .eventTypeName(event.getEventType() != null ? event.getEventType().getTypeName() : null)
-                        .message("Sự kiện \"" + event.getTitle() + "\" đã được Staff khôi phục")
+                        .message("Sự kiện \"" + event.getTitle() + "\" đã được Nhân viên phòng IC-PDP khôi phục")
                         .build();
                 
                 // Gửi WebSocket cho từng recipient
@@ -1337,7 +1441,7 @@ public class EventManagementService {
                 
                 // Gửi Notification
                 String title = "Sự kiện đã được khôi phục";
-                String message = String.format("Sự kiện \"%s\" của CLB %s đã được Staff khôi phục",
+                String message = String.format("Sự kiện \"%s\" của CLB %s đã được Nhân viên phòng IC-PDP khôi phục",
                         event.getTitle(),
                         club != null ? club.getClubName() : "N/A");
                 String actionUrl = "/events/" + event.getId();
@@ -1371,12 +1475,12 @@ public class EventManagementService {
     @Transactional
     public EventData publishEventByStaff(Long eventId, Long userId) {
         if (!roleService.isStaff(userId)) {
-            throw new ForbiddenException("Chỉ STAFF mới có quyền publish sự kiện");
+            throw new ForbiddenException("Chỉ Nhân viên phòng IC-PDP mới có quyền publish sự kiện");
         }
         Event event = eventRepository.findById(eventId)
                 .orElseThrow(() -> new NotFoundException("Không tìm thấy sự kiện"));
         
-        // Chỉ publish được event draft do STAFF tạo (không có club hoặc club = null)
+        // Chỉ publish được event draft do Nhân viên phòng IC-PDP tạo (không có club hoặc club = null)
         if (event.getClub() != null) {
             throw new ForbiddenException("Chỉ publish được sự kiện toàn trường (không thuộc CLB)");
         }
@@ -1391,12 +1495,12 @@ public class EventManagementService {
         
         User publisher = getUserById(userId);
         
-        // 🔔 WebSocket + Notification: Gửi cho tất cả users không phải STAFF (STUDENT, TEAM_OFFICER, CLUB_OFFICER)
+        // 🔔 WebSocket + Notification: Gửi cho tất cả users không phải Nhân viên phòng IC-PDP (STUDENT, TEAM_OFFICER, CLUB_OFFICER)
         try {
             EventWebSocketPayload payload = EventWebSocketPayload.builder()
                     .eventId(saved.getId())
                     .eventTitle(saved.getTitle())
-                    .requestEventId(null) // Staff draft events không có RequestEvent
+                    .requestEventId(null) // Nhân viên phòng IC-PDP draft events không có RequestEvent
                     .status(null)
                     .clubId(null) // Event toàn trường
                     .clubName(null)
@@ -1407,9 +1511,9 @@ public class EventManagementService {
                     .endTime(saved.getEndTime())
                     .location(saved.getLocation())
                     .eventTypeName(saved.getEventType() != null ? saved.getEventType().getTypeName() : null)
-                    .message(String.format("Sự kiện toàn trường \"%s\" đã được %s (Staff) công bố",
+                    .message(String.format("Sự kiện toàn trường \"%s\" đã được %s (Nhân viên phòng IC-PDP) công bố",
                             saved.getTitle(),
-                            publisher != null ? publisher.getFullName() : "Staff"))
+                            publisher != null ? publisher.getFullName() : "Nhân viên phòng IC-PDP"))
                     .build();
             
             // Broadcast WebSocket cho STUDENT, TEAM_OFFICER, và CLUB_OFFICER
@@ -1418,7 +1522,7 @@ public class EventManagementService {
             webSocketService.broadcastToSystemRole("CLUB_OFFICER", "EVENT", "PUBLISHED", payload);
             log.info("Sent WebSocket broadcast to STUDENT/TEAM_OFFICER/CLUB_OFFICER roles for event publication: {}", saved.getId());
             
-            // Gửi Notification cho tất cả users không phải STAFF
+            // Gửi Notification cho tất cả users không phải Nhân viên phòng IC-PDP
             List<Long> recipientIds = new ArrayList<>();
             
             // Lấy STUDENT
@@ -1438,9 +1542,9 @@ public class EventManagementService {
             
             if (!recipientIds.isEmpty()) {
                 String title = "Sự kiện mới đã được công bố";
-                String message = String.format("Sự kiện toàn trường \"%s\" đã được %s (Staff) công bố. Thời gian: %s - %s",
+                String message = String.format("Sự kiện toàn trường \"%s\" đã được %s (Nhân viên phòng IC-PDP) công bố. Thời gian: %s - %s",
                         saved.getTitle(),
-                        publisher != null ? publisher.getFullName() : "Staff",
+                        publisher != null ? publisher.getFullName() : "Nhân viên phòng IC-PDP",
                         saved.getStartTime() != null ? saved.getStartTime().toString() : "N/A",
                         saved.getEndTime() != null ? saved.getEndTime().toString() : "N/A");
                 String actionUrl = "/events/" + saved.getId();
@@ -1476,7 +1580,7 @@ public class EventManagementService {
     @Transactional(readOnly = true)
     public List<EventData> getStaffCancelledEvents(Long userId, Long clubId) {
         if (!roleService.isStaff(userId)) {
-            throw new ForbiddenException("Chỉ STAFF mới có quyền xem danh sách đã hủy");
+            throw new ForbiddenException("Chỉ Nhân viên phòng IC-PDP mới có quyền xem danh sách đã hủy");
         }
         List<Event> list;
         List<RequestStatus> pending = java.util.List.of(RequestStatus.PENDING_CLUB, RequestStatus.PENDING_UNIVERSITY);
@@ -1499,7 +1603,7 @@ public class EventManagementService {
     @Transactional
     public void staffHardDeleteCancelledEvent(Long eventId, Long userId) {
         if (!roleService.isStaff(userId)) {
-            throw new ForbiddenException("Chỉ STAFF mới có quyền xóa vĩnh viễn sự kiện");
+            throw new ForbiddenException("Chỉ Nhân viên phòng IC-PDP mới có quyền xóa vĩnh viễn sự kiện");
         }
         Event event = eventRepository.findById(eventId)
                 .orElseThrow(() -> new NotFoundException("Không tìm thấy sự kiện"));

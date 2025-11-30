@@ -32,6 +32,7 @@ import {
 import { getAllClubs, type ClubDto } from "@/service/EventService";
 import { getEventsWithoutReportRequirement } from "@/services/reportService";
 import { type EventWithoutReportRequirementDto } from "@/types/dto/reportRequirement.dto";
+import { toast } from "sonner";
 type ReportType = "periodic" | "post-event" | "other";
 
 interface ReportSubmissionModalProps {
@@ -215,7 +216,17 @@ export function ReportSubmissionModal({
     if (!formData.dueDate) {
       newErrors.dueDate = "Vui lòng chọn ngày hạn chót";
     }
-
+    // If dueDate includes time (datetime-local), ensure it's not in the past
+    if (formData.dueDate) {
+      try {
+        const selected = new Date(formData.dueDate);
+        if (selected < new Date()) {
+          newErrors.dueDate = "Không được chọn thời gian trong quá khứ";
+        }
+      } catch {
+        // ignore parse errors, existing error will cover empty/invalid values
+      }
+    }
     if (!formData.content.trim()) {
       newErrors.content = "Nội dung báo cáo không được để trống";
     }
@@ -237,11 +248,11 @@ export function ReportSubmissionModal({
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
-    const maxSize = 50 * 1024 * 1024; // 50MB for zip files
+    const maxSize = 20 * 1024 * 1024; // 20MB for zip files
 
     // Only allow one file
     if (files.length > 1) {
-      alert("Chỉ được phép tải lên một tệp hoặc một tệp zip");
+      toast.error("Chỉ được phép tải lên một tệp");
       e.target.value = "";
       return;
     }
@@ -249,17 +260,9 @@ export function ReportSubmissionModal({
     const file = files[0];
     if (!file) return;
 
-    // Check if file is zip or single file
-    const isZip = file.name.toLowerCase().endsWith(".zip");
-
-    if (!isZip && files.length > 1) {
-      alert("Chỉ được phép tải lên một tệp hoặc một tệp zip");
-      e.target.value = "";
-      return;
-    }
-
+    // Only check for maximum size (20MB)
     if (file.size > maxSize) {
-      alert(`File ${file.name} vượt quá kích thước tối đa 50MB`);
+      toast.error(`File ${file.name} vượt quá kích thước tối đa 20MB`);
       e.target.value = "";
       return;
     }
@@ -370,6 +373,13 @@ export function ReportSubmissionModal({
     return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i];
   };
 
+  // Get current local datetime in format suitable for `datetime-local` input
+  const getCurrentDateTimeLocal = () => {
+    const now = new Date();
+    const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
+    return local.toISOString().slice(0, 16);
+  };
+
   // Reset form when modal closes
   useEffect(() => {
     if (!open) {
@@ -474,14 +484,28 @@ export function ReportSubmissionModal({
                 </Label>
                 <Input
                   id="dueDate"
-                  type="date"
+                  type="datetime-local"
                   value={formData.dueDate}
                   onChange={(e) => {
-                    setFormData({ ...formData, dueDate: e.target.value });
-                    if (errors.dueDate) setErrors({ ...errors, dueDate: "" });
+                    const value = e.target.value;
+                    setFormData({ ...formData, dueDate: value });
+                    try {
+                      const selected = new Date(value);
+                      if (selected < new Date()) {
+                        setErrors({
+                          ...errors,
+                          dueDate: "Không được chọn thời gian trong quá khứ",
+                        });
+                        toast.error("Không được chọn thời gian trong quá khứ");
+                      } else if (errors.dueDate) {
+                        setErrors({ ...errors, dueDate: "" });
+                      }
+                    } catch {
+                      if (errors.dueDate) setErrors({ ...errors, dueDate: "" });
+                    }
                   }}
                   className={errors.dueDate ? "border-red-500" : ""}
-                  min={new Date().toISOString().split("T")[0]}
+                  min={getCurrentDateTimeLocal()}
                 />
                 {errors.dueDate && (
                   <p className="text-xs text-red-500 flex items-center gap-1">
@@ -728,9 +752,7 @@ export function ReportSubmissionModal({
                   <div className="flex flex-col items-center gap-2">
                     <Upload className="h-6 w-6 text-muted-foreground" />
                     <div className="text-sm">
-                      <p className="font-medium">
-                        Kéo thả tệp hoặc nhấp để chọn
-                      </p>
+                      <p className="font-medium">Nhấp để chọn file</p>
                       <p className="text-xs text-muted-foreground">
                         Chỉ một tệp hoặc một tệp zip (tối đa 50MB)
                       </p>
@@ -740,7 +762,6 @@ export function ReportSubmissionModal({
                     type="file"
                     onChange={handleFileUpload}
                     className="hidden"
-                    accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.jpg,.jpeg,.png,.zip"
                   />
                 </label>
               </div>
@@ -825,7 +846,20 @@ export function ReportSubmissionModal({
                   • Loại báo cáo:{" "}
                   {REPORT_TYPES.find((t) => t.value === formData.type)?.label}
                 </li>
-                <li>• Ngày hạn chót: {formData.dueDate || "Chưa có"}</li>
+                <li>
+                  • Ngày hạn chót:{" "}
+                  {formData.dueDate
+                    ? new Date(formData.dueDate).toLocaleString("vi-VN", {
+                        timeZone: "Asia/Ho_Chi_Minh",
+                        year: "numeric",
+                        month: "2-digit",
+                        day: "2-digit",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        second: "2-digit",
+                      })
+                    : "Chưa có"}
+                </li>
                 {formData.type === "post-event" && formData.selectedEventId && (
                   <li>
                     • Sự kiện:{" "}

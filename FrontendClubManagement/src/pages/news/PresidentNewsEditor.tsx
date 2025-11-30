@@ -1,4 +1,3 @@
-// src/pages/news/PresidentNewsEditor.tsx
 "use client";
 
 import { useNavigate, useParams, useLocation } from "react-router-dom";
@@ -8,6 +7,7 @@ import { draftsApi } from "@/api/newsDrafts";
 import { requestsApi } from "@/api/newsRequests";
 import { uploadImageOnly } from "@/api/uploads";
 import type { NewsData, RequestStatus } from "@/types/news";
+import { toast } from "sonner"; // ⭐ THÊM toast
 import {
   ArrowLeft,
   Tag,
@@ -91,14 +91,14 @@ export default function PresidentNewsEditor() {
   const [fileObj, setFileObj] = useState<File | null>(null);
   const [errors, setErrors] = useState<FormErrors>({});
 
-  // Lấy draftId từ query
+  /* ===== Load draftId ===== */
   useEffect(() => {
     const p = new URLSearchParams(window.location.search);
     const did = Number(p.get("draftId"));
     setDraftId(Number.isFinite(did) ? did : null);
   }, []);
 
-  // Load dữ liệu nháp
+  /* ===== Load draft data ===== */
   useEffect(() => {
     const fillFrom = (d?: NewsData) => {
       setTitle(d?.title || "");
@@ -114,15 +114,11 @@ export default function PresidentNewsEditor() {
           fillFrom(location.state.draft);
           return;
         }
-
         if (!draftId) return;
-
         const res = await draftsApi.get(draftId);
         const d = (res as any)?.data as NewsData | undefined;
         fillFrom(d);
-      } catch {
-        // ignore
-      }
+      } catch {}
     };
 
     (async () => {
@@ -131,33 +127,35 @@ export default function PresidentNewsEditor() {
     })();
   }, [draftId, location.state]);
 
+  /* ===== Validate ===== */
   const validate = () => {
     if (!Number.isFinite(clubId)) {
-      alert("Thiếu clubId trên URL");
+      toast.error("Thiếu clubId trên URL");
       return false;
     }
 
     const next: FormErrors = {};
-    if (!title.trim()) next.title = "Vui lòng nhập tiêu đề";
-    if (!content.trim()) next.content = "Vui lòng nhập nội dung";
-    if (!newsType.trim()) next.newsType = "Vui lòng chọn loại tin";
-    if (!(thumbPreview || thumbnailUrl))
-      next.thumbnailUrl = "Vui lòng chọn ảnh bìa";
+    if (!title.trim()) next.title = "Bạn chưa nhập tiêu đề";
+    if (!content.trim()) next.content = "Bạn chưa nhập nội dung";
+    if (!newsType.trim()) next.newsType = "Bạn chưa chọn loại tin";
+    // if (!(thumbPreview || thumbnailUrl))
+    //   next.thumbnailUrl = "Bạn chưa chọn ảnh bìa";
 
     setErrors(next);
     return Object.keys(next).length === 0;
   };
 
-  /* ===== Actions (giữ nguyên logic) ===== */
+  /* ===== Actions ===== */
   const saveDraft = async () => {
     if (!validate()) return;
     setSaving(true);
     try {
       let finalThumb = thumbnailUrl;
+
       if (fileObj) {
         const err = validateImageFile(fileObj);
         if (err) {
-          alert(err);
+          toast.error(err);
           setSaving(false);
           return;
         }
@@ -174,8 +172,8 @@ export default function PresidentNewsEditor() {
           newsType,
         });
         if (res.code !== 200 || !res.data)
-          throw new Error(res.message || "Update draft failed");
-        alert(`Đã cập nhật nháp #${res.data.id}`);
+          throw new Error(res.message || "Không thể cập nhật nháp");
+        toast.success(`Đã cập nhật bản nháp #${res.data.id}`);
       } else {
         const res = await draftsApi.create({
           title,
@@ -185,12 +183,13 @@ export default function PresidentNewsEditor() {
           clubId,
         } as any);
         if (res.code !== 200 || !res.data)
-          throw new Error(res.message || "Create draft failed");
-        alert(`Đã lưu nháp #${res.data.id}`);
+          throw new Error(res.message || "Không thể tạo nháp");
+        toast.success(`Đã lưu bản nháp #${res.data.id}`);
       }
+
       nav(`/myclub/${clubId}/news?tab=drafts`);
     } catch (e: any) {
-      alert(e?.message || "Không lưu được nháp");
+      toast.error(e?.message || "Lưu nháp thất bại");
     } finally {
       setSaving(false);
     }
@@ -201,10 +200,11 @@ export default function PresidentNewsEditor() {
     setSaving(true);
     try {
       let finalThumb = thumbnailUrl;
+
       if (fileObj) {
         const err = validateImageFile(fileObj);
         if (err) {
-          alert(err);
+          toast.error(err);
           setSaving(false);
           return;
         }
@@ -216,12 +216,15 @@ export default function PresidentNewsEditor() {
       if (draftId) {
         const res = await draftsApi.submit(draftId);
         if (res.code !== 200)
-          throw new Error(res.message || "Submit draft failed");
+          throw new Error(res.message || "Không thể gửi yêu cầu");
+
         const payload = res.data as {
           requestId: number;
           status: RequestStatus;
         };
-        alert(`Đã submit nháp #${draftId} → request #${payload?.requestId}`);
+        toast.success(
+          `Đã gửi nháp #${draftId} → yêu cầu #${payload?.requestId}`
+        );
       } else {
         const res = await requestsApi.create({
           title,
@@ -231,12 +234,13 @@ export default function PresidentNewsEditor() {
           clubId,
         });
         if (res.code !== 200 || !res.data)
-          throw new Error(res.message || "Create request failed");
-        alert(`Đã tạo request #${res.data.id}`);
+          throw new Error(res.message || "Không thể tạo yêu cầu");
+        toast.success(`Đã tạo yêu cầu xét duyệt #${res.data.id}`);
       }
+
       nav(`/myclub/${clubId}/news?tab=requests`);
     } catch (e: any) {
-      alert(e?.message || "Không submit được request");
+      toast.error(e?.message || "Gửi yêu cầu thất bại");
     } finally {
       setSaving(false);
     }
@@ -244,6 +248,7 @@ export default function PresidentNewsEditor() {
 
   const goBack = () => nav(-1);
 
+  /* ===== Date / Club meta ===== */
   const metaClub = Number.isFinite(clubId) ? `CLB #${clubId}` : "—";
   const todayVN = new Date().toLocaleDateString("vi-VN", {
     day: "2-digit",
@@ -251,7 +256,7 @@ export default function PresidentNewsEditor() {
     year: "numeric",
   });
 
-  /* ===== Loading skeleton (giống style Staff) ===== */
+  /* ===== Loading skeleton ===== */
   if (loading) {
     return (
       <div className="max-w-4xl mx-auto p-6 space-y-6">
@@ -259,7 +264,6 @@ export default function PresidentNewsEditor() {
           <Skeleton width={120} height={32} />
           <Skeleton width={160} height={20} />
         </div>
-
         <div className="space-y-4">
           <div className="space-y-3">
             <label className="text-sm font-semibold">Ảnh bìa</label>
@@ -280,7 +284,6 @@ export default function PresidentNewsEditor() {
             <Skeleton width="100%" height={280} />
           </div>
         </div>
-
         <div className="flex gap-3 pt-6 border-t">
           <Skeleton width={160} height={44} />
           <Skeleton width={160} height={44} />
@@ -290,7 +293,7 @@ export default function PresidentNewsEditor() {
     );
   }
 
-  /* ===== UI giống StaffNewsEditor ===== */
+  /* ===== UI ===== */
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-6">
       {/* Header */}
@@ -301,6 +304,7 @@ export default function PresidentNewsEditor() {
         >
           <ArrowLeft className="h-4 w-4" /> Quay lại
         </button>
+
         <div className="text-xs sm:text-sm text-slate-500 flex items-center gap-2 flex-wrap justify-end">
           <span>{metaClub}</span>
           <span>•</span>
@@ -313,14 +317,14 @@ export default function PresidentNewsEditor() {
               </span>
             </>
           )}
-          {draftId ? (
+          {draftId && (
             <>
               <span>•</span>
               <span className="text-xs text-slate-400">
                 Đang sửa nháp #{draftId}
               </span>
             </>
-          ) : null}
+          )}
         </div>
       </div>
 
@@ -332,7 +336,7 @@ export default function PresidentNewsEditor() {
           onPick={async (file, dataUrl) => {
             const err = validateImageFile(file);
             if (err) {
-              alert(err);
+              toast.error(err);
               return;
             }
             setFileObj(file);
@@ -434,9 +438,9 @@ export default function PresidentNewsEditor() {
           className="px-6 py-3 rounded-lg bg-gray-900 text-white font-medium disabled:opacity-50 hover:bg-gray-800 transition"
           disabled={saving}
         >
-          {saving ? (
+          {saving && (
             <Loader2 className="h-4 w-4 animate-spin inline-block mr-2" />
-          ) : null}
+          )}
           {draftId ? "Cập nhật nháp" : "Lưu bản nháp"}
         </button>
 
@@ -445,9 +449,9 @@ export default function PresidentNewsEditor() {
           className="px-6 py-3 rounded-lg bg-indigo-600 text-white font-medium disabled:opacity-50 hover:bg-indigo-700 transition"
           disabled={saving}
         >
-          {saving ? (
+          {saving && (
             <Loader2 className="h-4 w-4 animate-spin inline-block mr-2" />
-          ) : null}
+          )}
           Gửi yêu cầu
         </button>
 
@@ -463,7 +467,7 @@ export default function PresidentNewsEditor() {
   );
 }
 
-/** Drop-zone preview giống StaffNewsEditor, nhưng vẫn dùng validateImageFile ở trên (tại parent) */
+/* ===== Drop-zone preview ===== */
 function DropImagePreview({
   preview,
   onPick,
@@ -512,7 +516,7 @@ function DropImagePreview({
           await handleFile(e.dataTransfer.files?.[0]);
         }}
         onPaste={(e) => {
-          if (e.clipboardData?.getData("text/plain")) e.preventDefault(); // chặn dán link
+          if (e.clipboardData?.getData("text/plain")) e.preventDefault();
         }}
       >
         <div
@@ -541,6 +545,7 @@ function DropImagePreview({
           >
             <Upload className="h-4 w-4" /> Chọn ảnh
           </button>
+
           {hasImage && (
             <button
               type="button"
@@ -552,6 +557,7 @@ function DropImagePreview({
           )}
         </div>
       </div>
+
       {errorMsg && <p className="text-rose-600 text-xs mt-2">{errorMsg}</p>}
 
       <input

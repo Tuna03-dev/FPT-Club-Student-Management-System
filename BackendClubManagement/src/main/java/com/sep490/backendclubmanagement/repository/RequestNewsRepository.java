@@ -147,7 +147,7 @@ public interface RequestNewsRepository extends JpaRepository<RequestNews, Long> 
     @Query("""
         SELECT r
         FROM RequestNews r
-        WHERE 1 = 1
+        WHERE r.status <> com.sep490.backendclubmanagement.entity.RequestStatus.CANCELED
           AND ( :statusFilter    IS NULL OR r.status = :statusFilter )
           AND ( :clubFilter      IS NULL OR r.club.id = :clubFilter )
           AND ( :teamFilter      IS NULL OR r.team.id = :teamFilter )
@@ -175,6 +175,7 @@ public interface RequestNewsRepository extends JpaRepository<RequestNews, Long> 
         SELECT r
         FROM RequestNews r
         WHERE r.club.id = :clubId
+          AND r.status <> com.sep490.backendclubmanagement.entity.RequestStatus.CANCELED
           AND ( :statusFilter    IS NULL OR r.status = :statusFilter )
           AND ( :teamFilter      IS NULL OR r.team.id = :teamFilter )
           AND ( :createdByFilter IS NULL OR r.createdBy.id = :createdByFilter )
@@ -228,6 +229,7 @@ public interface RequestNewsRepository extends JpaRepository<RequestNews, Long> 
         SELECT r
         FROM RequestNews r
         WHERE r.createdBy.id = :me
+          AND r.status <> com.sep490.backendclubmanagement.entity.RequestStatus.CANCELED
           AND ( :clubFilter   IS NULL OR r.club.id = :clubFilter )
           AND ( :statusFilter IS NULL OR r.status = :statusFilter )
           AND ( :teamFilter   IS NULL OR r.team.id = :teamFilter )

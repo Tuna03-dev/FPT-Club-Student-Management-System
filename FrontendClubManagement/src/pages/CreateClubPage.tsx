@@ -75,10 +75,10 @@ const getStepCodeFromStatus = (status: string): string | null => {
     CONTACT_CONFIRMATION_PENDING: "REQUEST_REVIEW",
     CONTACT_CONFIRMED: "REQUEST_REVIEW",
     NAME_REVISION_REQUIRED: "REQUEST_REVIEW",
-    PROPOSAL_REQUIRED: "PROPOSAL_REQUIRED", // Staff đã yêu cầu, đang chờ sinh viên nộp
+    PROPOSAL_REQUIRED: "PROPOSAL_REQUIRED", // Nhân viên phòng IC-PDP đã yêu cầu, đang chờ sinh viên nộp
     PROPOSAL_SUBMITTED: "PROPOSAL_SUBMITTED",
-    PROPOSAL_APPROVED: "PROPOSAL_REVIEW", // Staff đã duyệt đề án
-    PROPOSAL_REJECTED: "PROPOSAL_REVIEW", // Đã trải qua bước staff duyệt (dù bị từ chối)
+    PROPOSAL_APPROVED: "PROPOSAL_REVIEW", // Nhân viên phòng IC-PDP đã duyệt đề án
+    PROPOSAL_REJECTED: "PROPOSAL_REVIEW", // Đã trải qua bước Nhân viên phòng IC-PDP duyệt (dù bị từ chối)
     DEFENSE_SCHEDULE_PROPOSED: "PROPOSE_DEFENSE_TIME",
     DEFENSE_SCHEDULE_APPROVED: "DEFENSE_SCHEDULE_CONFIRMED",
     DEFENSE_SCHEDULE_REJECTED: "PROPOSE_DEFENSE_TIME", // Từ chối lịch bảo vệ vẫn thuộc bước lịch bảo vệ
@@ -196,12 +196,12 @@ const CreateClubPage = () => {
       switch (msg.action) {
         case "REQUEST_ASSIGNED":
           toast.info("Yêu cầu của bạn đã được nhận", {
-            description: `Staff ${payload.assignedStaffName} đã nhận yêu cầu. Hạn xác nhận: ${payload.deadline ? new Date(payload.deadline).toLocaleString("vi-VN") : "N/A"}`,
+            description: `Nhân viên phòng IC-PDP ${payload.assignedStaffName} đã nhận yêu cầu. Hạn xác nhận: ${payload.deadline ? new Date(payload.deadline).toLocaleString("vi-VN") : "N/A"}`,
           });
           break;
         case "CONTACT_CONFIRMED":
           toast.success("Liên hệ đã được xác nhận", {
-            description: payload.message || "Staff đã xác nhận liên hệ với bạn",
+            description: payload.message || "Nhân viên phòng IC-PDP đã xác nhận liên hệ với bạn",
           });
           break;
         case "CONTACT_REJECTED":
@@ -211,12 +211,12 @@ const CreateClubPage = () => {
           break;
         case "PROPOSAL_REQUIRED":
           toast.warning("Yêu cầu nộp đề án", {
-            description: payload.comment || payload.message || "Staff yêu cầu bạn nộp đề án chi tiết",
+            description: payload.comment || payload.message || "Nhân viên phòng IC-PDP yêu cầu bạn nộp đề án chi tiết",
           });
           break;
         case "NAME_REVISION_REQUIRED":
           toast.warning("Cần cập nhật tên CLB", {
-            description: payload.comment || payload.message || "Staff yêu cầu bạn chỉnh sửa tên CLB",
+            description: payload.comment || payload.message || "Nhân viên phòng IC-PDP yêu cầu bạn chỉnh sửa tên CLB",
           });
           break;
         case "PROPOSAL_APPROVED":
@@ -309,7 +309,7 @@ const CreateClubPage = () => {
       const responses = await clubCreationApi.getFinalForms(requestId);
       setFinalFormHistory(responses);
     } catch (error: any) {
-      toast.error("Không thể tải danh sách form cuối", {
+      toast.error("Không thể tải danh sách Hồ sơ hoàn thiện", {
         description: error.message || "Đã xảy ra lỗi",
       });
       setFinalFormHistory([]);
@@ -698,11 +698,11 @@ const CreateClubPage = () => {
   const handleSubmitFinalForm = async () => {
     if (!selectedRequest) return;
     if (!finalFormTitle.trim()) {
-      toast.error("Vui lòng nhập tiêu đề form!");
+      toast.error("Vui lòng nhập tiêu đề Hồ sơ hoàn thiện!");
       return;
     }
     if (!finalFormFile && !finalFormFileUrl) {
-      toast.error("Vui lòng upload file form cuối hoặc nhập fileUrl!");
+      toast.error("Vui lòng upload file Hồ sơ hoàn thiện hoặc nhập fileUrl!");
       return;
     }
 
@@ -719,8 +719,8 @@ const CreateClubPage = () => {
       );
       const finalFormToastMessage =
         selectedRequest.rawStatus === "FINAL_FORM_SUBMITTED"
-          ? "Đã cập nhật form cuối thành công!"
-          : "Đã nộp form cuối thành công!";
+          ? "Đã cập nhật Hồ sơ hoàn thiện thành công!"
+          : "Đã nộp Hồ sơ hoàn thiện thành công!";
       toast.success(finalFormToastMessage);
       setIsFinalFormDialogOpen(false);
       setFinalFormTitle("");
@@ -729,7 +729,7 @@ const CreateClubPage = () => {
       setFinalFormNote("");
       await loadRequests();
     } catch (error: any) {
-      toast.error("Không thể nộp form cuối", {
+      toast.error("Không thể nộp Hồ sơ hoàn thiện", {
         description: error.message || "Đã xảy ra lỗi",
       });
     } finally {
@@ -963,8 +963,8 @@ const CreateClubPage = () => {
                             >
                               <FileText className="mr-2 h-4 w-4" />
                               {request.rawStatus === "FINAL_FORM_SUBMITTED"
-                                ? "Cập nhật form cuối"
-                                : "Nộp form cuối"}
+                                ? "Cập nhật Hồ sơ hoàn thiện"
+                                : "Nộp Hồ sơ hoàn thiện"}
                             </Button>
                           )}
                         </div>
@@ -1258,9 +1258,9 @@ const CreateClubPage = () => {
             </DialogTitle>
             <DialogDescription>
               {selectedRequest?.status === "revision_required"
-                ? "Vui lòng chỉnh sửa và nộp lại đề án theo yêu cầu của staff"
+                ? "Vui lòng chỉnh sửa và nộp lại đề án theo yêu cầu của Nhân viên phòng IC-PDP"
                 : selectedRequest?.rawStatus === "PROPOSAL_SUBMITTED"
-                ? "Bạn có thể cập nhật file đề án mới trước khi staff duyệt"
+                ? "Bạn có thể cập nhật file đề án mới trước khi Nhân viên phòng IC-PDP duyệt"
                 : "Upload file đề án (Word, Excel, PDF, PowerPoint)"}
             </DialogDescription>
           </DialogHeader>
@@ -1293,7 +1293,7 @@ const CreateClubPage = () => {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="proposalNote">Ghi chú cho staff (không bắt buộc)</Label>
+              <Label htmlFor="proposalNote">Ghi chú cho Nhân viên phòng IC-PDP (không bắt buộc)</Label>
               <Textarea
                 id="proposalNote"
                 value={proposalNote}
@@ -1302,7 +1302,7 @@ const CreateClubPage = () => {
                 rows={3}
               />
               <p className="text-xs text-muted-foreground">
-                Ghi chú sẽ được lưu trong lịch sử quy trình để staff hiểu rõ nội dung cập nhật.
+                Ghi chú sẽ được lưu trong lịch sử quy trình để Nhân viên phòng IC-PDP hiểu rõ nội dung cập nhật.
               </p>
             </div>
           </div>
@@ -1348,7 +1348,7 @@ const CreateClubPage = () => {
             </DialogTitle>
             <DialogDescription>
               {selectedRequest?.status === "revision_required"
-                ? "Vui lòng chỉnh sửa và đề xuất lại lịch bảo vệ theo yêu cầu của staff"
+                ? "Vui lòng chỉnh sửa và đề xuất lại lịch bảo vệ theo yêu cầu của Nhân viên phòng IC-PDP"
                 : "Vui lòng chọn ngày, thời gian và địa điểm để bảo vệ đề án thành lập CLB"}
             </DialogDescription>
           </DialogHeader>
@@ -1437,27 +1437,27 @@ const CreateClubPage = () => {
           <DialogHeader>
             <DialogTitle>
               {selectedRequest?.rawStatus === "FINAL_FORM_SUBMITTED"
-                ? "Cập nhật form cuối"
-                : "Nộp form cuối"}
+                ? "Cập nhật Hồ sơ hoàn thiện"
+                : "Nộp Hồ sơ hoàn thiện"}
             </DialogTitle>
             <DialogDescription>
               {selectedRequest?.rawStatus === "FINAL_FORM_SUBMITTED"
-                ? "Bạn có thể thay thế file form cuối trước khi staff duyệt."
-                : "Upload file form cuối (Word, Excel, PDF, PowerPoint)."}
+                ? "Bạn có thể thay thế file Hồ sơ hoàn thiện trước khi Nhân viên phòng IC-PDP duyệt."
+                : "Upload file Hồ sơ hoàn thiện (Word, Excel, PDF, PowerPoint)."}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="finalFormTitle">Tiêu đề form *</Label>
+              <Label htmlFor="finalFormTitle">Tiêu đề Hồ sơ hoàn thiện *</Label>
               <Input
                 id="finalFormTitle"
                 value={finalFormTitle}
                 onChange={(e) => setFinalFormTitle(e.target.value)}
-                placeholder="VD: Form cuối thành lập CLB"
+                placeholder="VD: Hồ sơ hoàn thiện thành lập CLB"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="finalFormFile">File form cuối *</Label>
+              <Label htmlFor="finalFormFile">File Hồ sơ hoàn thiện *</Label>
               <Input
                 id="finalFormFile"
                 type="file"
@@ -1475,7 +1475,7 @@ const CreateClubPage = () => {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="finalFormNote">Ghi chú cho staff (không bắt buộc)</Label>
+              <Label htmlFor="finalFormNote">Ghi chú cho Nhân viên phòng IC-PDP (không bắt buộc)</Label>
               <Textarea
                 id="finalFormNote"
                 value={finalFormNote}
@@ -1484,11 +1484,11 @@ const CreateClubPage = () => {
                 rows={3}
               />
               <p className="text-xs text-muted-foreground">
-                Ghi chú sẽ hiển thị trong lịch sử quy trình để staff hiểu nội dung cập nhật.
+                Ghi chú sẽ hiển thị trong lịch sử quy trình để Nhân viên phòng IC-PDP hiểu nội dung cập nhật.
               </p>
             </div>
             <div className="space-y-2">
-              <Label>Lịch sử form đã nộp</Label>
+              <Label>Lịch sử Hồ sơ hoàn thiện đã nộp</Label>
               {isFinalFormHistoryLoading ? (
                 <p className="text-sm text-muted-foreground">Đang tải...</p>
               ) : finalFormHistory.length === 0 ? (
@@ -1539,8 +1539,8 @@ const CreateClubPage = () => {
             <Button onClick={handleSubmitFinalForm}>
               <Upload className="mr-2 h-4 w-4" />
               {selectedRequest?.rawStatus === "FINAL_FORM_SUBMITTED"
-                ? "Cập nhật form cuối"
-                : "Nộp form cuối"}
+                ? "Cập nhật Hồ sơ hoàn thiện"
+                : "Nộp Hồ sơ hoàn thiện"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1561,7 +1561,7 @@ const CreateClubPage = () => {
           <DialogHeader>
             <DialogTitle>Cập nhật tên câu lạc bộ</DialogTitle>
             <DialogDescription>
-              Staff đã yêu cầu bạn cập nhật tên CLB để tiếp tục quy trình xét duyệt.
+              Nhân viên phòng IC-PDP đã yêu cầu bạn cập nhật tên CLB để tiếp tục quy trình xét duyệt.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">

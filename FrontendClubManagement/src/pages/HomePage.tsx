@@ -492,7 +492,7 @@ const HomePage: React.FC = () => {
         {!data && !showSkeleton && (
           <div className="mt-20 flex flex-col items-center text-center space-y-6 text-gray-600 pb-20">
             <img
-              src="/public/default-fallback-image.png" // đổi theo file bạn để trong public
+              src="/default-fallback-image.png" // đổi theo file bạn để trong public
               alt="Hệ thống đang tạm gián đoạn"
               className="w-72 sm:w-80 md:w-96 mx-auto opacity-90 drop-shadow-md"
             />

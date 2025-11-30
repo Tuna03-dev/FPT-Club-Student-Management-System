@@ -1,107 +1,116 @@
-"use client"
+"use client";
 
-import { useEffect, useState } from "react"
-import { Link, useLocation, useNavigate, useParams } from "react-router-dom"
-import { getNewsById, type NewsData } from "@/service/NewsService"
-import { staffNewsAdminApi } from "@/api/staffNewsAdmin"
-import { ArrowLeft, Pencil, Trash2, Eye, EyeOff, Tag, RefreshCw } from "lucide-react"
+import { useEffect, useState } from "react";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
+import { getNewsById, type NewsData } from "@/service/NewsService";
+import { staffNewsAdminApi } from "@/api/staffNewsAdmin";
+import {
+  ArrowLeft,
+  Pencil,
+  Trash2,
+  Eye,
+  EyeOff,
+  Tag,
+  RefreshCw,
+} from "lucide-react";
+import { toast } from "sonner";
 
 type LocationState = {
-  hidden?: boolean
-  deleted?: boolean
-} | null
+  hidden?: boolean;
+  deleted?: boolean;
+} | null;
 
 export default function StaffNewsDetail() {
-  const { id: idParam } = useParams()
-  const id = Number(idParam)
-  const nav = useNavigate()
-  const location = useLocation()
-  const state = (location.state as LocationState) || {}
+  const { id: idParam } = useParams();
+  const id = Number(idParam);
+  const nav = useNavigate();
+  const location = useLocation();
+  const state = (location.state as LocationState) || {};
 
-  const [data, setData] = useState<NewsData | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [data, setData] = useState<NewsData | null>(null);
+  const [loading, setLoading] = useState(true);
 
   // trạng thái UI giống list
-  const [hidden, setHidden] = useState<boolean>(!!state.hidden)
-  const [deleted, setDeleted] = useState<boolean>(!!state.deleted)
-  const [busyHide, setBusyHide] = useState(false)
-  const [busyDelete, setBusyDelete] = useState(false)
+  const [hidden, setHidden] = useState<boolean>(!!state.hidden);
+  const [deleted, setDeleted] = useState<boolean>(!!state.deleted);
+  const [busyHide, setBusyHide] = useState(false);
+  const [busyDelete, setBusyDelete] = useState(false);
 
   useEffect(() => {
-    if (!Number.isFinite(id)) return
+    if (!Number.isFinite(id)) return;
 
-    let alive = true
-    ;(async () => {
+    let alive = true;
+    (async () => {
       try {
-        const d = await getNewsById(id)
-        if (!alive) return
-        setData(d)
+        const d = await getNewsById(id);
+        if (!alive) return;
+        setData(d);
 
         // nếu BE cũng trả hidden/deleted thì sync theo
-        const anyD = d as any
-        if (typeof anyD.hidden === "boolean") setHidden(anyD.hidden)
-        if (typeof anyD.deleted === "boolean") setDeleted(anyD.deleted)
+        const anyD = d as any;
+        if (typeof anyD.hidden === "boolean") setHidden(anyD.hidden);
+        if (typeof anyD.deleted === "boolean") setDeleted(anyD.deleted);
       } catch (e: any) {
-        alert(e?.message || "Không tải được tin tức")
+        toast.error(e?.message || "Không tải được tin tức");
       } finally {
-        if (alive) setLoading(false)
+        if (alive) setLoading(false);
       }
-    })()
+    })();
 
     return () => {
-      alive = false
-    }
-  }, [id])
+      alive = false;
+    };
+  }, [id]);
 
   const fmt = (dt?: string | null) =>
-    dt ? new Date(dt).toLocaleString("vi-VN") : "—"
+    dt ? new Date(dt).toLocaleString("vi-VN") : "—";
 
   // Ẩn / hiện giống StaffNewsList
   const handleToggleHide = async () => {
-    if (!data || deleted) return
-    const nextHidden = !hidden
-    setBusyHide(true)
-    setHidden(nextHidden)
+    if (!data || deleted) return;
+    const nextHidden = !hidden;
+    setBusyHide(true);
+    setHidden(nextHidden);
     try {
-      if (nextHidden) await staffNewsAdminApi.hide(id)
-      else await staffNewsAdminApi.unhide(id)
+      if (nextHidden) await staffNewsAdminApi.hide(id);
+      else await staffNewsAdminApi.unhide(id);
     } catch (e: any) {
-      setHidden(!nextHidden)
-      alert(e?.message || "Ẩn/hiện thất bại.")
+      setHidden(!nextHidden);
+      toast.error(e?.message || "Ẩn/hiện thất bại.");
     } finally {
-      setBusyHide(false)
+      setBusyHide(false);
     }
-  }
+  };
 
   // Xóa mềm giống StaffNewsList
   const handleSoftDelete = async () => {
-    if (!data || deleted) return
-    if (!window.confirm("Bạn chắc chắn muốn xóa mềm bài news này?")) return
+    if (!data || deleted) return;
+    if (!window.confirm("Bạn chắc chắn muốn xóa mềm bài news này?")) return;
 
-    setBusyDelete(true)
+    setBusyDelete(true);
     try {
-      await staffNewsAdminApi.softDelete(id)
-      setDeleted(true)
-      alert("Đã xóa mềm bài news.")
+      await staffNewsAdminApi.softDelete(id);
+      setDeleted(true);
+      toast.success("Đã xóa mềm bài news.");
     } catch (e: any) {
-      alert(e?.message || "Xóa mềm thất bại.")
+      toast.error(e?.message || "Xóa mềm thất bại.");
     } finally {
-      setBusyDelete(false)
+      setBusyDelete(false);
     }
-  }
+  };
 
   if (!Number.isFinite(id)) {
-    return <div className="max-w-6xl mx-auto p-4">ID không hợp lệ.</div>
+    return <div className="max-w-6xl mx-auto p-4">ID không hợp lệ.</div>;
   }
   if (loading) {
     return (
       <div className="max-w-6xl mx-auto p-4 text-sm text-slate-500">
         Đang tải…
       </div>
-    )
+    );
   }
   if (!data) {
-    return <div className="max-w-6xl mx-auto p-4">Không tìm thấy tin.</div>
+    return <div className="max-w-6xl mx-auto p-4">Không tìm thấy tin.</div>;
   }
 
   // label trạng thái giống list
@@ -123,7 +132,7 @@ export default function StaffNewsDetail() {
         </span>
       )}
     </div>
-  )
+  );
 
   return (
     <div className="max-w-6xl mx-auto p-4 space-y-6">
@@ -227,5 +236,5 @@ export default function StaffNewsDetail() {
         </Link>
       </div>
     </div>
-  )
+  );
 }

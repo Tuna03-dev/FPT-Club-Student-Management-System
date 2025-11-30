@@ -3,7 +3,6 @@ import {
   Home,
   Users,
   Calendar,
-  Bell,
   Search,
   Menu,
   Shield,
@@ -54,24 +53,27 @@ import useMyClubs from "@/hooks/useMyClubs";
 import { PermissionContext } from "@/contexts/PermissionContext";
 import { useClubPermissions } from "@/hooks/useClubPermissions";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
-import { useWebSocket } from "@/hooks/useWebSocket"; // 🔥 thêm
+import { useWebSocket, type EventWebSocketPayload } from "@/hooks/useWebSocket";
 
 const navItems = [
   { key: "dashboard", url: "", icon: Home },
   { key: "members", url: "/members", icon: Users },
   { key: "events", url: "/events", icon: Calendar },
   { key: "payments", url: "/payments", icon: Wallet },
-  { key: "notifications", url: "/notifications", icon: Bell },
 ];
 
-type PermissionLevel = "CLUB_OFFICER" | "CLUB_TREASURER" | "TEAM_OFFICER" | "MEMBER";
+type PermissionLevel =
+  | "CLUB_OFFICER"
+  | "CLUB_TREASURER"
+  | "TEAM_OFFICER"
+  | "MEMBER";
 
 interface ManagementItem {
   key: string;
-  url: string;
+  url: string | ((clubId: string | number, teamId?: number | null) => string);
   icon: React.ComponentType<{ className?: string }>;
   label: string;
-  requiredRole: PermissionLevel; // Minimum role required
+  requiredRole: PermissionLevel;
 }
 
 const managementItems: ManagementItem[] = [
@@ -97,11 +99,19 @@ const managementItems: ManagementItem[] = [
     requiredRole: "TEAM_OFFICER",
   },
   {
+    key: "team_news",
+    url: (clubId: string | number, teamId?: number | null) =>
+      `/myclub/${clubId}/teams/${teamId}/team-news`,
+    icon: FileText,
+    label: "Tin tức phòng ban",
+    requiredRole: "TEAM_OFFICER",
+  },
+  {
     key: "manage_members",
     url: "/members",
     icon: Users,
     label: "Danh sách thành viên",
-    requiredRole: "MEMBER", // Everyone can view, but actions are restricted
+    requiredRole: "MEMBER",
   },
   {
     key: "manage_events",
@@ -129,13 +139,13 @@ const managementItems: ManagementItem[] = [
     url: "/finance",
     icon: DollarSign,
     label: "Quản lý tài chính",
-    requiredRole: "CLUB_TREASURER", // CLUB_TREASURER hoặc CLUB_OFFICER (xử lý trong logic filter)
+    requiredRole: "CLUB_TREASURER",
   },
   {
     key: "manage_information",
     url: "/information",
     icon: ClipboardList,
-    label: "Quản lý thông tin",
+    label: "Thông tin câu lạc bộ",
     requiredRole: "MEMBER",
   },
 ];
@@ -151,6 +161,7 @@ const managementColors: Record<string, string> = {
   manage_reports: "bg-gradient-to-br from-pink-500 to-pink-600",
   club_news: "bg-gradient-to-br from-indigo-500 to-indigo-600",
   manage_information: "bg-gradient-to-br from-indigo-500 to-indigo-600",
+  team_news: "bg-gradient-to-br from-cyan-500 to-cyan-600",
 };
 
 export const ClubLayout = () => {
@@ -168,7 +179,6 @@ export const ClubLayout = () => {
   const numericClubId = Number(clubId);
   const validClubId = Number.isFinite(numericClubId) && numericClubId > 0;
 
-  // 🔥 Lấy token cho WebSocket
   const token =
     typeof window !== "undefined"
       ? localStorage.getItem("accessToken") || null
@@ -176,7 +186,6 @@ export const ClubLayout = () => {
 
   const { isConnected, subscribeToClub } = useWebSocket(token);
 
-  // Load clubs list
   const shouldLoadMyClubs = isAuthenticated && !!user;
   const {
     data: clubs,
@@ -184,7 +193,6 @@ export const ClubLayout = () => {
     error: clubsError,
   } = useMyClubs(shouldLoadMyClubs);
 
-  // Load user info
   useEffect(() => {
     const checkAuth = () => {
       const currentUser = authService.getCurrentUser();
@@ -196,41 +204,74 @@ export const ClubLayout = () => {
     checkAuth();
 
     window.addEventListener("storage", checkAuth);
-    const handleAuthChange = () => checkAuth();
-    window.addEventListener("auth-state-changed", handleAuthChange);
+    window.addEventListener("auth-state-changed", checkAuth);
 
     return () => {
       window.removeEventListener("storage", checkAuth);
-      window.removeEventListener("auth-state-changed", handleAuthChange);
+      window.removeEventListener("auth-state-changed", checkAuth);
     };
   }, []);
 
-  // ===== Teams for sidebar =====
   const {
     data: teams,
     loading: teamsLoading,
     error: teamsError,
-    refetch: refetchTeams, // 🔥 dùng cho realtime
+    refetch: refetchTeams,
   } = useTeams(validClubId ? numericClubId : undefined);
 
-  // 🔥 Realtime: lắng nghe TEAM trên kênh club
+  const myTeam = useMemo(() => {
+    if (!teams) return null;
+
+    const leadTeam = teams.find((t) =>
+      t.myRoles?.some(
+        (r) => r.toUpperCase().includes("LEADER") || r.includes("Trưởng ban")
+      )
+    );
+    if (leadTeam) return leadTeam;
+
+    const officerTeam = teams.find((t) =>
+      t.myRoles?.some((role) =>
+        ["OFFICER", "TEAM_OFFICER", "VICE_LEADER", "VICE"].some((k) =>
+          role.toUpperCase().includes(k)
+        )
+      )
+    );
+    return officerTeam ?? null;
+  }, [teams]);
+
   useEffect(() => {
     if (!validClubId || !isConnected) return;
 
     const off = subscribeToClub(numericClubId, (msg) => {
-      if (msg.type !== "TEAM") return;
+      if (msg.type === "TEAM") {
+        if (
+          msg.action === "CREATED" ||
+          msg.action === "UPDATED" ||
+          msg.action === "DELETED"
+        ) {
+          refetchTeams();
+        }
+        return;
+      }
 
+      if (msg.type === "EVENT") {
+        const payload = msg.payload as EventWebSocketPayload;
+        if (msg.action === "MEETING_CREATED") {
+          toast.success("CLB có buổi meeting mới", {
+            description:
+              payload.message ||
+              `Buổi meeting "${payload.eventTitle}" vừa được tạo.`,
+          });
+        }
+        return;
+      }
+      if (msg.type !== "TEAM") return;
       if (
         msg.action === "CREATED" ||
         msg.action === "UPDATED" ||
         msg.action === "DELETED"
       ) {
         refetchTeams();
-
-        // tuỳ bạn, có thể không toast
-        // toast.success("Danh sách phòng ban đã được cập nhật.", {
-        //   duration: 2000,
-        // });
       }
     });
 
@@ -239,7 +280,6 @@ export const ClubLayout = () => {
     };
   }, [validClubId, numericClubId, isConnected, subscribeToClub, refetchTeams]);
 
-  // ===== Check permissions from localStorage (unified approach) =====
   const {
     isClubOfficer,
     isTeamOfficer,
@@ -247,34 +287,34 @@ export const ClubLayout = () => {
     loading: permissionsLoading,
   } = useClubPermissions(validClubId ? numericClubId : undefined);
 
-  // Ghi nhớ firstTeamId (chỉ để UX list, không ảnh hưởng permission)
-  if (teams?.[0]?.teamId && validClubId) {
+  if (myTeam?.teamId && validClubId) {
     const key = `firstTeamId:${numericClubId}`;
     try {
       const prev = sessionStorage.getItem(key);
       const prevVal = prev ? JSON.parse(prev)?.value : undefined;
-      if (prevVal !== teams[0].teamId) {
+      // if (prevVal !== teams[0].teamId) {
+      //   sessionStorage.setItem(
+      //     key,
+      //     JSON.stringify({ value: teams[0].teamId, at: Date.now() })
+      //   );
+      // }
+      if (prevVal !== myTeam.teamId) {
         sessionStorage.setItem(
           key,
-          JSON.stringify({ value: teams[0].teamId, at: Date.now() })
+          JSON.stringify({ value: myTeam.teamId, at: Date.now() })
         );
       }
-    } catch {
-      /* empty */
-    }
+    } catch {}
   }
 
-  // Determine user's role level
-  // Permission hierarchy: CLUB_OFFICER > CLUB_TREASURER > TEAM_OFFICER > MEMBER
   const userRoleLevel: PermissionLevel = useMemo(() => {
-    if (permissionsLoading) return "MEMBER"; // Default while loading
+    if (permissionsLoading) return "MEMBER";
     if (isClubOfficer) return "CLUB_OFFICER";
     if (isClubTreasurer) return "CLUB_TREASURER";
     if (isTeamOfficer) return "TEAM_OFFICER";
     return "MEMBER";
   }, [isClubOfficer, isClubTreasurer, isTeamOfficer, permissionsLoading]);
 
-  // Sync search input with URL params
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const q = params.get("q");
@@ -285,16 +325,13 @@ export const ClubLayout = () => {
     }
   }, [location.search]);
 
-  // Handle search input change with debounce
   const handleSearchChange = (value: string) => {
     setSearchInput(value);
 
-    // Clear existing timeout
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current);
     }
 
-    // Set new timeout for debounced search
     searchTimeoutRef.current = setTimeout(() => {
       const params = new URLSearchParams(location.search);
       if (value.trim()) {
@@ -303,7 +340,6 @@ export const ClubLayout = () => {
         params.delete("q");
       }
 
-      // Navigate to dashboard with search param if not already there
       const newSearch = params.toString();
       const targetPath = `/myclub/${clubId}`;
       const currentPath = location.pathname;
@@ -316,7 +352,6 @@ export const ClubLayout = () => {
     }, 500);
   };
 
-  // Handle clear search
   const handleClearSearch = () => {
     setSearchInput("");
     if (searchTimeoutRef.current) {
@@ -335,7 +370,6 @@ export const ClubLayout = () => {
     }
   };
 
-  // Filter menu based on user permissions and update labels
   const filteredManagementItems = useMemo(() => {
     if (permissionsLoading) return [];
 
@@ -348,13 +382,10 @@ export const ClubLayout = () => {
 
     return managementItems
       .filter((item) => {
-        // Special handling for finance: CLUB_TREASURER or CLUB_OFFICER
         if (item.key === "manage_finance") {
           return isClubTreasurer || isClubOfficer;
         }
 
-        // CLUB_TREASURER has all permissions of TEAM_OFFICER
-        // So if item requires TEAM_OFFICER, CLUB_TREASURER can also access it
         if (item.requiredRole === "TEAM_OFFICER") {
           return (
             roleHierarchy[userRoleLevel] >= roleHierarchy[item.requiredRole] ||
@@ -363,11 +394,9 @@ export const ClubLayout = () => {
           );
         }
 
-        // Check if user has required role level
         return roleHierarchy[userRoleLevel] >= roleHierarchy[item.requiredRole];
       })
       .map((item) => {
-        // Update labels for members (more view-oriented)
         if (userRoleLevel === "MEMBER") {
           if (item.key === "manage_members") {
             return { ...item, label: "Thành viên" };
@@ -379,7 +408,6 @@ export const ClubLayout = () => {
         return item;
       });
   }, [userRoleLevel, permissionsLoading, isClubTreasurer, isClubOfficer]);
-  // CHỈ hiện "Quản lí tin tức" khi amOfficer === true
 
   const getInitials = (name: string) =>
     name
@@ -400,7 +428,6 @@ export const ClubLayout = () => {
     try {
       await authService.logoutWithApi();
     } catch {
-      /* ignore */
     } finally {
       authService.logout();
       toast.success("Đăng xuất thành công!", { duration: 2000 });
@@ -450,13 +477,22 @@ export const ClubLayout = () => {
                 </div>
               </div>
 
-              {/* Center */}
+              {/* Center NAV — FIXED teamId */}
               <nav className="hidden md:flex items-center gap-2 flex-1 justify-center max-w-[600px]">
                 {navItems.map((item) => (
                   <Tooltip key={item.key}>
                     <TooltipTrigger asChild>
                       <NavLink
-                        to={`/myclub/${clubId}${item.url}`}
+                        to={
+                          typeof item.url === "function"
+                            ? (
+                                item.url as (
+                                  clubId: string | number,
+                                  teamId?: number | null
+                                ) => string
+                              )(clubId, myTeam?.teamId ?? null) // 🔥 FIX HERE
+                            : `/myclub/${clubId}${item.url}`
+                        }
                         end={item.url === ""}
                         className={({ isActive }) =>
                           `flex items-center justify-center px-8 py-2 rounded-lg transition-all relative ${
@@ -495,17 +531,14 @@ export const ClubLayout = () => {
                   <span className="font-medium text-orange-600">Trang chủ</span>
                 </Button>
                 <NotificationBell />
-                <DropdownMenu
-                  onOpenChange={(open) => {
-                    if (open) {
-                      // Refresh user roles if needed
-                    }
-                  }}
-                >
+                <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <button className="flex items-center gap-2 rounded-md px-2 py-1 hover:bg-orange-50 transition">
                       <Avatar className="h-9 w-9">
-                        <AvatarImage src={user?.avatarUrl} alt={user?.fullName} />
+                        <AvatarImage
+                          src={user?.avatarUrl}
+                          alt={user?.fullName}
+                        />
                         <AvatarFallback className="bg-orange-100 text-orange-600 text-sm">
                           {user ? getInitials(user.fullName) : "U"}
                         </AvatarFallback>
@@ -524,7 +557,9 @@ export const ClubLayout = () => {
                         <p className="text-[14px] font-semibold text-gray-800">
                           {user?.fullName}
                         </p>
-                        <p className="text-[13px] text-gray-500">{user?.email}</p>
+                        <p className="text-[13px] text-gray-500">
+                          {user?.email}
+                        </p>
                       </div>
                     </DropdownMenuLabel>
                     <DropdownMenuSeparator />
@@ -537,6 +572,7 @@ export const ClubLayout = () => {
                           <User className="mr-2 h-4 w-4 text-orange-500" />
                           Thông tin cá nhân
                         </DropdownMenuItem>
+
                         {!clubsLoading &&
                           !clubsError &&
                           clubs &&
@@ -550,6 +586,7 @@ export const ClubLayout = () => {
                               Câu lạc bộ của tôi
                             </DropdownMenuItem>
                           )}
+
                         <DropdownMenuItem
                           onClick={() => navigate("/create-club")}
                           className="cursor-pointer text-[14px] text-gray-700"
@@ -557,6 +594,7 @@ export const ClubLayout = () => {
                           <PlusCircle className="mr-2 h-4 w-4 text-orange-500" />
                           Đăng ký thành lập CLB
                         </DropdownMenuItem>
+
                         <DropdownMenuItem
                           onClick={() => navigate("/myRecruitmentApplications")}
                           className="cursor-pointer text-[14px] text-gray-700"
@@ -564,6 +602,7 @@ export const ClubLayout = () => {
                           <FileSignature className="mr-2 h-4 w-4 text-orange-500" />
                           Đơn ứng tuyển của tôi
                         </DropdownMenuItem>
+
                         {isStaff && (
                           <DropdownMenuItem
                             onClick={() => navigate("/staff/club-creation")}
@@ -573,6 +612,7 @@ export const ClubLayout = () => {
                             Trang quản lý của ICPDP
                           </DropdownMenuItem>
                         )}
+
                         {isAdmin && (
                           <DropdownMenuItem
                             onClick={() => navigate("/admin")}
@@ -582,7 +622,9 @@ export const ClubLayout = () => {
                             Trang quản trị
                           </DropdownMenuItem>
                         )}
+
                         <DropdownMenuSeparator />
+
                         <DropdownMenuItem
                           onClick={handleLogout}
                           className="cursor-pointer text-[14px] text-red-600"
@@ -604,16 +646,19 @@ export const ClubLayout = () => {
                         <DropdownMenuLabel className="px-3 py-1.5 text-[14px] font-semibold text-gray-800">
                           CLB của bạn
                         </DropdownMenuLabel>
+
                         {clubsLoading && (
                           <div className="px-3 py-2 text-[14px] text-gray-500">
                             Đang tải danh sách CLB…
                           </div>
                         )}
+
                         {clubsError && (
                           <div className="px-3 py-2 text-[14px] text-red-600">
                             {clubsError}
                           </div>
                         )}
+
                         {!clubsLoading &&
                           !clubsError &&
                           (!clubs || clubs.length === 0) && (
@@ -621,6 +666,7 @@ export const ClubLayout = () => {
                               Bạn chưa thuộc CLB nào.
                             </div>
                           )}
+
                         {!clubsLoading &&
                           !clubsError &&
                           clubs?.map((club) => (
@@ -661,7 +707,7 @@ export const ClubLayout = () => {
                   </DropdownMenuContent>
                 </DropdownMenu>
 
-                {/* Mobile menu */}
+                {/* Mobile menu — FIXED ROUTE */}
                 <DropdownMenu
                   open={isMobileMenuOpen}
                   onOpenChange={setIsMobileMenuOpen}
@@ -680,10 +726,22 @@ export const ClubLayout = () => {
                           ? "QUẢN LÝ"
                           : "DANH MỤC"}
                       </h3>
+
                       {filteredManagementItems.map((item) => (
                         <DropdownMenuItem key={item.key} asChild>
                           <NavLink
-                            to={`/myclub/${clubId}${item.url}`}
+                            to={
+                              typeof item.url === "function"
+                                ? item.url(
+                                    clubId,
+                                    myTeam?.teamId ??
+                                      teams?.find(
+                                        (t) => t.myRoles && t.myRoles.length > 0
+                                      )?.teamId ??
+                                      null
+                                  ) // 🔥 FIX HERE
+                                : `/myclub/${clubId}${item.url}`
+                            }
                             className="flex items-center gap-3 w-full"
                             onClick={() => setIsMobileMenuOpen(false)}
                           >
@@ -730,7 +788,11 @@ export const ClubLayout = () => {
                       {filteredManagementItems.map((item) => (
                         <NavLink
                           key={item.key}
-                          to={`/myclub/${clubId}${item.url}`}
+                          to={
+                            typeof item.url === "function"
+                              ? item.url(clubId, myTeam?.teamId) // 🔥 FIX HERE
+                              : `/myclub/${clubId}${item.url}`
+                          }
                           className={({ isActive }) =>
                             `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
                               isActive
@@ -761,7 +823,6 @@ export const ClubLayout = () => {
                     </h2>
                   </div>
 
-                  {/* Nút tạo phòng ban: CHỈ hiển thị khi là CLUB_OFFICER */}
                   {isClubOfficer && (
                     <div className="px-3 mb-2">
                       <Button
@@ -808,9 +869,6 @@ export const ClubLayout = () => {
                           {team.teamName.charAt(0).toUpperCase()}
                         </div>
                         <div className="flex-1 truncate">{team.teamName}</div>
-                        {/* <span className="text-[10px] text-muted-foreground">
-                          {team.memberCount}
-                        </span> */}
                       </NavLink>
                     );
                   })}

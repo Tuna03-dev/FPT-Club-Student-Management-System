@@ -134,22 +134,11 @@ public interface PublicClubRepository extends JpaRepository<Club, Long> {
           GROUP BY t.club_id
         ) t2 ON t2.club_id = c.id
         LEFT JOIN (
-          SELECT r1.id, r1.club_id
-          FROM recruitments r1
-          INNER JOIN (
-            SELECT club_id, MAX(created_at) AS max_created_at
-            FROM recruitments
-            WHERE deleted_at IS NULL
-              AND status = 'OPEN'
-              AND start_date <= CURRENT_TIMESTAMP
-              AND end_date >= CURRENT_TIMESTAMP
-            GROUP BY club_id
-          ) r2 ON r1.club_id = r2.club_id 
-               AND r1.created_at = r2.max_created_at
-          WHERE r1.deleted_at IS NULL
-            AND r1.status = 'OPEN'
-            AND r1.start_date <= CURRENT_TIMESTAMP
-            AND r1.end_date >= CURRENT_TIMESTAMP
+          SELECT club_id, MIN(id) AS id
+          FROM recruitments
+          WHERE deleted_at IS NULL
+            AND status = 'OPEN'
+          GROUP BY club_id
         ) r ON r.club_id = c.id
         WHERE c.deleted_at IS NULL
           AND c.status = 'ACTIVE'

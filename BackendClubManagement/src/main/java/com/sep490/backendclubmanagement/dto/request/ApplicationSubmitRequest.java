@@ -15,7 +15,7 @@ public class ApplicationSubmitRequest {
         @NotNull
         public Long questionId;
         public String answerText;
-        public String fileUrl;
+        public Boolean hasFile; // Indicates whether this answer should use the uploaded file
     }
 }
 
