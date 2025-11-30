@@ -53,7 +53,7 @@ import useMyClubs from "@/hooks/useMyClubs";
 import { PermissionContext } from "@/contexts/PermissionContext";
 import { useClubPermissions } from "@/hooks/useClubPermissions";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
-import { useWebSocket } from "@/hooks/useWebSocket";
+import { useWebSocket, type EventWebSocketPayload } from "@/hooks/useWebSocket";
 
 const navItems = [
   { key: "dashboard", url: "", icon: Home },
