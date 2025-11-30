@@ -99,7 +99,7 @@ const STATUS_CONFIG = {
     color: "text-green-500",
   },
   final_form_submitted: {
-    label: "Đã nộp form cuối",
+    label: "Đã nộp Hồ sơ hoàn thiện",
     variant: "default" as const,
     icon: FileText,
     color: "text-green-600",

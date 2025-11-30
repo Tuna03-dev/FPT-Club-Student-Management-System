@@ -5,7 +5,7 @@ public enum RequestEstablishmentStatus {
     SUBMITTED,                  // Đã gửi
     CONTACT_CONFIRMATION_PENDING,// Đang chờ xác nhận liên hệ [5 ngày]
     CONTACT_CONFIRMED,           // Đã xác nhận liên hệ
-    NAME_REVISION_REQUIRED,      // Staff yêu cầu chỉnh sửa tên CLB
+    NAME_REVISION_REQUIRED,      // Nhân viên phòng IC-PDP yêu cầu chỉnh sửa tên CLB
     CONTACT_REJECTED,            // Từ chối xác nhận liên hệ
     PROPOSAL_REQUIRED,           // Yêu cầu đề án
     PROPOSAL_SUBMITTED,          // Đã nộp đề án
@@ -17,8 +17,8 @@ public enum RequestEstablishmentStatus {
     DEFENSE_SCHEDULED,           // Lịch bảo vệ đã được xác nhận và lên lịch
     DEFENSE_COMPLETED,           // Bảo vệ đã hoàn thành
     FEEDBACK_PROVIDED,           // Đã có feedback sau bảo vệ
-    FINAL_FORM_SUBMITTED,        // Đã nộp form cuối
-    FINAL_FORM_REVIEWED,         // Đã xem xét form cuối
+    FINAL_FORM_SUBMITTED,        // Đã nộp Hồ sơ hoàn thiện
+    FINAL_FORM_REVIEWED,         // Đã xem xét Hồ sơ hoàn thiện
     APPROVED,                    // Đã duyệt
     REJECTED                     // Bị từ chối
 }

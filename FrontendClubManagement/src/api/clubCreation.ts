@@ -429,7 +429,7 @@ export const clubCreationApi = {
         },
       }
     );
-    if (res.code !== 200) throw new Error(res.message || "Failed to submit final form");
+    if (res.code !== 200) throw new Error(res.message || "Không thể nộp Hồ sơ hoàn thiện");
     return res.data!;
   },
 
@@ -440,7 +440,7 @@ export const clubCreationApi = {
     const res = await axiosClient.get<ClubCreationFinalFormResponse[]>(
       `/club-creation/requests/${requestId}/final-forms`
     );
-    if (res.code !== 200) throw new Error(res.message || "Failed to fetch final forms");
+    if (res.code !== 200) throw new Error(res.message || "Không thể tải danh sách Hồ sơ hoàn thiện");
     return res.data ?? [];
   },
 
@@ -511,7 +511,7 @@ export const clubCreationStaffApi = {
     const res = await axiosClient.get<ClubCreationFinalFormResponse[]>(
       `/staff/club-creation/requests/${requestId}/final-forms`
     );
-    if (res.code !== 200) throw new Error(res.message || "Failed to fetch final forms");
+    if (res.code !== 200) throw new Error(res.message || "Không thể tải danh sách Hồ sơ hoàn thiện");
     return res.data ?? [];
   },
 
@@ -522,7 +522,7 @@ export const clubCreationStaffApi = {
     const res = await axiosClient.post<RequestEstablishmentResponse>(
       `/staff/club-creation/requests/${requestId}/final-forms/approve`
     );
-    if (res.code !== 200) throw new Error(res.message || "Failed to approve final form");
+    if (res.code !== 200) throw new Error(res.message || "Không thể duyệt Hồ sơ hoàn thiện");
     return res.data!;
   },
 
