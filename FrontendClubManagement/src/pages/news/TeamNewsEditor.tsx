@@ -127,8 +127,8 @@ export default function TeamNewsEditor() {
     if (!title.trim()) next.title = "Bạn chưa nhập tiêu đề";
     if (!content.trim()) next.content = "Bạn chưa nhập nội dung";
     if (!newsType.trim()) next.newsType = "Bạn chưa chọn loại bài viết";
-    if (!(thumbPreview || thumbnailUrl))
-      next.thumbnailUrl = "Bạn chưa chọn ảnh thumbnail";
+    // if (!(thumbPreview || thumbnailUrl))
+    //   next.thumbnailUrl = "Bạn chưa chọn ảnh thumbnail";
     setErrors(next);
     return Object.keys(next).length === 0;
   };

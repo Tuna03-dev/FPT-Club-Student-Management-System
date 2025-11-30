@@ -120,7 +120,7 @@ export default function StaffNewsEdit() {
         title: title.trim(),
         content: content.trim(),
         type: newsType, // API của bạn field "type"
-        thumbnailUrl: String(finalThumb || ""), // required theo validatePayload()
+        thumbnailUrl: finalThumb ?? null, // required theo validatePayload()
       });
 
       // Re-apply trạng thái nếu cần (để sửa xong vẫn ẩn / vẫn xóa mềm)

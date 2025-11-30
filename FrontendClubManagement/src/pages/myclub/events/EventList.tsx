@@ -10,7 +10,7 @@ export const EventList = () => {
     <main className="min-h-screen bg-gradient-to-br from-background to-muted p-6">
       <div className="max-w-7xl mx-auto">
         <div className="mb-8">
-          <h1 className="text-4xl font-bold text-foreground mb-2">FPT Club Events</h1>
+          <h6 className="text-4xl font-bold text-foreground mb-2">Quản lý sự kiện</h6>
           <p className="text-muted-foreground">Quản lý sự kiện của câu lạc bộ</p>
         </div>
         <EventCalendar clubId={clubId} />

@@ -131,7 +131,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
     color: "bg-indigo-100 text-indigo-800",
   },
   FINAL_FORM_SUBMITTED: {
-    label: "Đã nộp form cuối",
+    label: "Đã nộp Hồ sơ hoàn thiện",
     color: "bg-blue-100 text-blue-800",
   },
   APPROVED: {
@@ -154,7 +154,7 @@ const getStepCodeFromStatus = (status: string): string | null => {
     PROPOSAL_REQUIRED: "PROPOSAL_REQUIRED",
     PROPOSAL_SUBMITTED: "PROPOSAL_SUBMITTED",
     PROPOSAL_APPROVED: "PROPOSAL_REVIEW",
-    PROPOSAL_REJECTED: "PROPOSAL_REVIEW", // Đã trải qua bước staff duyệt (dù bị từ chối)
+    PROPOSAL_REJECTED: "PROPOSAL_REVIEW", // Đã trải qua bước Nhân viên phòng IC-PDP duyệt (dù bị từ chối)
     DEFENSE_SCHEDULE_PROPOSED: "PROPOSE_DEFENSE_TIME",
     DEFENSE_SCHEDULE_APPROVED: "DEFENSE_SCHEDULE_CONFIRMED",
     DEFENSE_SCHEDULE_REJECTED: "PROPOSE_DEFENSE_TIME", // Từ chối lịch bảo vệ vẫn thuộc bước lịch bảo vệ
@@ -330,9 +330,9 @@ export default function ClubCreationManagement() {
           }
           break;
         case "FINAL_FORM_SUBMITTED":
-          toast.info("Form cuối đã được nộp", {
+          toast.info("Hồ sơ hoàn thiện đã được nộp", {
             description: payload.finalFormTitle
-              ? `Form cuối "${payload.finalFormTitle}" đã được nộp cho yêu cầu "${payload.clubName}"`
+              ? `Hồ sơ hoàn thiện "${payload.finalFormTitle}" đã được nộp cho yêu cầu "${payload.clubName}"`
               : payload.message,
           });
           // Refresh request list để hiển thị nút duyệt (luôn refresh, không cần check activeTab)
@@ -596,13 +596,13 @@ export default function ClubCreationManagement() {
     try {
       setIsLoading(true);
       await clubCreationStaffApi.approveFinalForm(requestId);
-      toast.success("Đã duyệt form cuối và tạo CLB thành công!");
+      toast.success("Đã duyệt Hồ sơ hoàn thiện và tạo CLB thành công!");
       await loadPendingRequests();
       if (selectedRequest) {
         await loadRequestDetail(parseInt(selectedRequest.id));
       }
     } catch (error: any) {
-      toast.error("Không thể duyệt form cuối", {
+      toast.error("Không thể duyệt Hồ sơ hoàn thiện", {
         description: error.message || "Đã xảy ra lỗi",
       });
     } finally {
@@ -749,7 +749,7 @@ export default function ClubCreationManagement() {
   };
 
   // Filter requests by status
-  // Pending: Chưa được staff xử lý (SUBMITTED, CONTACT_CONFIRMATION_PENDING)
+  // Pending: Chưa được Nhân viên phòng IC-PDP xử lý (SUBMITTED, CONTACT_CONFIRMATION_PENDING)
   const pendingRequests = clubRequests.filter(
     (r) =>
       r.status === "SUBMITTED" || r.status === "CONTACT_CONFIRMATION_PENDING"
@@ -1524,7 +1524,7 @@ export default function ClubCreationManagement() {
                 {/* Final Form Section */}
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <h3 className="font-semibold">Form cuối đã nộp</h3>
+                    <h3 className="font-semibold">Hồ sơ hoàn thiện đã nộp</h3>
                     {finalForms.length > 0 && (
                       <Badge variant="outline">{finalForms.length} form</Badge>
                     )}
@@ -1533,7 +1533,7 @@ export default function ClubCreationManagement() {
                     <p className="text-sm text-muted-foreground">Đang tải danh sách form...</p>
                   ) : finalForms.length === 0 ? (
                     <p className="text-sm text-muted-foreground italic">
-                      Chưa có form cuối nào được nộp
+                      Chưa có Hồ sơ hoàn thiện nào được nộp
                     </p>
                   ) : (
                     <div className="space-y-2">
@@ -1546,7 +1546,7 @@ export default function ClubCreationManagement() {
                                 <div>
                                   <div className="flex items-center gap-2">
                                     <p className="font-medium">
-                                      {data.title || `Form cuối #${form.id}`}
+                                      {data.title || `Hồ sơ hoàn thiện #${form.id}`}
                                     </p>
                                     {index === 0 && (
                                       <Badge className="bg-blue-100 text-blue-800 text-xs">
@@ -1774,7 +1774,7 @@ export default function ClubCreationManagement() {
                     )}
                     {selectedRequest.status === "DEFENSE_COMPLETED" && (
                       <div className="text-sm text-muted-foreground italic">
-                        Bảo vệ đã hoàn tất. Đang chờ sinh viên nộp form cuối...
+                        Bảo vệ đã hoàn tất. Đang chờ sinh viên nộp Hồ sơ hoàn thiện...
                       </div>
                     )}
                   </DialogFooter>

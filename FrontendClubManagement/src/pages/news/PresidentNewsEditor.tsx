@@ -138,8 +138,8 @@ export default function PresidentNewsEditor() {
     if (!title.trim()) next.title = "Bạn chưa nhập tiêu đề";
     if (!content.trim()) next.content = "Bạn chưa nhập nội dung";
     if (!newsType.trim()) next.newsType = "Bạn chưa chọn loại tin";
-    if (!(thumbPreview || thumbnailUrl))
-      next.thumbnailUrl = "Bạn chưa chọn ảnh bìa";
+    // if (!(thumbPreview || thumbnailUrl))
+    //   next.thumbnailUrl = "Bạn chưa chọn ảnh bìa";
 
     setErrors(next);
     return Object.keys(next).length === 0;
