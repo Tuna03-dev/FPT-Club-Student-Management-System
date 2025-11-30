@@ -110,7 +110,7 @@ public class ReportController {
     public ApiResponse<ReportRequirementResponse> createReportRequirement(
             @RequestPart("request") @Valid CreateReportRequirementRequest request,
             @RequestPart(value = "file", required = false) MultipartFile file
-    ) {
+    ) throws AppException {
         Long userId = SecurityUtils.getCurrentUserId();
         ReportRequirementResponse data = reportService.createReportRequirement(request, file, userId);
         return ApiResponse.success(data);
@@ -128,7 +128,7 @@ public class ReportController {
             @PathVariable Long requirementId,
             @RequestPart("request") @Valid UpdateReportRequirementRequest request,
             @RequestPart(value = "file", required = false) MultipartFile file
-    ) {
+    ) throws AppException {
         Long userId = SecurityUtils.getCurrentUserId();
         ReportRequirementResponse data = reportService.updateReportRequirement(requirementId, request, file, userId);
         return ApiResponse.success(data);

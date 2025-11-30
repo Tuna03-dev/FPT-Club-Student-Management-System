@@ -391,7 +391,8 @@ export async function submitReport(
 ): Promise<ReportDetailResponse> {
   const response = await axiosClient.post<ReportDetailResponse>(
     "/reports/club/submit",
-    request
+    request,
+    { timeout: 30000 }
   );
   if (!response.data) {
     throw new Error("Failed to submit report");
@@ -475,7 +476,8 @@ export async function getAllReports(
   if (request.sort) params.append("sort", request.sort);
 
   const response = await axiosClient.get<PageResponse<ReportListItemResponse>>(
-    `/reports/staff/filter?${params.toString()}`
+    `/reports/staff/filter?${params.toString()}`,
+    { timeout: 30000 }
   );
   if (!response.data) {
     throw new Error("Failed to get reports");

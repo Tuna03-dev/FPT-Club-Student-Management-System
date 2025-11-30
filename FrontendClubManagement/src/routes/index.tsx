@@ -52,8 +52,8 @@ import {
 } from "@/components/guards";
 import ForbiddenPage from "@/pages/ForbiddenPage";
 
-import { StaffReportManagement } from "@/pages/myclub/staff/reportManagement/StaffReport";
-import { PeriodicReportClubs } from "@/pages/myclub/staff/reportManagement/PeriodicReportClubs";
+import { StaffReportManagement } from "@/pages/staff/reportManagement/StaffReport";
+import { PeriodicReportClubs } from "@/pages/staff/reportManagement/PeriodicReportClubs";
 import { ClubReportManagement } from "@/pages/myclub/report/ReportManagement";
 import ProfileSettings from "@/pages/ProfileSettings";
 import TeamNewsManagementPage from "@/pages/myclub/teams/TeamNewsManagementPage";
