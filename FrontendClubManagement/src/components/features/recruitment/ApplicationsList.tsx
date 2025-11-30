@@ -396,7 +396,8 @@ export function ApplicationsList({
             {applications.map((application) => (
               <Card
                 key={application.application_id}
-                className="hover:shadow-lg transition-shadow"
+                onClick={() => setSelectedApplication(application)}
+                className="hover:shadow-lg transition-shadow cursor-pointer flex flex-col h-full"
               >
                 <CardHeader>
                   <div className="flex items-start justify-between">
@@ -418,8 +419,8 @@ export function ApplicationsList({
                     </div>
                   </div>
                 </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
+                <CardContent className="flex flex-col flex-1">
+                  <div className="space-y-3 flex-1">
                     <div className="flex items-center justify-between">
                       <Badge
                         className={applicationStatusColors[application.status]}
@@ -510,18 +511,21 @@ export function ApplicationsList({
                           </div>
                         </div>
                       )}
+                  </div>
 
-                    <div className="flex gap-2 pt-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setSelectedApplication(application)}
-                        className="bg-transparent"
-                      >
-                        <Eye className="h-4 w-4 mr-1" />
-                        Xem chi tiết
-                      </Button>
-                    </div>
+                  <div className="flex gap-2 pt-4 mt-auto">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedApplication(application);
+                      }}
+                      className="bg-transparent"
+                    >
+                      <Eye className="h-4 w-4 mr-1" />
+                      Xem chi tiết
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
