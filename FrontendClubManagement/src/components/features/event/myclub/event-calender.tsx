@@ -646,28 +646,28 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
           break;
         case "REQUEST_APPROVED_BY_UNIVERSITY":
           toast.success("Yêu cầu đã được duyệt", {
-            description: payload.message || `Yêu cầu tạo sự kiện "${payload.eventTitle}" đã được Staff duyệt và công bố`,
+            description: payload.message || `Yêu cầu tạo sự kiện "${payload.eventTitle}" đã được Nhân viên phòng IC-PDP duyệt và công bố`,
           });
           // Refresh events and draft events
           refetchEvents();
           break;
         case "REQUEST_REJECTED_BY_UNIVERSITY":
           toast.error("Yêu cầu đã bị từ chối", {
-            description: payload.message || `Yêu cầu tạo sự kiện "${payload.eventTitle}" đã bị Staff từ chối`,
+            description: payload.message || `Yêu cầu tạo sự kiện "${payload.eventTitle}" đã bị Nhân viên phòng IC-PDP từ chối`,
           });
           // Refresh draft events
           refetchEvents();
           break;
         case "CANCELLED_BY_STAFF":
           toast.warning("Sự kiện đã bị hủy", {
-            description: payload.message || `Sự kiện "${payload.eventTitle}" đã bị Staff hủy`,
+            description: payload.message || `Sự kiện "${payload.eventTitle}" đã bị Nhân viên phòng IC-PDP hủy`,
           });
           // Refresh events
           refetchEvents();
           break;
         case "RESTORED_BY_STAFF":
           toast.success("Sự kiện đã được khôi phục", {
-            description: payload.message || `Sự kiện "${payload.eventTitle}" đã được Staff khôi phục`,
+            description: payload.message || `Sự kiện "${payload.eventTitle}" đã được Nhân viên phòng IC-PDP khôi phục`,
           });
           // Refresh events
           refetchEvents();
@@ -796,7 +796,7 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
               payload
             );
             toast.warning("Sự kiện đã bị hủy", {
-              description: payload.message || `Sự kiện "${payload.eventTitle}" đã bị Staff hủy`,
+              description: payload.message || `Sự kiện "${payload.eventTitle}" đã bị Nhân viên phòng IC-PDP hủy`,
             });
             console.log(
               "[EventCalendar] Calling refetchEvents after CANCELLED_BY_STAFF event from club topic"
@@ -818,7 +818,7 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
             );
             toast.success("Sự kiện đã được khôi phục", {
               description:
-                payload.message || `Sự kiện "${payload.eventTitle}" đã được Staff khôi phục`,
+                payload.message || `Sự kiện "${payload.eventTitle}" đã được Nhân viên phòng IC-PDP khôi phục`,
             });
             console.log(
               "[EventCalendar] Calling refetchEvents after RESTORED_BY_STAFF event from club topic"

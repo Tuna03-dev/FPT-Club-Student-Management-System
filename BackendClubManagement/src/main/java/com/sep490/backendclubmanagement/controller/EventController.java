@@ -70,7 +70,7 @@ public class EventController {
                                                           @RequestParam(value = "endTime", required = false) String endTime) {
         Long userId = SecurityUtils.getCurrentUserId();
         if (!roleService.isStaff(userId)) {
-            throw new ForbiddenException("Chỉ STAFF mới có quyền truy cập");
+            throw new ForbiddenException("Chỉ Nhân viên phòng IC-PDP mới có quyền truy cập");
         }
         return ApiResponse.success(eventService.getStaffAllEvents(startTime, endTime));
     }
@@ -82,7 +82,7 @@ public class EventController {
                                                                @RequestParam(value = "endTime", required = false) String endTime) {
         Long userId = SecurityUtils.getCurrentUserId();
         if (!roleService.isStaff(userId)) {
-            throw new ForbiddenException("Chỉ STAFF mới có quyền truy cập");
+            throw new ForbiddenException("Chỉ Nhân viên phòng IC-PDP mới có quyền truy cập");
         }
         return ApiResponse.success(eventService.getStaffEventsByClubId(clubId, startTime, endTime));
     }
