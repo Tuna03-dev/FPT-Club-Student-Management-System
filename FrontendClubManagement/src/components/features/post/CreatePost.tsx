@@ -13,7 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useTeams } from "@/hooks/useTeams";
-import { useClubOfficerFlag } from "@/hooks/useClubOfficerFlag";
+import { useClubPermissions } from "@/hooks/useClubPermissions";
 import {
   Dialog,
   DialogContent,
@@ -52,10 +52,12 @@ export const CreatePost = ({
 
   // Load teams and check if user is club officer
   const { data: teams } = useTeams(clubId);
-  const { amOfficer: isClubOfficer } = useClubOfficerFlag(clubId);
+  const { isClubOfficer } = useClubPermissions(clubId);
 
   // Filter teams: if club officer, show all; otherwise only show user's teams
-  const availableTeams = teams || [];
+  const availableTeams = isClubOfficer
+    ? teams || []
+    : (teams || []).filter((team) => team.myRoles && team.myRoles.length > 0);
 
   // Reset post target if teamIdProp changes
   useEffect(() => {
