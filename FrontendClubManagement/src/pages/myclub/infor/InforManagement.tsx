@@ -249,6 +249,14 @@ export function ClubInforManagement() {
     const emailRegex = /^\S+@\S+\.\S+$/;
     const phoneRegex = /^[0-9]{10,11}$/;
 
+    // Required fields: clubName and clubCode must not be null/empty
+    if (!formData.clubName || !formData.clubName.trim()) {
+      errors.clubName = "Tên câu lạc bộ không được để trống";
+    }
+    if (!formData.clubCode || !formData.clubCode.trim()) {
+      errors.clubCode = "Mã câu lạc bộ không được để trống";
+    }
+
     if (formData.email && !emailRegex.test(formData.email)) {
       errors.email = "Email không hợp lệ";
     }
@@ -679,6 +687,11 @@ export function ClubInforManagement() {
                   readOnly={!isEditing}
                   placeholder={isEditing ? "Nhập tên câu lạc bộ" : undefined}
                 />
+                {fieldErrors.clubName && (
+                  <p className="text-xs text-destructive mt-1">
+                    {fieldErrors.clubName}
+                  </p>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -692,6 +705,11 @@ export function ClubInforManagement() {
                   readOnly={!isEditing}
                   placeholder={isEditing ? "Nhập mã câu lạc bộ" : undefined}
                 />
+                {fieldErrors.clubCode && (
+                  <p className="text-xs text-destructive mt-1">
+                    {fieldErrors.clubCode}
+                  </p>
+                )}
               </div>
 
               <div className="space-y-2">
