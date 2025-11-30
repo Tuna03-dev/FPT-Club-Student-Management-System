@@ -54,7 +54,6 @@ import { PermissionContext } from "@/contexts/PermissionContext";
 import { useClubPermissions } from "@/hooks/useClubPermissions";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { useWebSocket } from "@/hooks/useWebSocket";
-import { useWebSocket, type EventWebSocketPayload } from "@/hooks/useWebSocket"; // 🔥 thêm
 
 const navItems = [
   { key: "dashboard", url: "", icon: Home },
@@ -264,6 +263,8 @@ export const ClubLayout = () => {
               `Buổi meeting "${payload.eventTitle}" vừa được tạo.`,
           });
         }
+        return;
+      }
       if (msg.type !== "TEAM") return;
       if (
         msg.action === "CREATED" ||
