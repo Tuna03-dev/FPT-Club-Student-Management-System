@@ -298,6 +298,10 @@ export function EventsPage() {
     // Subscribe to CLUB_OFFICER role
     const unsubscribeClubOfficer = subscribeToSystemRole("CLUB_OFFICER", handleEventPublished);
 
+    // Subscribe to CLUB_TREASURE roles
+    const unsubscribeClubTreasurer = subscribeToSystemRole("CLUB_TREASURE", handleEventPublished);
+    const unsubscribeClubTreasurerAlt = subscribeToSystemRole("CLUB_TREASURER", handleEventPublished);
+
     // Also subscribe to user queue for personal notifications
     const unsubscribeUser = subscribeToUserQueue(handleEventPublished);
 
@@ -305,6 +309,8 @@ export function EventsPage() {
       unsubscribeStudent();
       unsubscribeTeamOfficer();
       unsubscribeClubOfficer();
+      unsubscribeClubTreasurer();
+      unsubscribeClubTreasurerAlt();
       unsubscribeUser();
     };
   }, [isConnected, subscribeToSystemRole, subscribeToUserQueue]);

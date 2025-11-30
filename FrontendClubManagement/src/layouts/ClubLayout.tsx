@@ -53,7 +53,7 @@ import useMyClubs from "@/hooks/useMyClubs";
 import { PermissionContext } from "@/contexts/PermissionContext";
 import { useClubPermissions } from "@/hooks/useClubPermissions";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
-import { useWebSocket } from "@/hooks/useWebSocket";
+import { useWebSocket, type EventWebSocketPayload } from "@/hooks/useWebSocket";
 
 const navItems = [
   { key: "dashboard", url: "", icon: Home },
@@ -243,6 +243,28 @@ export const ClubLayout = () => {
     if (!validClubId || !isConnected) return;
 
     const off = subscribeToClub(numericClubId, (msg) => {
+      if (msg.type === "TEAM") {
+        if (
+          msg.action === "CREATED" ||
+          msg.action === "UPDATED" ||
+          msg.action === "DELETED"
+        ) {
+          refetchTeams();
+        }
+        return;
+      }
+
+      if (msg.type === "EVENT") {
+        const payload = msg.payload as EventWebSocketPayload;
+        if (msg.action === "MEETING_CREATED") {
+          toast.success("CLB có buổi meeting mới", {
+            description:
+              payload.message ||
+              `Buổi meeting "${payload.eventTitle}" vừa được tạo.`,
+          });
+        }
+        return;
+      }
       if (msg.type !== "TEAM") return;
       if (
         msg.action === "CREATED" ||
