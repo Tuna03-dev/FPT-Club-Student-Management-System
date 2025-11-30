@@ -47,7 +47,7 @@ export function EventLegend({ clubId }: EventLegendProps) {
         {showPendingPublish && (
           <div className="flex items-center gap-3">
             <div className="w-4 h-4 rounded bg-orange-500"></div>
-            <span className="text-sm text-foreground">Chờ public (Staff)</span>
+            <span className="text-sm text-foreground">Chờ công khai (Nhân viên phòng IC-PDP)</span>
           </div>
         )}
         <div className="flex items-center gap-3">
