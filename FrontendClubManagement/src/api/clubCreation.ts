@@ -257,8 +257,14 @@ export const clubCreationApi = {
   // Get my requests
   getMyRequests: async (
     page: number = 0,
-    size: number = 100
-  ): Promise<RequestEstablishmentResponse[]> => {
+    size: number = 10
+  ): Promise<{
+    content: RequestEstablishmentResponse[];
+    totalElements: number;
+    totalPages: number;
+    currentPage: number;
+    pageSize: number;
+  }> => {
     const res = await axiosClient.get<{
       content: RequestEstablishmentResponse[];
       totalElements: number;
@@ -267,7 +273,13 @@ export const clubCreationApi = {
       params: { page, size },
     });
     if (res.code !== 200) throw new Error(res.message || "Failed to fetch requests");
-    return res.data?.content ?? [];
+    return {
+      content: res.data?.content ?? [],
+      totalElements: res.data?.totalElements ?? 0,
+      totalPages: res.data?.totalPages ?? 0,
+      currentPage: page,
+      pageSize: size,
+    };
   },
 
   // Get request detail
