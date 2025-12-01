@@ -4,19 +4,65 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { authService } from "@/services/authService";
 import { useTranslation } from "react-i18next";
-import { Menu, Search, Users, Settings, Bell, ShieldCheck, Building, Calendar } from "lucide-react";
+import {
+  Menu,
+  Search,
+  Users,
+  Settings,
+  Bell,
+  ShieldCheck,
+  Building,
+  Calendar,
+  LayoutTemplate,
+} from "lucide-react";
 
 const topNav = [{ key: "dashboard", url: "/admin", label: "Admin" }];
 
 const managementItems = [
-  { key: "staff", url: "/admin/staff", icon: Users, label: "Quản lý nhân viên" },
-  { key: "campus", url: "/admin/campus", icon: Building, label: "Quản lý cơ sở" },
-  { key: "semester", url: "/admin/semester", icon: Calendar, label: "Quản lý kỳ học" },
-  { key: "system", url: "/admin/settings", icon: Settings, label: "Cấu hình hệ thống" },
+  {
+    key: "staff",
+    url: "/admin/staff",
+    icon: Users,
+    label: "Quản lý nhân viên",
+  },
+  {
+    key: "campus",
+    url: "/admin/campus",
+    icon: Building,
+    label: "Quản lý cơ sở",
+  },
+  {
+    key: "semester",
+    url: "/admin/semester",
+    icon: Calendar,
+    label: "Quản lý kỳ học",
+  },
+  {
+    key: "system",
+    url: "/admin/settings",
+    icon: Settings,
+    label: "Cấu hình hệ thống",
+  },
+  {
+    key: "banner",
+    url: "/admin/banner",
+    icon: LayoutTemplate,
+    label: "Cấu hình Banner",
+  },
 ];
 
 const colorByKey: Record<string, string> = {
@@ -24,6 +70,7 @@ const colorByKey: Record<string, string> = {
   campus: "bg-gradient-to-br from-emerald-500 to-emerald-600",
   semester: "bg-gradient-to-br from-purple-500 to-purple-600",
   system: "bg-gradient-to-br from-slate-500 to-slate-600",
+  banner: "bg-gradient-to-br from-pink-500 to-rose-600",
 };
 
 export const AdminLayout = () => {
@@ -53,7 +100,11 @@ export const AdminLayout = () => {
               </div>
               <div className="relative w-full max-w-[240px] hidden md:block">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input type="search" placeholder={t("search")} className="pl-9 h-9 bg-secondary/50 border-0" />
+                <Input
+                  type="search"
+                  placeholder={t("search")}
+                  className="pl-9 h-9 bg-secondary/50 border-0"
+                />
               </div>
             </div>
 
@@ -66,14 +117,18 @@ export const AdminLayout = () => {
                       end
                       className={({ isActive }) =>
                         `flex items-center justify-center px-8 py-2 rounded-lg transition-all relative ${
-                          isActive ? "text-primary" : "text-muted-foreground hover:bg-secondary"
+                          isActive
+                            ? "text-primary"
+                            : "text-muted-foreground hover:bg-secondary"
                         }`
                       }
                     >
                       {({ isActive }) => (
                         <>
                           <span className="font-medium">{item.label}</span>
-                          {isActive && <div className="absolute bottom-0 left-0 right-0 h-1 bg-primary rounded-t-md" />}
+                          {isActive && (
+                            <div className="absolute bottom-0 left-0 right-0 h-1 bg-primary rounded-t-md" />
+                          )}
                         </>
                       )}
                     </NavLink>
@@ -91,7 +146,11 @@ export const AdminLayout = () => {
                   <Settings className="h-5 w-5" />
                 </Button>
               </NavLink>
-              <Button variant="ghost" size="icon" className="rounded-full relative">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="rounded-full relative"
+              >
                 <Bell className="h-5 w-5" />
                 <span className="absolute top-1 right-1 h-2 w-2 bg-destructive rounded-full" />
               </Button>
@@ -105,7 +164,10 @@ export const AdminLayout = () => {
                 </Button>
               </div>
 
-              <DropdownMenu open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
+              <DropdownMenu
+                open={isMobileMenuOpen}
+                onOpenChange={setIsMobileMenuOpen}
+              >
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="icon" className="md:hidden">
                     <Menu className="h-5 w-5" />
@@ -118,7 +180,11 @@ export const AdminLayout = () => {
                     </h3>
                     {managementItems.map((item) => (
                       <DropdownMenuItem key={item.key} asChild>
-                        <NavLink to={item.url} className="flex items-center gap-3 w-full" onClick={() => setIsMobileMenuOpen(false)}>
+                        <NavLink
+                          to={item.url}
+                          className="flex items-center gap-3 w-full"
+                          onClick={() => setIsMobileMenuOpen(false)}
+                        >
                           <div
                             className={`h-6 w-6 rounded-lg ${colorByKey[item.key]} flex items-center justify-center text-white shadow-sm`}
                           >
@@ -140,7 +206,9 @@ export const AdminLayout = () => {
             <nav className="pt-2 pb-4 px-4 space-y-6 h-full overflow-y-auto">
               <div>
                 <div className="px-3 mb-4">
-                  <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">QUẢN LÝ</h2>
+                  <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    QUẢN LÝ
+                  </h2>
                 </div>
                 <div className="space-y-2">
                   {managementItems.map((item) => (
@@ -149,7 +217,9 @@ export const AdminLayout = () => {
                       to={item.url}
                       className={({ isActive }) =>
                         `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                          isActive ? "bg-primary/10 text-primary shadow-sm" : "text-foreground hover:bg-secondary"
+                          isActive
+                            ? "bg-primary/10 text-primary shadow-sm"
+                            : "text-foreground hover:bg-secondary"
                         }`
                       }
                     >
@@ -174,7 +244,3 @@ export const AdminLayout = () => {
     </TooltipProvider>
   );
 };
-
-
-
-

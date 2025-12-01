@@ -191,10 +191,18 @@ class ClubManagementServiceTest {
         when(clubMembershipRepository.findClubsByUserIdAndSemesterId(userId, sem.getId()))
                 .thenReturn(List.of(clubDto));
 
+        // 🔥==> THÊM PHẦN NÀY
+        User u = new User();
+        u.setId(userId);
+        u.setFullName("User 10");
+        when(userRepository.findById(userId)).thenReturn(Optional.of(u));
+        // <==🔥
+
         ClubMemberShip cms = new ClubMemberShip();
         cms.setId(100L);
         Club club = new Club();
         club.setId(1L);
+        club.setClubName("CLB Dev");
         cms.setClub(club);
         cms.setStatus(ClubMemberShipStatus.ACTIVE);
 
@@ -224,4 +232,5 @@ class ClubManagementServiceTest {
         assertEquals("Chủ nhiệm", roles.get(0).getClubRole());
         assertEquals("CLUB_PRESIDENT", roles.get(0).getSystemRole());
     }
+
 }

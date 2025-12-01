@@ -3,6 +3,7 @@ package com.sep490.backendclubmanagement.entity;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.time.LocalDateTime;
 import java.util.Set;
 
 @Entity
@@ -33,6 +34,8 @@ public class Team extends BaseEntity {
 
     @OneToMany(mappedBy = "team", cascade = CascadeType.ALL)
     private Set<RoleMemberShip> roleMemberships;
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
 
     @OneToMany(mappedBy = "team", cascade = CascadeType.ALL)
     private Set<Post> posts;

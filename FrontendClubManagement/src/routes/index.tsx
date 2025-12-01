@@ -51,7 +51,7 @@ import {
   ClubMemberGuard,
 } from "@/components/guards";
 import ForbiddenPage from "@/pages/ForbiddenPage";
-
+import BannerAdminPage from "@/pages/admin/BannerAdminPage";
 import { StaffReportManagement } from "@/pages/myclub/staff/reportManagement/StaffReport";
 import { PeriodicReportClubs } from "@/pages/myclub/staff/reportManagement/PeriodicReportClubs";
 import { ClubReportManagement } from "@/pages/myclub/report/ReportManagement";
@@ -184,6 +184,10 @@ export const router = createBrowserRouter([
       {
         path: "settings",
         element: <div className="p-6">Cấu hình hệ thống</div>,
+      },
+      {
+        path: "banner",
+        element: <BannerAdminPage />,
       },
     ],
   },

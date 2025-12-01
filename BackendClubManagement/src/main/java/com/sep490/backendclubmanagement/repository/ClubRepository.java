@@ -131,4 +131,5 @@ public interface ClubRepository extends JpaRepository<Club, Long> {
           AND s.isCurrent = true
         """)
     List<ClubMemberShip> findPresidentsByClubId(@Param("clubId") Long clubId);
+
 }

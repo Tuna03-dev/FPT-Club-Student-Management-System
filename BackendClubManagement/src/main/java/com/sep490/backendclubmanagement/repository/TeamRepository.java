@@ -2,6 +2,7 @@ package com.sep490.backendclubmanagement.repository;
 
 import com.sep490.backendclubmanagement.entity.Team;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -30,5 +31,12 @@ public interface TeamRepository extends JpaRepository<Team, Long> {
 
     Optional<Team> findByClubIdAndTeamName(Long clubId, String teamName);
     boolean existsByClubIdAndTeamNameIgnoreCaseAndIdNot(Long clubId, String teamName, Long id);
+    @Query("""
+SELECT t FROM Team t
+WHERE t.club.id = :clubId
+AND t.deletedAt IS NULL
+ORDER BY t.teamName ASC
+""")
+    List<Team> findVisibleTeams(@Param("clubId") Long clubId);
 
 }

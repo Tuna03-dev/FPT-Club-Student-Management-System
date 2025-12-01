@@ -38,11 +38,19 @@ export function useTeams(clubId?: number, semesterId?: number) {
   useEffect(() => {
     fetchTeams();
   }, [fetchTeams]);
+  useEffect(() => {
+    function onTeamDeleted(e: any) {
+      const { teamId } = e.detail;
+      setData((prev) => prev.filter((t) => t.teamId !== teamId));
+    }
 
+    window.addEventListener("team-deleted", onTeamDeleted);
+    return () => window.removeEventListener("team-deleted", onTeamDeleted);
+  }, []);
   return {
     data,
     loading,
     error,
-    refetch: fetchTeams, 
+    refetch: fetchTeams,
   };
 }

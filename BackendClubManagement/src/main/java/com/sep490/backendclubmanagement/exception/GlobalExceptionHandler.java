@@ -105,6 +105,14 @@ public class GlobalExceptionHandler {
                 .status(403)
                 .body(ApiResponse.error(ErrorCode.FORBIDDEN, null));
     }
+    @ExceptionHandler(DuplicateResourceException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDuplicate(DuplicateResourceException ex) {
+        log.warn("Duplicate resource: {}", ex.getMessage());
+        return ResponseEntity
+                .status(ErrorCode.TEAM_NAME_EXISTED.getHttpStatus())
+                .body(ApiResponse.error(ErrorCode.TEAM_NAME_EXISTED, ex.getMessage(), null));
+    }
+
 
 
 }
