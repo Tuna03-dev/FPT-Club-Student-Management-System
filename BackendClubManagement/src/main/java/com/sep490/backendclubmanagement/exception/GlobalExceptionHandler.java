@@ -8,6 +8,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MultipartException;
 
 @Log4j2
 @RestControllerAdvice
@@ -49,6 +50,23 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(ErrorCode.VALIDATION_ERROR.getHttpStatus())
                 .body(ApiResponse.error(ErrorCode.VALIDATION_ERROR, errors));
+    }
+
+    @ExceptionHandler(MultipartException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMultipartException(MultipartException ex) {
+        log.warn("Multipart error (likely file size exceeded): {}", ex.getMessage());
+        
+        String message = "Dung lượng file quá lớn. Kích thước tối đa cho phép là 20MB.";
+        // Check if it's a size-related error
+        if (ex.getMessage() != null && (ex.getMessage().contains("size") || ex.getMessage().contains("exceeded"))) {
+            message = "Dung lượng file quá lớn. Kích thước tối đa cho phép là 20MB.";
+        } else {
+            message = "Lỗi khi upload file: " + (ex.getMessage() != null ? ex.getMessage() : "Đã xảy ra lỗi");
+        }
+        
+        return ResponseEntity
+                .status(ErrorCode.INVALID_INPUT.getHttpStatus())
+                .body(ApiResponse.error(ErrorCode.INVALID_INPUT, message, null));
     }
 
     @ExceptionHandler(Exception.class)

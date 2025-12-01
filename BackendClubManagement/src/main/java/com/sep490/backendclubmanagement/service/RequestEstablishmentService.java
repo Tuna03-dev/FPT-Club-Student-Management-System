@@ -51,6 +51,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.regex.Pattern;
 
 @Service
 @RequiredArgsConstructor
@@ -97,10 +98,18 @@ public class RequestEstablishmentService {
         validateClubNameUniqueness(clubName, null);
 
         if (clubCode != null) {
-            if (clubRepository.existsByClubCodeIgnoreCase(clubCode)
-                    || requestEstablishmentRepository.existsByClubCodeIgnoreCase(clubCode)) {
+            // Chỉ check trong bảng Club (các CLB đã được tạo), không check trong RequestEstablishment
+            if (clubRepository.existsByClubCodeIgnoreCase(clubCode)) {
                 throw new AppException(ErrorCode.INVALID_INPUT, "Mã CLB này đã tồn tại trong hệ thống");
             }
+        }
+
+        // Validate email and phone if provided
+        if (request.getEmail() != null && !request.getEmail().trim().isEmpty()) {
+            validateEmail(request.getEmail());
+        }
+        if (request.getPhone() != null && !request.getPhone().trim().isEmpty()) {
+            validatePhone(request.getPhone());
         }
 
         User creator = userRepository.findById(userId)
@@ -169,19 +178,69 @@ public class RequestEstablishmentService {
             throw new AppException(ErrorCode.INVALID_INPUT, "Chỉ có thể cập nhật yêu cầu ở trạng thái DRAFT");
         }
 
-       // Update fields if provided
-        if (request.getClubName() != null && !request.getClubName().trim().isEmpty()) {
-            requestEstablishment.setClubName(request.getClubName().trim());
+        // Prepare values for validation and update
+        String clubName = request.getClubName() != null ? request.getClubName().trim() : null;
+        String clubCategory = request.getClubCategory() != null ? request.getClubCategory().trim() : null;
+        String clubCode = request.getClubCode() != null && !request.getClubCode().trim().isEmpty()
+                ? request.getClubCode().trim()
+                : null;
+
+        // Validate clubName if provided
+        if (request.getClubName() != null) {
+            if (clubName == null || clubName.isEmpty()) {
+                throw new AppException(ErrorCode.INVALID_INPUT, "Tên CLB không được để trống");
+            }
+            // Validate uniqueness (exclude current request)
+            validateClubNameUniqueness(clubName, requestId);
+        } else {
+            // If not provided, keep existing value (trim if not null)
+            clubName = requestEstablishment.getClubName() != null 
+                    ? requestEstablishment.getClubName().trim() 
+                    : null;
         }
-        if (request.getClubCategory() != null && !request.getClubCategory().trim().isEmpty()) {
-            requestEstablishment.setClubCategory(request.getClubCategory().trim());
+
+        // Validate clubCategory if provided
+        if (request.getClubCategory() != null) {
+            if (clubCategory == null || clubCategory.isEmpty()) {
+                throw new AppException(ErrorCode.INVALID_INPUT, "Danh mục CLB không được để trống");
+            }
+        } else {
+            // If not provided, keep existing value (trim if not null)
+            clubCategory = requestEstablishment.getClubCategory() != null 
+                    ? requestEstablishment.getClubCategory().trim() 
+                    : null;
         }
-        if (request.getClubCode() != null) {
-            requestEstablishment.setClubCode(request.getClubCode().trim());
+
+        // Validate expectedMemberCount if provided
+        Integer expectedMemberCount = request.getExpectedMemberCount();
+        if (expectedMemberCount != null) {
+            if (expectedMemberCount <= 0) {
+                throw new AppException(ErrorCode.INVALID_INPUT, "Số lượng thành viên dự kiến phải lớn hơn 0");
+            }
+        } else {
+            // If not provided, keep existing value
+            expectedMemberCount = requestEstablishment.getExpectedMemberCount();
         }
-        if (request.getExpectedMemberCount() != null && request.getExpectedMemberCount() > 0) {
-            requestEstablishment.setExpectedMemberCount(request.getExpectedMemberCount());
+
+        // Validate clubCode uniqueness if provided
+        if (clubCode != null) {
+            // Chỉ check trong bảng Club (các CLB đã được tạo), không check trong RequestEstablishment
+            if (clubRepository.existsByClubCodeIgnoreCase(clubCode)) {
+                throw new AppException(ErrorCode.INVALID_INPUT, "Mã CLB này đã tồn tại trong hệ thống");
+            }
         }
+
+        // Update fields
+        requestEstablishment.setClubName(clubName);
+        requestEstablishment.setClubCategory(clubCategory);
+        if (clubCode != null) {
+            requestEstablishment.setClubCode(clubCode);
+        } else if (request.getClubCode() != null && request.getClubCode().trim().isEmpty()) {
+            // If empty string is provided, set to null
+            requestEstablishment.setClubCode(null);
+        }
+        requestEstablishment.setExpectedMemberCount(expectedMemberCount);
+        
         if (request.getActivityObjectives() != null) {
             requestEstablishment.setActivityObjectives(request.getActivityObjectives());
         }
@@ -191,11 +250,27 @@ public class RequestEstablishmentService {
         if (request.getDescription() != null) {
             requestEstablishment.setDescription(request.getDescription());
         }
+        
+        // Validate and update email if provided
         if (request.getEmail() != null) {
-            requestEstablishment.setEmail(request.getEmail().trim());
+            if (request.getEmail().trim().isEmpty()) {
+                // Allow setting email to null/empty
+                requestEstablishment.setEmail(null);
+            } else {
+                validateEmail(request.getEmail());
+                requestEstablishment.setEmail(request.getEmail().trim());
+            }
         }
+        
+        // Validate and update phone if provided
         if (request.getPhone() != null) {
-            requestEstablishment.setPhone(request.getPhone().trim());
+            if (request.getPhone().trim().isEmpty()) {
+                // Allow setting phone to null/empty
+                requestEstablishment.setPhone(null);
+            } else {
+                validatePhone(request.getPhone());
+                requestEstablishment.setPhone(request.getPhone().trim());
+            }
         }
         if (request.getFacebookLink() != null) {
             requestEstablishment.setFacebookLink(request.getFacebookLink().trim());
@@ -737,6 +812,14 @@ public class RequestEstablishmentService {
         // Upload file nếu có
         if (file != null && !file.isEmpty()) {
             try {
+                // Validate file size (max 20MB)
+                long maxFileSize = 20 * 1024 * 1024; // 20MB in bytes
+                if (file.getSize() > maxFileSize) {
+                    throw new AppException(ErrorCode.INVALID_INPUT, 
+                        String.format("Dung lượng file quá lớn. Kích thước tối đa cho phép là 20MB. File của bạn: %.2f MB", 
+                            file.getSize() / (1024.0 * 1024.0)));
+                }
+
                 // Validate file type (Word, Excel, PDF, ZIP)
                 String originalFilename = file.getOriginalFilename();
                 if (originalFilename != null) {
@@ -1795,6 +1878,14 @@ public class RequestEstablishmentService {
         // Upload file nếu có
         if (file != null && !file.isEmpty()) {
             try {
+                // Validate file size (max 20MB)
+                long maxFileSize = 20 * 1024 * 1024; // 20MB in bytes
+                if (file.getSize() > maxFileSize) {
+                    throw new AppException(ErrorCode.INVALID_INPUT, 
+                        String.format("Dung lượng file quá lớn. Kích thước tối đa cho phép là 20MB. File của bạn: %.2f MB", 
+                            file.getSize() / (1024.0 * 1024.0)));
+                }
+
                 // Validate file type (Word, Excel, PDF, ZIP)
                 String originalFilename = file.getOriginalFilename();
                 if (originalFilename != null) {
@@ -2420,16 +2511,40 @@ public class RequestEstablishmentService {
     }
 
     private void validateClubNameUniqueness(String clubName, Long currentRequestId) throws AppException {
+        // Chỉ check trong bảng Club (các CLB đã được tạo), không check trong RequestEstablishment
         if (clubRepository.existsByClubNameIgnoreCase(clubName)) {
             throw new AppException(ErrorCode.INVALID_INPUT, "Tên CLB này đã tồn tại trong hệ thống");
         }
+    }
 
-        boolean existsInRequests = currentRequestId == null
-                ? requestEstablishmentRepository.existsByClubNameIgnoreCase(clubName)
-                : requestEstablishmentRepository.existsByClubNameIgnoreCaseAndIdNot(clubName, currentRequestId);
+    private void validateEmail(String email) throws AppException {
+        if (email == null || email.trim().isEmpty()) {
+            return; // Email is optional, so null or empty is allowed
+        }
+        
+        // Email regex pattern
+        String emailPattern = "^[A-Za-z0-9+_.-]+@([A-Za-z0-9.-]+\\.[A-Za-z]{2,})$";
+        if (!Pattern.matches(emailPattern, email.trim())) {
+            throw new AppException(ErrorCode.INVALID_INPUT, "Email không hợp lệ");
+        }
+    }
 
-        if (existsInRequests) {
-            throw new AppException(ErrorCode.INVALID_INPUT, "Tên CLB này đã tồn tại trong hệ thống");
+    private void validatePhone(String phone) throws AppException {
+        if (phone == null || phone.trim().isEmpty()) {
+            return; // Phone is optional, so null or empty is allowed
+        }
+        
+        // Vietnamese phone number pattern:
+        // - 10 digits starting with 0 (e.g., 0987654321)
+        // - 11 digits starting with 84 (e.g., 84987654321)
+        // - 12 characters starting with +84 (e.g., +84987654321)
+        String trimmedPhone = phone.trim().replaceAll("[\\s-]", ""); // Remove spaces and dashes
+        
+        // Pattern: starts with 0 (10 digits) or 84/+84 (11-12 digits)
+        String phonePattern = "^(0[0-9]{9}|84[0-9]{9}|\\+84[0-9]{9})$";
+        
+        if (!Pattern.matches(phonePattern, trimmedPhone)) {
+            throw new AppException(ErrorCode.INVALID_INPUT, "Số điện thoại không hợp lệ. Vui lòng nhập số điện thoại Việt Nam (bắt đầu bằng 0, 84 hoặc +84)");
         }
     }
 
