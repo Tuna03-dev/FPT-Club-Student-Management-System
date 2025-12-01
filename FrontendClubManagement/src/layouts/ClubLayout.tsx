@@ -145,7 +145,7 @@ const managementItems: ManagementItem[] = [
     key: "manage_information",
     url: "/information",
     icon: ClipboardList,
-    label: "Quản lý thông tin",
+    label: "Thông tin câu lạc bộ",
     requiredRole: "MEMBER",
   },
 ];

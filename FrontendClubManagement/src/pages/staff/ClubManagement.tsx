@@ -93,6 +93,9 @@ export function StaffClubsManagement() {
   const [editingClub, setEditingClub] = useState<ClubManagementResponse | null>(
     null
   );
+  const [editFieldErrors, setEditFieldErrors] = useState<
+    Record<string, string>
+  >({});
   const [showCreateClubDialog, setShowCreateClubDialog] = useState(false);
   const [showCreateClubConfirm, setShowCreateClubConfirm] = useState(false);
   const [showUpdateClubConfirm, setShowUpdateClubConfirm] = useState(false);
@@ -495,6 +498,20 @@ export function StaffClubsManagement() {
 
   const handleUpdateClub = async () => {
     if (!editingClub) return;
+    // client-side validation: clubName and clubCode must not be empty
+    setEditFieldErrors({});
+    const errors: Record<string, string> = {};
+    if (!editingClub.clubName || !editingClub.clubName.trim()) {
+      errors.clubName = "Tên câu lạc bộ không được để trống";
+    }
+    if (!editingClub.clubCode || !editingClub.clubCode.trim()) {
+      errors.clubCode = "Mã câu lạc bộ không được để trống";
+    }
+    if (Object.keys(errors).length > 0) {
+      setEditFieldErrors(errors);
+      toast.error("Vui lòng sửa các lỗi trong biểu mẫu");
+      return;
+    }
 
     try {
       const updateData: UpdateClubRequest = {
@@ -1948,6 +1965,11 @@ export function StaffClubsManagement() {
                       })
                     }
                   />
+                  {editFieldErrors.clubName && (
+                    <p className="text-xs text-destructive mt-1">
+                      {editFieldErrors.clubName}
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -1965,6 +1987,11 @@ export function StaffClubsManagement() {
                     }
                     placeholder="VD: CLB_IT"
                   />
+                  {editFieldErrors.clubCode && (
+                    <p className="text-xs text-destructive mt-1">
+                      {editFieldErrors.clubCode}
+                    </p>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="edit-category">Thể loại *</Label>

@@ -248,11 +248,11 @@ export function ReportSubmissionModal({
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
-    const maxSize = 50 * 1024 * 1024; // 50MB for zip files
+    const maxSize = 20 * 1024 * 1024; // 20MB for zip files
 
     // Only allow one file
     if (files.length > 1) {
-      alert("Chỉ được phép tải lên một tệp hoặc một tệp zip");
+      toast.error("Chỉ được phép tải lên một tệp");
       e.target.value = "";
       return;
     }
@@ -260,17 +260,9 @@ export function ReportSubmissionModal({
     const file = files[0];
     if (!file) return;
 
-    // Check if file is zip or single file
-    const isZip = file.name.toLowerCase().endsWith(".zip");
-
-    if (!isZip && files.length > 1) {
-      alert("Chỉ được phép tải lên một tệp hoặc một tệp zip");
-      e.target.value = "";
-      return;
-    }
-
+    // Only check for maximum size (20MB)
     if (file.size > maxSize) {
-      alert(`File ${file.name} vượt quá kích thước tối đa 50MB`);
+      toast.error(`File ${file.name} vượt quá kích thước tối đa 20MB`);
       e.target.value = "";
       return;
     }
@@ -760,9 +752,7 @@ export function ReportSubmissionModal({
                   <div className="flex flex-col items-center gap-2">
                     <Upload className="h-6 w-6 text-muted-foreground" />
                     <div className="text-sm">
-                      <p className="font-medium">
-                        Kéo thả tệp hoặc nhấp để chọn
-                      </p>
+                      <p className="font-medium">Nhấp để chọn file</p>
                       <p className="text-xs text-muted-foreground">
                         Chỉ một tệp hoặc một tệp zip (tối đa 50MB)
                       </p>
@@ -772,7 +762,6 @@ export function ReportSubmissionModal({
                     type="file"
                     onChange={handleFileUpload}
                     className="hidden"
-                    accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.jpg,.jpeg,.png,.zip"
                   />
                 </label>
               </div>
