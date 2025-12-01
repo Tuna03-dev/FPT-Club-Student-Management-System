@@ -154,7 +154,7 @@ export function ClubRequestDialog({
               <Info className="h-5 w-5 text-amber-600 mt-0.5" />
               <div>
                 <p className="text-sm font-semibold text-amber-900">
-                  Staff yêu cầu bạn cập nhật lại tên CLB
+                  Nhân viên phòng IC-PDP yêu cầu bạn cập nhật lại tên CLB
                 </p>
                 <p className="text-sm text-amber-800">
                   Hãy cập nhật tên CLB để tiếp tục quy trình xét duyệt. Bạn có thể thao tác
@@ -565,7 +565,7 @@ export function ClubRequestDialog({
             <>
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <h3 className="font-semibold">Form cuối đã nộp</h3>
+                  <h3 className="font-semibold">Hồ sơ hoàn thiện đã nộp</h3>
                   <Badge variant="outline">{finalForms.length} form</Badge>
                 </div>
                 <div className="space-y-2">
@@ -577,7 +577,7 @@ export function ClubRequestDialog({
                           <div className="flex items-start justify-between gap-4">
                             <div className="flex-1">
                               <div className="flex items-center gap-2 mb-1">
-                                <p className="font-medium">{formData.title || "Form cuối"}</p>
+                                <p className="font-medium">{formData.title || "Hồ sơ hoàn thiện"}</p>
                                 {index === 0 && (
                                   <Badge className="bg-green-100 text-green-800 text-xs">
                                     Mới nhất

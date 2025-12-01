@@ -194,7 +194,7 @@ public class RecruitmentService implements RecruitmentServiceInterface {
                         .collect(Collectors.toList());
 
                 if (!recipientIds.isEmpty()) {
-                    String actionUrl = "/recruitments/" + r.getId();
+                    String actionUrl = "/myclub/" + club.getId() + "/recruitments";
                     String title = "Đợt tuyển thành viên mới đã mở";
                     String message = "CLB " + club.getClubName() + " đã mở đợt tuyển thành viên: \"" + r.getTitle() + "\"";
 
@@ -314,7 +314,7 @@ public class RecruitmentService implements RecruitmentServiceInterface {
                         .collect(Collectors.toList());
 
                 if (!recipientIds.isEmpty()) {
-                    String actionUrl = "/recruitments/" + r.getId();
+                    String actionUrl = "/myclub/" + club.getId() + "/recruitments";
                     String title = "Đợt tuyển thành viên mới đã mở";
                     String message = "CLB " + club.getClubName() + " đã mở đợt tuyển thành viên: \"" + r.getTitle() + "\"";
 
@@ -518,7 +518,7 @@ public class RecruitmentService implements RecruitmentServiceInterface {
             List<Long> officerIds = getClubOfficersInCurrentSemester(clubId);
 
             if (!officerIds.isEmpty()) {
-                String actionUrl = "/recruitments/" + recruitment.getId() + "/applications/" + app.getId();
+                String actionUrl = "/myclub/" + club.getId() + "/recruitments";
                 String title = "Có đơn ứng tuyển mới";
                 String message = applicant.getFullName() + " đã nộp đơn ứng tuyển vào đợt tuyển thành viên: \""
                         + recruitment.getTitle() + "\"";

@@ -51,6 +51,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.regex.Pattern;
 
 @Service
 @RequiredArgsConstructor
@@ -97,10 +98,18 @@ public class RequestEstablishmentService {
         validateClubNameUniqueness(clubName, null);
 
         if (clubCode != null) {
-            if (clubRepository.existsByClubCodeIgnoreCase(clubCode)
-                    || requestEstablishmentRepository.existsByClubCodeIgnoreCase(clubCode)) {
+            // Chỉ check trong bảng Club (các CLB đã được tạo), không check trong RequestEstablishment
+            if (clubRepository.existsByClubCodeIgnoreCase(clubCode)) {
                 throw new AppException(ErrorCode.INVALID_INPUT, "Mã CLB này đã tồn tại trong hệ thống");
             }
+        }
+
+        // Validate email and phone if provided
+        if (request.getEmail() != null && !request.getEmail().trim().isEmpty()) {
+            validateEmail(request.getEmail());
+        }
+        if (request.getPhone() != null && !request.getPhone().trim().isEmpty()) {
+            validatePhone(request.getPhone());
         }
 
         User creator = userRepository.findById(userId)
@@ -169,19 +178,69 @@ public class RequestEstablishmentService {
             throw new AppException(ErrorCode.INVALID_INPUT, "Chỉ có thể cập nhật yêu cầu ở trạng thái DRAFT");
         }
 
-       // Update fields if provided
-        if (request.getClubName() != null && !request.getClubName().trim().isEmpty()) {
-            requestEstablishment.setClubName(request.getClubName().trim());
+        // Prepare values for validation and update
+        String clubName = request.getClubName() != null ? request.getClubName().trim() : null;
+        String clubCategory = request.getClubCategory() != null ? request.getClubCategory().trim() : null;
+        String clubCode = request.getClubCode() != null && !request.getClubCode().trim().isEmpty()
+                ? request.getClubCode().trim()
+                : null;
+
+        // Validate clubName if provided
+        if (request.getClubName() != null) {
+            if (clubName == null || clubName.isEmpty()) {
+                throw new AppException(ErrorCode.INVALID_INPUT, "Tên CLB không được để trống");
+            }
+            // Validate uniqueness (exclude current request)
+            validateClubNameUniqueness(clubName, requestId);
+        } else {
+            // If not provided, keep existing value (trim if not null)
+            clubName = requestEstablishment.getClubName() != null 
+                    ? requestEstablishment.getClubName().trim() 
+                    : null;
         }
-        if (request.getClubCategory() != null && !request.getClubCategory().trim().isEmpty()) {
-            requestEstablishment.setClubCategory(request.getClubCategory().trim());
+
+        // Validate clubCategory if provided
+        if (request.getClubCategory() != null) {
+            if (clubCategory == null || clubCategory.isEmpty()) {
+                throw new AppException(ErrorCode.INVALID_INPUT, "Danh mục CLB không được để trống");
+            }
+        } else {
+            // If not provided, keep existing value (trim if not null)
+            clubCategory = requestEstablishment.getClubCategory() != null 
+                    ? requestEstablishment.getClubCategory().trim() 
+                    : null;
         }
-        if (request.getClubCode() != null) {
-            requestEstablishment.setClubCode(request.getClubCode().trim());
+
+        // Validate expectedMemberCount if provided
+        Integer expectedMemberCount = request.getExpectedMemberCount();
+        if (expectedMemberCount != null) {
+            if (expectedMemberCount <= 0) {
+                throw new AppException(ErrorCode.INVALID_INPUT, "Số lượng thành viên dự kiến phải lớn hơn 0");
+            }
+        } else {
+            // If not provided, keep existing value
+            expectedMemberCount = requestEstablishment.getExpectedMemberCount();
         }
-        if (request.getExpectedMemberCount() != null && request.getExpectedMemberCount() > 0) {
-            requestEstablishment.setExpectedMemberCount(request.getExpectedMemberCount());
+
+        // Validate clubCode uniqueness if provided
+        if (clubCode != null) {
+            // Chỉ check trong bảng Club (các CLB đã được tạo), không check trong RequestEstablishment
+            if (clubRepository.existsByClubCodeIgnoreCase(clubCode)) {
+                throw new AppException(ErrorCode.INVALID_INPUT, "Mã CLB này đã tồn tại trong hệ thống");
+            }
         }
+
+        // Update fields
+        requestEstablishment.setClubName(clubName);
+        requestEstablishment.setClubCategory(clubCategory);
+        if (clubCode != null) {
+            requestEstablishment.setClubCode(clubCode);
+        } else if (request.getClubCode() != null && request.getClubCode().trim().isEmpty()) {
+            // If empty string is provided, set to null
+            requestEstablishment.setClubCode(null);
+        }
+        requestEstablishment.setExpectedMemberCount(expectedMemberCount);
+        
         if (request.getActivityObjectives() != null) {
             requestEstablishment.setActivityObjectives(request.getActivityObjectives());
         }
@@ -191,11 +250,27 @@ public class RequestEstablishmentService {
         if (request.getDescription() != null) {
             requestEstablishment.setDescription(request.getDescription());
         }
+        
+        // Validate and update email if provided
         if (request.getEmail() != null) {
-            requestEstablishment.setEmail(request.getEmail().trim());
+            if (request.getEmail().trim().isEmpty()) {
+                // Allow setting email to null/empty
+                requestEstablishment.setEmail(null);
+            } else {
+                validateEmail(request.getEmail());
+                requestEstablishment.setEmail(request.getEmail().trim());
+            }
         }
+        
+        // Validate and update phone if provided
         if (request.getPhone() != null) {
-            requestEstablishment.setPhone(request.getPhone().trim());
+            if (request.getPhone().trim().isEmpty()) {
+                // Allow setting phone to null/empty
+                requestEstablishment.setPhone(null);
+            } else {
+                validatePhone(request.getPhone());
+                requestEstablishment.setPhone(request.getPhone().trim());
+            }
         }
         if (request.getFacebookLink() != null) {
             requestEstablishment.setFacebookLink(request.getFacebookLink().trim());
@@ -292,7 +367,8 @@ public class RequestEstablishmentService {
                 String message = String.format("Sinh viên %s đã gửi yêu cầu thành lập CLB: %s",
                         requestEstablishment.getCreatedBy().getFullName(),
                         requestEstablishment.getClubName());
-                String actionUrl = "/staff/club-creation/requests/" + requestEstablishment.getId();
+                // FE route: /staff/club-creation (danh sách yêu cầu cho staff)
+                String actionUrl = "/staff/club-creation";
 
                 List<Long> staffIds = staffUsers.stream().map(User::getId).toList();
                 notificationService.sendToUsers(
@@ -363,7 +439,7 @@ public class RequestEstablishmentService {
 
         Long assignedStaffId = request.getStaffId() != null ? request.getStaffId() : staffId;
         User assignedStaff = userRepository.findById(assignedStaffId)
-                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND, "Không tìm thấy staff được gán"));
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND, "Không tìm thấy Nhân viên phòng IC-PDP được gán"));
 
         requestEstablishment.setAssignedStaff(assignedStaff);
         requestEstablishment = requestEstablishmentRepository.save(requestEstablishment);
@@ -382,14 +458,14 @@ public class RequestEstablishmentService {
             throw new AppException(ErrorCode.INVALID_INPUT, "Chỉ có thể nhận yêu cầu ở trạng thái SUBMITTED");
         }
 
-        // Nếu chưa được gán, tự động gán cho staff đang nhận
+        // Nếu chưa được gán, tự động gán cho Nhân viên phòng IC-PDP đang nhận
         if (requestEstablishment.getAssignedStaff() == null) {
             User staff = userRepository.findById(staffId)
-                    .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND, "Không tìm thấy staff"));
+                    .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND, "Không tìm thấy Nhân viên phòng IC-PDP"));
             requestEstablishment.setAssignedStaff(staff);
         } else if (!requestEstablishment.getAssignedStaff().getId().equals(staffId)) {
-            // Nếu đã được gán cho staff khác, không cho phép nhận
-            throw new AppException(ErrorCode.FORBIDDEN, "Yêu cầu này đã được gán cho staff khác");
+            // Nếu đã được gán cho Nhân viên phòng IC-PDP khác, không cho phép nhận
+            throw new AppException(ErrorCode.FORBIDDEN, "Yêu cầu này đã được gán cho Nhân viên phòng IC-PDP khác");
         }
 
         LocalDateTime now = LocalDateTime.now();
@@ -402,7 +478,7 @@ public class RequestEstablishmentService {
         requestEstablishmentRepository.flush();
 
         try {
-            workflowHistoryService.createWorkflowHistory(requestEstablishment.getId(), staffId, "REQUEST_REVIEW", "Staff đã nhận yêu cầu và bắt đầu xem xét");
+            workflowHistoryService.createWorkflowHistory(requestEstablishment.getId(), staffId, "REQUEST_REVIEW", "Nhân viên phòng IC-PDP đã nhận yêu cầu và bắt đầu xem xét");
         } catch (Exception e) {
             log.error("Failed to create workflow history, but continuing: {}", e.getMessage());
         }
@@ -418,7 +494,7 @@ public class RequestEstablishmentService {
                     .assignedStaffName(staff != null ? staff.getFullName() : null)
                     .assignedStaffEmail(staff != null ? staff.getEmail() : null)
                     .deadline(requestEstablishment.getConfirmationDeadline())
-                    .message("Staff đã nhận yêu cầu của bạn. Hạn xác nhận: " + requestEstablishment.getConfirmationDeadline())
+                    .message("Nhân viên phòng IC-PDP đã nhận yêu cầu của bạn. Hạn xác nhận: " + requestEstablishment.getConfirmationDeadline())
                     .build();
 
             webSocketService.sendToUser(
@@ -435,11 +511,12 @@ public class RequestEstablishmentService {
         // 🔔 Notification: Gửi cho student
         try {
             String title = "Yêu cầu của bạn đã được nhận";
-            String message = String.format("Staff %s đã nhận yêu cầu thành lập CLB \"%s\". Hạn xác nhận: %s",
-                    requestEstablishment.getAssignedStaff() != null ? requestEstablishment.getAssignedStaff().getFullName() : "Staff",
+            String message = String.format("Nhân viên phòng IC-PDP %s đã nhận yêu cầu thành lập CLB \"%s\". Hạn xác nhận: %s",
+                    requestEstablishment.getAssignedStaff() != null ? requestEstablishment.getAssignedStaff().getFullName() : "Nhân viên phòng IC-PDP",
                     requestEstablishment.getClubName(),
                     requestEstablishment.getConfirmationDeadline() != null ? requestEstablishment.getConfirmationDeadline().toString() : "N/A");
-            String actionUrl = "/club-creation/requests/" + requestEstablishment.getId();
+            // FE route: /create-club (trang theo dõi yêu cầu của student)
+            String actionUrl = "/create-club";
 
             notificationService.sendToUser(
                     requestEstablishment.getCreatedBy().getId(),
@@ -491,7 +568,7 @@ public class RequestEstablishmentService {
         requestEstablishmentRepository.flush();
 
         try {
-            workflowHistoryService.createWorkflowHistory(requestEstablishment.getId(), staffId, "REQUEST_REVIEW", "Staff đã xác nhận liên hệ với sinh viên");
+            workflowHistoryService.createWorkflowHistory(requestEstablishment.getId(), staffId, "REQUEST_REVIEW", "Nhân viên phòng IC-PDP đã xác nhận liên hệ với sinh viên");
         } catch (Exception e) {
             log.error("Failed to create workflow history, but continuing: {}", e.getMessage());
         }
@@ -505,7 +582,7 @@ public class RequestEstablishmentService {
                     .status(requestEstablishment.getStatus())
                     .assignedStaffId(staff != null ? staff.getId() : null)
                     .assignedStaffName(staff != null ? staff.getFullName() : null)
-                    .message("Staff đã xác nhận liên hệ với bạn")
+                    .message("Nhân viên phòng IC-PDP đã xác nhận liên hệ với bạn")
                     .build();
 
             webSocketService.sendToUser(
@@ -521,8 +598,9 @@ public class RequestEstablishmentService {
         // 🔔 Notification: Gửi cho student
         try {
             String title = "Liên hệ đã được xác nhận";
-            String message = String.format("Staff đã xác nhận liên hệ cho yêu cầu thành lập CLB \"%s\"", requestEstablishment.getClubName());
-            String actionUrl = "/club-creation/requests/" + requestEstablishment.getId();
+            String message = String.format("Nhân viên phòng IC-PDP đã xác nhận liên hệ cho yêu cầu thành lập CLB \"%s\"", requestEstablishment.getClubName());
+            // FE route: /create-club (trang theo dõi yêu cầu của student)
+            String actionUrl = "/create-club";
 
             notificationService.sendToUser(
                     requestEstablishment.getCreatedBy().getId(),
@@ -562,7 +640,7 @@ public class RequestEstablishmentService {
         requestEstablishmentRepository.flush();
 
         try {
-            String comment = "Staff từ chối xác nhận liên hệ. Lý do: " + (request.getReason() != null ? request.getReason() : "Không có lý do");
+            String comment = "Nhân viên phòng IC-PDP từ chối xác nhận liên hệ. Lý do: " + (request.getReason() != null ? request.getReason() : "Không có lý do");
             workflowHistoryService.createWorkflowHistory(requestEstablishment.getId(), staffId, "REQUEST_REVIEW", comment);
         } catch (Exception e) {
             log.error("Failed to create workflow history, but continuing: {}", e.getMessage());
@@ -600,7 +678,8 @@ public class RequestEstablishmentService {
             String message = String.format("Yêu cầu thành lập CLB \"%s\" đã bị từ chối. Lý do: %s",
                     requestEstablishment.getClubName(),
                     request.getReason() != null ? request.getReason() : "Không có lý do");
-            String actionUrl = "/club-creation/requests/" + requestEstablishment.getId();
+            // FE route: /create-club (trang theo dõi yêu cầu của student)
+            String actionUrl = "/create-club";
 
             notificationService.sendToUser(
                     requestEstablishment.getCreatedBy().getId(),
@@ -643,8 +722,8 @@ public class RequestEstablishmentService {
         try {
             String comment = (request != null && request.getComment() != null && !request.getComment().trim().isEmpty())
                     ? request.getComment().trim()
-                    : "Staff đã yêu cầu sinh viên nộp đề án chi tiết";
-            // Tạo history với step code PROPOSAL_REQUIRED để đánh dấu staff đã yêu cầu nộp đề án
+                    : "Nhân viên phòng IC-PDP đã yêu cầu sinh viên nộp đề án chi tiết";
+            // Tạo history với step code PROPOSAL_REQUIRED để đánh dấu Nhân viên phòng IC-PDP đã yêu cầu nộp đề án
             workflowHistoryService.createWorkflowHistory(requestEstablishment.getId(), staffId, "PROPOSAL_REQUIRED", comment);
         } catch (Exception e) {
             log.error("Failed to create workflow history, but continuing: {}", e.getMessage());
@@ -655,7 +734,7 @@ public class RequestEstablishmentService {
             User staff = requestEstablishment.getAssignedStaff();
             String commentText = (request != null && request.getComment() != null && !request.getComment().trim().isEmpty())
                     ? request.getComment().trim()
-                    : "Staff đã yêu cầu bạn nộp đề án chi tiết";
+                    : "Nhân viên phòng IC-PDP đã yêu cầu bạn nộp đề án chi tiết";
             ClubCreationWebSocketPayload payload = ClubCreationWebSocketPayload.builder()
                     .requestId(requestEstablishment.getId())
                     .clubName(requestEstablishment.getClubName())
@@ -680,11 +759,12 @@ public class RequestEstablishmentService {
         try {
             String commentText = (request != null && request.getComment() != null && !request.getComment().trim().isEmpty())
                     ? request.getComment().trim()
-                    : "Staff đã yêu cầu bạn nộp đề án chi tiết";
+                    : "Nhân viên phòng IC-PDP đã yêu cầu bạn nộp đề án chi tiết";
             String title = "Yêu cầu nộp đề án";
-            String message = String.format("Staff yêu cầu bạn nộp đề án chi tiết cho yêu cầu thành lập CLB \"%s\". %s",
+            String message = String.format("Nhân viên phòng IC-PDP yêu cầu bạn nộp đề án chi tiết cho yêu cầu thành lập CLB \"%s\". %s",
                     requestEstablishment.getClubName(), commentText);
-            String actionUrl = "/club-creation/requests/" + requestEstablishment.getId() + "/proposal";
+            // FE route: /create-club (student vào tab tạo CLB, xem/nộp đề án từ dialog)
+            String actionUrl = "/create-club";
 
             notificationService.sendToUser(
                     requestEstablishment.getCreatedBy().getId(),
@@ -719,13 +799,13 @@ public class RequestEstablishmentService {
             throw new AppException(ErrorCode.FORBIDDEN, "Bạn không có quyền nộp đề án cho yêu cầu này");
         }
 
-        // Check status: allow submit when staff already requested proposal, student is resubmitting after rejection,
+        // Check status: allow submit when Nhân viên phòng IC-PDP already requested proposal, student is resubmitting after rejection,
         // or student wants to update proposal while waiting for approval
         RequestEstablishmentStatus previousStatus = requestEstablishment.getStatus();
         if (previousStatus != RequestEstablishmentStatus.PROPOSAL_REQUIRED &&
             previousStatus != RequestEstablishmentStatus.PROPOSAL_REJECTED &&
             previousStatus != RequestEstablishmentStatus.PROPOSAL_SUBMITTED) {
-            throw new AppException(ErrorCode.INVALID_INPUT, "Chỉ có thể nộp đề án khi trạng thái là PROPOSAL_REQUIRED, PROPOSAL_REJECTED hoặc PROPOSAL_SUBMITTED (chờ staff duyệt)");
+            throw new AppException(ErrorCode.INVALID_INPUT, "Chỉ có thể nộp đề án khi trạng thái là PROPOSAL_REQUIRED, PROPOSAL_REJECTED hoặc PROPOSAL_SUBMITTED (chờ Nhân viên phòng IC-PDP duyệt)");
         }
 
         // Validate: phải có file hoặc fileUrl
@@ -737,6 +817,14 @@ public class RequestEstablishmentService {
         // Upload file nếu có
         if (file != null && !file.isEmpty()) {
             try {
+                // Validate file size (max 20MB)
+                long maxFileSize = 20 * 1024 * 1024; // 20MB in bytes
+                if (file.getSize() > maxFileSize) {
+                    throw new AppException(ErrorCode.INVALID_INPUT, 
+                        String.format("Dung lượng file quá lớn. Kích thước tối đa cho phép là 20MB. File của bạn: %.2f MB", 
+                            file.getSize() / (1024.0 * 1024.0)));
+                }
+
                 // Validate file type (Word, Excel, PDF, ZIP)
                 String originalFilename = file.getOriginalFilename();
                 if (originalFilename != null) {
@@ -833,7 +921,8 @@ public class RequestEstablishmentService {
                         requestEstablishment.getCreatedBy().getFullName(),
                         proposal.getTitle(),
                         requestEstablishment.getClubName());
-                String actionUrl = "/staff/club-creation/requests/" + requestEstablishment.getId() + "/proposals";
+                // FE route: /staff/club-creation (staff xem danh sách và chi tiết đề án trong trang này)
+                String actionUrl = "/staff/club-creation";
 
                 notificationService.sendToUser(
                         staff.getId(),
@@ -895,11 +984,11 @@ public class RequestEstablishmentService {
     }
 
     /**
-     * Staff xem danh sách đề án đã nộp (status = PROPOSAL_SUBMITTED)
-     * Chỉ hiển thị các proposals từ requests được assign cho staff đó
+     * Nhân viên phòng IC-PDP xem danh sách đề án đã nộp (status = PROPOSAL_SUBMITTED)
+     * Chỉ hiển thị các proposals từ requests được assign cho Nhân viên phòng IC-PDP đó
      */
     public Page<ClubProposalResponse> getSubmittedProposals(Long staffId, Pageable pageable) throws AppException {
-        // Get all requests with PROPOSAL_SUBMITTED status assigned to this staff (without pagination first)
+        // Get all requests with PROPOSAL_SUBMITTED status assigned to this Nhân viên phòng IC-PDP (without pagination first)
         List<RequestEstablishmentStatus> statuses = List.of(RequestEstablishmentStatus.PROPOSAL_SUBMITTED);
         List<RequestEstablishment> allRequests = requestEstablishmentRepository.findByAssignedStaffAndStatusIn(
                 staffId, 
@@ -939,14 +1028,14 @@ public class RequestEstablishmentService {
     }
 
     /**
-     * Staff xem danh sách đề án của một request
+     * Nhân viên phòng IC-PDP xem danh sách đề án của một request
      */
     public List<ClubProposalResponse> getProposalsForStaff(Long requestId, Long staffId) throws AppException {
         // Get request to check permission
         RequestEstablishment requestEstablishment = requestEstablishmentRepository.findDetailById(requestId)
                 .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND, "Không tìm thấy yêu cầu thành lập CLB"));
 
-        // Check permission: only assigned staff can view
+        // Check permission: only assigned Nhân viên phòng IC-PDP can view
         if (requestEstablishment.getAssignedStaff() == null || !requestEstablishment.getAssignedStaff().getId().equals(staffId)) {
             throw new AppException(ErrorCode.FORBIDDEN, "Bạn không có quyền xem đề án của yêu cầu này");
         }
@@ -960,14 +1049,14 @@ public class RequestEstablishmentService {
     }
 
     /**
-     * Staff xem chi tiết đề án
+     * Nhân viên phòng IC-PDP xem chi tiết đề án
      */
     public ClubProposalResponse getProposalDetailForStaff(Long requestId, Long proposalId, Long staffId) throws AppException {
         // Get request to check permission
         RequestEstablishment requestEstablishment = requestEstablishmentRepository.findDetailById(requestId)
                 .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND, "Không tìm thấy yêu cầu thành lập CLB"));
 
-        // Check permission: only assigned staff can view
+        // Check permission: only assigned Nhân viên phòng IC-PDP can view
         if (requestEstablishment.getAssignedStaff() == null || !requestEstablishment.getAssignedStaff().getId().equals(staffId)) {
             throw new AppException(ErrorCode.FORBIDDEN, "Bạn không có quyền xem đề án này");
         }
@@ -980,7 +1069,7 @@ public class RequestEstablishmentService {
     }
 
     /**
-     * Staff duyệt đề án
+     * Nhân viên phòng IC-PDP duyệt đề án
      * Chuyển status từ PROPOSAL_SUBMITTED → PROPOSAL_APPROVED
      */
     @Transactional
@@ -1014,7 +1103,7 @@ public class RequestEstablishmentService {
 
         // Create workflow history
         try {
-            workflowHistoryService.createWorkflowHistory(requestEstablishment.getId(), staffId, "PROPOSAL_REVIEW", "Staff đã duyệt đề án: " + proposal.getTitle());
+            workflowHistoryService.createWorkflowHistory(requestEstablishment.getId(), staffId, "PROPOSAL_REVIEW", "Nhân viên phòng IC-PDP đã duyệt đề án: " + proposal.getTitle());
         } catch (Exception e) {
             log.error("Failed to create workflow history, but continuing: {}", e.getMessage());
         }
@@ -1048,10 +1137,11 @@ public class RequestEstablishmentService {
         // 🔔 Notification: Gửi cho student
         try {
             String title = "Đề án của bạn đã được duyệt";
-            String message = String.format("Đề án \"%s\" cho yêu cầu thành lập CLB \"%s\" đã được staff duyệt",
+            String message = String.format("Đề án \"%s\" cho yêu cầu thành lập CLB \"%s\" đã được Nhân viên phòng IC-PDP duyệt",
                     proposal.getTitle(),
                     requestEstablishment.getClubName());
-            String actionUrl = "/club-creation/requests/" + requestEstablishment.getId();
+            // FE route: /create-club (trang theo dõi yêu cầu của student)
+            String actionUrl = "/create-club";
 
             notificationService.sendToUser(
                     requestEstablishment.getCreatedBy().getId(),
@@ -1071,7 +1161,7 @@ public class RequestEstablishmentService {
     }
 
     /**
-     * Staff từ chối đề án
+     * Nhân viên phòng IC-PDP từ chối đề án
      * Chuyển status từ PROPOSAL_SUBMITTED → PROPOSAL_REJECTED
      */
     @Transactional
@@ -1105,7 +1195,7 @@ public class RequestEstablishmentService {
 
         // Create workflow history
         try {
-            String comment = "Staff từ chối đề án: " + proposal.getTitle();
+            String comment = "Nhân viên phòng IC-PDP từ chối đề án: " + proposal.getTitle();
             if (request.getReason() != null && !request.getReason().trim().isEmpty()) {
                 comment += ". Lý do: " + request.getReason();
             }
@@ -1149,7 +1239,8 @@ public class RequestEstablishmentService {
                     proposal.getTitle(),
                     requestEstablishment.getClubName(),
                     request.getReason() != null ? request.getReason() : "Không có lý do");
-            String actionUrl = "/club-creation/requests/" + requestEstablishment.getId() + "/proposal";
+            // FE route: /create-club (student mở trang tạo CLB để nộp lại / xem lý do từ chối đề án)
+            String actionUrl = "/create-club";
 
             notificationService.sendToUser(
                     requestEstablishment.getCreatedBy().getId(),
@@ -1283,7 +1374,8 @@ public class RequestEstablishmentService {
                         requestEstablishment.getCreatedBy().getFullName(),
                         requestEstablishment.getClubName(),
                         schedule.getDefenseDate());
-                String actionUrl = "/staff/club-creation/requests/" + requestEstablishment.getId() + "/defense-schedule";
+                // FE route: /staff/club-creation (staff xem và duyệt lịch bảo vệ trong trang này)
+                String actionUrl = "/staff/club-creation";
 
                 notificationService.sendToUser(
                         staff.getId(),
@@ -1375,11 +1467,11 @@ public class RequestEstablishmentService {
     }
 
     /**
-     * Staff xem danh sách lịch bảo vệ đã đề xuất (status = DEFENSE_SCHEDULE_PROPOSED)
-     * Chỉ hiển thị các defense schedules từ requests được assign cho staff đó
+     * Nhân viên phòng IC-PDP xem danh sách lịch bảo vệ đã đề xuất (status = DEFENSE_SCHEDULE_PROPOSED)
+     * Chỉ hiển thị các defense schedules từ requests được assign cho Nhân viên phòng IC-PDP đó
      */
     public Page<DefenseScheduleResponse> getProposedDefenseSchedules(Long staffId, Pageable pageable) throws AppException {
-        // Get all requests with DEFENSE_SCHEDULE_PROPOSED status assigned to this staff (without pagination first)
+        // Get all requests with DEFENSE_SCHEDULE_PROPOSED status assigned to this Nhân viên phòng IC-PDP (without pagination first)
         List<RequestEstablishmentStatus> statuses = List.of(RequestEstablishmentStatus.DEFENSE_SCHEDULE_PROPOSED);
         List<RequestEstablishment> allRequests = requestEstablishmentRepository.findByAssignedStaffAndStatusIn(
                 staffId, 
@@ -1427,14 +1519,14 @@ public class RequestEstablishmentService {
     }
 
     /**
-     * Staff xem chi tiết lịch bảo vệ
+     * Nhân viên phòng IC-PDP xem chi tiết lịch bảo vệ
      */
     public DefenseScheduleResponse getDefenseScheduleForStaff(Long requestId, Long staffId) throws AppException {
         // Get request to check permission
         RequestEstablishment requestEstablishment = requestEstablishmentRepository.findDetailById(requestId)
                 .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND, "Không tìm thấy yêu cầu thành lập CLB"));
 
-        // Check permission: only assigned staff can view
+        // Check permission: only assigned Nhân viên phòng IC-PDP can view
         if (requestEstablishment.getAssignedStaff() == null || !requestEstablishment.getAssignedStaff().getId().equals(staffId)) {
             throw new AppException(ErrorCode.FORBIDDEN, "Bạn không có quyền xem lịch bảo vệ này");
         }
@@ -1447,7 +1539,7 @@ public class RequestEstablishmentService {
     }
 
     /**
-     * Staff duyệt lịch bảo vệ
+     * Nhân viên phòng IC-PDP duyệt lịch bảo vệ
      * Chuyển status từ DEFENSE_SCHEDULE_PROPOSED → DEFENSE_SCHEDULE_APPROVED
      */
     @Transactional
@@ -1482,7 +1574,7 @@ public class RequestEstablishmentService {
 
         // Create workflow history
         try {
-            workflowHistoryService.createWorkflowHistory(requestEstablishment.getId(), staffId, "DEFENSE_SCHEDULE_CONFIRMED", "Staff đã duyệt lịch bảo vệ: " + schedule.getDefenseDate());
+            workflowHistoryService.createWorkflowHistory(requestEstablishment.getId(), staffId, "DEFENSE_SCHEDULE_CONFIRMED", "Nhân viên phòng IC-PDP đã duyệt lịch bảo vệ: " + schedule.getDefenseDate());
         } catch (Exception e) {
             log.error("Failed to create workflow history, but continuing: {}", e.getMessage());
         }
@@ -1523,7 +1615,8 @@ public class RequestEstablishmentService {
                     requestEstablishment.getClubName(),
                     schedule.getDefenseDate(),
                     schedule.getLocation() != null ? schedule.getLocation() : "Chưa có");
-            String actionUrl = "/club-creation/requests/" + requestEstablishment.getId() + "/defense-schedule";
+            // FE route: /create-club (student xem lịch bảo vệ trong trang tạo CLB)
+            String actionUrl = "/create-club";
 
             notificationService.sendToUser(
                     requestEstablishment.getCreatedBy().getId(),
@@ -1543,7 +1636,7 @@ public class RequestEstablishmentService {
     }
 
     /**
-     * Staff từ chối lịch bảo vệ
+     * Nhân viên phòng IC-PDP từ chối lịch bảo vệ
      * Chuyển status từ DEFENSE_SCHEDULE_PROPOSED → DEFENSE_SCHEDULE_REJECTED
      */
     @Transactional
@@ -1574,7 +1667,7 @@ public class RequestEstablishmentService {
 
         // Create workflow history
         try {
-            String comment = "Staff từ chối lịch bảo vệ: " + schedule.getDefenseDate();
+            String comment = "Nhân viên phòng IC-PDP từ chối lịch bảo vệ: " + schedule.getDefenseDate();
             if (request.getReason() != null && !request.getReason().trim().isEmpty()) {
                 comment += ". Lý do: " + request.getReason();
             }
@@ -1617,7 +1710,8 @@ public class RequestEstablishmentService {
             String message = String.format("Lịch bảo vệ cho yêu cầu thành lập CLB \"%s\" đã bị từ chối. Lý do: %s",
                     requestEstablishment.getClubName(),
                     request.getReason() != null ? request.getReason() : "Không có lý do");
-            String actionUrl = "/club-creation/requests/" + requestEstablishment.getId() + "/defense-schedule";
+            // FE route: /create-club (student xem / cập nhật lịch bảo vệ trong trang tạo CLB)
+            String actionUrl = "/create-club";
 
             notificationService.sendToUser(
                     requestEstablishment.getCreatedBy().getId(),
@@ -1637,7 +1731,7 @@ public class RequestEstablishmentService {
     }
 
     /**
-     * Staff nhập kết quả bảo vệ (PASSED/FAILED) + feedback
+     * Nhân viên phòng IC-PDP nhập kết quả bảo vệ (PASSED/FAILED) + feedback
      * Nếu FAILED → REJECTED (end)
      * Nếu PASSED → DEFENSE_COMPLETED (tiếp tục)
      */
@@ -1694,7 +1788,7 @@ public class RequestEstablishmentService {
 
         // Create workflow history
         try {
-            String comment = "Staff đã nhập kết quả bảo vệ: " + request.getResult();
+            String comment = "Nhân viên phòng IC-PDP đã nhập kết quả bảo vệ: " + request.getResult();
             if (request.getFeedback() != null && !request.getFeedback().trim().isEmpty()) {
                 comment += ". Feedback: " + request.getFeedback();
             }
@@ -1743,7 +1837,8 @@ public class RequestEstablishmentService {
             if (request.getFeedback() != null && !request.getFeedback().trim().isEmpty()) {
                 message += ". Feedback: " + request.getFeedback();
             }
-            String actionUrl = "/club-creation/requests/" + requestEstablishment.getId();
+            // FE route: /create-club (student xem yêu cầu sau khi nhập kết quả bảo vệ)
+            String actionUrl = "/create-club";
 
             notificationService.sendToUser(
                     requestEstablishment.getCreatedBy().getId(),
@@ -1763,7 +1858,7 @@ public class RequestEstablishmentService {
     }
 
     /**
-     * Student nộp form cuối
+     * Student nộp Hồ sơ hoàn thiện
      * Chuyển status từ DEFENSE_COMPLETED → FINAL_FORM_SUBMITTED
      * Hỗ trợ upload file trực tiếp (Word, Excel, PDF) hoặc dùng fileUrl
      * Luôn tạo form mới (nhiều version) thay vì update form cũ
@@ -1776,25 +1871,33 @@ public class RequestEstablishmentService {
 
         // Check ownership
         if (!requestEstablishment.getCreatedBy().getId().equals(userId)) {
-            throw new AppException(ErrorCode.FORBIDDEN, "Bạn không có quyền nộp form cuối cho yêu cầu này");
+            throw new AppException(ErrorCode.FORBIDDEN, "Bạn không có quyền nộp Hồ sơ hoàn thiện cho yêu cầu này");
         }
 
         RequestEstablishmentStatus previousStatus = requestEstablishment.getStatus();
         // Check status: DEFENSE_COMPLETED (first submission) or FINAL_FORM_SUBMITTED (update before approval)
         if (previousStatus != RequestEstablishmentStatus.DEFENSE_COMPLETED &&
             previousStatus != RequestEstablishmentStatus.FINAL_FORM_SUBMITTED) {
-            throw new AppException(ErrorCode.INVALID_INPUT, "Chỉ có thể nộp form cuối khi trạng thái là DEFENSE_COMPLETED hoặc FINAL_FORM_SUBMITTED");
+            throw new AppException(ErrorCode.INVALID_INPUT, "Chỉ có thể nộp Hồ sơ hoàn thiện khi trạng thái là DEFENSE_COMPLETED hoặc FINAL_FORM_SUBMITTED");
         }
 
         // Validate: phải có file hoặc fileUrl
         String fileUrl = request.getFileUrl();
         if ((file == null || file.isEmpty()) && (fileUrl == null || fileUrl.trim().isEmpty())) {
-            throw new AppException(ErrorCode.INVALID_INPUT, "Vui lòng upload file form cuối hoặc cung cấp fileUrl");
+            throw new AppException(ErrorCode.INVALID_INPUT, "Vui lòng upload file Hồ sơ hoàn thiện hoặc cung cấp fileUrl");
         }
 
         // Upload file nếu có
         if (file != null && !file.isEmpty()) {
             try {
+                // Validate file size (max 20MB)
+                long maxFileSize = 20 * 1024 * 1024; // 20MB in bytes
+                if (file.getSize() > maxFileSize) {
+                    throw new AppException(ErrorCode.INVALID_INPUT, 
+                        String.format("Dung lượng file quá lớn. Kích thước tối đa cho phép là 20MB. File của bạn: %.2f MB", 
+                            file.getSize() / (1024.0 * 1024.0)));
+                }
+
                 // Validate file type (Word, Excel, PDF, ZIP)
                 String originalFilename = file.getOriginalFilename();
                 if (originalFilename != null) {
@@ -1812,7 +1915,7 @@ public class RequestEstablishmentService {
                 throw e; // Re-throw AppException
             } catch (Exception e) {
                 log.error("Failed to upload final form file: {}", e.getMessage(), e);
-                throw new AppException(ErrorCode.INTERNAL_SERVER_ERROR, "Không thể upload file form cuối: " + e.getMessage());
+                throw new AppException(ErrorCode.INTERNAL_SERVER_ERROR, "Không thể upload file Hồ sơ hoàn thiện: " + e.getMessage());
             }
         }
 
@@ -1851,9 +1954,9 @@ public class RequestEstablishmentService {
             String comments = request.getComment();
             if (comments == null || comments.trim().isEmpty()) {
                 if (previousStatus == RequestEstablishmentStatus.FINAL_FORM_SUBMITTED) {
-                    comments = "Sinh viên đã cập nhật form cuối: " + request.getTitle();
+                    comments = "Sinh viên đã cập nhật Hồ sơ hoàn thiện: " + request.getTitle();
                 } else {
-                    comments = "Sinh viên đã nộp form cuối: " + request.getTitle();
+                    comments = "Sinh viên đã nộp Hồ sơ hoàn thiện: " + request.getTitle();
                 }
             }
             workflowHistoryService.createWorkflowHistory(
@@ -1880,7 +1983,7 @@ public class RequestEstablishmentService {
                         .finalFormTitle(request.getTitle())
                         .creatorId(requestEstablishment.getCreatedBy().getId())
                         .creatorName(requestEstablishment.getCreatedBy().getFullName())
-                        .message("Sinh viên đã nộp form cuối: " + request.getTitle())
+                        .message("Sinh viên đã nộp Hồ sơ hoàn thiện: " + request.getTitle())
                         .build();
 
                 webSocketService.sendToUser(
@@ -1898,12 +2001,13 @@ public class RequestEstablishmentService {
         try {
             User staff = requestEstablishment.getAssignedStaff();
             if (staff != null) {
-                String title = "Form cuối đã được nộp";
-                String message = String.format("Sinh viên %s đã nộp form cuối \"%s\" cho yêu cầu thành lập CLB \"%s\"",
+                String title = "Hồ sơ hoàn thiện đã được nộp";
+                String message = String.format("Sinh viên %s đã nộp Hồ sơ hoàn thiện \"%s\" cho yêu cầu thành lập CLB \"%s\"",
                         requestEstablishment.getCreatedBy().getFullName(),
                         request.getTitle(),
                         requestEstablishment.getClubName());
-                String actionUrl = "/staff/club-creation/requests/" + requestEstablishment.getId() + "/final-forms";
+                // FE route: /staff/club-creation (staff xem lịch sử Hồ sơ hoàn thiện trong trang này)
+                String actionUrl = "/staff/club-creation";
 
                 notificationService.sendToUser(
                         staff.getId(),
@@ -1924,14 +2028,14 @@ public class RequestEstablishmentService {
     }
 
     /**
-     * Student xem danh sách form cuối (tất cả version) của yêu cầu
+     * Student xem danh sách Hồ sơ hoàn thiện (tất cả version) của yêu cầu
      */
     public List<ClubCreationFinalFormResponse> getFinalFormsForStudent(Long requestId, Long userId) throws AppException {
         RequestEstablishment requestEstablishment = requestEstablishmentRepository.findDetailById(requestId)
                 .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND, "Không tìm thấy yêu cầu thành lập CLB"));
 
         if (!requestEstablishment.getCreatedBy().getId().equals(userId)) {
-            throw new AppException(ErrorCode.FORBIDDEN, "Bạn không có quyền xem form cuối của yêu cầu này");
+            throw new AppException(ErrorCode.FORBIDDEN, "Bạn không có quyền xem Hồ sơ hoàn thiện của yêu cầu này");
         }
 
         List<ClubCreationFinalForm> finalForms = clubCreationFinalFormRepository
@@ -1943,7 +2047,7 @@ public class RequestEstablishmentService {
     }
 
     /**
-     * Staff xem danh sách form cuối (tất cả version) của yêu cầu được giao
+     * Nhân viên phòng IC-PDP xem danh sách Hồ sơ hoàn thiện (tất cả version) của yêu cầu được giao
      */
     public List<ClubCreationFinalFormResponse> getFinalFormsForStaff(Long requestId, Long staffId) throws AppException {
         RequestEstablishment requestEstablishment = requestEstablishmentRepository.findDetailById(requestId)
@@ -1951,7 +2055,7 @@ public class RequestEstablishmentService {
 
         if (requestEstablishment.getAssignedStaff() == null ||
                 !requestEstablishment.getAssignedStaff().getId().equals(staffId)) {
-            throw new AppException(ErrorCode.FORBIDDEN, "Bạn không có quyền xem form cuối của yêu cầu này");
+            throw new AppException(ErrorCode.FORBIDDEN, "Bạn không có quyền xem Hồ sơ hoàn thiện của yêu cầu này");
         }
 
         List<ClubCreationFinalForm> finalForms = clubCreationFinalFormRepository
@@ -1963,7 +2067,7 @@ public class RequestEstablishmentService {
     }
 
     /**
-     * Staff duyệt form cuối và tự động tạo CLB + vai trò mặc định
+     * Nhân viên phòng IC-PDP duyệt Hồ sơ hoàn thiện và tự động tạo CLB + vai trò mặc định
      */
     @Transactional
     public RequestEstablishmentResponse approveFinalForm(Long requestId, Long staffId) throws AppException {
@@ -1972,19 +2076,19 @@ public class RequestEstablishmentService {
 
         if (requestEstablishment.getAssignedStaff() == null ||
                 !requestEstablishment.getAssignedStaff().getId().equals(staffId)) {
-            throw new AppException(ErrorCode.FORBIDDEN, "Bạn không có quyền duyệt form cuối của yêu cầu này");
+            throw new AppException(ErrorCode.FORBIDDEN, "Bạn không có quyền duyệt Hồ sơ hoàn thiện của yêu cầu này");
         }
 
         if (requestEstablishment.getStatus() != RequestEstablishmentStatus.FINAL_FORM_SUBMITTED) {
-            throw new AppException(ErrorCode.INVALID_INPUT, "Yêu cầu chưa ở trạng thái nộp form cuối");
+            throw new AppException(ErrorCode.INVALID_INPUT, "Yêu cầu chưa ở trạng thái nộp Hồ sơ hoàn thiện");
         }
 
         ClubCreationFinalForm latestFinalForm = clubCreationFinalFormRepository
                 .findFirstByRequestEstablishmentIdOrderByCreatedAtDesc(requestId)
-                .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND, "Không tìm thấy form cuối để duyệt"));
+                .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND, "Không tìm thấy Hồ sơ hoàn thiện để duyệt"));
 
         User staff = userRepository.findById(staffId)
-                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND, "Không tìm thấy thông tin staff"));
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND, "Không tìm thấy thông tin Nhân viên phòng IC-PDP"));
 
         latestFinalForm.setStatus("APPROVED");
         latestFinalForm.setReviewedAt(LocalDateTime.now());
@@ -2013,7 +2117,7 @@ public class RequestEstablishmentService {
                     requestEstablishment.getId(),
                     staffId,
                     "FINAL_FORM_APPROVED",
-                    "Staff đã duyệt form cuối"
+                    "Nhân viên phòng IC-PDP đã duyệt Hồ sơ hoàn thiện"
             );
         } catch (Exception e) {
             log.error("Failed to create workflow history for FINAL_FORM_APPROVED, but continuing: {}", e.getMessage());
@@ -2025,7 +2129,7 @@ public class RequestEstablishmentService {
                     requestEstablishment.getId(),
                     staffId,
                     "CLUB_CREATED",
-                    "Staff đã thành lập CLB"
+                    "Nhân viên phòng IC-PDP đã thành lập CLB"
             );
         } catch (Exception e) {
             log.error("Failed to create workflow history for CLUB_CREATED, but continuing: {}", e.getMessage());
@@ -2042,7 +2146,7 @@ public class RequestEstablishmentService {
                     .status(requestEstablishment.getStatus())
                     .clubId(club.getId())
                     .finalFormId(latestFinalForm.getId())
-                    .finalFormTitle(latestFinalForm.getFormData() != null ? latestFinalForm.getFormData() : "Form cuối")
+                    .finalFormTitle(latestFinalForm.getFormData() != null ? latestFinalForm.getFormData() : "Hồ sơ hoàn thiện")
                     .assignedStaffId(staff != null ? staff.getId() : null)
                     .assignedStaffName(staff != null ? staff.getFullName() : null)
                     .message("Chúc mừng! CLB \"" + requestEstablishment.getClubName() + "\" đã được thành lập thành công!")
@@ -2274,7 +2378,7 @@ public class RequestEstablishmentService {
 
         String comment = (request != null && request.getComment() != null && !request.getComment().trim().isEmpty())
                 ? request.getComment().trim()
-                : "Staff yêu cầu bạn cập nhật lại tên CLB để rõ ràng hơn";
+                : "Nhân viên phòng IC-PDP yêu cầu bạn cập nhật lại tên CLB để rõ ràng hơn";
 
         try {
             workflowHistoryService.createWorkflowHistory(
@@ -2314,7 +2418,8 @@ public class RequestEstablishmentService {
 
         try {
             String title = "Yêu cầu cập nhật tên CLB";
-            String actionUrl = "/club-creation/requests/" + requestEstablishment.getId();
+            // FE route: /create-club (student xem lại yêu cầu sau khi staff yêu cầu đổi tên)
+            String actionUrl = "/create-club";
             notificationService.sendToUser(
                     requestEstablishment.getCreatedBy().getId(),
                     staffId,
@@ -2398,7 +2503,8 @@ public class RequestEstablishmentService {
                 String title = "Sinh viên đã cập nhật tên CLB";
                 String message = String.format("Yêu cầu #%d đã được cập nhật tên thành \"%s\"",
                         requestEstablishment.getId(), newClubName);
-                String actionUrl = "/staff/club-creation/requests/" + requestEstablishment.getId();
+                // FE route: /staff/club-creation (staff xem yêu cầu sau khi student cập nhật tên)
+                String actionUrl = "/staff/club-creation";
                 notificationService.sendToUser(
                         staff.getId(),
                         userId,
@@ -2420,16 +2526,40 @@ public class RequestEstablishmentService {
     }
 
     private void validateClubNameUniqueness(String clubName, Long currentRequestId) throws AppException {
+        // Chỉ check trong bảng Club (các CLB đã được tạo), không check trong RequestEstablishment
         if (clubRepository.existsByClubNameIgnoreCase(clubName)) {
             throw new AppException(ErrorCode.INVALID_INPUT, "Tên CLB này đã tồn tại trong hệ thống");
         }
+    }
 
-        boolean existsInRequests = currentRequestId == null
-                ? requestEstablishmentRepository.existsByClubNameIgnoreCase(clubName)
-                : requestEstablishmentRepository.existsByClubNameIgnoreCaseAndIdNot(clubName, currentRequestId);
+    private void validateEmail(String email) throws AppException {
+        if (email == null || email.trim().isEmpty()) {
+            return; // Email is optional, so null or empty is allowed
+        }
+        
+        // Email regex pattern
+        String emailPattern = "^[A-Za-z0-9+_.-]+@([A-Za-z0-9.-]+\\.[A-Za-z]{2,})$";
+        if (!Pattern.matches(emailPattern, email.trim())) {
+            throw new AppException(ErrorCode.INVALID_INPUT, "Email không hợp lệ");
+        }
+    }
 
-        if (existsInRequests) {
-            throw new AppException(ErrorCode.INVALID_INPUT, "Tên CLB này đã tồn tại trong hệ thống");
+    private void validatePhone(String phone) throws AppException {
+        if (phone == null || phone.trim().isEmpty()) {
+            return; // Phone is optional, so null or empty is allowed
+        }
+        
+        // Vietnamese phone number pattern:
+        // - 10 digits starting with 0 (e.g., 0987654321)
+        // - 11 digits starting with 84 (e.g., 84987654321)
+        // - 12 characters starting with +84 (e.g., +84987654321)
+        String trimmedPhone = phone.trim().replaceAll("[\\s-]", ""); // Remove spaces and dashes
+        
+        // Pattern: starts with 0 (10 digits) or 84/+84 (11-12 digits)
+        String phonePattern = "^(0[0-9]{9}|84[0-9]{9}|\\+84[0-9]{9})$";
+        
+        if (!Pattern.matches(phonePattern, trimmedPhone)) {
+            throw new AppException(ErrorCode.INVALID_INPUT, "Số điện thoại không hợp lệ. Vui lòng nhập số điện thoại Việt Nam (bắt đầu bằng 0, 84 hoặc +84)");
         }
     }
 

@@ -854,11 +854,7 @@ export function RecruitmentForm({
                   </p>
                   <ul className="list-disc list-inside space-y-1 text-xs">
                     <li>
-                      Ứng viên sẽ có thể tải lên file (PDF, Word, tối đa 20MB.)
-                    </li>
-                    <li>
-                      Ứng viên có thể gửi link (Drive,..) nếu như vượt quá dung
-                      lượng hoặc định dạng khác.
+                      Ứng viên sẽ có thể tải lên file, tệp zip,.. (tối đa 20MB.)
                     </li>
                   </ul>
                 </div>

@@ -70,10 +70,18 @@ export function UpdateReportRequirementDialog({
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
+      // Enforce single-file upload
+      if (e.target.files.length > 1) {
+        toast.error("Chỉ được phép tải lên một tệp");
+        e.target.value = "";
+        return;
+      }
+
       const selectedFile = e.target.files[0];
-      // Validate file size (max 50MB)
-      if (selectedFile.size > 50 * 1024 * 1024) {
-        toast.error("Kích thước file không được vượt quá 50MB");
+      // Validate file size (max 20MB)
+      if (selectedFile.size > 20 * 1024 * 1024) {
+        toast.error("Kích thước file không được vượt quá 20MB");
+        e.target.value = "";
         return;
       }
       setFile(selectedFile);
@@ -278,9 +286,9 @@ export function UpdateReportRequirementDialog({
                 <div className="flex flex-col items-center gap-2">
                   <Upload className="h-6 w-6 text-muted-foreground" />
                   <div className="text-sm">
-                    <p className="font-medium">Kéo thả tệp hoặc nhấp để chọn</p>
+                    <p className="font-medium">Nhấp để chọn file</p>
                     <p className="text-xs text-muted-foreground">
-                      Hỗ trợ: PDF, DOC, DOCX, XLS, XLSX (tối đa 50MB)
+                      Một tệp (tối đa 20MB)
                     </p>
                   </div>
                 </div>
@@ -288,7 +296,6 @@ export function UpdateReportRequirementDialog({
                   type="file"
                   onChange={handleFileChange}
                   className="hidden"
-                  accept=".pdf,.doc,.docx,.xls,.xlsx"
                 />
               </label>
             </div>

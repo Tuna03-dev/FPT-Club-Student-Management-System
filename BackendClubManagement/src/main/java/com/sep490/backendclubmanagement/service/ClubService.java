@@ -269,7 +269,7 @@ public class ClubService implements ClubServiceInterface {
 
         // Send notification to the new club president
         try {
-            String actionUrl = "/clubs/" + savedClub.getId();
+            String actionUrl = "/myclub/" + savedClub.getId();
             String title = "Bạn được chỉ định làm Chủ nhiệm CLB";
             String message = "Bạn đã được chỉ định làm Chủ nhiệm của CLB " + savedClub.getClubName() +
                     " (" + savedClub.getClubCode() + "). Chúc mừng bạn!";
@@ -515,7 +515,7 @@ public class ClubService implements ClubServiceInterface {
             List<Long> memberIds = getActiveClubMembers(clubId);
 
             if (!memberIds.isEmpty()) {
-                String actionUrl = "/clubs/" + clubId;
+                String actionUrl = "/myclub/" + clubId;
                 String title = "Câu lạc bộ đã bị vô hiệu hóa";
                 String message = "CLB " + club.getClubName() + " đã bị vô hiệu hóa bởi nhà trường. " +
                         "Mọi hoạt động của CLB sẽ tạm ngưng cho đến khi được kích hoạt lại.";
@@ -559,7 +559,7 @@ public class ClubService implements ClubServiceInterface {
             List<Long> memberIds = getActiveClubMembers(clubId);
 
             if (!memberIds.isEmpty()) {
-                String actionUrl = "/clubs/" + clubId;
+                String actionUrl = "//" + clubId;
                 String title = "Câu lạc bộ đã được kích hoạt lại";
                 String message = "CLB " + club.getClubName() + " đã được kích hoạt lại bởi nhà trường. " +
                         "Các hoạt động của CLB có thể tiếp tục.";

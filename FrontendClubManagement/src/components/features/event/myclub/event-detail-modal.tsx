@@ -33,10 +33,14 @@ interface EventDetailModalProps {
     images: string[]
     isMyDraft?: boolean
     requestStatus?: string
+    clubId?: number
+    clubName?: string
+    eventTypeName?: string
+    isRegistered?: boolean
   }
   clubId?: number
   onClose: () => void
-  onUpdated?: (updated: { id: string; title: string; description: string; startDate: Date; endDate: Date; location: string; attendees: number; status: "upcoming" | "ongoing" | "completed"; images: string[]; isMyDraft?: boolean; requestStatus?: string }) => void
+  onUpdated?: (updated: { id: string; title: string; description: string; startDate: Date; endDate: Date; location: string; attendees: number; status: "upcoming" | "ongoing" | "completed"; images: string[]; isMyDraft?: boolean; requestStatus?: string; clubId?: number; clubName?: string; eventTypeName?: string; isRegistered?: boolean }) => void
   onDeleted?: (id: string) => void
   readOnly?: boolean
   pendingRequest?: { requestEventId: number; status?: string }
@@ -53,11 +57,13 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
   const [isPublishing, setIsPublishing] = useState(false)
   const [images, setImages] = useState<string[]>(event.images ?? [])
   const [mediaTypes, setMediaTypes] = useState<string[]>([])
-  const [isRegistered, setIsRegistered] = useState(false)
+  const [isRegistered, setIsRegistered] = useState(event.isRegistered ?? false)
   const [isRegistering, setIsRegistering] = useState(false)
-  const [clubName, setClubName] = useState<string | null>(null)
-  const [eventTypeName, setEventTypeName] = useState<string | null>(null)
-  const [eventClubId, setEventClubId] = useState<number | null>(null)
+  const [isLoadingRegistration, setIsLoadingRegistration] = useState(event.isRegistered === undefined) // Chỉ load nếu chưa có từ props
+  const [clubName, setClubName] = useState<string | null>(event.clubName || null)
+  const [eventTypeName, setEventTypeName] = useState<string | null>(event.eventTypeName || null)
+  const [eventClubId, setEventClubId] = useState<number | null>(event.clubId ?? null)
+  const [isLoadingDetails, setIsLoadingDetails] = useState(false)
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false)
   const [cancelReason, setCancelReason] = useState("")
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
@@ -73,7 +79,11 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
   const clubRole = currentClubId ? authService.getClubRole(currentClubId) : null
   const systemRoleInClub = clubRole?.systemRole?.toUpperCase()
   const isClubPresident = currentClubId && systemRoleInClub === "CLUB_OFFICER"
-  const isClubOfficer = currentClubId && systemRoleInClub === "TEAM_OFFICER"
+  const isClubOfficer =
+    currentClubId &&
+    (systemRoleInClub === "TEAM_OFFICER" ||
+      systemRoleInClub === "CLUB_TREASURE" ||
+      systemRoleInClub === "CLUB_TREASURER")
   const canMarkAttendance = isClubPresident || isClubOfficer
   const canManageMeeting = canMarkAttendance // FE: lãnh đạo CLB có quyền quản lý MEETING
 
@@ -147,37 +157,73 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
   // Kiểm tra sự kiện đang diễn ra (thời gian hiện tại nằm giữa startDate và endDate)
   const isEventOngoing = new Date() >= event.startDate && new Date() < event.endDate
 
-  // Fetch full event details to get clubName and mediaUrls
+  // Fetch full event details to get clubName and mediaUrls - gọi song song để tối ưu
   React.useEffect(() => {
     let cancelled = false
-    getEventById(Number(event.id))
-      .then((full) => {
-        if (!cancelled) {
+    setIsLoadingDetails(true)
+    
+    // Nếu là draft hoặc đã kết thúc, không cần check registration
+    const needsRegistrationCheck = !event.isMyDraft && !isEventEnded && event.isRegistered === undefined
+    if (!needsRegistrationCheck) {
+      setIsLoadingRegistration(false)
+    }
+    
+    // Gọi API song song thay vì tuần tự
+    const fetchDetails = async () => {
+      try {
+        const [fullEventData, registrationData] = await Promise.allSettled([
+          getEventById(Number(event.id)),
+          needsRegistrationCheck
+            ? getRegistrationStatus(Number(event.id))
+            : Promise.resolve(event.isRegistered ?? false)
+        ])
+        
+        if (cancelled) return
+        
+        // Xử lý kết quả getEventById
+        if (fullEventData.status === 'fulfilled') {
+          const full = fullEventData.value
           if (!images || images.length === 0) {
             setImages(full.mediaUrls ?? [])
           }
           setMediaTypes(full.mediaTypes ?? [])
-          setClubName(full.clubName || null)
-          setEventTypeName(full.eventTypeName || null)
-          setEventClubId(full.clubId ?? null)
+          // Chỉ cập nhật nếu chưa có từ props
+          if (!clubName) setClubName(full.clubName || null)
+          if (!eventTypeName) setEventTypeName(full.eventTypeName || null)
+          if (eventClubId === null) setEventClubId(full.clubId ?? null)
         }
-      })
-      .catch(() => {})
+        
+        // Xử lý kết quả getRegistrationStatus
+        if (needsRegistrationCheck) {
+          if (registrationData.status === 'fulfilled') {
+            setIsRegistered(registrationData.value as boolean)
+          } else if (registrationData.status === 'rejected') {
+            setIsRegistered(false)
+          }
+        } else if (registrationData.status === 'fulfilled') {
+          // Nếu đã có từ props, vẫn cập nhật nếu API trả về khác
+          const apiValue = registrationData.value as boolean
+          if (apiValue !== event.isRegistered) {
+            setIsRegistered(apiValue)
+          }
+        }
+        // Đánh dấu đã load xong registration status
+        setIsLoadingRegistration(false)
+      } catch (error) {
+        console.error("Error fetching event details:", error)
+        if (needsRegistrationCheck) {
+          setIsLoadingRegistration(false)
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingDetails(false)
+        }
+      }
+    }
+    
+    fetchDetails()
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [event.id])
-
-  // Kiểm tra trạng thái đăng ký khi không phải draft
-  React.useEffect(() => {
-    if (!event.isMyDraft && !isEventEnded) {
-      getRegistrationStatus(Number(event.id))
-        .then((registered) => {
-          setIsRegistered(registered)
-        })
-        .catch(() => {
-          setIsRegistered(false)
-        })
-    }
   }, [event.id, event.isMyDraft, isEventEnded])
 
   const handlePrevImage = () => {
@@ -224,11 +270,23 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
           return
         }
         await cancelEventRegistration(Number(event.id))
-        setIsRegistered(false)
+        const newRegistered = false
+        setIsRegistered(newRegistered)
+        // Cập nhật lại event trong calendar
+        onUpdated?.({
+          ...event,
+          isRegistered: newRegistered,
+        })
         toast.success("Đã hủy đăng ký sự kiện")
       } else {
         await registerForEvent(Number(event.id))
-        setIsRegistered(true)
+        const newRegistered = true
+        setIsRegistered(newRegistered)
+        // Cập nhật lại event trong calendar
+        onUpdated?.({
+          ...event,
+          isRegistered: newRegistered,
+        })
         toast.success("Đăng ký tham gia sự kiện thành công!")
       }
     } catch (error: unknown) {
@@ -385,6 +443,9 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
                         images: published.mediaUrls || [],
                         isMyDraft: false,
                         requestStatus: undefined,
+                        clubId: published.clubId,
+                        clubName: published.clubName,
+                        eventTypeName: published.eventTypeName,
                       })
                       // Thông báo cho calendar refetch lại dữ liệu
                       try {
@@ -504,16 +565,28 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
                 </>
               )}
                   {/* STAFF: Hủy sự kiện CLB (đưa về nháp) trước khi bắt đầu */}
-              {isStaff && eventClubId != null && isEventUpcoming && (
-                    <Button
-                      className="flex-1 bg-amber-500 hover:bg-amber-600 text-white h-10 text-sm gap-2"
-                      onClick={() => {
-                        setCancelReason("");
-                        setCancelDialogOpen(true);
-                      }}
-                    >
-                      Hủy sự kiện
-                    </Button>
+              {isStaff && isEventUpcoming && (
+                    <>
+                      {isLoadingDetails && eventClubId === null ? (
+                        <Button
+                          className="flex-1 bg-amber-500 hover:bg-amber-600 text-white h-10 text-sm gap-2"
+                          disabled
+                        >
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Đang tải...
+                        </Button>
+                      ) : eventClubId != null ? (
+                        <Button
+                          className="flex-1 bg-amber-500 hover:bg-amber-600 text-white h-10 text-sm gap-2"
+                          onClick={() => {
+                            setCancelReason("");
+                            setCancelDialogOpen(true);
+                          }}
+                        >
+                          Hủy sự kiện
+                        </Button>
+                      ) : null}
+                    </>
                   )}
               {/* Nút Điểm danh/Xem điểm danh - chỉ hiện cho CLUB_OFFICER và TEAM_OFFICER */}
               {canMarkAttendance && currentClubId && (
@@ -548,18 +621,25 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
               {!isStaff && !isEventEnded && (
                 <Button 
                   className={`${canMarkAttendance && currentClubId ? "flex-1" : "w-full"} h-10 text-sm gap-2 ${
-                    isRegistered 
-                      ? "bg-gray-500 hover:bg-gray-600 text-white" 
-                      : "bg-primary hover:bg-primary/90 text-primary-foreground"
+                    isLoadingRegistration
+                      ? "bg-muted text-muted-foreground" 
+                      : isRegistered 
+                        ? "bg-gray-500 hover:bg-gray-600 text-white" 
+                        : "bg-primary hover:bg-primary/90 text-primary-foreground"
                   }`}
                   onClick={handleRegisterClick}
-                  disabled={isRegistering || (isRegistered && isEventOngoing)}
+                  disabled={isRegistering || isLoadingRegistration || (isRegistered && isEventOngoing)}
                   title={isRegistered && isEventOngoing ? "Không thể hủy đăng ký khi sự kiện đang diễn ra" : undefined}
                 >
                   {isRegistering ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
                       Đang xử lý...
+                    </>
+                  ) : isLoadingRegistration ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Đang tải...
                     </>
                   ) : isRegistered ? (
                     <>
@@ -671,6 +751,9 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
                   images: updated.mediaUrls || [],
                   isMyDraft: event.isMyDraft,
                   requestStatus: event.requestStatus,
+                  clubId: updated.clubId,
+                  clubName: updated.clubName,
+                  eventTypeName: updated.eventTypeName,
                 })
               } catch (error: unknown) {
                 console.error("Error updating event:", error)

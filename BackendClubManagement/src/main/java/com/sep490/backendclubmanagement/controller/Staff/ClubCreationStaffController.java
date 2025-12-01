@@ -46,7 +46,7 @@ public class ClubCreationStaffController {
     ) throws AppException {
         Long userId = SecurityUtils.getCurrentUserId();
         if (!roleService.isStaff(userId)) {
-            throw new ForbiddenException("Chỉ STAFF mới có quyền truy cập");
+            throw new ForbiddenException("Chỉ Nhân viên phòng IC-PDP mới có quyền truy cập");
         }
         Page<RequestEstablishmentResponse> responses = requestEstablishmentService.getPendingRequests(pageable);
         return ResponseEntity.ok(ApiResponse.success(responses));
@@ -62,14 +62,14 @@ public class ClubCreationStaffController {
     ) throws AppException {
         Long userId = SecurityUtils.getCurrentUserId();
         if (!roleService.isStaff(userId)) {
-            throw new ForbiddenException("Chỉ STAFF mới có quyền truy cập");
+            throw new ForbiddenException("Chỉ Nhân viên phòng IC-PDP mới có quyền truy cập");
         }
         RequestEstablishmentResponse response = requestEstablishmentService.getRequestDetailForStaff(requestId);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
     /**
-     * Gán staff xử lý yêu cầu (tự nhận hoặc gán cho staff khác)
+     * Gán Nhân viên phòng IC-PDP xử lý yêu cầu (tự nhận hoặc gán cho Nhân viên phòng IC-PDP khác)
      * POST /api/staff/club-creation/requests/{requestId}/assign
      */
     @PostMapping("/{requestId}/assign")
@@ -79,7 +79,7 @@ public class ClubCreationStaffController {
     ) throws AppException {
         Long staffId = SecurityUtils.getCurrentUserId();
         if (!roleService.isStaff(staffId)) {
-            throw new ForbiddenException("Chỉ STAFF mới có quyền truy cập");
+            throw new ForbiddenException("Chỉ Nhân viên phòng IC-PDP mới có quyền truy cập");
         }
         if (request == null) {
             request = new AssignRequestEstablishmentRequest();
@@ -89,7 +89,7 @@ public class ClubCreationStaffController {
     }
 
     /**
-     * Staff nhận yêu cầu và set deadline 5 ngày
+     * Nhân viên phòng IC-PDP nhận yêu cầu và set deadline 5 ngày
      * POST /api/staff/club-creation/requests/{requestId}/receive
      */
     @PostMapping("/{requestId}/receive")
@@ -98,7 +98,7 @@ public class ClubCreationStaffController {
     ) throws AppException {
         Long staffId = SecurityUtils.getCurrentUserId();
         if (!roleService.isStaff(staffId)) {
-            throw new ForbiddenException("Chỉ STAFF mới có quyền truy cập");
+            throw new ForbiddenException("Chỉ Nhân viên phòng IC-PDP mới có quyền truy cập");
         }
         RequestEstablishmentResponse response = requestEstablishmentService.receiveRequest(requestId, staffId);
         return ResponseEntity.ok(ApiResponse.success(response));
@@ -114,7 +114,7 @@ public class ClubCreationStaffController {
     ) throws AppException {
         Long staffId = SecurityUtils.getCurrentUserId();
         if (!roleService.isStaff(staffId)) {
-            throw new ForbiddenException("Chỉ STAFF mới có quyền truy cập");
+            throw new ForbiddenException("Chỉ Nhân viên phòng IC-PDP mới có quyền truy cập");
         }
         RequestEstablishmentResponse response = requestEstablishmentService.confirmContact(requestId, staffId);
         return ResponseEntity.ok(ApiResponse.success(response));
@@ -131,7 +131,7 @@ public class ClubCreationStaffController {
     ) throws AppException {
         Long staffId = SecurityUtils.getCurrentUserId();
         if (!roleService.isStaff(staffId)) {
-            throw new ForbiddenException("Chỉ STAFF mới có quyền truy cập");
+            throw new ForbiddenException("Chỉ Nhân viên phòng IC-PDP mới có quyền truy cập");
         }
         RequestEstablishmentResponse response = requestEstablishmentService.rejectContact(requestId, staffId, request);
         return ResponseEntity.ok(ApiResponse.success(response));
@@ -148,7 +148,7 @@ public class ClubCreationStaffController {
     ) throws AppException {
         Long staffId = SecurityUtils.getCurrentUserId();
         if (!roleService.isStaff(staffId)) {
-            throw new ForbiddenException("Chỉ STAFF mới có quyền truy cập");
+            throw new ForbiddenException("Chỉ Nhân viên phòng IC-PDP mới có quyền truy cập");
         }
         RequestEstablishmentResponse response = requestEstablishmentService.requestProposal(requestId, staffId, request);
         return ResponseEntity.ok(ApiResponse.success(response));
@@ -164,14 +164,14 @@ public class ClubCreationStaffController {
     ) throws AppException {
         Long staffId = SecurityUtils.getCurrentUserId();
         if (!roleService.isStaff(staffId)) {
-            throw new ForbiddenException("Chỉ STAFF mới có quyền truy cập");
+            throw new ForbiddenException("Chỉ Nhân viên phòng IC-PDP mới có quyền truy cập");
         }
         List<ClubProposalResponse> proposals = requestEstablishmentService.getProposalsForStaff(requestId, staffId);
         return ResponseEntity.ok(ApiResponse.success(proposals));
     }
 
     /**
-     * Xem danh sách form cuối đã nộp của một request (dành cho staff được giao)
+     * Xem danh sách Hồ sơ hoàn thiện đã nộp của một request (dành cho Nhân viên phòng IC-PDP được giao)
      * GET /api/staff/club-creation/requests/{requestId}/final-forms
      */
     @GetMapping("/{requestId}/final-forms")
@@ -180,14 +180,14 @@ public class ClubCreationStaffController {
     ) throws AppException {
         Long staffId = SecurityUtils.getCurrentUserId();
         if (!roleService.isStaff(staffId)) {
-            throw new ForbiddenException("Chỉ STAFF mới có quyền truy cập");
+            throw new ForbiddenException("Chỉ Nhân viên phòng IC-PDP mới có quyền truy cập");
         }
         List<ClubCreationFinalFormResponse> responses = requestEstablishmentService.getFinalFormsForStaff(requestId, staffId);
         return ResponseEntity.ok(ApiResponse.success(responses));
     }
 
     /**
-     * Duyệt form cuối và tự động tạo CLB
+     * Duyệt Hồ sơ hoàn thiện và tự động tạo CLB
      * POST /api/staff/club-creation/requests/{requestId}/final-forms/approve
      */
     @PostMapping("/{requestId}/final-forms/approve")
@@ -196,7 +196,7 @@ public class ClubCreationStaffController {
     ) throws AppException {
         Long staffId = SecurityUtils.getCurrentUserId();
         if (!roleService.isStaff(staffId)) {
-            throw new ForbiddenException("Chỉ STAFF mới có quyền truy cập");
+            throw new ForbiddenException("Chỉ Nhân viên phòng IC-PDP mới có quyền truy cập");
         }
         RequestEstablishmentResponse response = requestEstablishmentService.approveFinalForm(requestId, staffId);
         return ResponseEntity.ok(ApiResponse.success(response));
@@ -212,7 +212,7 @@ public class ClubCreationStaffController {
     ) throws AppException {
         Long staffId = SecurityUtils.getCurrentUserId();
         if (!roleService.isStaff(staffId)) {
-            throw new ForbiddenException("Chỉ STAFF mới có quyền truy cập");
+            throw new ForbiddenException("Chỉ Nhân viên phòng IC-PDP mới có quyền truy cập");
         }
         Page<ClubProposalResponse> proposals = requestEstablishmentService.getSubmittedProposals(staffId, pageable);
         return ResponseEntity.ok(ApiResponse.success(proposals));
@@ -229,7 +229,7 @@ public class ClubCreationStaffController {
     ) throws AppException {
         Long staffId = SecurityUtils.getCurrentUserId();
         if (!roleService.isStaff(staffId)) {
-            throw new ForbiddenException("Chỉ STAFF mới có quyền truy cập");
+            throw new ForbiddenException("Chỉ Nhân viên phòng IC-PDP mới có quyền truy cập");
         }
         ClubProposalResponse proposal = requestEstablishmentService.getProposalDetailForStaff(requestId, proposalId, staffId);
         return ResponseEntity.ok(ApiResponse.success(proposal));
@@ -245,7 +245,7 @@ public class ClubCreationStaffController {
     ) throws AppException {
         Long staffId = SecurityUtils.getCurrentUserId();
         if (!roleService.isStaff(staffId)) {
-            throw new ForbiddenException("Chỉ STAFF mới có quyền truy cập");
+            throw new ForbiddenException("Chỉ Nhân viên phòng IC-PDP mới có quyền truy cập");
         }
         RequestEstablishmentResponse response = requestEstablishmentService.approveProposal(requestId, staffId);
         return ResponseEntity.ok(ApiResponse.success(response));
@@ -262,7 +262,7 @@ public class ClubCreationStaffController {
     ) throws AppException {
         Long staffId = SecurityUtils.getCurrentUserId();
         if (!roleService.isStaff(staffId)) {
-            throw new ForbiddenException("Chỉ STAFF mới có quyền truy cập");
+            throw new ForbiddenException("Chỉ Nhân viên phòng IC-PDP mới có quyền truy cập");
         }
         if (request == null) {
             request = new RejectProposalRequest();
@@ -281,7 +281,7 @@ public class ClubCreationStaffController {
     ) throws AppException {
         Long staffId = SecurityUtils.getCurrentUserId();
         if (!roleService.isStaff(staffId)) {
-            throw new ForbiddenException("Chỉ STAFF mới có quyền truy cập");
+            throw new ForbiddenException("Chỉ Nhân viên phòng IC-PDP mới có quyền truy cập");
         }
         Page<DefenseScheduleResponse> schedules = requestEstablishmentService.getProposedDefenseSchedules(staffId, pageable);
         return ResponseEntity.ok(ApiResponse.success(schedules));
@@ -297,7 +297,7 @@ public class ClubCreationStaffController {
     ) throws AppException {
         Long staffId = SecurityUtils.getCurrentUserId();
         if (!roleService.isStaff(staffId)) {
-            throw new ForbiddenException("Chỉ STAFF mới có quyền truy cập");
+            throw new ForbiddenException("Chỉ Nhân viên phòng IC-PDP mới có quyền truy cập");
         }
         DefenseScheduleResponse schedule = requestEstablishmentService.getDefenseScheduleForStaff(requestId, staffId);
         return ResponseEntity.ok(ApiResponse.success(schedule));
@@ -313,7 +313,7 @@ public class ClubCreationStaffController {
     ) throws AppException {
         Long staffId = SecurityUtils.getCurrentUserId();
         if (!roleService.isStaff(staffId)) {
-            throw new ForbiddenException("Chỉ STAFF mới có quyền truy cập");
+            throw new ForbiddenException("Chỉ Nhân viên phòng IC-PDP mới có quyền truy cập");
         }
         RequestEstablishmentResponse response = requestEstablishmentService.approveDefenseSchedule(requestId, staffId);
         return ResponseEntity.ok(ApiResponse.success(response));
@@ -330,7 +330,7 @@ public class ClubCreationStaffController {
     ) throws AppException {
         Long staffId = SecurityUtils.getCurrentUserId();
         if (!roleService.isStaff(staffId)) {
-            throw new ForbiddenException("Chỉ STAFF mới có quyền truy cập");
+            throw new ForbiddenException("Chỉ Nhân viên phòng IC-PDP mới có quyền truy cập");
         }
         if (request == null) {
             request = new RejectDefenseScheduleRequest();
@@ -350,7 +350,7 @@ public class ClubCreationStaffController {
     ) throws AppException {
         Long staffId = SecurityUtils.getCurrentUserId();
         if (!roleService.isStaff(staffId)) {
-            throw new ForbiddenException("Chỉ STAFF mới có quyền truy cập");
+            throw new ForbiddenException("Chỉ Nhân viên phòng IC-PDP mới có quyền truy cập");
         }
         RequestEstablishmentResponse response = requestEstablishmentService.completeDefense(requestId, staffId, request);
         return ResponseEntity.ok(ApiResponse.success(response));
@@ -367,14 +367,14 @@ public class ClubCreationStaffController {
     ) throws AppException {
         Long userId = SecurityUtils.getCurrentUserId();
         if (!roleService.isStaff(userId)) {
-            throw new ForbiddenException("Chỉ STAFF mới có quyền truy cập");
+            throw new ForbiddenException("Chỉ Nhân viên phòng IC-PDP mới có quyền truy cập");
         }
         Page<WorkflowHistoryResponse> histories = requestEstablishmentService.getWorkflowHistory(requestId, pageable);
         return ResponseEntity.ok(ApiResponse.success(histories));
     }
 
     /**
-     * Staff yêu cầu sinh viên chỉnh sửa tên CLB
+     * Nhân viên phòng IC-PDP yêu cầu sinh viên chỉnh sửa tên CLB
      * POST /api/staff/club-creation/requests/{requestId}/request-name-revision
      */
     @PostMapping("/{requestId}/request-name-revision")
@@ -384,7 +384,7 @@ public class ClubCreationStaffController {
     ) throws AppException {
         Long staffId = SecurityUtils.getCurrentUserId();
         if (!roleService.isStaff(staffId)) {
-            throw new ForbiddenException("Chỉ STAFF mới có quyền truy cập");
+            throw new ForbiddenException("Chỉ Nhân viên phòng IC-PDP mới có quyền truy cập");
         }
         RequestEstablishmentResponse response = requestEstablishmentService.requestNameRevision(requestId, staffId, request);
         return ResponseEntity.ok(ApiResponse.success(response));

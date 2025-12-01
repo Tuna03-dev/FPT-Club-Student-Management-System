@@ -63,7 +63,7 @@ public interface ReportServiceInterface {
      * @param userId Current user ID
      * @return Created report requirement response with club requirements
      */
-    ReportRequirementResponse createReportRequirement(CreateReportRequirementRequest request, MultipartFile file, Long userId);
+    ReportRequirementResponse createReportRequirement(CreateReportRequirementRequest request, MultipartFile file, Long userId) throws  AppException;
 
     /**
      * Update report requirement basic information (for staff only)
@@ -73,7 +73,7 @@ public interface ReportServiceInterface {
      * @param userId Current user ID
      * @return Updated report requirement response
      */
-    ReportRequirementResponse updateReportRequirement(Long requirementId, UpdateReportRequirementRequest request, MultipartFile file, Long userId);
+    ReportRequirementResponse updateReportRequirement(Long requirementId, UpdateReportRequirementRequest request, MultipartFile file, Long userId) throws AppException;
 
 
     /**

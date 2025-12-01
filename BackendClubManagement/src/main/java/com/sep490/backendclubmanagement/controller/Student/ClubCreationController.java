@@ -210,7 +210,7 @@ public class ClubCreationController {
     }
 
     /**
-     * Nộp form cuối (chuyển từ DEFENSE_COMPLETED → FINAL_FORM_SUBMITTED)
+     * Nộp Hồ sơ hoàn thiện (chuyển từ DEFENSE_COMPLETED → FINAL_FORM_SUBMITTED)
      * POST /api/club-creation/requests/{requestId}/final-form
      * 
      * Hỗ trợ upload file trực tiếp (Word, Excel, PDF) hoặc dùng fileUrl
@@ -233,7 +233,7 @@ public class ClubCreationController {
         
         // Validate title
         if (title == null || title.trim().isEmpty()) {
-            throw new AppException(com.sep490.backendclubmanagement.exception.ErrorCode.INVALID_INPUT, "Tiêu đề form không được để trống");
+            throw new AppException(com.sep490.backendclubmanagement.exception.ErrorCode.INVALID_INPUT, "Tiêu đề Hồ sơ hoàn thiện không được để trống");
         }
         
         // Build request object
@@ -247,7 +247,7 @@ public class ClubCreationController {
     }
 
     /**
-     * Xem danh sách form cuối đã nộp (tất cả version)
+     * Xem danh sách Hồ sơ hoàn thiện đã nộp (tất cả version)
      * GET /api/club-creation/requests/{requestId}/final-forms
      */
     @GetMapping("/{requestId}/final-forms")

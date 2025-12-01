@@ -2,20 +2,21 @@
 import {
   Calendar,
   Bell,
-  Settings,
   Menu,
-  Search,
   Clock,
   FileText,
   Users,
   Home,
   Building2,
   UserSquare2,
+  LogOut,
+  User,
+  FileSignature,
+  Shield,
 } from "lucide-react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Tooltip,
@@ -27,10 +28,13 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import useMyClubs from "@/hooks/useMyClubs";
 import { authService } from "@/services/authService";
-import { useTranslation } from "react-i18next";
+// translations not needed in staff header
 import { StaffNotificationBell } from "@/components/notifications/StaffNotificationBell";
 import { useWebSocket, type EventWebSocketPayload } from "@/hooks/useWebSocket";
 import { toast } from "sonner";
@@ -103,8 +107,9 @@ const managementColors: Record<string, string> = {
 };
 
 export const StaffLayout = () => {
-  const { t } = useTranslation("common");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [user, setUser] = useState<any>(null);
+  const [showClubsList, setShowClubsList] = useState(false);
   const navigate = useNavigate();
 
   // WebSocket setup for Staff event notifications
@@ -122,7 +127,9 @@ export const StaffLayout = () => {
 
       if (msg.action === "REQUEST_SUBMITTED") {
         toast.info("Yêu cầu tạo sự kiện mới", {
-          description: payload.message || `Có yêu cầu tạo sự kiện "${payload.eventTitle}" chờ duyệt`,
+          description:
+            payload.message ||
+            `Có yêu cầu tạo sự kiện "${payload.eventTitle}" chờ duyệt`,
           action: {
             label: "Xem",
             onClick: () => navigate("/myclub/staff/events"),
@@ -134,6 +141,34 @@ export const StaffLayout = () => {
     return () => unsubscribe?.();
   }, [isConnected, subscribeToSystemRole, navigate]);
 
+  // Load user info for header
+  useEffect(() => {
+    const checkAuth = () => {
+      const currentUser = authService.getCurrentUser();
+      setUser(currentUser);
+    };
+
+    checkAuth();
+    window.addEventListener("storage", checkAuth);
+    return () => window.removeEventListener("storage", checkAuth);
+  }, []);
+
+  const isAuthenticated = authService.isAuthenticated();
+
+  const shouldLoadMyClubs = isAuthenticated && !!user;
+  const {
+    data: clubs,
+    loading: clubsLoading,
+    error: clubsError,
+  } = useMyClubs(shouldLoadMyClubs);
+
+  const normalizedSystemRole = user?.systemRole
+    ? String(user.systemRole).trim().toUpperCase()
+    : "";
+  const isAdmin =
+    normalizedSystemRole === "ADMIN" || normalizedSystemRole === "MANAGER";
+  const isStaff = normalizedSystemRole === "STAFF";
+
   const handleLogout = async () => {
     try {
       await authService.logoutWithApi();
@@ -141,7 +176,8 @@ export const StaffLayout = () => {
       /* ignore */
     } finally {
       authService.logout();
-      navigate("/login", { replace: true });
+      toast.success("Đăng xuất thành công!", { duration: 2000 });
+      navigate("/", { replace: true });
     }
   };
 
@@ -150,80 +186,220 @@ export const StaffLayout = () => {
       <div className="h-screen w-full bg-background flex flex-col overflow-hidden">
         <header className="sticky top-0 z-50 w-full border-b border-border bg-card shadow-sm">
           <div className="flex h-14 items-center justify-between px-4 max-w-[1920px] mx-auto">
-            {/* Left: logo + search */}
+            {/* Left */}
             <div className="flex items-center gap-4 flex-1 max-w-[320px]">
               <div className="h-10 w-10 rounded-full bg-gradient-to-br from-primary to-primary-glow shadow-lg flex items-center justify-center">
                 <span className="text-white font-bold text-lg">S</span>
               </div>
-              <div className="relative w-full max-w-[240px] hidden md:block">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  type="search"
-                  placeholder={t("search")}
-                  className="pl-9 h-9 bg-secondary/50 border-0"
-                />
-              </div>
             </div>
 
-            {/* Center: nav */}
+            {/* Center */}
             <nav className="hidden md:flex items-center gap-2 flex-1 justify-center max-w-[600px]">
-              {navItems.map((item) => (
-                <Tooltip key={item.key}>
-                  <TooltipTrigger asChild>
-                    <NavLink
-                      to={`/myclub/staff${item.url}`}
-                      end={item.url === ""}
-                      className={({ isActive }) =>
-                        `flex items-center justify-center px-8 py-2 rounded-lg transition-all relative ${
-                          isActive
-                            ? "text-primary"
-                            : "text-muted-foreground hover:bg-secondary"
-                        }`
-                      }
-                    >
-                      {({ isActive }) => (
-                        <>
-                          <item.icon className="h-6 w-6" />
-                          {isActive && (
-                            <div className="absolute bottom-0 left-0 right-0 h-1 bg-primary rounded-t-md" />
-                          )}
-                        </>
-                      )}
-                    </NavLink>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom">
-                    <p>{item.label}</p>
-                  </TooltipContent>
-                </Tooltip>
-              ))}
+              {navItems
+                .filter((item) => item.key !== "events")
+                .map((item) => (
+                  <Tooltip key={item.key}>
+                    <TooltipTrigger asChild>
+                      <NavLink
+                        to={`/myclub/staff${item.url}`}
+                        end={item.url === ""}
+                        className={({ isActive }) =>
+                          `flex items-center justify-center px-8 py-2 rounded-lg transition-all relative ${
+                            isActive
+                              ? "text-primary"
+                              : "text-muted-foreground hover:bg-secondary"
+                          }`
+                        }
+                      >
+                        {({ isActive }) => (
+                          <>
+                            <item.icon className="h-6 w-6" />
+                            {isActive && (
+                              <div className="absolute bottom-0 left-0 right-0 h-1 bg-primary rounded-t-md" />
+                            )}
+                          </>
+                        )}
+                      </NavLink>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">
+                      <p>{item.label}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                ))}
             </nav>
 
-            {/* Right: user */}
-            <div className="flex items-center gap-2 flex-1 justify-end max-w-[320px]">
+            {/* Right */}
+            <div className="flex items-center gap-3 flex-1 justify-end max-w-[320px]">
               <Button
                 variant="ghost"
                 size="sm"
-                className="hidden sm:flex items-center gap-2"
+                className="hidden sm:flex items-center gap-2 hover:bg-orange-50 transition"
                 onClick={() => navigate("/")}
               >
-                <Home className="h-4 w-4" />
-                <span>Trang chủ</span>
+                <Home className="h-4 w-4 text-orange-500" />
+                <span className="font-medium text-orange-600">Trang chủ</span>
               </Button>
-              <NavLink to="/myclub/staff/settings">
-                <Button variant="ghost" size="icon" className="rounded-full">
-                  <Settings className="h-5 w-5" />
-                </Button>
-              </NavLink>
               <StaffNotificationBell />
-              <div className="flex items-center gap-2">
-                <Avatar className="h-8 w-8 ring-2 ring-primary/20">
-                  <AvatarImage src="https://github.com/shadcn.png" />
-                  <AvatarFallback>S</AvatarFallback>
-                </Avatar>
-                <Button variant="ghost" size="sm" onClick={handleLogout}>
-                  {t("logout", { defaultValue: "Đăng xuất" })}
-                </Button>
-              </div>
+
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="flex items-center gap-2 rounded-md px-2 py-1 hover:bg-orange-50 transition">
+                    <Avatar className="h-9 w-9">
+                      <AvatarImage src={user?.avatarUrl} alt={user?.fullName} />
+                      <AvatarFallback className="bg-orange-100 text-orange-600 text-sm">
+                        {user?.fullName
+                          ? user.fullName
+                              .split(" ")
+                              .map((n: string) => n[0])
+                              .join("")
+                              .slice(0, 2)
+                              .toUpperCase()
+                          : "S"}
+                      </AvatarFallback>
+                    </Avatar>
+                    <span className="hidden sm:block text-[15px] font-medium text-gray-700 max-w-[120px] truncate">
+                      {user?.fullName}
+                    </span>
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  align="end"
+                  className="w-60 max-h-[30rem] overflow-y-auto rounded-md shadow-lg"
+                >
+                  <DropdownMenuLabel>
+                    <div className="flex flex-col space-y-0.5">
+                      <p className="text-[14px] font-semibold text-gray-800">
+                        {user?.fullName}
+                      </p>
+                      <p className="text-[13px] text-gray-500">{user?.email}</p>
+                    </div>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {!showClubsList ? (
+                    <>
+                      <DropdownMenuItem
+                        onClick={() => navigate("/profile")}
+                        className="cursor-pointer text-[14px] text-gray-700"
+                      >
+                        <User className="mr-2 h-4 w-4 text-orange-500" />
+                        Thông tin cá nhân
+                      </DropdownMenuItem>
+                      {!clubsLoading &&
+                        !clubsError &&
+                        clubs &&
+                        clubs.length > 0 && (
+                          <DropdownMenuItem
+                            onClick={() => setShowClubsList(true)}
+                            onSelect={(e) => e.preventDefault()}
+                            className="cursor-pointer text-[14px] text-gray-700"
+                          >
+                            <Users className="mr-2 h-4 w-4 text-orange-500" />
+                            Câu lạc bộ của tôi
+                          </DropdownMenuItem>
+                        )}
+                      <DropdownMenuItem
+                        onClick={() => navigate("/myRecruitmentApplications")}
+                        className="cursor-pointer text-[14px] text-gray-700"
+                      >
+                        <FileSignature className="mr-2 h-4 w-4 text-orange-500" />
+                        Đơn ứng tuyển của tôi
+                      </DropdownMenuItem>
+                      {isStaff && (
+                        <DropdownMenuItem
+                          onClick={() => navigate("/staff/club-creation")}
+                          className="cursor-pointer text-[14px] text-gray-700"
+                        >
+                          <Building2 className="mr-2 h-4 w-4 text-orange-500" />
+                          Trang quản lý của ICPDP
+                        </DropdownMenuItem>
+                      )}
+                      {isAdmin && (
+                        <DropdownMenuItem
+                          onClick={() => navigate("/admin")}
+                          className="cursor-pointer text-[14px] text-gray-700"
+                        >
+                          <Shield className="mr-2 h-4 w-4 text-orange-500" />
+                          Trang quản trị
+                        </DropdownMenuItem>
+                      )}
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onClick={handleLogout}
+                        className="cursor-pointer text-[14px] text-red-600"
+                      >
+                        <LogOut className="mr-2 h-4 w-4" />
+                        Đăng xuất
+                      </DropdownMenuItem>
+                    </>
+                  ) : (
+                    <>
+                      <DropdownMenuItem
+                        onClick={() => setShowClubsList(false)}
+                        onSelect={(e) => e.preventDefault()}
+                        className="cursor-pointer text-[13px] text-gray-500"
+                      >
+                        ← Quay lại
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuLabel className="px-3 py-1.5 text-[14px] font-semibold text-gray-800">
+                        CLB của bạn
+                      </DropdownMenuLabel>
+                      {clubsLoading && (
+                        <div className="px-3 py-2 text-[14px] text-gray-500">
+                          Đang tải danh sách CLB…
+                        </div>
+                      )}
+                      {clubsError && (
+                        <div className="px-3 py-2 text-[14px] text-red-600">
+                          {String(clubsError)}
+                        </div>
+                      )}
+                      {!clubsLoading &&
+                        !clubsError &&
+                        (!clubs || clubs.length === 0) && (
+                          <div className="px-3 py-2 text-[14px] text-gray-500">
+                            Bạn chưa thuộc CLB nào.
+                          </div>
+                        )}
+                      {!clubsLoading &&
+                        !clubsError &&
+                        clubs?.map((club: any) => (
+                          <DropdownMenuItem
+                            key={club.clubId}
+                            onClick={() => {
+                              localStorage.setItem(
+                                "lastClubId",
+                                String(club.clubId)
+                              );
+                              setShowClubsList(false);
+                              navigate(`/myclub/${club.clubId}`);
+                            }}
+                            className="cursor-pointer"
+                          >
+                            <div className="flex items-center gap-3 w-full">
+                              {club.logoUrl ? (
+                                <img
+                                  src={club.logoUrl}
+                                  alt={club.clubName}
+                                  className="h-9 w-9 rounded-md object-cover"
+                                />
+                              ) : (
+                                <div className="h-9 w-9 rounded-md bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center">
+                                  <span className="text-white font-bold text-sm">
+                                    {club.clubName?.charAt(0) || "C"}
+                                  </span>
+                                </div>
+                              )}
+                              <span className="text-[14px] truncate text-gray-700">
+                                {club.clubName}
+                              </span>
+                            </div>
+                          </DropdownMenuItem>
+                        ))}
+                    </>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
 
               {/* Mobile menu */}
               <DropdownMenu
@@ -248,9 +424,7 @@ export const StaffLayout = () => {
                           onClick={() => setIsMobileMenuOpen(false)}
                         >
                           <div
-                            className={`h-6 w-6 rounded-lg ${
-                              managementColors[item.key]
-                            } flex items-center justify-center text-white shadow-sm`}
+                            className={`h-6 w-6 rounded-lg ${managementColors[item.key]} flex items-center justify-center text-white shadow-sm`}
                           >
                             <item.icon className="h-3 w-3" />
                           </div>
