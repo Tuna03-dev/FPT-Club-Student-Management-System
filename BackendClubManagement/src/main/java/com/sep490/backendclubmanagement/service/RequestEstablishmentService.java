@@ -367,7 +367,8 @@ public class RequestEstablishmentService {
                 String message = String.format("Sinh viên %s đã gửi yêu cầu thành lập CLB: %s",
                         requestEstablishment.getCreatedBy().getFullName(),
                         requestEstablishment.getClubName());
-                String actionUrl = "/staff/club-creation/requests/" + requestEstablishment.getId();
+                // FE route: /staff/club-creation (danh sách yêu cầu cho staff)
+                String actionUrl = "/staff/club-creation";
 
                 List<Long> staffIds = staffUsers.stream().map(User::getId).toList();
                 notificationService.sendToUsers(
@@ -514,7 +515,8 @@ public class RequestEstablishmentService {
                     requestEstablishment.getAssignedStaff() != null ? requestEstablishment.getAssignedStaff().getFullName() : "Nhân viên phòng IC-PDP",
                     requestEstablishment.getClubName(),
                     requestEstablishment.getConfirmationDeadline() != null ? requestEstablishment.getConfirmationDeadline().toString() : "N/A");
-            String actionUrl = "/club-creation/requests/" + requestEstablishment.getId();
+            // FE route: /create-club (trang theo dõi yêu cầu của student)
+            String actionUrl = "/create-club";
 
             notificationService.sendToUser(
                     requestEstablishment.getCreatedBy().getId(),
@@ -597,7 +599,8 @@ public class RequestEstablishmentService {
         try {
             String title = "Liên hệ đã được xác nhận";
             String message = String.format("Nhân viên phòng IC-PDP đã xác nhận liên hệ cho yêu cầu thành lập CLB \"%s\"", requestEstablishment.getClubName());
-            String actionUrl = "/club-creation/requests/" + requestEstablishment.getId();
+            // FE route: /create-club (trang theo dõi yêu cầu của student)
+            String actionUrl = "/create-club";
 
             notificationService.sendToUser(
                     requestEstablishment.getCreatedBy().getId(),
@@ -675,7 +678,8 @@ public class RequestEstablishmentService {
             String message = String.format("Yêu cầu thành lập CLB \"%s\" đã bị từ chối. Lý do: %s",
                     requestEstablishment.getClubName(),
                     request.getReason() != null ? request.getReason() : "Không có lý do");
-            String actionUrl = "/club-creation/requests/" + requestEstablishment.getId();
+            // FE route: /create-club (trang theo dõi yêu cầu của student)
+            String actionUrl = "/create-club";
 
             notificationService.sendToUser(
                     requestEstablishment.getCreatedBy().getId(),
@@ -759,7 +763,8 @@ public class RequestEstablishmentService {
             String title = "Yêu cầu nộp đề án";
             String message = String.format("Nhân viên phòng IC-PDP yêu cầu bạn nộp đề án chi tiết cho yêu cầu thành lập CLB \"%s\". %s",
                     requestEstablishment.getClubName(), commentText);
-            String actionUrl = "/club-creation/requests/" + requestEstablishment.getId() + "/proposal";
+            // FE route: /create-club (student vào tab tạo CLB, xem/nộp đề án từ dialog)
+            String actionUrl = "/create-club";
 
             notificationService.sendToUser(
                     requestEstablishment.getCreatedBy().getId(),
@@ -916,7 +921,8 @@ public class RequestEstablishmentService {
                         requestEstablishment.getCreatedBy().getFullName(),
                         proposal.getTitle(),
                         requestEstablishment.getClubName());
-                String actionUrl = "/staff/club-creation/requests/" + requestEstablishment.getId() + "/proposals";
+                // FE route: /staff/club-creation (staff xem danh sách và chi tiết đề án trong trang này)
+                String actionUrl = "/staff/club-creation";
 
                 notificationService.sendToUser(
                         staff.getId(),
@@ -1134,7 +1140,8 @@ public class RequestEstablishmentService {
             String message = String.format("Đề án \"%s\" cho yêu cầu thành lập CLB \"%s\" đã được Nhân viên phòng IC-PDP duyệt",
                     proposal.getTitle(),
                     requestEstablishment.getClubName());
-            String actionUrl = "/club-creation/requests/" + requestEstablishment.getId();
+            // FE route: /create-club (trang theo dõi yêu cầu của student)
+            String actionUrl = "/create-club";
 
             notificationService.sendToUser(
                     requestEstablishment.getCreatedBy().getId(),
@@ -1232,7 +1239,8 @@ public class RequestEstablishmentService {
                     proposal.getTitle(),
                     requestEstablishment.getClubName(),
                     request.getReason() != null ? request.getReason() : "Không có lý do");
-            String actionUrl = "/club-creation/requests/" + requestEstablishment.getId() + "/proposal";
+            // FE route: /create-club (student mở trang tạo CLB để nộp lại / xem lý do từ chối đề án)
+            String actionUrl = "/create-club";
 
             notificationService.sendToUser(
                     requestEstablishment.getCreatedBy().getId(),
@@ -1366,7 +1374,8 @@ public class RequestEstablishmentService {
                         requestEstablishment.getCreatedBy().getFullName(),
                         requestEstablishment.getClubName(),
                         schedule.getDefenseDate());
-                String actionUrl = "/staff/club-creation/requests/" + requestEstablishment.getId() + "/defense-schedule";
+                // FE route: /staff/club-creation (staff xem và duyệt lịch bảo vệ trong trang này)
+                String actionUrl = "/staff/club-creation";
 
                 notificationService.sendToUser(
                         staff.getId(),
@@ -1606,7 +1615,8 @@ public class RequestEstablishmentService {
                     requestEstablishment.getClubName(),
                     schedule.getDefenseDate(),
                     schedule.getLocation() != null ? schedule.getLocation() : "Chưa có");
-            String actionUrl = "/club-creation/requests/" + requestEstablishment.getId() + "/defense-schedule";
+            // FE route: /create-club (student xem lịch bảo vệ trong trang tạo CLB)
+            String actionUrl = "/create-club";
 
             notificationService.sendToUser(
                     requestEstablishment.getCreatedBy().getId(),
@@ -1700,7 +1710,8 @@ public class RequestEstablishmentService {
             String message = String.format("Lịch bảo vệ cho yêu cầu thành lập CLB \"%s\" đã bị từ chối. Lý do: %s",
                     requestEstablishment.getClubName(),
                     request.getReason() != null ? request.getReason() : "Không có lý do");
-            String actionUrl = "/club-creation/requests/" + requestEstablishment.getId() + "/defense-schedule";
+            // FE route: /create-club (student xem / cập nhật lịch bảo vệ trong trang tạo CLB)
+            String actionUrl = "/create-club";
 
             notificationService.sendToUser(
                     requestEstablishment.getCreatedBy().getId(),
@@ -1826,7 +1837,8 @@ public class RequestEstablishmentService {
             if (request.getFeedback() != null && !request.getFeedback().trim().isEmpty()) {
                 message += ". Feedback: " + request.getFeedback();
             }
-            String actionUrl = "/club-creation/requests/" + requestEstablishment.getId();
+            // FE route: /create-club (student xem yêu cầu sau khi nhập kết quả bảo vệ)
+            String actionUrl = "/create-club";
 
             notificationService.sendToUser(
                     requestEstablishment.getCreatedBy().getId(),
@@ -1994,7 +2006,8 @@ public class RequestEstablishmentService {
                         requestEstablishment.getCreatedBy().getFullName(),
                         request.getTitle(),
                         requestEstablishment.getClubName());
-                String actionUrl = "/staff/club-creation/requests/" + requestEstablishment.getId() + "/final-forms";
+                // FE route: /staff/club-creation (staff xem lịch sử Hồ sơ hoàn thiện trong trang này)
+                String actionUrl = "/staff/club-creation";
 
                 notificationService.sendToUser(
                         staff.getId(),
@@ -2405,7 +2418,8 @@ public class RequestEstablishmentService {
 
         try {
             String title = "Yêu cầu cập nhật tên CLB";
-            String actionUrl = "/club-creation/requests/" + requestEstablishment.getId();
+            // FE route: /create-club (student xem lại yêu cầu sau khi staff yêu cầu đổi tên)
+            String actionUrl = "/create-club";
             notificationService.sendToUser(
                     requestEstablishment.getCreatedBy().getId(),
                     staffId,
@@ -2489,7 +2503,8 @@ public class RequestEstablishmentService {
                 String title = "Sinh viên đã cập nhật tên CLB";
                 String message = String.format("Yêu cầu #%d đã được cập nhật tên thành \"%s\"",
                         requestEstablishment.getId(), newClubName);
-                String actionUrl = "/staff/club-creation/requests/" + requestEstablishment.getId();
+                // FE route: /staff/club-creation (staff xem yêu cầu sau khi student cập nhật tên)
+                String actionUrl = "/staff/club-creation";
                 notificationService.sendToUser(
                         staff.getId(),
                         userId,

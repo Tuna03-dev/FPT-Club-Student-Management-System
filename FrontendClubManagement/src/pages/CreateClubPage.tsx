@@ -48,6 +48,7 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination";
+import { authService } from "@/services/authService";
 
 // Helper function to map BE status to FE status
 const mapStatusToFE = (status: string): ClubRequest["status"] => {
@@ -315,12 +316,29 @@ const CreateClubPage = () => {
               : payload.message,
             duration: 10000,
           });
-          // Navigate to club page if clubId is available
-          if (payload.clubId) {
-            setTimeout(() => {
-              window.location.href = `/myclub/${payload.clubId}`;
-            }, 2000);
-          }
+
+          // Sau khi CLB được tạo, refresh token để cập nhật quyền (CLUB_PRESIDENT, CLUB_OFFICER, ...)
+          (async () => {
+            try {
+              const res = await authService.refreshToken();
+              if (res.code === 200 && res.data) {
+                authService.setTokens(res.data.accessToken);
+                if (res.data.user) {
+                  authService.setUser(res.data.user);
+                }
+              }
+            } catch (error) {
+              console.error("Failed to refresh token after club creation:", error);
+            } finally {
+              // Dù refresh thành công hay không, vẫn điều hướng sang trang CLB mới nếu có clubId
+              if (payload.clubId) {
+                setTimeout(() => {
+                  window.location.href = `/myclub/${payload.clubId}`;
+                }, 2000);
+              }
+            }
+          })();
+
           break;
         default:
           // Handle other actions silently or with generic message
