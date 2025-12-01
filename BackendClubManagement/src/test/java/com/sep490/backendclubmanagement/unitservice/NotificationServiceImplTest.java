@@ -362,42 +362,39 @@ class NotificationServiceImplTest {
     void markAllAsRead_happyPath() {
         Long userId = 1L;
 
-        Notification n1 = mock(Notification.class);
-        Notification n2 = mock(Notification.class);
+        // Giả lập repo cập nhật 2 bản ghi
+        when(notificationRepo.markAllAsReadByUserId(userId)).thenReturn(2);
 
-        when(notificationRepo.findTop10ByRecipientIdAndIsReadFalseOrderByCreatedAtDesc(userId))
-                .thenReturn(List.of(n1, n2));
-
-        when(userRepo.findById(userId)).thenReturn(Optional.of(recipient));
+        User u = new User();
+        u.setId(userId);
+        u.setEmail("recipient@example.com");
+        when(userRepo.findById(userId)).thenReturn(Optional.of(u));
 
         notificationService.markAllAsRead(userId);
 
-        verify(n1).markAsRead();
-        verify(n2).markAsRead();
-        verify(notificationRepo).saveAll(List.of(n1, n2));
+        verify(notificationRepo).markAllAsReadByUserId(userId);
+
+        // Socket báo READ-ALL
         verify(webSocketService).sendToUser(
                 eq("recipient@example.com"),
                 eq("NOTIFICATION"),
-                eq("READ-UPDATE"),
-                eq("BULK")
+                eq("READ-ALL"),
+                eq("2")
         );
     }
+
 
     @Test
     void markAllAsRead_userNotFound_noSocket() {
         Long userId = 1L;
 
-        Notification n1 = mock(Notification.class);
-
-        when(notificationRepo.findTop10ByRecipientIdAndIsReadFalseOrderByCreatedAtDesc(userId))
-                .thenReturn(List.of(n1));
-
+        when(notificationRepo.markAllAsReadByUserId(userId)).thenReturn(5);
         when(userRepo.findById(userId)).thenReturn(Optional.empty());
 
         notificationService.markAllAsRead(userId);
 
-        verify(n1).markAsRead();
-        verify(notificationRepo).saveAll(List.of(n1));
+        verify(notificationRepo).markAllAsReadByUserId(userId);
         verify(webSocketService, never()).sendToUser(anyString(), anyString(), anyString(), anyString());
     }
+
 }

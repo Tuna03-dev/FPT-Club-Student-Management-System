@@ -3,6 +3,7 @@ package com.sep490.backendclubmanagement.repository;
 import com.sep490.backendclubmanagement.dto.response.TeamMemberDTO;
 import com.sep490.backendclubmanagement.entity.RoleMemberShip;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -737,4 +738,54 @@ WHERE cm.club.id = :clubId
     """)
     boolean isUserClubOfficer(@Param("userId") Long userId, @Param("clubId") Long clubId);
     List<RoleMemberShip> findByTeamIdAndIsActiveTrue(Long teamId);
+    @Query("""
+    SELECT rm.clubMemberShip.user.id
+    FROM RoleMemberShip rm
+    WHERE rm.team.id = :teamId
+      AND rm.isActive = true
+""")
+    List<Long> findActiveUserIdsByTeamId(@Param("teamId") Long teamId);
+    boolean existsByTeamId(Long teamId);
+    @Query(value = """
+    SELECT DISTINCT cm.user_id
+    FROM role_memberships rm
+    JOIN club_memberships cm ON rm.club_membership_id = cm.id
+    WHERE cm.club_id = :clubId
+      AND rm.semester_id = :semesterId
+      AND rm.is_active = TRUE         -- chỉ chặn user đang active
+      AND rm.team_id IS NOT NULL      -- đang thuộc 1 team nào đó
+      AND cm.user_id IN (:userIds)
+""", nativeQuery = true)
+    List<Long> findActiveTeamMembersInSemester(
+            @Param("clubId") Long clubId,
+            @Param("semesterId") Long semesterId,
+            @Param("userIds") List<Long> userIds
+    );
+    @Modifying
+    @Query("""
+    UPDATE RoleMemberShip rm
+    SET rm.isActive = false
+    WHERE rm.clubMemberShip.id = :clubMembershipId
+      AND rm.semester.id = :semesterId
+      AND rm.team IS NOT NULL
+      AND COALESCE(rm.isActive, TRUE) = TRUE
+""")
+    void deactivateActiveTeamRoles(@Param("clubMembershipId") Long clubMembershipId,
+                                   @Param("semesterId") Long semesterId);
+
+    @Modifying
+    @Query("""
+    UPDATE RoleMemberShip rm
+    SET rm.isActive = false
+    WHERE rm.clubMemberShip.user.id IN :userIds
+      AND rm.clubMemberShip.club.id = :clubId
+      AND rm.semester.id = :semesterId
+      AND rm.isActive = true
+""")
+    void deactivateActiveRolesForUsers(
+            @Param("userIds") List<Long> userIds,
+            @Param("clubId") Long clubId,
+            @Param("semesterId") Long semesterId
+    );
+
 }

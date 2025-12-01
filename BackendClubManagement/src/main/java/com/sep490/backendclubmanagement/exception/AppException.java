@@ -3,7 +3,7 @@ package com.sep490.backendclubmanagement.exception;
 import lombok.Getter;
 
 @Getter
-public class AppException extends Exception{
+public class AppException extends RuntimeException {
     private final ErrorCode errorCode;
 
     public AppException(ErrorCode errorCode) {
