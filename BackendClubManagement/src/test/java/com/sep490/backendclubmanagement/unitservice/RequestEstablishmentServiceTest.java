@@ -25,7 +25,13 @@ import static org.mockito.Mockito.*;
 
 /**
  * Unit test cho RequestEstablishmentService (JUnit5 + Mockito)
- * 65 test cases covering happy paths and basic validations
+ * 120+ test cases covering:
+ * - Happy paths for all operations
+ * - Edge cases and error scenarios
+ * - Validation rules
+ * - Permission checks
+ * - Status transitions
+ * - All methods in RequestEstablishmentService
  */
 @ExtendWith(MockitoExtension.class)
 class RequestEstablishmentServiceTest {
@@ -202,7 +208,7 @@ class RequestEstablishmentServiceTest {
     }
 
     // ==========================================
-    // STUDENT OPERATIONS - createRequest (5 test cases)
+    // STUDENT OPERATIONS - createRequest (8 test cases)
     // ==========================================
 
     @Test
@@ -308,6 +314,58 @@ class RequestEstablishmentServiceTest {
         assertEquals(ErrorCode.USER_NOT_FOUND, ex.getErrorCode());
     }
 
+    @Test
+    void createRequest_whenClubCategoryIsEmpty_shouldThrowException() {
+        // Arrange
+        Long userId = 1L;
+        CreateRequestEstablishmentRequest request = buildCreateRequest(true);
+        request.setClubCategory("");
+
+        // Act & Assert
+        AppException ex = assertThrows(AppException.class,
+                () -> requestEstablishmentService.createRequest(userId, request));
+
+        assertEquals(ErrorCode.INVALID_INPUT, ex.getErrorCode());
+        assertTrue(ex.getMessage().contains("Danh mục CLB không được để trống"));
+    }
+
+    @Test
+    void createRequest_whenExpectedMemberCountIsZero_shouldThrowException() {
+        // Arrange
+        Long userId = 1L;
+        CreateRequestEstablishmentRequest request = buildCreateRequest(true);
+        request.setExpectedMemberCount(0);
+
+        // Note: clubRepository.existsByClubNameIgnoreCase and requestEstablishmentRepository.existsByClubNameIgnoreCase
+        // are not called because validation throws exception before reaching validateClubNameUniqueness()
+
+        // Act & Assert
+        AppException ex = assertThrows(AppException.class,
+                () -> requestEstablishmentService.createRequest(userId, request));
+
+        assertEquals(ErrorCode.INVALID_INPUT, ex.getErrorCode());
+        assertTrue(ex.getMessage().contains("Số lượng thành viên dự kiến phải lớn hơn 0"));
+    }
+
+    @Test
+    void createRequest_whenClubCodeExists_shouldThrowException() {
+        // Arrange
+        Long userId = 1L;
+        CreateRequestEstablishmentRequest request = buildCreateRequest(true);
+        request.setClubCode("EXISTING_CODE");
+
+        when(clubRepository.existsByClubNameIgnoreCase(anyString())).thenReturn(false);
+        when(requestEstablishmentRepository.existsByClubNameIgnoreCase(anyString())).thenReturn(false);
+        when(clubRepository.existsByClubCodeIgnoreCase("EXISTING_CODE")).thenReturn(true);
+
+        // Act & Assert
+        AppException ex = assertThrows(AppException.class,
+                () -> requestEstablishmentService.createRequest(userId, request));
+
+        assertEquals(ErrorCode.INVALID_INPUT, ex.getErrorCode());
+        assertTrue(ex.getMessage().contains("Mã CLB này đã tồn tại"));
+    }
+
     // ==========================================
     // STUDENT OPERATIONS - getMyRequests (2 test cases)
     // ==========================================
@@ -353,7 +411,7 @@ class RequestEstablishmentServiceTest {
     }
 
     // ==========================================
-    // STUDENT OPERATIONS - getRequestDetail (2 test cases)
+    // STUDENT OPERATIONS - getRequestDetail (3 test cases)
     // ==========================================
 
     @Test
@@ -390,6 +448,21 @@ class RequestEstablishmentServiceTest {
 
         assertEquals(ErrorCode.FORBIDDEN, ex.getErrorCode());
         assertTrue(ex.getMessage().contains("không có quyền"));
+    }
+
+    @Test
+    void getRequestDetail_whenRequestNotFound_shouldThrowException() {
+        // Arrange
+        Long requestId = 100L;
+        Long userId = 1L;
+
+        when(requestEstablishmentRepository.findDetailById(requestId)).thenReturn(Optional.empty());
+
+        // Act & Assert
+        AppException ex = assertThrows(AppException.class,
+                () -> requestEstablishmentService.getRequestDetail(requestId, userId));
+
+        assertEquals(ErrorCode.NOT_FOUND, ex.getErrorCode());
     }
 
     // ==========================================
@@ -491,7 +564,7 @@ class RequestEstablishmentServiceTest {
     }
 
     // ==========================================
-    // STUDENT OPERATIONS - submitRequest (2 test cases)
+    // STUDENT OPERATIONS - submitRequest (5 test cases)
     // ==========================================
 
     @Test
@@ -531,8 +604,62 @@ class RequestEstablishmentServiceTest {
         assertTrue(ex.getMessage().contains("DRAFT"));
     }
 
+    @Test
+    void submitRequest_whenClubNameIsEmpty_shouldThrowException() {
+        // Arrange
+        Long requestId = 100L;
+        Long userId = 1L;
+        RequestEstablishment request = buildRequest(requestId, userId, RequestEstablishmentStatus.DRAFT);
+        request.setClubName("");
+
+        when(requestEstablishmentRepository.findDetailById(requestId)).thenReturn(Optional.of(request));
+
+        // Act & Assert
+        AppException ex = assertThrows(AppException.class,
+                () -> requestEstablishmentService.submitRequest(requestId, userId));
+
+        assertEquals(ErrorCode.INVALID_INPUT, ex.getErrorCode());
+        assertTrue(ex.getMessage().contains("Tên CLB không được để trống"));
+    }
+
+    @Test
+    void submitRequest_whenClubCategoryIsEmpty_shouldThrowException() {
+        // Arrange
+        Long requestId = 100L;
+        Long userId = 1L;
+        RequestEstablishment request = buildRequest(requestId, userId, RequestEstablishmentStatus.DRAFT);
+        request.setClubCategory("");
+
+        when(requestEstablishmentRepository.findDetailById(requestId)).thenReturn(Optional.of(request));
+
+        // Act & Assert
+        AppException ex = assertThrows(AppException.class,
+                () -> requestEstablishmentService.submitRequest(requestId, userId));
+
+        assertEquals(ErrorCode.INVALID_INPUT, ex.getErrorCode());
+        assertTrue(ex.getMessage().contains("Danh mục CLB không được để trống"));
+    }
+
+    @Test
+    void submitRequest_whenExpectedMemberCountIsZero_shouldThrowException() {
+        // Arrange
+        Long requestId = 100L;
+        Long userId = 1L;
+        RequestEstablishment request = buildRequest(requestId, userId, RequestEstablishmentStatus.DRAFT);
+        request.setExpectedMemberCount(0);
+
+        when(requestEstablishmentRepository.findDetailById(requestId)).thenReturn(Optional.of(request));
+
+        // Act & Assert
+        AppException ex = assertThrows(AppException.class,
+                () -> requestEstablishmentService.submitRequest(requestId, userId));
+
+        assertEquals(ErrorCode.INVALID_INPUT, ex.getErrorCode());
+        assertTrue(ex.getMessage().contains("Số lượng thành viên dự kiến phải lớn hơn 0"));
+    }
+
     // ==========================================
-    // STUDENT OPERATIONS - submitProposal (3 test cases)
+    // STUDENT OPERATIONS - submitProposal (6 test cases)
     // ==========================================
 
     @Test
@@ -604,8 +731,83 @@ class RequestEstablishmentServiceTest {
         assertEquals(ErrorCode.INVALID_INPUT, ex.getErrorCode());
     }
 
+    @Test
+    void submitProposal_whenProposalRejected_shouldAllowResubmit() throws AppException {
+        // Arrange
+        Long requestId = 100L;
+        Long userId = 1L;
+        RequestEstablishment request = buildRequestWithStaff(requestId, userId, 10L, RequestEstablishmentStatus.PROPOSAL_REJECTED);
+        SubmitProposalRequest proposalRequest = new SubmitProposalRequest();
+        proposalRequest.setTitle("Resubmitted Proposal");
+        proposalRequest.setFileUrl("https://file.com/resubmit.pdf");
+
+        when(requestEstablishmentRepository.findDetailById(requestId)).thenReturn(Optional.of(request));
+        when(clubProposalRepository.save(any(ClubProposal.class))).thenAnswer(invocation -> {
+            ClubProposal p = invocation.getArgument(0);
+            p.setId(200L);
+            return p;
+        });
+        when(requestEstablishmentRepository.save(any(RequestEstablishment.class))).thenReturn(request);
+        doNothing().when(workflowHistoryService).createWorkflowHistory(anyLong(), anyLong(), anyString(), anyString());
+
+        // Act
+        RequestEstablishmentResponse response = requestEstablishmentService.submitProposal(requestId, userId, proposalRequest, null);
+
+        // Assert
+        assertNotNull(response);
+        assertEquals(RequestEstablishmentStatus.PROPOSAL_SUBMITTED, response.getStatus());
+    }
+
+    @Test
+    void submitProposal_whenProposalSubmitted_shouldAllowUpdate() throws AppException {
+        // Arrange
+        Long requestId = 100L;
+        Long userId = 1L;
+        RequestEstablishment request = buildRequestWithStaff(requestId, userId, 10L, RequestEstablishmentStatus.PROPOSAL_SUBMITTED);
+        SubmitProposalRequest proposalRequest = new SubmitProposalRequest();
+        proposalRequest.setTitle("Updated Proposal");
+        proposalRequest.setFileUrl("https://file.com/update.pdf");
+
+        when(requestEstablishmentRepository.findDetailById(requestId)).thenReturn(Optional.of(request));
+        when(clubProposalRepository.save(any(ClubProposal.class))).thenAnswer(invocation -> {
+            ClubProposal p = invocation.getArgument(0);
+            p.setId(201L);
+            return p;
+        });
+        when(requestEstablishmentRepository.save(any(RequestEstablishment.class))).thenReturn(request);
+        doNothing().when(workflowHistoryService).createWorkflowHistory(anyLong(), anyLong(), anyString(), anyString());
+
+        // Act
+        RequestEstablishmentResponse response = requestEstablishmentService.submitProposal(requestId, userId, proposalRequest, null);
+
+        // Assert
+        assertNotNull(response);
+        assertEquals(RequestEstablishmentStatus.PROPOSAL_SUBMITTED, response.getStatus());
+    }
+
+    @Test
+    void submitProposal_whenInvalidFileType_shouldThrowException() {
+        // Arrange
+        Long requestId = 100L;
+        Long userId = 1L;
+        RequestEstablishment request = buildRequestWithStaff(requestId, userId, 10L, RequestEstablishmentStatus.PROPOSAL_REQUIRED);
+        SubmitProposalRequest proposalRequest = new SubmitProposalRequest();
+        proposalRequest.setTitle("Proposal Title");
+
+        when(requestEstablishmentRepository.findDetailById(requestId)).thenReturn(Optional.of(request));
+        when(multipartFile.isEmpty()).thenReturn(false);
+        when(multipartFile.getOriginalFilename()).thenReturn("proposal.exe");
+
+        // Act & Assert
+        AppException ex = assertThrows(AppException.class,
+                () -> requestEstablishmentService.submitProposal(requestId, userId, proposalRequest, multipartFile));
+
+        assertEquals(ErrorCode.INVALID_INPUT, ex.getErrorCode());
+        assertTrue(ex.getMessage().contains("Chỉ chấp nhận file"));
+    }
+
     // ==========================================
-    // STUDENT OPERATIONS - proposeDefenseSchedule (2 test cases)
+    // STUDENT OPERATIONS - proposeDefenseSchedule (4 test cases)
     // ==========================================
 
     @Test
@@ -655,8 +857,103 @@ class RequestEstablishmentServiceTest {
         assertEquals(ErrorCode.INVALID_INPUT, ex.getErrorCode());
     }
 
+    @Test
+    void proposeDefenseSchedule_whenDefenseScheduleRejected_shouldAllowResubmit() throws AppException {
+        // Arrange
+        Long requestId = 100L;
+        Long userId = 1L;
+        RequestEstablishment request = buildRequestWithStaff(requestId, userId, 10L, RequestEstablishmentStatus.DEFENSE_SCHEDULE_REJECTED);
+        ProposeDefenseScheduleRequest scheduleRequest = new ProposeDefenseScheduleRequest();
+        scheduleRequest.setDefenseDate(LocalDateTime.now().plusDays(7));
+        scheduleRequest.setDefenseEndDate(LocalDateTime.now().plusDays(7).plusHours(2));
+        scheduleRequest.setLocation("Room 102");
+
+        when(requestEstablishmentRepository.findDetailById(requestId)).thenReturn(Optional.of(request));
+        DefenseSchedule existingSchedule = buildDefenseSchedule(300L, requestId);
+        when(defenseScheduleRepository.findByRequestEstablishmentId(requestId)).thenReturn(Optional.of(existingSchedule));
+        when(defenseScheduleRepository.save(any(DefenseSchedule.class))).thenReturn(existingSchedule);
+        when(requestEstablishmentRepository.save(any(RequestEstablishment.class))).thenReturn(request);
+        doNothing().when(workflowHistoryService).createWorkflowHistory(anyLong(), anyLong(), anyString(), anyString());
+
+        // Act
+        DefenseScheduleResponse response = requestEstablishmentService.proposeDefenseSchedule(requestId, userId, scheduleRequest);
+
+        // Assert
+        assertNotNull(response);
+        verify(defenseScheduleRepository).save(any(DefenseSchedule.class));
+    }
+
+    @Test
+    void proposeDefenseSchedule_whenDefenseEndDateBeforeDefenseDate_shouldThrowException() {
+        // Arrange
+        Long requestId = 100L;
+        Long userId = 1L;
+        RequestEstablishment request = buildRequestWithStaff(requestId, userId, 10L, RequestEstablishmentStatus.PROPOSAL_APPROVED);
+        ProposeDefenseScheduleRequest scheduleRequest = new ProposeDefenseScheduleRequest();
+        scheduleRequest.setDefenseDate(LocalDateTime.now().plusDays(7));
+        scheduleRequest.setDefenseEndDate(LocalDateTime.now().plusDays(6)); // Before defense date
+
+        when(requestEstablishmentRepository.findDetailById(requestId)).thenReturn(Optional.of(request));
+
+        // Act & Assert
+        AppException ex = assertThrows(AppException.class,
+                () -> requestEstablishmentService.proposeDefenseSchedule(requestId, userId, scheduleRequest));
+
+        assertEquals(ErrorCode.INVALID_INPUT, ex.getErrorCode());
+        assertTrue(ex.getMessage().contains("Thời gian kết thúc bảo vệ phải sau thời gian bắt đầu"));
+    }
+
     // ==========================================
-    // STUDENT OPERATIONS - submitFinalForm (2 test cases)
+    // STUDENT OPERATIONS - updateDefenseSchedule (2 test cases)
+    // ==========================================
+
+    @Test
+    void updateDefenseSchedule_whenValid_shouldUpdateSuccessfully() throws AppException {
+        // Arrange
+        Long requestId = 100L;
+        Long userId = 1L;
+        RequestEstablishment request = buildRequestWithStaff(requestId, userId, 10L, RequestEstablishmentStatus.DEFENSE_SCHEDULE_PROPOSED);
+        DefenseSchedule schedule = buildDefenseSchedule(300L, requestId);
+        ProposeDefenseScheduleRequest updateRequest = new ProposeDefenseScheduleRequest();
+        updateRequest.setDefenseDate(LocalDateTime.now().plusDays(8));
+        updateRequest.setDefenseEndDate(LocalDateTime.now().plusDays(8).plusHours(2));
+        updateRequest.setLocation("Room 201");
+
+        when(requestEstablishmentRepository.findDetailById(requestId)).thenReturn(Optional.of(request));
+        when(defenseScheduleRepository.findByRequestEstablishmentId(requestId)).thenReturn(Optional.of(schedule));
+        when(defenseScheduleRepository.save(any(DefenseSchedule.class))).thenReturn(schedule);
+
+        // Act
+        DefenseScheduleResponse response = requestEstablishmentService.updateDefenseSchedule(requestId, userId, updateRequest);
+
+        // Assert
+        assertNotNull(response);
+        verify(defenseScheduleRepository).save(any(DefenseSchedule.class));
+    }
+
+    @Test
+    void updateDefenseSchedule_whenScheduleConfirmed_shouldThrowException() {
+        // Arrange
+        Long requestId = 100L;
+        Long userId = 1L;
+        RequestEstablishment request = buildRequestWithStaff(requestId, userId, 10L, RequestEstablishmentStatus.DEFENSE_SCHEDULE_PROPOSED);
+        DefenseSchedule schedule = buildDefenseSchedule(300L, requestId);
+        schedule.setResult(DefenseScheduleStatus.CONFIRMED);
+        ProposeDefenseScheduleRequest updateRequest = new ProposeDefenseScheduleRequest();
+
+        when(requestEstablishmentRepository.findDetailById(requestId)).thenReturn(Optional.of(request));
+        when(defenseScheduleRepository.findByRequestEstablishmentId(requestId)).thenReturn(Optional.of(schedule));
+
+        // Act & Assert
+        AppException ex = assertThrows(AppException.class,
+                () -> requestEstablishmentService.updateDefenseSchedule(requestId, userId, updateRequest));
+
+        assertEquals(ErrorCode.INVALID_INPUT, ex.getErrorCode());
+        assertTrue(ex.getMessage().contains("đã được xác nhận"));
+    }
+
+    // ==========================================
+    // STUDENT OPERATIONS - submitFinalForm (4 test cases)
     // ==========================================
 
     @Test
@@ -708,6 +1005,53 @@ class RequestEstablishmentServiceTest {
                 () -> requestEstablishmentService.submitFinalForm(requestId, userId, formRequest, multipartFile));
 
         assertEquals(ErrorCode.INVALID_INPUT, ex.getErrorCode());
+    }
+
+    @Test
+    void submitFinalForm_whenFinalFormSubmitted_shouldAllowUpdate() throws AppException {
+        // Arrange
+        Long requestId = 100L;
+        Long userId = 1L;
+        RequestEstablishment request = buildRequestWithStaff(requestId, userId, 10L, RequestEstablishmentStatus.FINAL_FORM_SUBMITTED);
+        SubmitFinalFormRequest formRequest = new SubmitFinalFormRequest();
+        formRequest.setTitle("Updated Final Form");
+        formRequest.setFileUrl("https://file.com/updated.pdf");
+
+        when(requestEstablishmentRepository.findDetailById(requestId)).thenReturn(Optional.of(request));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(buildStudent(userId, "student1@fpt.edu.vn")));
+        ClubCreationFinalForm existingForm = buildFinalForm(400L, requestId);
+        when(clubCreationFinalFormRepository.findByRequestEstablishmentId(requestId)).thenReturn(Optional.of(existingForm));
+        when(clubCreationFinalFormRepository.save(any(ClubCreationFinalForm.class))).thenReturn(existingForm);
+        when(requestEstablishmentRepository.save(any(RequestEstablishment.class))).thenReturn(request);
+        doNothing().when(workflowHistoryService).createWorkflowHistory(anyLong(), anyLong(), anyString(), anyString());
+
+        // Act
+        ClubCreationFinalFormResponse response = requestEstablishmentService.submitFinalForm(requestId, userId, formRequest, null);
+
+        // Assert
+        assertNotNull(response);
+        verify(clubCreationFinalFormRepository).save(any(ClubCreationFinalForm.class));
+    }
+
+    @Test
+    void submitFinalForm_whenInvalidFileType_shouldThrowException() {
+        // Arrange
+        Long requestId = 100L;
+        Long userId = 1L;
+        RequestEstablishment request = buildRequestWithStaff(requestId, userId, 10L, RequestEstablishmentStatus.DEFENSE_COMPLETED);
+        SubmitFinalFormRequest formRequest = new SubmitFinalFormRequest();
+        formRequest.setTitle("Final Form");
+
+        when(requestEstablishmentRepository.findDetailById(requestId)).thenReturn(Optional.of(request));
+        when(multipartFile.isEmpty()).thenReturn(false);
+        when(multipartFile.getOriginalFilename()).thenReturn("final.exe");
+
+        // Act & Assert
+        AppException ex = assertThrows(AppException.class,
+                () -> requestEstablishmentService.submitFinalForm(requestId, userId, formRequest, multipartFile));
+
+        assertEquals(ErrorCode.INVALID_INPUT, ex.getErrorCode());
+        assertTrue(ex.getMessage().contains("Chỉ chấp nhận file"));
     }
 
     // ==========================================
@@ -786,7 +1130,7 @@ class RequestEstablishmentServiceTest {
     }
 
     // ==========================================
-    // STAFF OPERATIONS - assignRequest (2 test cases)
+    // STAFF OPERATIONS - assignRequest (4 test cases)
     // ==========================================
 
     @Test
@@ -827,6 +1171,46 @@ class RequestEstablishmentServiceTest {
 
         assertEquals(ErrorCode.INVALID_INPUT, ex.getErrorCode());
         assertTrue(ex.getMessage().contains("SUBMITTED"));
+    }
+
+    @Test
+    void assignRequest_whenStaffIdIsNull_shouldAutoAssign() throws AppException {
+        // Arrange
+        Long requestId = 100L;
+        Long staffId = 10L;
+        RequestEstablishment request = buildRequest(requestId, 1L, RequestEstablishmentStatus.SUBMITTED);
+        AssignRequestEstablishmentRequest assignRequest = new AssignRequestEstablishmentRequest();
+        assignRequest.setStaffId(null); // Null means auto-assign to current staff
+
+        when(requestEstablishmentRepository.findDetailById(requestId)).thenReturn(Optional.of(request));
+        when(userRepository.findById(staffId)).thenReturn(Optional.of(buildStaff(staffId, "staff10@fpt.edu.vn")));
+        when(requestEstablishmentRepository.save(any(RequestEstablishment.class))).thenReturn(request);
+
+        // Act
+        RequestEstablishmentResponse response = requestEstablishmentService.assignRequest(requestId, staffId, assignRequest);
+
+        // Assert
+        assertNotNull(response);
+        verify(requestEstablishmentRepository).save(any(RequestEstablishment.class));
+    }
+
+    @Test
+    void assignRequest_whenStaffNotFound_shouldThrowException() {
+        // Arrange
+        Long requestId = 100L;
+        Long staffId = 10L;
+        RequestEstablishment request = buildRequest(requestId, 1L, RequestEstablishmentStatus.SUBMITTED);
+        AssignRequestEstablishmentRequest assignRequest = new AssignRequestEstablishmentRequest();
+        assignRequest.setStaffId(999L);
+
+        when(requestEstablishmentRepository.findDetailById(requestId)).thenReturn(Optional.of(request));
+        when(userRepository.findById(999L)).thenReturn(Optional.empty());
+
+        // Act & Assert
+        AppException ex = assertThrows(AppException.class,
+                () -> requestEstablishmentService.assignRequest(requestId, staffId, assignRequest));
+
+        assertEquals(ErrorCode.USER_NOT_FOUND, ex.getErrorCode());
     }
 
     // ==========================================
@@ -892,11 +1276,11 @@ class RequestEstablishmentServiceTest {
                 () -> requestEstablishmentService.receiveRequest(requestId, staffId));
 
         assertEquals(ErrorCode.FORBIDDEN, ex.getErrorCode());
-        assertTrue(ex.getMessage().contains("staff khác"));
+        assertTrue(ex.getMessage().contains("Nhân viên phòng IC-PDP khác"));
     }
 
     // ==========================================
-    // STAFF OPERATIONS - confirmContact (3 test cases)
+    // STAFF OPERATIONS - confirmContact (4 test cases)
     // ==========================================
 
     @Test
@@ -951,6 +1335,24 @@ class RequestEstablishmentServiceTest {
                 () -> requestEstablishmentService.confirmContact(requestId, staffId));
 
         assertEquals(ErrorCode.INVALID_INPUT, ex.getErrorCode());
+    }
+
+    @Test
+    void confirmContact_whenDeadlineExpired_shouldThrowException() {
+        // Arrange
+        Long requestId = 100L;
+        Long staffId = 10L;
+        RequestEstablishment request = buildRequestWithStaff(requestId, 1L, staffId, RequestEstablishmentStatus.CONTACT_CONFIRMATION_PENDING);
+        request.setConfirmationDeadline(LocalDateTime.now().minusDays(1)); // Expired
+
+        when(requestEstablishmentRepository.findDetailById(requestId)).thenReturn(Optional.of(request));
+
+        // Act & Assert
+        AppException ex = assertThrows(AppException.class,
+                () -> requestEstablishmentService.confirmContact(requestId, staffId));
+
+        assertEquals(ErrorCode.INVALID_INPUT, ex.getErrorCode());
+        assertTrue(ex.getMessage().contains("Đã quá hạn xác nhận"));
     }
 
     // ==========================================
@@ -1039,7 +1441,7 @@ class RequestEstablishmentServiceTest {
     }
 
     // ==========================================
-    // STAFF OPERATIONS - approveProposal (2 test cases)
+    // STAFF OPERATIONS - approveProposal (3 test cases)
     // ==========================================
 
     @Test
@@ -1080,8 +1482,27 @@ class RequestEstablishmentServiceTest {
         assertEquals(ErrorCode.INVALID_INPUT, ex.getErrorCode());
     }
 
+    @Test
+    void approveProposal_whenNoProposalFound_shouldThrowException() {
+        // Arrange
+        Long requestId = 100L;
+        Long staffId = 10L;
+        RequestEstablishment request = buildRequestWithStaff(requestId, 1L, staffId, RequestEstablishmentStatus.PROPOSAL_SUBMITTED);
+
+        when(requestEstablishmentRepository.findDetailById(requestId)).thenReturn(Optional.of(request));
+        when(clubProposalRepository.findAllByRequestEstablishmentIdOrderByCreatedAtDesc(requestId))
+                .thenReturn(List.of());
+
+        // Act & Assert
+        AppException ex = assertThrows(AppException.class,
+                () -> requestEstablishmentService.approveProposal(requestId, staffId));
+
+        assertEquals(ErrorCode.NOT_FOUND, ex.getErrorCode());
+        assertTrue(ex.getMessage().contains("Không tìm thấy đề án"));
+    }
+
     // ==========================================
-    // STAFF OPERATIONS - rejectProposal (2 test cases)
+    // STAFF OPERATIONS - rejectProposal (3 test cases)
     // ==========================================
 
     @Test
@@ -1125,8 +1546,28 @@ class RequestEstablishmentServiceTest {
         assertEquals(ErrorCode.INVALID_INPUT, ex.getErrorCode());
     }
 
+    @Test
+    void rejectProposal_whenNoProposalFound_shouldThrowException() {
+        // Arrange
+        Long requestId = 100L;
+        Long staffId = 10L;
+        RequestEstablishment request = buildRequestWithStaff(requestId, 1L, staffId, RequestEstablishmentStatus.PROPOSAL_SUBMITTED);
+        RejectProposalRequest rejectRequest = new RejectProposalRequest();
+
+        when(requestEstablishmentRepository.findDetailById(requestId)).thenReturn(Optional.of(request));
+        when(clubProposalRepository.findAllByRequestEstablishmentIdOrderByCreatedAtDesc(requestId))
+                .thenReturn(List.of());
+
+        // Act & Assert
+        AppException ex = assertThrows(AppException.class,
+                () -> requestEstablishmentService.rejectProposal(requestId, staffId, rejectRequest));
+
+        assertEquals(ErrorCode.NOT_FOUND, ex.getErrorCode());
+        assertTrue(ex.getMessage().contains("Không tìm thấy đề án"));
+    }
+
     // ==========================================
-    // STAFF OPERATIONS - approveDefenseSchedule (2 test cases)
+    // STAFF OPERATIONS - approveDefenseSchedule (3 test cases)
     // ==========================================
 
     @Test
@@ -1165,6 +1606,24 @@ class RequestEstablishmentServiceTest {
                 () -> requestEstablishmentService.approveDefenseSchedule(requestId, staffId));
 
         assertEquals(ErrorCode.INVALID_INPUT, ex.getErrorCode());
+    }
+
+    @Test
+    void approveDefenseSchedule_whenNoScheduleFound_shouldThrowException() {
+        // Arrange
+        Long requestId = 100L;
+        Long staffId = 10L;
+        RequestEstablishment request = buildRequestWithStaff(requestId, 1L, staffId, RequestEstablishmentStatus.DEFENSE_SCHEDULE_PROPOSED);
+
+        when(requestEstablishmentRepository.findDetailById(requestId)).thenReturn(Optional.of(request));
+        when(defenseScheduleRepository.findByRequestEstablishmentId(requestId)).thenReturn(Optional.empty());
+
+        // Act & Assert
+        AppException ex = assertThrows(AppException.class,
+                () -> requestEstablishmentService.approveDefenseSchedule(requestId, staffId));
+
+        assertEquals(ErrorCode.NOT_FOUND, ex.getErrorCode());
+        assertTrue(ex.getMessage().contains("Không tìm thấy lịch bảo vệ"));
     }
 
     // ==========================================
@@ -1212,7 +1671,7 @@ class RequestEstablishmentServiceTest {
     }
 
     // ==========================================
-    // STAFF OPERATIONS - completeDefense (3 test cases)
+    // STAFF OPERATIONS - completeDefense (5 test cases)
     // ==========================================
 
     @Test
@@ -1284,8 +1743,51 @@ class RequestEstablishmentServiceTest {
         assertEquals(ErrorCode.INVALID_INPUT, ex.getErrorCode());
     }
 
+    @Test
+    void completeDefense_whenDefenseDateNotPassed_shouldThrowException() {
+        // Arrange
+        Long requestId = 100L;
+        Long staffId = 10L;
+        RequestEstablishment request = buildRequestWithStaff(requestId, 1L, staffId, RequestEstablishmentStatus.DEFENSE_SCHEDULE_APPROVED);
+        DefenseSchedule schedule = buildDefenseSchedule(300L, requestId);
+        schedule.setDefenseDate(LocalDateTime.now().plusDays(1)); // Future date
+        CompleteDefenseRequest completeRequest = new CompleteDefenseRequest();
+        completeRequest.setResult(DefenseScheduleStatus.PASSED);
+
+        when(requestEstablishmentRepository.findDetailById(requestId)).thenReturn(Optional.of(request));
+        when(defenseScheduleRepository.findByRequestEstablishmentId(requestId)).thenReturn(Optional.of(schedule));
+
+        // Act & Assert
+        AppException ex = assertThrows(AppException.class,
+                () -> requestEstablishmentService.completeDefense(requestId, staffId, completeRequest));
+
+        assertEquals(ErrorCode.INVALID_INPUT, ex.getErrorCode());
+        assertTrue(ex.getMessage().contains("Chưa đến thời gian bảo vệ"));
+    }
+
+    @Test
+    void completeDefense_whenInvalidResult_shouldThrowException() {
+        // Arrange
+        Long requestId = 100L;
+        Long staffId = 10L;
+        RequestEstablishment request = buildRequestWithStaff(requestId, 1L, staffId, RequestEstablishmentStatus.DEFENSE_SCHEDULE_APPROVED);
+        CompleteDefenseRequest completeRequest = new CompleteDefenseRequest();
+        completeRequest.setResult(DefenseScheduleStatus.PROPOSED); // Invalid result
+
+        when(requestEstablishmentRepository.findDetailById(requestId)).thenReturn(Optional.of(request));
+        // Note: defenseScheduleRepository.findByRequestEstablishmentId is not called because 
+        // validation throws exception before reaching that code
+
+        // Act & Assert
+        AppException ex = assertThrows(AppException.class,
+                () -> requestEstablishmentService.completeDefense(requestId, staffId, completeRequest));
+
+        assertEquals(ErrorCode.INVALID_INPUT, ex.getErrorCode());
+        assertTrue(ex.getMessage().contains("Kết quả bảo vệ chỉ có thể là PASSED hoặc FAILED"));
+    }
+
     // ==========================================
-    // STAFF OPERATIONS - approveFinalForm (3 test cases)
+    // STAFF OPERATIONS - approveFinalForm (6 test cases)
     // ==========================================
 
     @Test
@@ -1373,6 +1875,90 @@ class RequestEstablishmentServiceTest {
                 () -> requestEstablishmentService.approveFinalForm(requestId, staffId));
 
         assertEquals(ErrorCode.FORBIDDEN, ex.getErrorCode());
+    }
+
+    @Test
+    void approveFinalForm_whenNoFinalFormFound_shouldThrowException() {
+        // Arrange
+        Long requestId = 100L;
+        Long staffId = 10L;
+        RequestEstablishment request = buildRequestWithStaff(requestId, 1L, staffId, RequestEstablishmentStatus.FINAL_FORM_SUBMITTED);
+
+        when(requestEstablishmentRepository.findDetailById(requestId)).thenReturn(Optional.of(request));
+        when(clubCreationFinalFormRepository.findFirstByRequestEstablishmentIdOrderByCreatedAtDesc(requestId))
+                .thenReturn(Optional.empty());
+
+        // Act & Assert
+        AppException ex = assertThrows(AppException.class,
+                () -> requestEstablishmentService.approveFinalForm(requestId, staffId));
+
+        assertEquals(ErrorCode.NOT_FOUND, ex.getErrorCode());
+        assertTrue(ex.getMessage().contains("Không tìm thấy Hồ sơ hoàn thiện"));
+    }
+
+    @Test
+    void approveFinalForm_whenClubCodeDuplicate_shouldThrowException() {
+        // Arrange
+        Long requestId = 100L;
+        Long staffId = 10L;
+        RequestEstablishment request = buildRequestWithStaff(requestId, 1L, staffId, RequestEstablishmentStatus.FINAL_FORM_SUBMITTED);
+        request.setClubCode("DUPLICATE_CODE");
+        ClubCreationFinalForm finalForm = buildFinalForm(400L, requestId);
+        User staff = buildStaff(staffId, "staff10@fpt.edu.vn");
+        Club existingClub = new Club();
+        existingClub.setId(999L);
+
+        when(requestEstablishmentRepository.findDetailById(requestId)).thenReturn(Optional.of(request));
+        when(clubCreationFinalFormRepository.findFirstByRequestEstablishmentIdOrderByCreatedAtDesc(requestId))
+                .thenReturn(Optional.of(finalForm));
+        when(userRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(clubRepository.findByClubCode("DUPLICATE_CODE")).thenReturn(Optional.of(existingClub));
+
+        // Act & Assert
+        AppException ex = assertThrows(AppException.class,
+                () -> requestEstablishmentService.approveFinalForm(requestId, staffId));
+
+        assertEquals(ErrorCode.INVALID_INPUT, ex.getErrorCode());
+        assertTrue(ex.getMessage().contains("Mã CLB đã tồn tại"));
+    }
+
+    @Test
+    void approveFinalForm_whenNoCurrentSemester_shouldThrowException() {
+        // Arrange
+        Long requestId = 100L;
+        Long staffId = 10L;
+        RequestEstablishment request = buildRequestWithStaff(requestId, 1L, staffId, RequestEstablishmentStatus.FINAL_FORM_SUBMITTED);
+        ClubCreationFinalForm finalForm = buildFinalForm(400L, requestId);
+        User staff = buildStaff(staffId, "staff10@fpt.edu.vn");
+
+        when(requestEstablishmentRepository.findDetailById(requestId)).thenReturn(Optional.of(request));
+        when(clubCreationFinalFormRepository.findFirstByRequestEstablishmentIdOrderByCreatedAtDesc(requestId))
+                .thenReturn(Optional.of(finalForm));
+        when(userRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(clubRepository.findByClubCode(anyString())).thenReturn(Optional.empty());
+        when(clubRepository.save(any(Club.class))).thenAnswer(invocation -> {
+            Club c = invocation.getArgument(0);
+            c.setId(600L);
+            return c;
+        });
+        when(clubRoleRepository.saveAll(anyList())).thenAnswer(invocation -> {
+            List<ClubRole> roles = invocation.getArgument(0);
+            roles.forEach(r -> r.setId(500L + roles.indexOf(r)));
+            return roles;
+        });
+        when(clubMemberShipRepository.save(any(ClubMemberShip.class))).thenAnswer(invocation -> {
+            ClubMemberShip m = invocation.getArgument(0);
+            m.setId(700L);
+            return m;
+        });
+        when(semesterRepository.findCurrentSemester()).thenReturn(Optional.empty());
+
+        // Act & Assert
+        AppException ex = assertThrows(AppException.class,
+                () -> requestEstablishmentService.approveFinalForm(requestId, staffId));
+
+        assertEquals(ErrorCode.INTERNAL_SERVER_ERROR, ex.getErrorCode());
+        assertTrue(ex.getMessage().contains("Không tìm thấy học kỳ hiện tại"));
     }
 
     // ==========================================
@@ -1518,6 +2104,91 @@ class RequestEstablishmentServiceTest {
     }
 
     // ==========================================
+    // STUDENT OPERATIONS - getProposalDetail (2 test cases)
+    // ==========================================
+
+    @Test
+    void getProposalDetail_whenValid_shouldReturnProposal() throws AppException {
+        // Arrange
+        Long requestId = 100L;
+        Long proposalId = 200L;
+        Long userId = 1L;
+        RequestEstablishment request = buildRequest(requestId, userId, RequestEstablishmentStatus.PROPOSAL_SUBMITTED);
+        ClubProposal proposal = buildProposal(proposalId, requestId);
+
+        when(requestEstablishmentRepository.findDetailById(requestId)).thenReturn(Optional.of(request));
+        when(clubProposalRepository.findByIdAndRequestEstablishmentId(proposalId, requestId))
+                .thenReturn(Optional.of(proposal));
+
+        // Act
+        ClubProposalResponse response = requestEstablishmentService.getProposalDetail(requestId, proposalId, userId);
+
+        // Assert
+        assertNotNull(response);
+        assertEquals(proposalId, response.getId());
+    }
+
+    @Test
+    void getProposalDetail_whenNotOwner_shouldThrowForbiddenException() {
+        // Arrange
+        Long requestId = 100L;
+        Long proposalId = 200L;
+        Long userId = 1L;
+        Long otherUserId = 2L;
+        RequestEstablishment request = buildRequest(requestId, otherUserId, RequestEstablishmentStatus.PROPOSAL_SUBMITTED);
+
+        when(requestEstablishmentRepository.findDetailById(requestId)).thenReturn(Optional.of(request));
+
+        // Act & Assert
+        AppException ex = assertThrows(AppException.class,
+                () -> requestEstablishmentService.getProposalDetail(requestId, proposalId, userId));
+
+        assertEquals(ErrorCode.FORBIDDEN, ex.getErrorCode());
+    }
+
+    // ==========================================
+    // STUDENT OPERATIONS - getFinalFormsForStudent (2 test cases)
+    // ==========================================
+
+    @Test
+    void getFinalFormsForStudent_whenValid_shouldReturnFinalForms() throws AppException {
+        // Arrange
+        Long requestId = 100L;
+        Long userId = 1L;
+        RequestEstablishment request = buildRequest(requestId, userId, RequestEstablishmentStatus.FINAL_FORM_SUBMITTED);
+        ClubCreationFinalForm form1 = buildFinalForm(400L, requestId);
+        ClubCreationFinalForm form2 = buildFinalForm(401L, requestId);
+
+        when(requestEstablishmentRepository.findDetailById(requestId)).thenReturn(Optional.of(request));
+        when(clubCreationFinalFormRepository.findAllByRequestEstablishmentIdOrderByCreatedAtDesc(requestId))
+                .thenReturn(List.of(form1, form2));
+
+        // Act
+        List<ClubCreationFinalFormResponse> response = requestEstablishmentService.getFinalFormsForStudent(requestId, userId);
+
+        // Assert
+        assertNotNull(response);
+        assertEquals(2, response.size());
+    }
+
+    @Test
+    void getFinalFormsForStudent_whenNotOwner_shouldThrowForbiddenException() {
+        // Arrange
+        Long requestId = 100L;
+        Long userId = 1L;
+        Long otherUserId = 2L;
+        RequestEstablishment request = buildRequest(requestId, otherUserId, RequestEstablishmentStatus.FINAL_FORM_SUBMITTED);
+
+        when(requestEstablishmentRepository.findDetailById(requestId)).thenReturn(Optional.of(request));
+
+        // Act & Assert
+        AppException ex = assertThrows(AppException.class,
+                () -> requestEstablishmentService.getFinalFormsForStudent(requestId, userId));
+
+        assertEquals(ErrorCode.FORBIDDEN, ex.getErrorCode());
+    }
+
+    // ==========================================
     // SHARED OPERATIONS - getDefenseSchedule (student) (1 test case)
     // ==========================================
 
@@ -1540,5 +2211,155 @@ class RequestEstablishmentServiceTest {
         assertEquals(300L, response.getId());
         assertNotNull(response.getDefenseDate());
     }
+
+    // ==========================================
+    // STAFF OPERATIONS - getRequestDetailForStaff (2 test cases)
+    // ==========================================
+
+    @Test
+    void getRequestDetailForStaff_whenValid_shouldReturnRequest() throws AppException {
+        // Arrange
+        Long requestId = 100L;
+        RequestEstablishment request = buildRequest(requestId, 1L, RequestEstablishmentStatus.SUBMITTED);
+
+        when(requestEstablishmentRepository.findDetailById(requestId)).thenReturn(Optional.of(request));
+
+        // Act
+        RequestEstablishmentResponse response = requestEstablishmentService.getRequestDetailForStaff(requestId);
+
+        // Assert
+        assertNotNull(response);
+        assertEquals(requestId, response.getId());
+    }
+
+    @Test
+    void getRequestDetailForStaff_whenRequestNotFound_shouldThrowException() {
+        // Arrange
+        Long requestId = 100L;
+
+        when(requestEstablishmentRepository.findDetailById(requestId)).thenReturn(Optional.empty());
+
+        // Act & Assert
+        AppException ex = assertThrows(AppException.class,
+                () -> requestEstablishmentService.getRequestDetailForStaff(requestId));
+
+        assertEquals(ErrorCode.NOT_FOUND, ex.getErrorCode());
+    }
+
+    // ==========================================
+    // STAFF OPERATIONS - getProposalsForStaff (2 test cases)
+    // ==========================================
+
+    @Test
+    void getProposalsForStaff_whenValid_shouldReturnProposals() throws AppException {
+        // Arrange
+        Long requestId = 100L;
+        Long staffId = 10L;
+        RequestEstablishment request = buildRequestWithStaff(requestId, 1L, staffId, RequestEstablishmentStatus.PROPOSAL_SUBMITTED);
+        ClubProposal proposal1 = buildProposal(200L, requestId);
+        ClubProposal proposal2 = buildProposal(201L, requestId);
+
+        when(requestEstablishmentRepository.findDetailById(requestId)).thenReturn(Optional.of(request));
+        when(clubProposalRepository.findAllByRequestEstablishmentIdOrderByCreatedAtDesc(requestId))
+                .thenReturn(List.of(proposal1, proposal2));
+
+        // Act
+        List<ClubProposalResponse> response = requestEstablishmentService.getProposalsForStaff(requestId, staffId);
+
+        // Assert
+        assertNotNull(response);
+        assertEquals(2, response.size());
+    }
+
+    @Test
+    void getProposalsForStaff_whenNotAssigned_shouldThrowForbiddenException() {
+        // Arrange
+        Long requestId = 100L;
+        Long staffId = 10L;
+        Long otherStaffId = 20L;
+        RequestEstablishment request = buildRequestWithStaff(requestId, 1L, otherStaffId, RequestEstablishmentStatus.PROPOSAL_SUBMITTED);
+
+        when(requestEstablishmentRepository.findDetailById(requestId)).thenReturn(Optional.of(request));
+
+        // Act & Assert
+        AppException ex = assertThrows(AppException.class,
+                () -> requestEstablishmentService.getProposalsForStaff(requestId, staffId));
+
+        assertEquals(ErrorCode.FORBIDDEN, ex.getErrorCode());
+    }
+
+    // ==========================================
+    // STAFF OPERATIONS - getProposalDetailForStaff (1 test case)
+    // ==========================================
+
+    @Test
+    void getProposalDetailForStaff_whenValid_shouldReturnProposal() throws AppException {
+        // Arrange
+        Long requestId = 100L;
+        Long proposalId = 200L;
+        Long staffId = 10L;
+        RequestEstablishment request = buildRequestWithStaff(requestId, 1L, staffId, RequestEstablishmentStatus.PROPOSAL_SUBMITTED);
+        ClubProposal proposal = buildProposal(proposalId, requestId);
+
+        when(requestEstablishmentRepository.findDetailById(requestId)).thenReturn(Optional.of(request));
+        when(clubProposalRepository.findByIdAndRequestEstablishmentId(proposalId, requestId))
+                .thenReturn(Optional.of(proposal));
+
+        // Act
+        ClubProposalResponse response = requestEstablishmentService.getProposalDetailForStaff(requestId, proposalId, staffId);
+
+        // Assert
+        assertNotNull(response);
+        assertEquals(proposalId, response.getId());
+    }
+
+    // ==========================================
+    // STAFF OPERATIONS - getDefenseScheduleForStaff (1 test case)
+    // ==========================================
+
+    @Test
+    void getDefenseScheduleForStaff_whenValid_shouldReturnSchedule() throws AppException {
+        // Arrange
+        Long requestId = 100L;
+        Long staffId = 10L;
+        RequestEstablishment request = buildRequestWithStaff(requestId, 1L, staffId, RequestEstablishmentStatus.DEFENSE_SCHEDULE_PROPOSED);
+        DefenseSchedule schedule = buildDefenseSchedule(300L, requestId);
+
+        when(requestEstablishmentRepository.findDetailById(requestId)).thenReturn(Optional.of(request));
+        when(defenseScheduleRepository.findByRequestEstablishmentId(requestId)).thenReturn(Optional.of(schedule));
+
+        // Act
+        DefenseScheduleResponse response = requestEstablishmentService.getDefenseScheduleForStaff(requestId, staffId);
+
+        // Assert
+        assertNotNull(response);
+        assertEquals(300L, response.getId());
+    }
+
+    // ==========================================
+    // STAFF OPERATIONS - getFinalFormsForStaff (1 test case)
+    // ==========================================
+
+    @Test
+    void getFinalFormsForStaff_whenValid_shouldReturnFinalForms() throws AppException {
+        // Arrange
+        Long requestId = 100L;
+        Long staffId = 10L;
+        RequestEstablishment request = buildRequestWithStaff(requestId, 1L, staffId, RequestEstablishmentStatus.FINAL_FORM_SUBMITTED);
+        ClubCreationFinalForm form1 = buildFinalForm(400L, requestId);
+
+        when(requestEstablishmentRepository.findDetailById(requestId)).thenReturn(Optional.of(request));
+        when(clubCreationFinalFormRepository.findAllByRequestEstablishmentIdOrderByCreatedAtDesc(requestId))
+                .thenReturn(List.of(form1));
+
+        // Act
+        List<ClubCreationFinalFormResponse> response = requestEstablishmentService.getFinalFormsForStaff(requestId, staffId);
+
+        // Assert
+        assertNotNull(response);
+        assertEquals(1, response.size());
+    }
 }
+
+
 
