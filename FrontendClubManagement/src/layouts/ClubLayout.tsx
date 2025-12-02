@@ -279,6 +279,24 @@ export const ClubLayout = () => {
       off?.();
     };
   }, [validClubId, numericClubId, isConnected, subscribeToClub, refetchTeams]);
+  useEffect(() => {
+    if (!validClubId) return;
+
+    const handler = (e: Event) => {
+      const ce = e as CustomEvent;
+      if (ce.detail?.clubId === numericClubId) {
+        refetchTeams();
+      }
+    };
+
+    window.addEventListener("team-created", handler as EventListener);
+    window.addEventListener("team-deleted", handler as EventListener);
+
+    return () => {
+      window.removeEventListener("team-created", handler as EventListener);
+      window.removeEventListener("team-deleted", handler as EventListener);
+    };
+  }, [validClubId, numericClubId, refetchTeams]);
 
   const {
     isClubOfficer,
