@@ -151,6 +151,14 @@ public interface ReportServiceInterface {
             ReportType reportType, Long clubId, String keyword, Pageable pageable, Long userId);
 
     /**
+     * Get a single report requirement by ID (for staff only)
+     * @param requirementId Submission report requirement ID
+     * @param userId Current user ID
+     * @return Report requirement response
+     */
+    ReportRequirementResponse getReportRequirementById(Long requirementId, Long userId);
+
+    /**
      * Get list of clubs that need to submit reports for a specific report requirement (for staff only)
      * @param requirementId Submission report requirement ID
      * @param keyword Keyword for searching club name or code

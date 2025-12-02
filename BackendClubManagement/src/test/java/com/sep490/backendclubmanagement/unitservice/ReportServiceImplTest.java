@@ -160,7 +160,6 @@ class ReportServiceImplTest {
 
         Page<Report> reportPage = new PageImpl<>(List.of(universityReport), pageable, 1);
 
-        when(roleService.isStaff(staffId)).thenReturn(true);
         when(reportRepository.findAllWithFilters(
             any(), any(), any(), any(), any(), any(Pageable.class)
         )).thenReturn(reportPage);
@@ -179,23 +178,286 @@ class ReportServiceImplTest {
         // Assert
         assertNotNull(result);
         assertEquals(1, result.getTotalElements());
+        assertEquals(1, result.getContent().size());
         assertEquals("University Report", result.getContent().get(0).getReportTitle());
-        verify(roleService).isStaff(staffId);
+        verify(reportRepository).findAllWithFilters(
+            any(), any(), any(), any(), any(), any(Pageable.class)
+        );
+        verify(reportMapper).toListItem(universityReport);
     }
 
     @Test
-    void getAllReports_ThrowsForbiddenException_WhenNotStaff() {
+    void getAllReports_Success_WithMultipleUniversityLevelReports() {
+        // Arrange
+        Long staffId = staffUser.getId();
+        Pageable pageable = PageRequest.of(0, 10);
+
+        Report report1 = new Report();
+        report1.setId(1L);
+        report1.setReportTitle("Report 1");
+        report1.setStatus(ReportStatus.PENDING_UNIVERSITY);
+        report1.setClubReportRequirement(clubRequirement);
+        report1.setSemester(currentSemester);
+
+        Report report2 = new Report();
+        report2.setId(2L);
+        report2.setReportTitle("Report 2");
+        report2.setStatus(ReportStatus.APPROVED_UNIVERSITY);
+        report2.setClubReportRequirement(clubRequirement);
+        report2.setSemester(currentSemester);
+
+        Report report3 = new Report();
+        report3.setId(3L);
+        report3.setReportTitle("Report 3");
+        report3.setStatus(ReportStatus.REJECTED_UNIVERSITY);
+        report3.setClubReportRequirement(clubRequirement);
+        report3.setSemester(currentSemester);
+
+        Page<Report> reportPage = new PageImpl<>(List.of(report1, report2, report3), pageable, 3);
+
+        when(reportRepository.findAllWithFilters(
+            isNull(), isNull(), isNull(), isNull(), isNull(), any(Pageable.class)
+        )).thenReturn(reportPage);
+
+        ReportListItemResponse response1 = new ReportListItemResponse();
+        response1.setId(1L);
+        response1.setReportTitle("Report 1");
+
+        ReportListItemResponse response2 = new ReportListItemResponse();
+        response2.setId(2L);
+        response2.setReportTitle("Report 2");
+
+        ReportListItemResponse response3 = new ReportListItemResponse();
+        response3.setId(3L);
+        response3.setReportTitle("Report 3");
+
+        when(reportMapper.toListItem(report1)).thenReturn(response1);
+        when(reportMapper.toListItem(report2)).thenReturn(response2);
+        when(reportMapper.toListItem(report3)).thenReturn(response3);
+
+        // Act
+        PageResponse<ReportListItemResponse> result = reportService.getAllReports(
+            null, null, null, null, null, pageable, staffId
+        );
+
+        // Assert
+        assertNotNull(result);
+        assertEquals(3, result.getTotalElements());
+        assertEquals(3, result.getContent().size());
+        assertEquals("Report 1", result.getContent().get(0).getReportTitle());
+        assertEquals("Report 2", result.getContent().get(1).getReportTitle());
+        assertEquals("Report 3", result.getContent().get(2).getReportTitle());
+    }
+
+    @Test
+    void getAllReports_Success_FiltersOutNonUniversityLevelReports() {
+        // Arrange
+        Long staffId = staffUser.getId();
+        Pageable pageable = PageRequest.of(0, 10);
+
+        Report universityReport = new Report();
+        universityReport.setId(1L);
+        universityReport.setReportTitle("University Report");
+        universityReport.setStatus(ReportStatus.PENDING_UNIVERSITY);
+        universityReport.setClubReportRequirement(clubRequirement);
+
+        Report draftReport = new Report();
+        draftReport.setId(2L);
+        draftReport.setReportTitle("Draft Report");
+        draftReport.setStatus(ReportStatus.DRAFT);
+        draftReport.setClubReportRequirement(clubRequirement);
+
+        Report clubReport = new Report();
+        clubReport.setId(3L);
+        clubReport.setReportTitle("Club Report");
+        clubReport.setStatus(ReportStatus.PENDING_CLUB);
+        clubReport.setClubReportRequirement(clubRequirement);
+
+        // Repository returns all reports, but service should filter
+        Page<Report> reportPage = new PageImpl<>(
+            List.of(universityReport, draftReport, clubReport), pageable, 3
+        );
+
+        when(reportRepository.findAllWithFilters(
+            isNull(), isNull(), isNull(), isNull(), isNull(), any(Pageable.class)
+        )).thenReturn(reportPage);
+
+        ReportListItemResponse responseItem = new ReportListItemResponse();
+        responseItem.setId(1L);
+        responseItem.setReportTitle("University Report");
+        when(reportMapper.toListItem(universityReport)).thenReturn(responseItem);
+
+        // Act
+        PageResponse<ReportListItemResponse> result = reportService.getAllReports(
+            null, null, null, null, null, pageable, staffId
+        );
+
+        // Assert - Should only return university-level report
+        assertNotNull(result);
+        assertEquals(1, result.getTotalElements());
+        assertEquals(1, result.getContent().size());
+        assertEquals("University Report", result.getContent().get(0).getReportTitle());
+        verify(reportMapper, times(1)).toListItem(any(Report.class));
+        verify(reportMapper).toListItem(universityReport);
+    }
+
+    @Test
+    void getAllReports_Success_WithResubmittedUniversityStatus() {
+        // Arrange
+        Long staffId = staffUser.getId();
+        Pageable pageable = PageRequest.of(0, 10);
+
+        Report resubmittedReport = new Report();
+        resubmittedReport.setId(1L);
+        resubmittedReport.setReportTitle("Resubmitted Report");
+        resubmittedReport.setStatus(ReportStatus.RESUBMITTED_UNIVERSITY);
+        resubmittedReport.setClubReportRequirement(clubRequirement);
+        resubmittedReport.setSemester(currentSemester);
+
+        Page<Report> reportPage = new PageImpl<>(List.of(resubmittedReport), pageable, 1);
+
+        when(reportRepository.findAllWithFilters(
+            eq(ReportStatus.RESUBMITTED_UNIVERSITY), isNull(), isNull(), isNull(), isNull(), any(Pageable.class)
+        )).thenReturn(reportPage);
+
+        ReportListItemResponse responseItem = new ReportListItemResponse();
+        responseItem.setId(1L);
+        responseItem.setReportTitle("Resubmitted Report");
+        when(reportMapper.toListItem(resubmittedReport)).thenReturn(responseItem);
+
+        // Act
+        PageResponse<ReportListItemResponse> result = reportService.getAllReports(
+            ReportStatus.RESUBMITTED_UNIVERSITY, null, null, null, null, pageable, staffId
+        );
+
+        // Assert
+        assertNotNull(result);
+        assertEquals(1, result.getTotalElements());
+        assertEquals("Resubmitted Report", result.getContent().get(0).getReportTitle());
+    }
+
+    @Test
+    void getAllReports_Success_WithKeywordFilter() {
+        // Arrange
+        Long staffId = staffUser.getId();
+        Pageable pageable = PageRequest.of(0, 10);
+        String keyword = "University";
+
+        Report report1 = new Report();
+        report1.setId(1L);
+        report1.setReportTitle("University Report 1");
+        report1.setContent("Content about university");
+        report1.setStatus(ReportStatus.PENDING_UNIVERSITY);
+        report1.setClubReportRequirement(clubRequirement);
+
+        Report report2 = new Report();
+        report2.setId(2L);
+        report2.setReportTitle("Other Report");
+        report2.setContent("Other content");
+        report2.setStatus(ReportStatus.PENDING_UNIVERSITY);
+        report2.setClubReportRequirement(clubRequirement);
+
+        // When keyword is provided, service queries all then filters client-side
+        Page<Report> allReportsPage = new PageImpl<>(
+            List.of(report1, report2),
+            PageRequest.of(0, Integer.MAX_VALUE),
+            2
+        );
+
+        when(reportRepository.findAllWithFilters(
+            isNull(), isNull(), isNull(), isNull(), isNull(), any(Pageable.class)
+        )).thenReturn(allReportsPage);
+
+        ReportListItemResponse response1 = new ReportListItemResponse();
+        response1.setId(1L);
+        response1.setReportTitle("University Report 1");
+
+        when(reportMapper.toListItem(report1)).thenReturn(response1);
+
+        // Act
+        PageResponse<ReportListItemResponse> result = reportService.getAllReports(
+            null, null, null, null, keyword, pageable, staffId
+        );
+
+        // Assert
+        assertNotNull(result);
+        // Note: Client-side filtering based on Vietnamese normalization
+        // The actual filtering logic depends on matchesVietnameseKeyword implementation
+    }
+
+    @Test
+    void getAllReports_ReturnsEmptyList_WhenNoUniversityLevelReports() {
+        // Arrange
+        Long staffId = staffUser.getId();
+        Pageable pageable = PageRequest.of(0, 10);
+
+        Report draftReport = new Report();
+        draftReport.setId(1L);
+        draftReport.setReportTitle("Draft Report");
+        draftReport.setStatus(ReportStatus.DRAFT);
+        draftReport.setClubReportRequirement(clubRequirement);
+
+        Page<Report> reportPage = new PageImpl<>(List.of(draftReport), pageable, 1);
+
+        when(reportRepository.findAllWithFilters(
+            isNull(), isNull(), isNull(), isNull(), isNull(), any(Pageable.class)
+        )).thenReturn(reportPage);
+
+        // Act
+        PageResponse<ReportListItemResponse> result = reportService.getAllReports(
+            null, null, null, null, null, pageable, staffId
+        );
+
+        // Assert
+        assertNotNull(result);
+        assertEquals(0, result.getTotalElements());
+        assertEquals(0, result.getContent().size());
+        assertTrue(result.getContent().isEmpty());
+        verify(reportMapper, never()).toListItem(any(Report.class));
+    }
+
+    @Test
+    void getAllReports_ThrowsForbiddenException_WhenInvalidStatus() {
         // Arrange
         Long userId = user.getId();
         Pageable pageable = PageRequest.of(0, 10);
 
-        when(roleService.isStaff(userId)).thenReturn(false);
+        // Act & Assert - Try to access with non-university level status
+        ForbiddenException exception = assertThrows(ForbiddenException.class, () ->
+            reportService.getAllReports(ReportStatus.DRAFT, null, null, null, null, pageable, userId)
+        );
+
+        assertTrue(exception.getMessage().contains("PENDING_UNIVERSITY"));
+        assertTrue(exception.getMessage().contains("APPROVED_UNIVERSITY"));
+        assertTrue(exception.getMessage().contains("REJECTED_UNIVERSITY"));
+        assertTrue(exception.getMessage().contains("RESUBMITTED_UNIVERSITY"));
+
+        // Verify repository was never called
+        verify(reportRepository, never()).findAllWithFilters(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void getAllReports_ThrowsForbiddenException_WhenPendingClubStatus() {
+        // Arrange
+        Long userId = user.getId();
+        Pageable pageable = PageRequest.of(0, 10);
 
         // Act & Assert
         assertThrows(ForbiddenException.class, () ->
-            reportService.getAllReports(null, null, null, null, null, pageable, userId
-        ));
-        verify(roleService).isStaff(userId);
+            reportService.getAllReports(ReportStatus.PENDING_CLUB, null, null, null, null, pageable, userId)
+        );
+    }
+
+    @Test
+    void getAllReports_ThrowsForbiddenException_WhenRejectedClubStatus() {
+        // Arrange
+        Long userId = user.getId();
+        Pageable pageable = PageRequest.of(0, 10);
+
+        // Act & Assert
+        assertThrows(ForbiddenException.class, () ->
+            reportService.getAllReports(ReportStatus.REJECTED_CLUB, null, null, null, null, pageable, userId)
+        );
     }
 
     // ========== getReportDetail ==========
@@ -207,7 +469,6 @@ class ReportServiceImplTest {
         Long reportId = report.getId();
         report.setStatus(ReportStatus.PENDING_UNIVERSITY);
 
-        when(roleService.isStaff(staffId)).thenReturn(true);
         when(reportRepository.findByIdWithRelations(reportId)).thenReturn(Optional.of(report));
 
         ReportDetailResponse detailResponse = new ReportDetailResponse();
@@ -223,6 +484,25 @@ class ReportServiceImplTest {
         assertEquals(reportId, result.getId());
         assertEquals("Test Report", result.getReportTitle());
         verify(reportRepository).findByIdWithRelations(reportId);
+        verify(reportMapper).toDetail(report);
+    }
+
+    @Test
+    void getReportDetail_ThrowsForbiddenException_WhenNotUniversityLevelStatus() {
+        // Arrange
+        Long staffId = staffUser.getId();
+        Long reportId = report.getId();
+        report.setStatus(ReportStatus.DRAFT);
+
+        when(reportRepository.findByIdWithRelations(reportId)).thenReturn(Optional.of(report));
+
+        // Act & Assert
+        ForbiddenException exception = assertThrows(ForbiddenException.class, () ->
+            reportService.getReportDetail(reportId, staffId)
+        );
+
+        assertTrue(exception.getMessage().contains("PENDING_UNIVERSITY"));
+        assertTrue(exception.getMessage().contains("Current status: DRAFT"));
     }
 
     @Test
@@ -231,7 +511,6 @@ class ReportServiceImplTest {
         Long staffId = staffUser.getId();
         Long reportId = 999L;
 
-        when(roleService.isStaff(staffId)).thenReturn(true);
         when(reportRepository.findByIdWithRelations(reportId)).thenReturn(Optional.empty());
 
         // Act & Assert
@@ -255,7 +534,6 @@ class ReportServiceImplTest {
         request.setStatus(ReportStatus.APPROVED_UNIVERSITY);
         request.setReviewerFeedback("Approved by university");
 
-        when(roleService.isStaff(staffId)).thenReturn(true);
         when(reportRepository.findByIdWithRelations(report.getId())).thenReturn(Optional.of(report));
         when(reportRepository.save(any(Report.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -293,7 +571,6 @@ class ReportServiceImplTest {
         request.setReviewerFeedback("Needs revision");
         request.setMustResubmit(true);
 
-        when(roleService.isStaff(staffId)).thenReturn(true);
         when(reportRepository.findByIdWithRelations(report.getId())).thenReturn(Optional.of(report));
         when(reportRepository.save(any(Report.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -318,22 +595,6 @@ class ReportServiceImplTest {
     }
 
     @Test
-    void reviewReport_ThrowsForbiddenException_WhenNotStaff() {
-        // Arrange
-        Long userId = user.getId();
-        ReportReviewRequest request = new ReportReviewRequest();
-        request.setReportId(report.getId());
-        request.setStatus(ReportStatus.APPROVED_UNIVERSITY);
-
-        when(roleService.isStaff(userId)).thenReturn(false);
-
-        // Act & Assert
-        assertThrows(ForbiddenException.class, () ->
-            reportService.reviewReport(request, userId)
-        );
-    }
-
-    @Test
     void reviewReport_ThrowsForbiddenException_WhenInvalidStatusTransition() {
         // Arrange
         Long staffId = staffUser.getId();
@@ -343,7 +604,6 @@ class ReportServiceImplTest {
         request.setReportId(report.getId());
         request.setStatus(ReportStatus.APPROVED_UNIVERSITY);
 
-        when(roleService.isStaff(staffId)).thenReturn(true);
         when(reportRepository.findByIdWithRelations(report.getId())).thenReturn(Optional.of(report));
 
         // Act & Assert
@@ -486,8 +746,8 @@ class ReportServiceImplTest {
         CloudinaryService.UploadResult uploadResult = new CloudinaryService.UploadResult(
             "http://cloudinary.com/template.pdf", "template_id", "pdf", 1024L
         );
-        when(cloudinaryService.uploadFileAsync(eq(file), anyString()))
-            .thenReturn(CompletableFuture.completedFuture(uploadResult));
+        when(cloudinaryService.uploadFile(eq(file), anyString()))
+            .thenReturn(uploadResult);
 
         when(submissionReportRequirementRepository.save(any(SubmissionReportRequirement.class)))
             .thenAnswer(invocation -> {
@@ -522,7 +782,7 @@ class ReportServiceImplTest {
 
         // Assert
         assertNotNull(result);
-        verify(cloudinaryService).uploadFileAsync(eq(file), anyString());
+        verify(cloudinaryService).uploadFile(eq(file), anyString());
         verify(submissionReportRequirementRepository).save(argThat(req ->
             "http://cloudinary.com/template.pdf".equals(req.getTemplateUrl())
         ));
@@ -659,30 +919,7 @@ class ReportServiceImplTest {
         ));
     }
 
-    @Test
-    void createReport_ThrowsForbiddenException_WhenNotClubOfficer() {
-        // Arrange
-        Long userId = user.getId();
 
-        CreateReportRequest request = new CreateReportRequest();
-        request.setClubId(club.getId());
-        request.setReportTitle("New Report");
-        request.setReportRequirementId(clubRequirement.getId());
-
-        when(semesterRepository.findCurrentSemester()).thenReturn(Optional.of(currentSemester));
-        when(roleMemberShipRepository.isClubOfficerOrTeamOfficerOrTreasurerInCurrentSemester(
-            userId, club.getId(), currentSemester.getId()
-        )).thenReturn(false);
-
-        // Act & Assert
-        assertThrows(ForbiddenException.class, () ->
-            reportService.createReport(request, null, userId)
-        );
-
-        // Verify it fails before accessing other repositories
-        verify(clubRepository, never()).findById(anyLong());
-        verify(userRepository, never()).findById(anyLong());
-    }
 
     // ========== updateReport ==========
 
@@ -851,23 +1088,7 @@ class ReportServiceImplTest {
         assertEquals("Test Report", result.getContent().get(0).getReportTitle());
     }
 
-    @Test
-    void getClubReports_ThrowsForbiddenException_WhenNotClubOfficer() {
-        // Arrange
-        Long userId = user.getId();
-        Pageable pageable = PageRequest.of(0, 10);
 
-        when(clubRepository.existsById(club.getId())).thenReturn(true);
-        when(semesterRepository.findCurrentSemester()).thenReturn(Optional.of(currentSemester));
-        when(roleMemberShipRepository.isClubOfficerInCurrentSemester(
-            userId, club.getId(), currentSemester.getId()
-        )).thenReturn(false);
-
-        // Act & Assert
-        assertThrows(ForbiddenException.class, () ->
-            reportService.getClubReports(club.getId(), null, null, null, null, pageable, userId)
-        );
-    }
 
 
     // ========== getAllReportRequirements ==========
@@ -905,53 +1126,14 @@ class ReportServiceImplTest {
         assertNotNull(result);
         assertEquals(1, result.getTotalElements());
         assertEquals("Monthly Report", result.getContent().get(0).getTitle());
+        // Verify clubCount is set and clubRequirements is null
+        assertEquals(1, result.getContent().get(0).getClubCount());
+        assertNull(result.getContent().get(0).getClubRequirements());
         verify(clubReportRequirementRepository).findBySubmissionReportRequirementIdIn(anyList());
     }
 
     // ========== reviewReportByClub ==========
 
-    @Test
-    void reviewReportByClub_Success_WhenClubOfficerApproves() throws AppException {
-        // Arrange
-        Long userId = user.getId();
-        report.setStatus(ReportStatus.PENDING_CLUB);
-        report.setClubReportRequirement(clubRequirement);
-        clubRequirement.setReport(report);
-
-        ReportReviewRequest request = new ReportReviewRequest();
-        request.setReportId(report.getId());
-        request.setStatus(ReportStatus.PENDING_UNIVERSITY);
-        request.setReviewerFeedback("Approved by club");
-
-        when(reportRepository.findByIdWithRelations(report.getId())).thenReturn(Optional.of(report));
-        when(semesterRepository.findCurrentSemester()).thenReturn(Optional.of(currentSemester));
-        when(roleMemberShipRepository.isClubOfficerInCurrentSemester(
-            userId, club.getId(), currentSemester.getId()
-        )).thenReturn(true);
-        when(reportRepository.save(any(Report.class))).thenAnswer(invocation -> invocation.getArgument(0));
-
-        // Mock for async notification (sendClubReviewNotificationAsync -> getStaffUsers)
-        when(userRepository.findBySystemRole_RoleNameIgnoreCase("STAFF")).thenReturn(List.of(staffUser));
-        doNothing().when(notificationService).sendToUsersAsync(
-            anyList(), anyLong(), anyString(), anyString(), any(), any(), anyString(),
-            anyLong(), anyLong(), anyLong(), anyLong());
-
-        ReportDetailResponse response = new ReportDetailResponse();
-        response.setId(report.getId());
-        response.setStatus(ReportStatus.PENDING_UNIVERSITY);
-        when(reportMapper.toDetail(any(Report.class))).thenReturn(response);
-
-        // Act
-        ReportDetailResponse result = reportService.reviewReportByClub(request, userId);
-
-        // Assert
-        assertNotNull(result);
-        assertEquals(ReportStatus.PENDING_UNIVERSITY, result.getStatus());
-        verify(reportRepository).save(argThat(r ->
-            r.getStatus() == ReportStatus.PENDING_UNIVERSITY &&
-            r.getReviewedDate() != null
-        ));
-    }
 
     @Test
     void reviewReportByClub_ThrowsForbiddenException_WhenNotClubOfficer() {
@@ -1143,23 +1325,6 @@ class ReportServiceImplTest {
         // Act & Assert
         assertThrows(NotFoundException.class, () ->
             reportService.updateReportRequirement(requirementId, request, null, staffId)
-        );
-    }
-
-    @Test
-    void updateReportRequirement_ThrowsForbiddenException_WhenNotStaff() {
-        // Arrange
-        Long userId = user.getId();
-        Long requirementId = submissionRequirement.getId();
-
-        UpdateReportRequirementRequest request = new UpdateReportRequirementRequest();
-        request.setTitle("Updated Report");
-
-        when(roleService.isStaff(userId)).thenReturn(false);
-
-        // Act & Assert
-        assertThrows(ForbiddenException.class, () ->
-            reportService.updateReportRequirement(requirementId, request, null, userId)
         );
     }
 

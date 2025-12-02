@@ -102,6 +102,19 @@ public class ReportController {
     }
 
     /**
+     * Get a single report requirement by ID (for staff only)
+     */
+    @PreAuthorize("@clubSecurity.isStaff()")
+    @GetMapping("/staff/requirements/{requirementId}")
+    public ApiResponse<ReportRequirementResponse> getReportRequirementById(
+            @PathVariable Long requirementId
+    ) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        ReportRequirementResponse data = reportService.getReportRequirementById(requirementId, userId);
+        return ApiResponse.success(data);
+    }
+
+    /**
      * Create report requirement for multiple clubs (for staff only)
      * Multipart/form-data endpoint
      * File upload is optional. If file is provided, it will be uploaded to Cloudinary.

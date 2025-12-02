@@ -161,6 +161,21 @@ export async function getAllReportRequirements(
 }
 
 /**
+ * Get a single report requirement by ID (for staff only)
+ */
+export async function getReportRequirementById(
+  requirementId: number
+): Promise<ReportRequirementResponse> {
+  const response = await axiosClient.get<ReportRequirementResponse>(
+    `/reports/staff/requirements/${requirementId}`
+  );
+  if (!response.data) {
+    throw new Error("Failed to get report requirement");
+  }
+  return response.data;
+}
+
+/**
  * Get list of clubs that need to submit reports for a specific report requirement
  * Supports pagination and search by club name or code
  */
@@ -178,7 +193,8 @@ export async function getClubsByReportRequirement(
   }
 
   const response = await axiosClient.get<PageResponse<ClubRequirementInfo>>(
-    `/reports/staff/requirements/${requirementId}/clubs?${params.toString()}`
+    `/reports/staff/requirements/${requirementId}/clubs?${params.toString()}`,
+    { timeout: 30000 }
   );
   if (!response.data) {
     throw new Error("Failed to get clubs by report requirement");

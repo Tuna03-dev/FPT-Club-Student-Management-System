@@ -754,7 +754,7 @@ export function ReportSubmissionModal({
                     <div className="text-sm">
                       <p className="font-medium">Nhấp để chọn file</p>
                       <p className="text-xs text-muted-foreground">
-                        Chỉ một tệp hoặc một tệp zip (tối đa 50MB)
+                        Chỉ một tệp hoặc một tệp zip (tối đa 20MB)
                       </p>
                     </div>
                   </div>

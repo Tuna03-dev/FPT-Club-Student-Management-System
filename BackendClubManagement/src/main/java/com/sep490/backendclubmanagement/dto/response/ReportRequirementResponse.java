@@ -25,6 +25,7 @@ public class ReportRequirementResponse {
     private UserInfo createdBy;
 
     private List<ClubRequirementInfo> clubRequirements;
+    private Integer clubCount;
 
     @Data
     @NoArgsConstructor
