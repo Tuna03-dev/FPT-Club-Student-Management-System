@@ -8,6 +8,7 @@ import type {
   ClubRequirementInfo,
   ReportFilterRequest,
   ReportListItemResponse,
+  OfficerReportRequirementResponse,
 } from "@/types/dto/reportRequirement.dto";
 import type { ClubDto } from "@/service/EventService";
 import type { ReportDetailResponse } from "@/types/dto/reportRequirement.dto";
@@ -214,11 +215,12 @@ export interface ClubReportRequirementFilterRequest {
 
 /**
  * Get all report requirements for a club with filters and pagination (for CLUB_OFFICER or TEAM_OFFICER)
+ * Returns optimized response with only essential fields
  */
 export async function getClubReportRequirementsForOfficerWithFilters(
   clubId: number,
   request: ClubReportRequirementFilterRequest
-): Promise<PageResponse<ReportRequirementResponse>> {
+): Promise<PageResponse<OfficerReportRequirementResponse>> {
   const params = new URLSearchParams();
 
   if (request.status) params.append("status", request.status);
@@ -234,7 +236,7 @@ export async function getClubReportRequirementsForOfficerWithFilters(
   if (request.sort) params.append("sort", request.sort);
 
   const response = await axiosClient.get<
-    PageResponse<ReportRequirementResponse>
+    PageResponse<OfficerReportRequirementResponse>
   >(
     `/reports/club/${clubId}/requirements/officer/filter?${params.toString()}`,
     {

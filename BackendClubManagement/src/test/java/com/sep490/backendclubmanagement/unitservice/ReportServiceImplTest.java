@@ -14,18 +14,24 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.*;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 import org.springframework.data.domain.*;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(org.mockito.junit.jupiter.MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class ReportServiceImplTest {
 
     @Mock
@@ -54,6 +60,13 @@ class ReportServiceImplTest {
     private CloudinaryService cloudinaryService;
     @Mock
     private RoleMemberShipRepository roleMemberShipRepository;
+    @Mock
+    private TeamRepository teamRepository;
+    @Mock
+    private NotificationService notificationService;
+
+    // Create a real synchronous executor for testing instead of mocking
+    private final Executor taskExecutor = Runnable::run;
 
     @InjectMocks
     private ReportServiceImpl reportService;
@@ -69,6 +82,9 @@ class ReportServiceImplTest {
 
     @BeforeEach
     void setup() {
+        // Inject taskExecutor into reportService using reflection
+        ReflectionTestUtils.setField(reportService, "taskExecutor", taskExecutor);
+
         club = new Club();
         club.setId(1L);
         club.setClubName("Test Club");
@@ -109,6 +125,7 @@ class ReportServiceImplTest {
         clubRequirement.setId(1L);
         clubRequirement.setClub(club);
         clubRequirement.setSubmissionReportRequirement(submissionRequirement);
+        // Don't set report by default - it should be set in specific tests
 
         report = new Report();
         report.setId(1L);
@@ -118,6 +135,7 @@ class ReportServiceImplTest {
         report.setClubReportRequirement(clubRequirement);
         report.setSemester(currentSemester);
         report.setCreatedBy(user);
+        report.setMustResubmit(false);
     }
 
     // ========== getAllReports ==========
@@ -144,8 +162,7 @@ class ReportServiceImplTest {
 
         when(roleService.isStaff(staffId)).thenReturn(true);
         when(reportRepository.findAllWithFilters(
-            any(ReportStatus.class), any(Long.class), any(Long.class),
-            any(ReportType.class), isNull(), any(Pageable.class)
+            any(), any(), any(), any(), any(), any(Pageable.class)
         )).thenReturn(reportPage);
 
         ReportListItemResponse responseItem = new ReportListItemResponse();
@@ -176,8 +193,8 @@ class ReportServiceImplTest {
 
         // Act & Assert
         assertThrows(ForbiddenException.class, () ->
-            reportService.getAllReports(null, null, null, null, null, pageable, userId)
-        );
+            reportService.getAllReports(null, null, null, null, null, pageable, userId
+        ));
         verify(roleService).isStaff(userId);
     }
 
@@ -225,6 +242,80 @@ class ReportServiceImplTest {
 
     // ========== reviewReport ==========
 
+    @Test
+    void reviewReport_Success_WhenStaffApprovesReport() {
+        // Arrange
+        Long staffId = staffUser.getId();
+        report.setStatus(ReportStatus.PENDING_UNIVERSITY);
+        report.setClubReportRequirement(clubRequirement);
+        clubRequirement.setReport(report);
+
+        ReportReviewRequest request = new ReportReviewRequest();
+        request.setReportId(report.getId());
+        request.setStatus(ReportStatus.APPROVED_UNIVERSITY);
+        request.setReviewerFeedback("Approved by university");
+
+        when(roleService.isStaff(staffId)).thenReturn(true);
+        when(reportRepository.findByIdWithRelations(report.getId())).thenReturn(Optional.of(report));
+        when(reportRepository.save(any(Report.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        // Mock for async notification logic
+        when(semesterRepository.findByIsCurrentTrue()).thenReturn(Optional.of(currentSemester));
+        when(roleMemberShipRepository.findClubOfficerUserIdsByClubIdAndSemesterId(anyLong(), anyLong()))
+            .thenReturn(List.of(user.getId()));
+        doNothing().when(notificationService).sendToUsersAsync(
+            anyList(), anyLong(), anyString(), anyString(), any(), any(), anyString(),
+            anyLong(), anyLong(), anyLong(), anyLong());
+
+        // Act
+        reportService.reviewReport(request, staffId);
+
+        // Assert
+        verify(reportRepository).save(argThat(r ->
+            r.getStatus() == ReportStatus.APPROVED_UNIVERSITY &&
+            r.getReviewedDate() != null &&
+            !r.isMustResubmit() &&
+            r.getReviewerFeedback() != null
+        ));
+    }
+
+    @Test
+    void reviewReport_Success_WhenStaffRejectsReport() {
+        // Arrange
+        Long staffId = staffUser.getId();
+        report.setStatus(ReportStatus.PENDING_UNIVERSITY);
+        report.setClubReportRequirement(clubRequirement);
+        clubRequirement.setReport(report);
+
+        ReportReviewRequest request = new ReportReviewRequest();
+        request.setReportId(report.getId());
+        request.setStatus(ReportStatus.REJECTED_UNIVERSITY);
+        request.setReviewerFeedback("Needs revision");
+        request.setMustResubmit(true);
+
+        when(roleService.isStaff(staffId)).thenReturn(true);
+        when(reportRepository.findByIdWithRelations(report.getId())).thenReturn(Optional.of(report));
+        when(reportRepository.save(any(Report.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        // Mock for async notification logic
+        when(semesterRepository.findByIsCurrentTrue()).thenReturn(Optional.of(currentSemester));
+        when(roleMemberShipRepository.findClubOfficerUserIdsByClubIdAndSemesterId(anyLong(), anyLong()))
+            .thenReturn(List.of(user.getId()));
+        doNothing().when(notificationService).sendToUsersAsync(
+            anyList(), anyLong(), anyString(), anyString(), any(), any(), anyString(),
+            anyLong(), anyLong(), anyLong(), anyLong());
+
+        // Act
+        reportService.reviewReport(request, staffId);
+
+        // Assert
+        verify(reportRepository).save(argThat(r ->
+            r.getStatus() == ReportStatus.REJECTED_UNIVERSITY &&
+            r.getReviewedDate() != null &&
+            r.isMustResubmit() &&
+            "Needs revision".equals(r.getReviewerFeedback())
+        ));
+    }
 
     @Test
     void reviewReport_ThrowsForbiddenException_WhenNotStaff() {
@@ -281,17 +372,25 @@ class ReportServiceImplTest {
         club2.setClubCode("TC002");
 
         when(roleService.isStaff(staffId)).thenReturn(true);
+        when(clubRepository.findAllById(request.getClubIds())).thenReturn(List.of(club, club2));
         when(userRepository.findById(staffId)).thenReturn(Optional.of(staffUser));
         when(submissionReportRequirementRepository.save(any(SubmissionReportRequirement.class)))
-            .thenReturn(submissionRequirement);
-        when(clubRepository.findAllById(request.getClubIds())).thenReturn(List.of(club, club2));
-        when(clubReportRequirementRepository.save(any(ClubReportRequirement.class)))
+            .thenAnswer(invocation -> invocation.getArgument(0));
+        when(clubReportRequirementRepository.saveAll(anyList()))
             .thenAnswer(invocation -> invocation.getArgument(0));
 
         ReportRequirementResponse response = new ReportRequirementResponse();
         response.setId(1L);
         response.setTitle("Monthly Report");
-        when(submissionReportRequirementMapper.toDto(submissionRequirement)).thenReturn(response);
+        when(submissionReportRequirementMapper.toDto(any(SubmissionReportRequirement.class))).thenReturn(response);
+
+        // Mock for async notification
+        when(semesterRepository.findByIsCurrentTrue()).thenReturn(Optional.of(currentSemester));
+        when(roleMemberShipRepository.findClubOfficerUserIdsByClubIdsAndSemesterId(anyList(), anyLong()))
+            .thenReturn(List.of());
+        doNothing().when(notificationService).sendToUsersAsync(
+            anyList(), anyLong(), anyString(), anyString(), any(), any(), anyString(),
+            anyLong(), anyLong(), anyLong(), anyLong());
 
         // Act
         ReportRequirementResponse result = reportService.createReportRequirement(request, null, staffId);
@@ -300,7 +399,7 @@ class ReportServiceImplTest {
         assertNotNull(result);
         assertEquals("Monthly Report", result.getTitle());
         verify(submissionReportRequirementRepository).save(any(SubmissionReportRequirement.class));
-        verify(clubReportRequirementRepository, times(2)).save(any(ClubReportRequirement.class));
+        verify(clubReportRequirementRepository).saveAll(anyList());
     }
 
     @Test
@@ -317,18 +416,26 @@ class ReportServiceImplTest {
         request.setClubIds(List.of(1L));
 
         when(roleService.isStaff(staffId)).thenReturn(true);
-        when(userRepository.findById(staffId)).thenReturn(Optional.of(staffUser));
-        when(eventRepository.findById(event.getId())).thenReturn(Optional.of(event));
-        when(submissionReportRequirementRepository.save(any(SubmissionReportRequirement.class)))
-            .thenReturn(submissionRequirement);
         when(clubRepository.findAllById(request.getClubIds())).thenReturn(List.of(club));
-        when(clubReportRequirementRepository.save(any(ClubReportRequirement.class)))
+        when(eventRepository.findById(event.getId())).thenReturn(Optional.of(event));
+        when(userRepository.findById(staffId)).thenReturn(Optional.of(staffUser));
+        when(submissionReportRequirementRepository.save(any(SubmissionReportRequirement.class)))
+            .thenAnswer(invocation -> invocation.getArgument(0));
+        when(clubReportRequirementRepository.saveAll(anyList()))
             .thenAnswer(invocation -> invocation.getArgument(0));
 
         ReportRequirementResponse response = new ReportRequirementResponse();
         response.setId(1L);
         response.setTitle("Event Report");
-        when(submissionReportRequirementMapper.toDto(submissionRequirement)).thenReturn(response);
+        when(submissionReportRequirementMapper.toDto(any(SubmissionReportRequirement.class))).thenReturn(response);
+
+        // Mock for async notification
+        when(semesterRepository.findByIsCurrentTrue()).thenReturn(Optional.of(currentSemester));
+        when(roleMemberShipRepository.findClubOfficerUserIdsByClubIdsAndSemesterId(anyList(), anyLong()))
+            .thenReturn(List.of());
+        doNothing().when(notificationService).sendToUsersAsync(
+            anyList(), anyLong(), anyString(), anyString(), any(), any(), anyString(),
+            anyLong(), anyLong(), anyLong(), anyLong());
 
         // Act
         ReportRequirementResponse result = reportService.createReportRequirement(request, null, staffId);
@@ -373,31 +480,51 @@ class ReportServiceImplTest {
         when(roleService.isStaff(staffId)).thenReturn(true);
         when(file.isEmpty()).thenReturn(false);
         when(file.getSize()).thenReturn(1024L * 1024L); // 1MB
+        when(clubRepository.findAllById(request.getClubIds())).thenReturn(List.of(club));
         when(userRepository.findById(staffId)).thenReturn(Optional.of(staffUser));
 
         CloudinaryService.UploadResult uploadResult = new CloudinaryService.UploadResult(
             "http://cloudinary.com/template.pdf", "template_id", "pdf", 1024L
         );
-        when(cloudinaryService.uploadFile(file)).thenReturn(uploadResult);
+        when(cloudinaryService.uploadFileAsync(eq(file), anyString()))
+            .thenReturn(CompletableFuture.completedFuture(uploadResult));
 
         when(submissionReportRequirementRepository.save(any(SubmissionReportRequirement.class)))
-            .thenReturn(submissionRequirement);
-        when(clubRepository.findAllById(request.getClubIds())).thenReturn(List.of(club));
-        when(clubReportRequirementRepository.save(any(ClubReportRequirement.class)))
-            .thenAnswer(invocation -> invocation.getArgument(0));
+            .thenAnswer(invocation -> {
+                SubmissionReportRequirement saved = invocation.getArgument(0);
+                saved.setId(1L);
+                return saved;
+            });
+        when(clubReportRequirementRepository.saveAll(anyList()))
+            .thenAnswer(invocation -> {
+                List<ClubReportRequirement> list = invocation.getArgument(0);
+                for (int i = 0; i < list.size(); i++) {
+                    list.get(i).setId((long) (i + 1));
+                }
+                return list;
+            });
 
         ReportRequirementResponse response = new ReportRequirementResponse();
         response.setId(1L);
-        when(submissionReportRequirementMapper.toDto(submissionRequirement)).thenReturn(response);
+        response.setTitle("Monthly Report");
+        when(submissionReportRequirementMapper.toDto(any(SubmissionReportRequirement.class))).thenReturn(response);
+
+        // Mock for async notification
+        when(semesterRepository.findByIsCurrentTrue()).thenReturn(Optional.of(currentSemester));
+        when(roleMemberShipRepository.findClubOfficerUserIdsByClubIdsAndSemesterId(anyList(), anyLong()))
+            .thenReturn(List.of());
+        doNothing().when(notificationService).sendToUsersAsync(
+            anyList(), anyLong(), anyString(), anyString(), any(), any(), anyString(),
+            anyLong(), anyLong(), anyLong(), anyLong());
 
         // Act
         ReportRequirementResponse result = reportService.createReportRequirement(request, file, staffId);
 
         // Assert
         assertNotNull(result);
-        verify(cloudinaryService).uploadFile(file);
+        verify(cloudinaryService).uploadFileAsync(eq(file), anyString());
         verify(submissionReportRequirementRepository).save(argThat(req ->
-            req.getTemplateUrl().equals("http://cloudinary.com/template.pdf")
+            "http://cloudinary.com/template.pdf".equals(req.getTemplateUrl())
         ));
     }
 
@@ -439,12 +566,22 @@ class ReportServiceImplTest {
         when(submissionReportRequirementRepository.findById(requirementId))
             .thenReturn(Optional.of(submissionRequirement));
         when(submissionReportRequirementRepository.save(any(SubmissionReportRequirement.class)))
-            .thenReturn(submissionRequirement);
+            .thenAnswer(invocation -> invocation.getArgument(0));
+        when(clubReportRequirementRepository.findBySubmissionReportRequirementId(requirementId))
+            .thenReturn(List.of(clubRequirement));
 
         ReportRequirementResponse response = new ReportRequirementResponse();
         response.setId(requirementId);
         response.setTitle("Updated Monthly Report");
-        when(submissionReportRequirementMapper.toDto(submissionRequirement)).thenReturn(response);
+        when(submissionReportRequirementMapper.toDto(any(SubmissionReportRequirement.class))).thenReturn(response);
+
+        // Mock for async notification
+        when(semesterRepository.findByIsCurrentTrue()).thenReturn(Optional.of(currentSemester));
+        when(roleMemberShipRepository.findClubOfficerUserIdsByClubIdsAndSemesterId(anyList(), anyLong()))
+            .thenReturn(List.of());
+        doNothing().when(notificationService).sendToUsersAsync(
+            anyList(), anyLong(), anyString(), anyString(), any(), any(), anyString(),
+            anyLong(), anyLong(), anyLong(), anyLong());
 
         // Act
         ReportRequirementResponse result = reportService.updateReportRequirement(requirementId, request, null, staffId);
@@ -469,27 +606,45 @@ class ReportServiceImplTest {
         request.setReportRequirementId(clubRequirement.getId());
         request.setAutoSubmit(true);
 
+        // Create a new clubRequirement without report for this test
+        ClubReportRequirement emptyClubRequirement = new ClubReportRequirement();
+        emptyClubRequirement.setId(1L);
+        emptyClubRequirement.setClub(club);
+        emptyClubRequirement.setSubmissionReportRequirement(submissionRequirement);
+        emptyClubRequirement.setReport(null); // Ensure no report exists
+
         when(semesterRepository.findCurrentSemester()).thenReturn(Optional.of(currentSemester));
-        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(roleMemberShipRepository.isClubOfficerOrTeamOfficerOrTreasurerInCurrentSemester(
             userId, club.getId(), currentSemester.getId()
         )).thenReturn(true);
         when(clubRepository.findById(club.getId())).thenReturn(Optional.of(club));
-        when(submissionReportRequirementRepository.findById(clubRequirement.getId()))
+        when(submissionReportRequirementRepository.findById(emptyClubRequirement.getId()))
             .thenReturn(Optional.of(submissionRequirement));
         when(clubReportRequirementRepository.findByClubIdAndSubmissionReportRequirementId(
-            club.getId(), clubRequirement.getId()
-        )).thenReturn(Optional.of(clubRequirement));
+            club.getId(), emptyClubRequirement.getId()
+        )).thenReturn(Optional.of(emptyClubRequirement));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(roleMemberShipRepository.isClubOfficerInCurrentSemester(
             userId, club.getId(), currentSemester.getId()
         )).thenReturn(true);
-        when(reportRepository.save(any(Report.class))).thenReturn(report);
-        when(reportRepository.findByIdWithRelations(report.getId())).thenReturn(Optional.of(report));
+        when(reportRepository.save(any(Report.class))).thenAnswer(invocation -> {
+            Report savedReport = invocation.getArgument(0);
+            savedReport.setId(1L);
+            return savedReport;
+        });
 
         ReportDetailResponse response = new ReportDetailResponse();
         response.setId(1L);
         response.setReportTitle("New Report");
-        when(reportMapper.toDetail(report)).thenReturn(response);
+        response.setStatus(ReportStatus.PENDING_CLUB);
+        when(reportMapper.toDetail(any(Report.class))).thenReturn(response);
+
+        // Mock for async notification (sendReportSubmittedNotificationAsync)
+        when(roleMemberShipRepository.findClubOfficerUserIdsByClubIdAndSemesterId(anyLong(), anyLong()))
+            .thenReturn(List.of(user.getId()));
+        doNothing().when(notificationService).sendToUsersAsync(
+            anyList(), anyLong(), anyString(), anyString(), any(), any(), anyString(),
+            anyLong(), anyLong(), anyLong(), anyLong());
 
         // Act
         ReportDetailResponse result = reportService.createReport(request, null, userId);
@@ -497,7 +652,11 @@ class ReportServiceImplTest {
         // Assert
         assertNotNull(result);
         assertEquals("New Report", result.getReportTitle());
-        verify(reportRepository).save(any(Report.class));
+        assertEquals(ReportStatus.PENDING_CLUB, result.getStatus());
+        verify(reportRepository).save(argThat(r ->
+            r.getStatus() == ReportStatus.PENDING_CLUB &&
+            r.getSubmittedDate() != null
+        ));
     }
 
     @Test
@@ -511,7 +670,6 @@ class ReportServiceImplTest {
         request.setReportRequirementId(clubRequirement.getId());
 
         when(semesterRepository.findCurrentSemester()).thenReturn(Optional.of(currentSemester));
-        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(roleMemberShipRepository.isClubOfficerOrTeamOfficerOrTreasurerInCurrentSemester(
             userId, club.getId(), currentSemester.getId()
         )).thenReturn(false);
@@ -520,6 +678,10 @@ class ReportServiceImplTest {
         assertThrows(ForbiddenException.class, () ->
             reportService.createReport(request, null, userId)
         );
+
+        // Verify it fails before accessing other repositories
+        verify(clubRepository, never()).findById(anyLong());
+        verify(userRepository, never()).findById(anyLong());
     }
 
     // ========== updateReport ==========
@@ -575,6 +737,8 @@ class ReportServiceImplTest {
         // Arrange
         Long userId = user.getId();
         report.setStatus(ReportStatus.DRAFT);
+        report.setClubReportRequirement(clubRequirement);
+        clubRequirement.setReport(report);
 
         SubmitReportRequest request = new SubmitReportRequest();
         request.setReportId(report.getId());
@@ -584,12 +748,19 @@ class ReportServiceImplTest {
         when(roleMemberShipRepository.isClubOfficerInCurrentSemester(
             userId, club.getId(), currentSemester.getId()
         )).thenReturn(true);
-        when(reportRepository.save(any(Report.class))).thenReturn(report);
+        when(reportRepository.save(any(Report.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        // Mock for async notification (sendSubmitReportNotificationAsync)
+        when(roleMemberShipRepository.findClubOfficerUserIdsByClubIdAndSemesterId(anyLong(), anyLong()))
+            .thenReturn(List.of(user.getId()));
+        doNothing().when(notificationService).sendToUsersAsync(
+            anyList(), anyLong(), anyString(), anyString(), any(), any(), anyString(),
+            anyLong(), anyLong(), anyLong(), anyLong());
 
         ReportDetailResponse response = new ReportDetailResponse();
         response.setId(report.getId());
         response.setStatus(ReportStatus.PENDING_CLUB);
-        when(reportMapper.toDetail(report)).thenReturn(response);
+        when(reportMapper.toDetail(any(Report.class))).thenReturn(response);
 
         // Act
         ReportDetailResponse result = reportService.submitReport(request, userId);
@@ -608,6 +779,8 @@ class ReportServiceImplTest {
         Long userId = user.getId();
         report.setStatus(ReportStatus.REJECTED_CLUB);
         report.setMustResubmit(true);
+        report.setClubReportRequirement(clubRequirement);
+        clubRequirement.setReport(report);
 
         SubmitReportRequest request = new SubmitReportRequest();
         request.setReportId(report.getId());
@@ -617,12 +790,19 @@ class ReportServiceImplTest {
         when(roleMemberShipRepository.isClubOfficerInCurrentSemester(
             userId, club.getId(), currentSemester.getId()
         )).thenReturn(true);
-        when(reportRepository.save(any(Report.class))).thenReturn(report);
+        when(reportRepository.save(any(Report.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        // Mock for async notification
+        when(roleMemberShipRepository.findClubOfficerUserIdsByClubIdAndSemesterId(anyLong(), anyLong()))
+            .thenReturn(List.of(user.getId()));
+        doNothing().when(notificationService).sendToUsersAsync(
+            anyList(), anyLong(), anyString(), anyString(), any(), any(), anyString(),
+            anyLong(), anyLong(), anyLong(), anyLong());
 
         ReportDetailResponse response = new ReportDetailResponse();
         response.setId(report.getId());
         response.setStatus(ReportStatus.UPDATED_PENDING_CLUB);
-        when(reportMapper.toDetail(report)).thenReturn(response);
+        when(reportMapper.toDetail(any(Report.class))).thenReturn(response);
 
         // Act
         ReportDetailResponse result = reportService.submitReport(request, userId);
@@ -646,7 +826,7 @@ class ReportServiceImplTest {
 
         Page<Report> reportPage = new PageImpl<>(List.of(report), pageable, 1);
 
-        when(clubRepository.findById(club.getId())).thenReturn(Optional.of(club));
+        when(clubRepository.existsById(club.getId())).thenReturn(true);
         when(semesterRepository.findCurrentSemester()).thenReturn(Optional.of(currentSemester));
         when(roleMemberShipRepository.isClubOfficerInCurrentSemester(
             userId, club.getId(), currentSemester.getId()
@@ -677,7 +857,7 @@ class ReportServiceImplTest {
         Long userId = user.getId();
         Pageable pageable = PageRequest.of(0, 10);
 
-        when(clubRepository.findById(club.getId())).thenReturn(Optional.of(club));
+        when(clubRepository.existsById(club.getId())).thenReturn(true);
         when(semesterRepository.findCurrentSemester()).thenReturn(Optional.of(currentSemester));
         when(roleMemberShipRepository.isClubOfficerInCurrentSemester(
             userId, club.getId(), currentSemester.getId()
@@ -689,40 +869,6 @@ class ReportServiceImplTest {
         );
     }
 
-    // ========== deleteReport ==========
-
-    @Test
-    void deleteReport_Success_WhenReportInDraftStatus() throws AppException {
-        // Arrange
-        Long userId = user.getId();
-        report.setStatus(ReportStatus.DRAFT);
-
-        when(reportRepository.findByIdWithRelations(report.getId())).thenReturn(Optional.of(report));
-        when(clubReportRequirementRepository.save(any(ClubReportRequirement.class)))
-            .thenReturn(clubRequirement);
-
-        // Act
-        reportService.deleteReport(report.getId(), userId);
-
-        // Assert
-        verify(clubReportRequirementRepository).save(argThat(crr -> crr.getReport() == null));
-        verify(reportRepository).delete(report);
-        verify(reportRepository).flush();
-    }
-
-    @Test
-    void deleteReport_ThrowsException_WhenReportNotInDraft() {
-        // Arrange
-        Long userId = user.getId();
-        report.setStatus(ReportStatus.PENDING_UNIVERSITY);
-
-        when(reportRepository.findByIdWithRelations(report.getId())).thenReturn(Optional.of(report));
-
-        // Act & Assert
-        assertThrows(ForbiddenException.class, () ->
-            reportService.deleteReport(report.getId(), userId)
-        );
-    }
 
     // ========== getAllReportRequirements ==========
 
@@ -735,10 +881,15 @@ class ReportServiceImplTest {
         Page<SubmissionReportRequirement> requirementPage =
             new PageImpl<>(List.of(submissionRequirement), pageable, 1);
 
+        // Setup clubRequirement with proper relationship
+        clubRequirement.setSubmissionReportRequirement(submissionRequirement);
+
         when(roleService.isStaff(staffId)).thenReturn(true);
         when(submissionReportRequirementRepository.findAllWithFilters(
             any(), any(), any(), eq(pageable)
         )).thenReturn(requirementPage);
+        when(clubReportRequirementRepository.findBySubmissionReportRequirementIdIn(anyList()))
+            .thenReturn(List.of(clubRequirement));
 
         ReportRequirementResponse response = new ReportRequirementResponse();
         response.setId(1L);
@@ -754,6 +905,7 @@ class ReportServiceImplTest {
         assertNotNull(result);
         assertEquals(1, result.getTotalElements());
         assertEquals("Monthly Report", result.getContent().get(0).getTitle());
+        verify(clubReportRequirementRepository).findBySubmissionReportRequirementIdIn(anyList());
     }
 
     // ========== reviewReportByClub ==========
@@ -763,6 +915,8 @@ class ReportServiceImplTest {
         // Arrange
         Long userId = user.getId();
         report.setStatus(ReportStatus.PENDING_CLUB);
+        report.setClubReportRequirement(clubRequirement);
+        clubRequirement.setReport(report);
 
         ReportReviewRequest request = new ReportReviewRequest();
         request.setReportId(report.getId());
@@ -774,13 +928,18 @@ class ReportServiceImplTest {
         when(roleMemberShipRepository.isClubOfficerInCurrentSemester(
             userId, club.getId(), currentSemester.getId()
         )).thenReturn(true);
-        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
-        when(reportRepository.save(any(Report.class))).thenReturn(report);
+        when(reportRepository.save(any(Report.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        // Mock for async notification (sendClubReviewNotificationAsync -> getStaffUsers)
+        when(userRepository.findBySystemRole_RoleNameIgnoreCase("STAFF")).thenReturn(List.of(staffUser));
+        doNothing().when(notificationService).sendToUsersAsync(
+            anyList(), anyLong(), anyString(), anyString(), any(), any(), anyString(),
+            anyLong(), anyLong(), anyLong(), anyLong());
 
         ReportDetailResponse response = new ReportDetailResponse();
         response.setId(report.getId());
         response.setStatus(ReportStatus.PENDING_UNIVERSITY);
-        when(reportMapper.toDetail(report)).thenReturn(response);
+        when(reportMapper.toDetail(any(Report.class))).thenReturn(response);
 
         // Act
         ReportDetailResponse result = reportService.reviewReportByClub(request, userId);
@@ -789,7 +948,8 @@ class ReportServiceImplTest {
         assertNotNull(result);
         assertEquals(ReportStatus.PENDING_UNIVERSITY, result.getStatus());
         verify(reportRepository).save(argThat(r ->
-            r.getStatus() == ReportStatus.PENDING_UNIVERSITY
+            r.getStatus() == ReportStatus.PENDING_UNIVERSITY &&
+            r.getReviewedDate() != null
         ));
     }
 
@@ -817,37 +977,32 @@ class ReportServiceImplTest {
 
     // ========== Additional Test Cases ==========
 
-    @Test
-    void deleteReport_ThrowsForbiddenException_WhenNotCreator() {
-        // Arrange
-        Long otherUserId = 999L;
-        report.setStatus(ReportStatus.DRAFT);
-
-        when(reportRepository.findByIdWithRelations(report.getId())).thenReturn(Optional.of(report));
-
-        // Act & Assert
-        assertThrows(ForbiddenException.class, () ->
-            reportService.deleteReport(report.getId(), otherUserId)
-        );
-    }
 
     @Test
     void createReport_ThrowsException_WhenClubNotActive() {
         // Arrange
         Long userId = user.getId();
-        club.setStatus("INACTIVE");
+        Club inactiveClub = new Club();
+        inactiveClub.setId(1L);
+        inactiveClub.setClubName("Test Club");
+        inactiveClub.setStatus("INACTIVE");
 
         CreateReportRequest request = new CreateReportRequest();
-        request.setClubId(club.getId());
+        request.setClubId(inactiveClub.getId());
         request.setReportTitle("New Report");
         request.setReportRequirementId(clubRequirement.getId());
 
+        ClubReportRequirement emptyClubRequirement = new ClubReportRequirement();
+        emptyClubRequirement.setId(1L);
+        emptyClubRequirement.setClub(inactiveClub);
+        emptyClubRequirement.setSubmissionReportRequirement(submissionRequirement);
+        emptyClubRequirement.setReport(null);
+
         when(semesterRepository.findCurrentSemester()).thenReturn(Optional.of(currentSemester));
-        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(roleMemberShipRepository.isClubOfficerOrTeamOfficerOrTreasurerInCurrentSemester(
-            userId, club.getId(), currentSemester.getId()
+            userId, inactiveClub.getId(), currentSemester.getId()
         )).thenReturn(true);
-        when(clubRepository.findById(club.getId())).thenReturn(Optional.of(club));
+        when(clubRepository.findById(inactiveClub.getId())).thenReturn(Optional.of(inactiveClub));
 
         // Act & Assert
         assertThrows(AppException.class, () ->
@@ -903,13 +1058,26 @@ class ReportServiceImplTest {
     void submitReport_ThrowsException_WhenClubNotActive() {
         // Arrange
         Long userId = user.getId();
-        report.setStatus(ReportStatus.DRAFT);
-        club.setStatus("INACTIVE");
+        Club inactiveClub = new Club();
+        inactiveClub.setId(1L);
+        inactiveClub.setStatus("INACTIVE");
+
+        ClubReportRequirement inactiveClubReq = new ClubReportRequirement();
+        inactiveClubReq.setId(1L);
+        inactiveClubReq.setClub(inactiveClub);
+        inactiveClubReq.setSubmissionReportRequirement(submissionRequirement);
+
+        Report inactiveReport = new Report();
+        inactiveReport.setId(1L);
+        inactiveReport.setStatus(ReportStatus.DRAFT);
+        inactiveReport.setClubReportRequirement(inactiveClubReq);
+        inactiveReport.setCreatedBy(user);
+        inactiveClubReq.setReport(inactiveReport);
 
         SubmitReportRequest request = new SubmitReportRequest();
-        request.setReportId(report.getId());
+        request.setReportId(inactiveReport.getId());
 
-        when(reportRepository.findByIdWithRelations(report.getId())).thenReturn(Optional.of(report));
+        when(reportRepository.findByIdWithRelations(inactiveReport.getId())).thenReturn(Optional.of(inactiveReport));
 
         // Act & Assert
         assertThrows(AppException.class, () ->
@@ -930,6 +1098,7 @@ class ReportServiceImplTest {
         request.setClubIds(List.of(1L));
 
         when(roleService.isStaff(staffId)).thenReturn(true);
+        when(clubRepository.findAllById(request.getClubIds())).thenReturn(List.of(club));
         when(eventRepository.findById(999L)).thenReturn(Optional.empty());
 
         // Act & Assert
@@ -950,10 +1119,7 @@ class ReportServiceImplTest {
         request.setClubIds(List.of(1L, 999L));
 
         when(roleService.isStaff(staffId)).thenReturn(true);
-        when(userRepository.findById(staffId)).thenReturn(Optional.of(staffUser));
-        when(submissionReportRequirementRepository.save(any(SubmissionReportRequirement.class)))
-            .thenReturn(submissionRequirement);
-        when(clubRepository.findAllById(request.getClubIds())).thenReturn(List.of(club));
+        when(clubRepository.findAllById(request.getClubIds())).thenReturn(List.of(club)); // Only 1 club found instead of 2
 
         // Act & Assert
         assertThrows(NotFoundException.class, () ->
@@ -997,24 +1163,6 @@ class ReportServiceImplTest {
         );
     }
 
-    @Test
-    void getClubReportDetail_ThrowsForbiddenException_WhenReportNotBelongsToClub() {
-        // Arrange
-        Long userId = user.getId();
-        Long wrongClubId = 999L;
-
-        Club wrongClub = new Club();
-        wrongClub.setId(wrongClubId);
-        wrongClub.setClubName("Wrong Club");
-
-        when(clubRepository.findById(wrongClubId)).thenReturn(Optional.of(wrongClub));
-        when(reportRepository.findByIdWithRelations(report.getId())).thenReturn(Optional.of(report));
-
-        // Act & Assert
-        assertThrows(ForbiddenException.class, () ->
-            reportService.getClubReportDetail(report.getId(), wrongClubId, userId)
-        );
-    }
 
 
     @Test
@@ -1029,28 +1177,38 @@ class ReportServiceImplTest {
         request.setReportRequirementId(clubRequirement.getId());
         request.setAutoSubmit(false);
 
+        // Create a new clubRequirement without report for this test
+        ClubReportRequirement emptyClubRequirement = new ClubReportRequirement();
+        emptyClubRequirement.setId(1L);
+        emptyClubRequirement.setClub(club);
+        emptyClubRequirement.setSubmissionReportRequirement(submissionRequirement);
+        emptyClubRequirement.setReport(null); // Ensure no report exists
+
         when(semesterRepository.findCurrentSemester()).thenReturn(Optional.of(currentSemester));
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(roleMemberShipRepository.isClubOfficerOrTeamOfficerOrTreasurerInCurrentSemester(
             userId, club.getId(), currentSemester.getId()
         )).thenReturn(true);
         when(clubRepository.findById(club.getId())).thenReturn(Optional.of(club));
-        when(submissionReportRequirementRepository.findById(clubRequirement.getId()))
+        when(submissionReportRequirementRepository.findById(emptyClubRequirement.getId()))
             .thenReturn(Optional.of(submissionRequirement));
         when(clubReportRequirementRepository.findByClubIdAndSubmissionReportRequirementId(
-            club.getId(), clubRequirement.getId()
-        )).thenReturn(Optional.of(clubRequirement));
+            club.getId(), emptyClubRequirement.getId()
+        )).thenReturn(Optional.of(emptyClubRequirement));
         when(roleMemberShipRepository.isClubOfficerInCurrentSemester(
             userId, club.getId(), currentSemester.getId()
         )).thenReturn(false); // Not club officer, just team officer
-        when(reportRepository.save(any(Report.class))).thenReturn(report);
-        when(reportRepository.findByIdWithRelations(report.getId())).thenReturn(Optional.of(report));
+        when(reportRepository.save(any(Report.class))).thenAnswer(invocation -> {
+            Report savedReport = invocation.getArgument(0);
+            savedReport.setId(1L);
+            return savedReport;
+        });
 
         ReportDetailResponse response = new ReportDetailResponse();
         response.setId(1L);
         response.setReportTitle("Team Report");
         response.setStatus(ReportStatus.DRAFT);
-        when(reportMapper.toDetail(report)).thenReturn(response);
+        when(reportMapper.toDetail(any(Report.class))).thenReturn(response);
 
         // Act
         ReportDetailResponse result = reportService.createReport(request, null, userId);

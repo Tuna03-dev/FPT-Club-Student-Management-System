@@ -654,6 +654,7 @@ WHERE cm.club.id = :clubId
           AND cm.club.id = :clubId
           AND rm.semester.id = :semesterId
           AND COALESCE(rm.isActive, TRUE) = TRUE
+          AND COALESCE(cm.user.isActive, TRUE) = TRUE
           AND rm.team IS NOT NULL
           AND cr IS NOT NULL
           AND (
@@ -681,6 +682,7 @@ WHERE cm.club.id = :clubId
         WHERE cm.club.id = :clubId
           AND rm.semester.id = :semesterId
           AND COALESCE(rm.isActive, TRUE) = TRUE
+          AND COALESCE(cm.user.isActive, TRUE) = TRUE
           AND cr IS NOT NULL
           AND (
               UPPER(TRIM(cr.roleCode)) IN ('CLUB_OFFICER')
@@ -689,6 +691,32 @@ WHERE cm.club.id = :clubId
     """)
     List<Long> findClubOfficerUserIdsByClubIdAndSemesterId(
             @Param("clubId") Long clubId,
+            @Param("semesterId") Long semesterId
+    );
+
+    /**
+     * Batch load club officers for multiple clubs in a specific semester
+     * Returns Object[] with [clubId, userId] to avoid N+1 queries
+     * Used for bulk notifications and other operations
+     */
+    @Query("""
+        SELECT cm.club.id, cm.user.id
+        FROM RoleMemberShip rm
+        JOIN rm.clubMemberShip cm
+        JOIN rm.clubRole cr
+        LEFT JOIN cr.systemRole sr
+        WHERE cm.club.id IN :clubIds
+          AND rm.semester.id = :semesterId
+          AND COALESCE(rm.isActive, TRUE) = TRUE
+          AND COALESCE(cm.user.isActive, TRUE) = TRUE
+          AND cr IS NOT NULL
+          AND (
+              UPPER(TRIM(cr.roleCode)) IN ('CLUB_OFFICER')
+              OR (sr IS NOT NULL AND UPPER(TRIM(sr.roleName)) IN ('CLUB_OFFICER'))
+          )
+    """)
+    List<Object[]> findClubOfficerUserIdsByClubIdsAndSemesterId(
+            @Param("clubIds") List<Long> clubIds,
             @Param("semesterId") Long semesterId
     );
 
@@ -706,6 +734,7 @@ WHERE cm.club.id = :clubId
         WHERE t.id = :teamId
           AND rm.semester.id = :semesterId
           AND COALESCE(rm.isActive, TRUE) = TRUE
+          AND COALESCE(cm.user.isActive, TRUE) = TRUE
           AND cr IS NOT NULL
           AND (
               UPPER(TRIM(cr.roleCode)) IN ('TEAM_OFFICER','CLUB_TREASURE')

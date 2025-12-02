@@ -8,6 +8,7 @@ import com.sep490.backendclubmanagement.dto.request.ReportReviewRequest;
 import com.sep490.backendclubmanagement.dto.request.SubmitReportRequest;
 import com.sep490.backendclubmanagement.dto.request.UpdateReportRequest;
 import com.sep490.backendclubmanagement.dto.request.UpdateReportRequirementRequest;
+import com.sep490.backendclubmanagement.dto.response.OfficerReportRequirementResponse;
 import com.sep490.backendclubmanagement.dto.response.PageResponse;
 import com.sep490.backendclubmanagement.dto.response.ReportDetailResponse;
 import com.sep490.backendclubmanagement.dto.response.ReportListItemResponse;
@@ -232,7 +233,7 @@ public class ReportController {
      */
     @PreAuthorize("@clubSecurity.isTeamOfficerOrClubOfficerOrTreasurerInClub(#clubId)")
     @GetMapping("/club/{clubId}/requirements/officer/filter")
-    public ApiResponse<PageResponse<ReportRequirementResponse>> getClubReportRequirementsForOfficerWithFilters(
+    public ApiResponse<PageResponse<OfficerReportRequirementResponse>> getClubReportRequirementsForOfficerWithFilters(
             @PathVariable Long clubId,
             @RequestParam(required = false) String status,
             @RequestParam(required = false) Long semesterId,
@@ -244,7 +245,7 @@ public class ReportController {
     ) {
         Long userId = SecurityUtils.getCurrentUserId();
         Pageable pageable = PageRequest.of(page, size, parseSort(sort));
-        PageResponse<ReportRequirementResponse> data = reportService.getClubReportRequirementsForOfficerWithFilters(
+        PageResponse<OfficerReportRequirementResponse> data = reportService.getClubReportRequirementsForOfficerWithFilters(
                 clubId, status, semesterId, keyword, teamId, pageable, userId);
         return ApiResponse.success(data);
     }

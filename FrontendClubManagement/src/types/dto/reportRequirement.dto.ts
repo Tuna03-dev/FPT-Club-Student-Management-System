@@ -159,6 +159,30 @@ export function mapBackendToFrontendReportType(
   }
 }
 
+// Optimized Report Requirement Response for Officers (club officer/team officer)
+export interface OfficerReportRequirementResponse {
+  id: number; // submissionReportRequirementId
+  title: string;
+  description?: string;
+  dueDate: string;
+  reportType?: ReportType;
+  templateUrl?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  createdByName?: string;
+  clubRequirement: {
+    id: number; // clubReportRequirementId
+    clubId: number;
+    teamId?: number | null;
+    report?: {
+      id: number;
+      status?: string; // ReportStatus enum
+      mustResubmit?: boolean;
+      createdBy?: number; // User ID only
+    };
+  };
+}
+
 // Report Status enum
 // report-status.ts
 export type ReportStatus =

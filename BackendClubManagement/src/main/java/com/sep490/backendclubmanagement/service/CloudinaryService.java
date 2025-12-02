@@ -7,7 +7,6 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -87,6 +86,22 @@ public class CloudinaryService {
      */
     public UploadResult uploadFile(MultipartFile file) {
         return uploadFile(file, "club/recruitment");
+    }
+
+    /**
+     * Upload file (PDF, DOC, DOCX, etc.) to Cloudinary with specified folder - ASYNC
+     * @param file MultipartFile to upload
+     * @param folder Folder path in Cloudinary (e.g., "club/reports", "club/recruitment")
+     * @return CompletableFuture with UploadResult
+     */
+    @Async("uploadExecutor")
+    public CompletableFuture<UploadResult> uploadFileAsync(MultipartFile file, String folder) {
+        try {
+            UploadResult result = uploadFile(file, folder);
+            return CompletableFuture.completedFuture(result);
+        } catch (Exception e) {
+            return CompletableFuture.failedFuture(e);
+        }
     }
 
     /**
