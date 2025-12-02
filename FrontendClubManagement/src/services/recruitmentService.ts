@@ -135,7 +135,10 @@ export async function getRecruitmentsByClubId(
   queryParams.append("sort", sort);
 
   const res = await axiosClient.get<PagedResponse<RecruitmentData>>(
-    `/recruitments/clubs/${clubId}?${queryParams.toString()}`
+    `/recruitments/clubs/${clubId}?${queryParams.toString()}`,
+    {
+      timeout: 30000, // 30 seconds
+    }
   );
 
   if (!res.data) throw new Error("Empty response");
@@ -198,7 +201,10 @@ export async function getApplicationsByRecruitmentId(
   queryParams.append("sort", sort);
 
   const res = await axiosClient.get<PagedResponse<RecruitmentApplicationData>>(
-    `/recruitments/${recruitmentId}/applications?${queryParams.toString()}`
+    `/recruitments/${recruitmentId}/applications?${queryParams.toString()}`,
+    {
+      timeout: 30000, // 30 seconds
+    }
   );
 
   if (!res.data) throw new Error("Empty response");
@@ -212,7 +218,10 @@ export async function createRecruitment(
 ): Promise<RecruitmentData> {
   const res = await axiosClient.post<RecruitmentData>(
     `/recruitments/clubs/${clubId}`,
-    data
+    data,
+    {
+      timeout: 60000, // 60 seconds
+    }
   );
   if (!res.data) throw new Error("Failed to create recruitment");
   return res.data;
@@ -225,7 +234,10 @@ export async function updateRecruitment(
 ): Promise<RecruitmentData> {
   const res = await axiosClient.put<RecruitmentData>(
     `/recruitments/${id}`,
-    data
+    data,
+    {
+      timeout: 60000, // 60 seconds
+    }
   );
   if (!res.data) throw new Error("Failed to update recruitment");
   return res.data;
@@ -285,6 +297,7 @@ export async function submitApplication(
       headers: {
         "Content-Type": "multipart/form-data",
       },
+      timeout: 60000, // 60 seconds
     }
   );
   if (!res.data) throw new Error("Failed to submit application");
@@ -311,7 +324,10 @@ export async function getMyApplications(
   queryParams.append("sort", sort);
 
   const res = await axiosClient.get<PagedResponse<RecruitmentApplicationData>>(
-    `/recruitments/myApplications?${queryParams.toString()}`
+    `/recruitments/myApplications?${queryParams.toString()}`,
+    {
+      timeout: 30000, // 30 seconds
+    }
   );
 
   if (!res.data) throw new Error("Empty response");
@@ -359,7 +375,10 @@ export async function updateApplicationStatus(
 
   const res = await axiosClient.post<RecruitmentApplicationData>(
     `/recruitments/applications/review`,
-    requestData
+    requestData,
+    {
+      timeout: 30000, // 30 seconds
+    }
   );
 
   // axiosClient returns ApiResponse<T>, so we need to access res.data for the actual data
@@ -390,7 +409,10 @@ export async function updateInterviewSchedule(
 
   const res = await axiosClient.put<RecruitmentApplicationData>(
     `/recruitments/applications/interview`,
-    requestData
+    requestData,
+    {
+      timeout: 30000, // 30 seconds
+    }
   );
 
   if (!res.data) throw new Error("Failed to update interview schedule");

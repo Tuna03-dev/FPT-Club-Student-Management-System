@@ -8,7 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -39,6 +39,19 @@ public interface ClubReportRequirementRepository extends JpaRepository<ClubRepor
            "WHERE crr.submissionReportRequirement.id = :submissionReportRequirementId")
     List<ClubReportRequirement> findBySubmissionReportRequirementId(
             @Param("submissionReportRequirementId") Long submissionReportRequirementId
+    );
+
+    /**
+     * Find all ClubReportRequirements by multiple submissionReportRequirementIds
+     * Fetch club and report eagerly to avoid N+1 queries and LazyInitializationException
+     * Used for batch loading in getAllReportRequirements()
+     */
+    @Query("SELECT crr FROM ClubReportRequirement crr " +
+           "JOIN FETCH crr.club " +
+           "LEFT JOIN FETCH crr.report r " +
+           "WHERE crr.submissionReportRequirement.id IN :submissionReportRequirementIds")
+    List<ClubReportRequirement> findBySubmissionReportRequirementIdIn(
+            @Param("submissionReportRequirementIds") List<Long> submissionReportRequirementIds
     );
 
     /**
@@ -122,7 +135,7 @@ public interface ClubReportRequirementRepository extends JpaRepository<ClubRepor
             @Param("reportStatus") com.sep490.backendclubmanagement.entity.ReportStatus reportStatus,
             @Param("semesterId") Long semesterId,
             @Param("teamId") Long teamId,
-            @Param("currentDate") LocalDate currentDate,
+            @Param("currentDate") LocalDateTime currentDate,
             Pageable pageable
     );
 }

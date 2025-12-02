@@ -33,7 +33,7 @@ public enum ErrorCode {
     POST_NOT_FOUND (HttpStatus.NOT_FOUND, 2001, "Post not found"),
     INTERVIEW_NOT_YET(HttpStatus.BAD_REQUEST, 3004, "Không thể review application khi chưa đến thời gian phỏng vấn"),
     INTERVIEW_TIME_PASSED(HttpStatus.BAD_REQUEST, 3005, "Không thể chỉnh sửa lịch phỏng vấn khi đã qua thời gian phỏng vấn"),
-    FILE_TOO_LARGE(HttpStatus.BAD_REQUEST, 1002, "Kích thước tập tin vượt quá giới hạn 20MB"),
+    FILE_TOO_LARGE(HttpStatus.BAD_REQUEST, 1002, "Kích thước tập tin vượt quá giới hạn"),
 
     // Transaction related errors
     CLUB_WALLET_NOT_FOUND(HttpStatus.NOT_FOUND, 5000, "Không tìm thấy ví câu lạc bộ"),
@@ -55,7 +55,10 @@ public enum ErrorCode {
     // Club management errors
     CLUB_CODE_EXISTED(HttpStatus.BAD_REQUEST, 8000, "Mã câu lạc bộ đã tồn tại"),
     CLUB_NAME_EXISTED(HttpStatus.BAD_REQUEST, 8001, "Tên câu lạc bộ đã tồn tại"),
-    USER_NOT_VALID(HttpStatus.BAD_REQUEST, 8002, "Email người dùng không hợp lệ hoặc không thuộc tổ chức");
+    USER_NOT_VALID(HttpStatus.BAD_REQUEST, 8002, "Email người dùng không hợp lệ hoặc không thuộc tổ chức"),
+    TEAM_NAME_EXISTED(HttpStatus.BAD_REQUEST, 8003, "Tên ban đã tồn tại trong câu lạc bộ"),
+    TEAM_HAS_HISTORY(HttpStatus.BAD_REQUEST, 8101, "Không thể xoá phòng ban đã từng có thành viên");
+
 
     private final HttpStatus httpStatus;
     private final int code;

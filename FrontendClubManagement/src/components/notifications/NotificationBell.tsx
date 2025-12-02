@@ -67,14 +67,13 @@ export const NotificationBell: React.FC = () => {
     if (open) loadLatest();
   }, [open, loadLatest]);
 
-  /* ===== Realtime ===== */
   useEffect(() => {
     if (!isConnected) return;
 
     const off = subscribeToUserQueue((msg) => {
       if (msg.type !== "NOTIFICATION") return;
 
-      // có noti mới
+      // thông báo mới
       if (msg.action === "NEW") {
         refreshUnreadCount();
         setNewPing(true);
@@ -90,7 +89,8 @@ export const NotificationBell: React.FC = () => {
         }
       }
 
-      if (msg.action === "READ-UPDATE") {
+      // ĐÁNH DẤU ĐỌC 1 HOẶC ĐỌC TẤT CẢ
+      if (msg.action === "READ-UPDATE" || msg.action === "READ-ALL") {
         refreshUnreadCount();
         if (open) loadLatest();
       }
@@ -137,7 +137,9 @@ export const NotificationBell: React.FC = () => {
         }
       } else if (clubId) {
         // Nếu actionUrl là relative path và có clubId, navigate với clubId
-        navigate(`/myclub/${clubId}${n.actionUrl.startsWith("/") ? n.actionUrl : "/" + n.actionUrl}`);
+        navigate(
+          `/myclub/${clubId}${n.actionUrl.startsWith("/") ? n.actionUrl : "/" + n.actionUrl}`
+        );
       } else {
         // Nếu không có clubId, navigate trực tiếp (có thể là trang chung)
         navigate(n.actionUrl.startsWith("/") ? n.actionUrl : "/" + n.actionUrl);

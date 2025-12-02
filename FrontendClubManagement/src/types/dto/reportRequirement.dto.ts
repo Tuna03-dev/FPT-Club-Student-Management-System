@@ -6,7 +6,7 @@ export type ReportType = "SEMESTER" | "EVENT" | "OTHER";
 export interface CreateReportRequirementRequest {
   title: string;
   description?: string;
-  dueDate: string; // ISO date string (YYYY-MM-DD)
+  dueDate: string; // ISO datetime string (YYYY-MM-DDTHH:mm:ss)
   reportType?: ReportType;
   templateUrl?: string;
   clubIds: number[];
@@ -157,6 +157,30 @@ export function mapBackendToFrontendReportType(
     default:
       return "periodic";
   }
+}
+
+// Optimized Report Requirement Response for Officers (club officer/team officer)
+export interface OfficerReportRequirementResponse {
+  id: number; // submissionReportRequirementId
+  title: string;
+  description?: string;
+  dueDate: string;
+  reportType?: ReportType;
+  templateUrl?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  createdByName?: string;
+  clubRequirement: {
+    id: number; // clubReportRequirementId
+    clubId: number;
+    teamId?: number | null;
+    report?: {
+      id: number;
+      status?: string; // ReportStatus enum
+      mustResubmit?: boolean;
+      createdBy?: number; // User ID only
+    };
+  };
 }
 
 // Report Status enum

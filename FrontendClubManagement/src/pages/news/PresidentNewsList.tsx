@@ -1,3 +1,5 @@
+"use client";
+
 import type React from "react";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -14,13 +16,13 @@ import type {
   RequestStatus,
   PageResp,
 } from "@/types/news";
+
 import {
   Plus,
   RefreshCw,
   Search,
   CheckCircle,
   XCircle,
-  FileText,
   Send,
   FolderOpen,
   ImageOff,
@@ -30,9 +32,18 @@ import {
   Info,
   AlertTriangle,
 } from "lucide-react";
+
 import { SkeletonRow } from "@/components/common/Skeleton";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
+/* ======================================================================================
+   CONSTANTS
+   ====================================================================================== */
+
+const DRAFT_PAGE_SIZE = 10;
+const REQUEST_PAGE_SIZE = 10;
 
 type DraftPage = {
   content: NewsData[];
@@ -49,9 +60,6 @@ type RequestPage = {
 };
 
 type TabKey = "drafts" | "requests";
-
-const DRAFT_PAGE_SIZE = 10;
-const REQUEST_PAGE_SIZE = 10;
 
 const fmt = (iso?: string | null) =>
   iso ? new Date(iso).toLocaleString("vi-VN") : "—";
@@ -94,14 +102,23 @@ const badgeClass = (s?: string) => {
   }`;
 };
 
+/* ======================================================================================
+   MAIN COMPONENT EXPORT
+   ====================================================================================== */
+
 export default function PresidentNewsList() {
   return <PresidentNewsListImpl />;
 }
 
+/* ======================================================================================
+   IMPLEMENTATION
+   ====================================================================================== */
+
 function PresidentNewsListImpl() {
   const nav = useNavigate();
-  const { clubId: clubIdParam } = useParams();
   const [sp, setSp] = useSearchParams();
+  const { clubId: clubIdParam } = useParams();
+
   const clubId = useMemo(() => {
     const n = Number(clubIdParam);
     return Number.isFinite(n) ? n : null;
@@ -111,58 +128,67 @@ function PresidentNewsListImpl() {
   const { isConnected, subscribeToClub, subscribeToUserQueue } =
     useWebSocket(token);
 
-  // ===== Tabs (requests lên đầu, default = requests) =====
+  /* ======================================================================================
+     STATES
+     ====================================================================================== */
+
   const tabInUrl = (sp.get("tab") as TabKey) || "requests";
   const [tab, setTab] = useState<TabKey>(tabInUrl);
-  useEffect(() => {
-    if (tab !== tabInUrl) {
-      const next = new URLSearchParams(sp);
-      next.set("tab", tab);
-      setSp(next, { replace: true });
-    }
-  }, [tab, tabInUrl, sp, setSp]);
 
-  // Banners (info / error)
   const [info, setInfo] = useState<string | null>(null);
   const [errBanner, setErrBanner] = useState<string | null>(null);
 
-  // Drafts
+  // DRAFTS
   const [drafts, setDrafts] = useState<DraftPage | null>(null);
   const [loadingDrafts, setLoadingDrafts] = useState(false);
   const [doingDraft, setDoingDraft] = useState<number | null>(null);
-  const [draftPageIndex, setDraftPageIndex] = useState(0); // 0-based
+  const [draftPageIndex, setDraftPageIndex] = useState(0);
 
-  // Requests
+  // REQUESTS
   const [reqPage, setReqPage] = useState<RequestPage | null>(null);
   const [loadingReqs, setLoadingReqs] = useState(false);
   const [doingReq, setDoingReq] = useState<number | null>(null);
-  const [reqPageIndex, setReqPageIndex] = useState(0); // 0-based
+  const [reqPageIndex, setReqPageIndex] = useState(0);
   const [kw, setKw] = useState("");
-  // ✅ default trạng thái = PENDING_CLUB
-  const [status, setStatus] = useState<RequestStatus | "">(
-    "PENDING_UNIVERSITY"
-  );
+  const [status, setStatus] = useState<RequestStatus | "">("PENDING_CLUB");
 
-  // Confirm / Reject modals
   const [confirmState, setConfirmState] = useState<null | {
     type: "submitDraft" | "deleteDraft" | "approveSubmit";
     id: number;
   }>(null);
   const [rejectState, setRejectState] = useState<null | { id: number }>(null);
 
-  // ========= LOAD DATA =========
+  /* ======================================================================================
+     URL TAB SYNC
+     ====================================================================================== */
+
+  useEffect(() => {
+    if (tab !== tabInUrl) {
+      const params = new URLSearchParams(sp);
+      params.set("tab", tab);
+      setSp(params, { replace: true });
+    }
+  }, [tab]);
+
+  /* ======================================================================================
+     LOAD FUNCTIONS
+     ====================================================================================== */
+
   const loadDrafts = async (page?: number) => {
-    const targetPage = typeof page === "number" ? page : draftPageIndex;
+    const p = typeof page === "number" ? page : draftPageIndex;
     setLoadingDrafts(true);
     setErrBanner(null);
+
     try {
       const res = await draftsApi.list({
-        page: targetPage,
+        page: p,
         size: DRAFT_PAGE_SIZE,
         clubId: clubId ?? undefined,
       });
+
       const body = (res as any)?.data ?? res;
       const pageData: PageResp<NewsData> | undefined = body?.data ?? body;
+
       setDrafts({
         content: pageData?.content ?? [],
         totalElements:
@@ -170,9 +196,10 @@ function PresidentNewsListImpl() {
         size: pageData?.size,
         number: pageData?.number,
       });
-      setDraftPageIndex(targetPage);
+
+      setDraftPageIndex(p);
     } catch (e: any) {
-      setErrBanner(e?.message || "Không tải được danh sách bản nháp.");
+      setErrBanner(e?.message || "Không tải được danh sách nháp.");
     } finally {
       setLoadingDrafts(false);
     }
@@ -180,7 +207,7 @@ function PresidentNewsListImpl() {
 
   const loadReqs = async (
     page?: number,
-    overrides?: { kw?: string; status?: RequestStatus | "" }
+    override?: { kw?: string; status?: RequestStatus | "" }
   ) => {
     if (!clubId) {
       setReqPage({
@@ -192,42 +219,33 @@ function PresidentNewsListImpl() {
       return;
     }
 
-    const targetPage = typeof page === "number" ? page : reqPageIndex;
+    const p = typeof page === "number" ? page : reqPageIndex;
     setLoadingReqs(true);
     setErrBanner(null);
 
-    // ✅ dùng giá trị override nếu có, không thì dùng state hiện tại
-    const currentKw = overrides?.kw ?? kw;
-    const currentStatus = overrides?.status ?? status;
+    const curKw = override?.kw ?? kw;
+    const curStatus = override?.status ?? status;
 
     try {
       const pageObj: any = await requestsApi.search({
         clubId,
-        page: targetPage + 1, // BE: page = 1-based
+        page: p + 1,
         size: REQUEST_PAGE_SIZE,
-        keyword: currentKw || undefined,
-        status: (currentStatus as RequestStatus) || undefined,
+        keyword: curKw || undefined,
+        status: (curStatus as RequestStatus) || undefined,
       });
-
-      console.log("=== PAGE OBJ ===", pageObj);
 
       const content = Array.isArray(pageObj.data) ? pageObj.data : [];
       const total = pageObj.total ?? content.length;
-      const size = pageObj.size ?? REQUEST_PAGE_SIZE;
-      const number =
-        typeof pageObj.page === "number" ? pageObj.page - 1 : targetPage;
-
-      console.log("ReqContent:", content.length);
-      console.log("totalElements:", total);
-      console.log("page(number):", number);
-      console.log("reqTotalPages =", Math.ceil(total / REQUEST_PAGE_SIZE));
+      const number = typeof pageObj.page === "number" ? pageObj.page - 1 : p;
 
       setReqPage({
         content,
         totalElements: total,
-        size,
+        size: REQUEST_PAGE_SIZE,
         number,
       });
+
       setReqPageIndex(number);
     } catch (e: any) {
       setErrBanner(e?.message || "Không tải được danh sách request.");
@@ -236,113 +254,74 @@ function PresidentNewsListImpl() {
     }
   };
 
-  // Load theo tab (không auto theo kw/status để tránh spam → nhưng lần đầu vẫn load với default)
+  /* ======================================================================================
+     INIT LOAD
+     ====================================================================================== */
+
   useEffect(() => {
     if (!clubId) return;
-    if (tab === "drafts") loadDrafts(draftPageIndex);
-    else loadReqs(reqPageIndex);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    tab === "drafts" ? loadDrafts() : loadReqs();
   }, [tab, clubId]);
 
-  // ✅ Debounce tìm kiếm keyword: gõ xong tự filter sau 400ms
+  /* ======================================================================================
+     DEBOUNCE SEARCH
+     ====================================================================================== */
+
   useEffect(() => {
     if (!clubId || tab !== "requests") return;
-    const handle = setTimeout(() => {
+
+    const h = setTimeout(() => {
       setReqPageIndex(0);
       loadReqs(0, { kw });
     }, 400);
 
-    return () => clearTimeout(handle);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => clearTimeout(h);
   }, [kw, clubId, tab]);
 
-  // ===== Realtime via WebSocket =====
+  /* ======================================================================================
+     WEBSOCKET
+     ====================================================================================== */
+
   useEffect(() => {
     if (!isConnected || !clubId) return;
 
     const offClub = subscribeToClub(clubId, (msg) => {
-      if (msg.type === "NEWS_DRAFT") {
-        if (["SUBMITTED", "DELETED", "UPDATED"].includes(msg.action)) {
-          loadDrafts();
-          loadReqs();
-          if (msg.action === "SUBMITTED")
-            setInfo("Một bản nháp vừa được submit thành request.");
-          if (msg.action === "DELETED") setInfo("Một bản nháp vừa được xóa.");
-          if (msg.action === "UPDATED")
-            setInfo("Một bản nháp vừa được cập nhật.");
-        }
-      }
-      if (msg.type === "NEWS_REQUEST") {
-        if (
-          [
-            "CREATED",
-            "UPDATED",
-            "APPROVED_CLUB",
-            "REJECTED_CLUB",
-            "PENDING_UNIVERSITY",
-            "CANCELED",
-          ].includes(msg.action)
-        ) {
-          loadReqs();
-          const map: Record<string, string> = {
-            CREATED: "Vừa có request mới.",
-            UPDATED: "Request vừa được cập nhật.",
-            APPROVED_CLUB: "Request đã được duyệt ở cấp CLB.",
-            REJECTED_CLUB: "Request đã bị từ chối ở cấp CLB.",
-            PENDING_UNIVERSITY: "Request đã gửi lên cấp Trường.",
-            CANCELED: "Request đã bị hủy.",
-          };
-          setInfo(map[msg.action] || "Request thay đổi trạng thái.");
-        }
-      }
+      if (msg.type === "NEWS_DRAFT") loadDrafts();
+      if (msg.type === "NEWS_REQUEST") loadReqs();
     });
 
-    const offMe = subscribeToUserQueue((msg) => {
-      if (msg.type === "NEWS_REQUEST") {
-        if (["APPROVED_CLUB", "REJECTED_CLUB"].includes(msg.action)) {
-          loadReqs();
-        }
-      }
-    });
+    const offMe = subscribeToUserQueue(() => loadReqs());
 
     return () => {
       offClub?.();
       offMe?.();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isConnected, clubId, subscribeToClub, subscribeToUserQueue]);
+  }, [isConnected, clubId]);
 
-  // ===== Actions =====
-  const onEditDraft = (d: NewsData) => {
-    if (!clubId) {
-      setErrBanner("Thiếu clubId trên URL.");
-      return;
-    }
+  /* ======================================================================================
+     ACTION HANDLERS
+     ====================================================================================== */
+
+  const onEditDraft = (d: NewsData) =>
     nav(`/myclub/${clubId}/news-editor?draftId=${d.id}`, {
       state: { draft: d },
     });
-  };
 
-  const onSubmitDraft = (newsId: number) => {
-    setConfirmState({ type: "submitDraft", id: newsId });
-  };
+  const onSubmitDraft = (id: number) =>
+    setConfirmState({ type: "submitDraft", id });
 
-  const onDeleteDraft = (newsId: number) => {
-    setConfirmState({ type: "deleteDraft", id: newsId });
-  };
+  const onDeleteDraft = (id: number) =>
+    setConfirmState({ type: "deleteDraft", id });
 
-  const onApproveSubmit = (reqId: number) => {
-    setConfirmState({ type: "approveSubmit", id: reqId });
-  };
+  const onApproveSubmit = (id: number) =>
+    setConfirmState({ type: "approveSubmit", id });
 
-  const onReject = (r: NewsRequest) => {
-    setRejectState({ id: r.id });
-  };
+  const onReject = (req: NewsRequest) => setRejectState({ id: req.id });
 
-  // Xử lý confirm OK
   const handleConfirmOk = async () => {
     if (!confirmState) return;
     const { type, id } = confirmState;
+
     setConfirmState(null);
     setInfo(null);
     setErrBanner(null);
@@ -352,169 +331,362 @@ function PresidentNewsListImpl() {
         setDoingDraft(id);
         await draftsApi.submit(id);
         setInfo("Đã submit bản nháp thành request.");
-        await loadDrafts(draftPageIndex);
-        await loadReqs(reqPageIndex);
+        await loadDrafts();
+        await loadReqs();
       } else if (type === "deleteDraft") {
         setDoingDraft(id);
         await draftsApi.remove(id);
         setInfo("Đã xóa bản nháp.");
-        await loadDrafts(draftPageIndex);
+        await loadDrafts();
       } else if (type === "approveSubmit") {
         setDoingReq(id);
         await requestsApi.clubApproveAndSubmit(id);
-        setInfo("Đã duyệt và gửi lên Staff.");
-        await loadReqs(reqPageIndex);
-        await loadDrafts(draftPageIndex);
+        setInfo("Đã duyệt & gửi request lên Staff.");
+        await loadReqs();
       }
     } catch (e: any) {
-      setErrBanner(e?.message || "Có lỗi khi thực hiện thao tác.");
+      setErrBanner(e.message || "Có lỗi xảy ra.");
     } finally {
       setDoingDraft(null);
       setDoingReq(null);
     }
   };
 
-  const handleConfirmCancel = () => setConfirmState(null);
-
-  // Xử lý reject modal
   const handleRejectOk = async (
     reason: string,
-    setReasonErr: (s: string | null) => void
+    setErr: (msg: string | null) => void
   ) => {
     if (!rejectState) return;
+
     if (!reason.trim()) {
-      setReasonErr("Vui lòng nhập lý do từ chối.");
+      setErr("Vui lòng nhập lý do từ chối.");
       return;
     }
-    setReasonErr(null);
+
     const id = rejectState.id;
     setRejectState(null);
     setDoingReq(id);
-    setInfo(null);
-    setErrBanner(null);
+
     try {
-      await requestsApi.clubPresidentReject(id, { reason: reason.trim() });
+      await requestsApi.clubPresidentReject(id, { reason });
       setInfo("Đã từ chối request.");
-      await loadReqs(reqPageIndex);
+      await loadReqs();
     } catch (e: any) {
-      setErrBanner(e?.message || "Không từ chối được.");
+      setErrBanner(e.message || "Không thể từ chối.");
     } finally {
       setDoingReq(null);
     }
   };
 
-  // ===== Header & Tabs =====
-  const Header = (
-    <header className="sticky top-0 z-10 bg-white/70 backdrop-blur supports-[backdrop-filter]:bg-white/60 border-b">
-      <div className="max-w-none mx-auto flex items-center justify-between py-4 px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center gap-3">
-          <FileText className="h-6 w-6 text-orange-600" />
-          <h1 className="text-3xl font-semibold text-slate-900">
-            Quản lý tin tức
-          </h1>
-        </div>
-        {clubId && (
-          <Link
-            to={`/myclub/${clubId}/news-editor`}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-orange-600 text-white hover:bg-orange-700 shadow-sm active:scale-[.99] transition-colors"
-          >
-            <Plus className="h-4 w-4" /> Tạo News
-          </Link>
-        )}
-      </div>
-    </header>
-  );
+  /* ======================================================================================
+     UI HELPER COMPONENTS
+     ====================================================================================== */
 
-  const Tabs = (
-    <div className="flex items-center justify-between gap-4 flex-wrap">
-      <div className="inline-flex p-1 rounded-xl border bg-white shadow-sm">
-        <TabButton
-          active={tab === "requests"}
-          onClick={() => setTab("requests")}
-        >
-          Danh sách yêu cầu tin tức
-        </TabButton>
-        <TabButton active={tab === "drafts"} onClick={() => setTab("drafts")}>
-          Bản nháp tin tức
-        </TabButton>
-      </div>
-      {tab === "requests" && (
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative">
-            <input
-              className="border rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/40"
-              placeholder="Tìm kiếm…"
-              value={kw}
-              onChange={(e) => setKw(e.target.value)}
-            />
-            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-          </div>
-          <select
-            className="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/40"
-            value={status}
-            onChange={(e) => {
-              const newStatus = e.target.value as RequestStatus | "";
-              setStatus(newStatus);
-              setReqPageIndex(0);
-              // ✅ đổi option là filter luôn
-              loadReqs(0, { status: newStatus });
-            }}
+  const ActionBtn = ({
+    icon,
+    title,
+    onClick,
+    loading,
+    variant = "default",
+  }: {
+    icon: React.ReactNode;
+    title: string;
+    onClick?: () => void;
+    loading?: boolean;
+    variant?: "default" | "success" | "danger";
+  }) => {
+    const base =
+      "p-2 rounded-lg hover:bg-slate-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed";
+    const theme =
+      variant === "success"
+        ? "text-emerald-600 hover:bg-emerald-50"
+        : variant === "danger"
+          ? "text-rose-600 hover:bg-rose-50"
+          : "text-slate-600 hover:bg-slate-100";
+
+    return (
+      <button
+        title={title}
+        className={`${base} ${theme}`}
+        disabled={loading}
+        onClick={onClick}
+      >
+        {loading ? <RefreshCw className="h-4 w-4 animate-spin" /> : icon}
+      </button>
+    );
+  };
+
+  const TablePagination = ({
+    page,
+    totalPages,
+    onChange,
+  }: {
+    page: number;
+    totalPages: number;
+    onChange: (page: number) => void;
+  }) => {
+    if (totalPages <= 1) return null;
+
+    const current = page + 1;
+    const pages: number[] = [];
+    const max = 5;
+
+    if (totalPages <= max) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else if (current <= 3) {
+      for (let i = 1; i <= max; i++) pages.push(i);
+    } else if (current >= totalPages - 2) {
+      for (let i = totalPages - 4; i <= totalPages; i++) pages.push(i);
+    } else {
+      for (let i = current - 2; i <= current + 2; i++) pages.push(i);
+    }
+
+    return (
+      <div className="flex items-center justify-between px-6 py-3 border-t bg-slate-50 text-sm text-slate-600">
+        <span>
+          Trang {current} / {totalPages}
+        </span>
+
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onChange(page - 1)}
+            disabled={current === 1}
           >
-            {STATUS_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
+            Trước
+          </Button>
+
+          <div className="flex items-center gap-1">
+            {pages.map((p) => (
+              <Button
+                key={p}
+                variant={current === p ? "default" : "outline"}
+                size="sm"
+                onClick={() => onChange(p - 1)}
+                className="w-10 h-10"
+              >
+                {p}
+              </Button>
             ))}
-          </select>
-          <button
-            className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border hover:bg-slate-50 transition-colors"
-            onClick={() => {
-              const defaultStatus: RequestStatus | "" = "PENDING_CLUB";
-              setKw("");
-              setStatus(defaultStatus);
-              setReqPageIndex(0);
-              loadReqs(0, { kw: "", status: defaultStatus });
-            }}
+          </div>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onChange(page + 1)}
+            disabled={current === totalPages}
           >
-            Đặt lại
+            Sau
+          </Button>
+        </div>
+      </div>
+    );
+  };
+
+  const ConfirmModal = ({
+    title,
+    message,
+    onOk,
+    onCancel,
+    okText = "Xác nhận",
+    cancelText = "Hủy",
+    okVariant = "primary",
+  }: {
+    title: string;
+    message: string;
+    onOk: () => void;
+    onCancel: () => void;
+    okText?: string;
+    cancelText?: string;
+    okVariant?: "primary" | "danger";
+  }) => (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/30" onClick={onCancel} />
+      <div className="relative w-full max-w-md rounded-2xl bg-white shadow-xl p-5">
+        <h3 className="text-base font-semibold text-slate-900">{title}</h3>
+        <p className="mt-2 text-sm text-slate-700">{message}</p>
+        <div className="mt-4 flex justify-end gap-2">
+          <button
+            className="px-3 py-1.5 rounded-lg border hover:bg-slate-50"
+            onClick={onCancel}
+          >
+            {cancelText}
+          </button>
+          <button
+            onClick={onOk}
+            className={`px-3 py-1.5 rounded-lg text-white ${
+              okVariant === "danger"
+                ? "bg-rose-600 hover:bg-rose-700"
+                : "bg-indigo-600 hover:bg-indigo-700"
+            }`}
+          >
+            {okText}
           </button>
         </div>
-      )}
+      </div>
     </div>
   );
 
-  // ===== Helper cho render =====
+  const RejectModal = ({
+    requestId,
+    onOk,
+    onCancel,
+  }: {
+    requestId: number;
+    onOk: (reason: string, setErr: (msg: string | null) => void) => void;
+    onCancel: () => void;
+  }) => {
+    const [reason, setReason] = useState("");
+    const [err, setErr] = useState<string | null>(null);
+
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center">
+        <div className="absolute inset-0 bg-black/30" onClick={onCancel} />
+        <div className="relative w-full max-w-md rounded-2xl bg-white shadow-xl p-5">
+          <h3 className="text-base font-semibold text-slate-900">
+            Từ chối request #{requestId}
+          </h3>
+          <div className="mt-3">
+            <label className="text-sm font-medium text-slate-700">
+              Lý do từ chối
+            </label>
+            <textarea
+              className={`mt-1 w-full min-h-[90px] border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 ${
+                err
+                  ? "border-rose-300 focus:ring-rose-200"
+                  : "focus:ring-indigo-200"
+              }`}
+              placeholder="Nhập lý do…"
+              value={reason}
+              onChange={(e) => {
+                setReason(e.target.value);
+                if (err && e.target.value.trim()) setErr(null);
+              }}
+            />
+            {err && <p className="mt-1 text-xs text-rose-600">{err}</p>}
+          </div>
+          <div className="mt-4 flex justify-end gap-2">
+            <button
+              className="px-3 py-1.5 rounded-lg border hover:bg-slate-50"
+              onClick={onCancel}
+            >
+              Hủy
+            </button>
+            <button
+              onClick={() => onOk(reason, setErr)}
+              className="px-3 py-1.5 rounded-lg text-white bg-rose-600 hover:bg-rose-700"
+            >
+              Từ chối
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  /* ======================================================================================
+     PAGE RENDER
+     ====================================================================================== */
+
   const draftsContent = drafts?.content ?? [];
-  const draftTotalPages =
-    drafts && drafts.totalElements
-      ? Math.max(1, Math.ceil(drafts.totalElements / DRAFT_PAGE_SIZE))
-      : 1;
+  const draftPages = drafts?.totalElements
+    ? Math.ceil(drafts.totalElements / DRAFT_PAGE_SIZE)
+    : 1;
 
   const reqs = reqPage?.content ?? [];
-  const reqTotalPages =
-    reqPage && reqPage.totalElements
-      ? Math.max(1, Math.ceil(reqPage.totalElements / REQUEST_PAGE_SIZE))
-      : 1;
+  const reqPages = reqPage?.totalElements
+    ? Math.ceil(reqPage.totalElements / REQUEST_PAGE_SIZE)
+    : 1;
 
   return (
     <div className="px-4 sm:px-6 lg:px-8 py-4 space-y-6 max-w-none mx-auto">
-      {Header}
+      {/* ==================================================================================
+         HEADER + TABS + TOOLBAR (GIỐNG STAFF)
+         ================================================================================== */}
 
-      {/* Banners */}
+      <div className="mb-8">
+        <div className="flex items-center justify-between">
+          <h1 className="text-3xl font-bold text-foreground">TIN TỨC</h1>
+        </div>
+        <p className="text-muted-foreground">
+          Quản lý tin tức và yêu cầu của CLB
+        </p>
+      </div>
+
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        {/* Tabs */}
+        <Tabs value={tab} onValueChange={(v) => setTab(v as TabKey)}>
+          <TabsList className="grid w-max grid-cols-2 gap-2">
+            <TabsTrigger value="requests">Yêu cầu</TabsTrigger>
+            <TabsTrigger value="drafts">Bản nháp</TabsTrigger>
+          </TabsList>
+        </Tabs>
+
+        {/* Toolbar theo tab */}
+        {tab === "requests" && (
+          <div className="flex items-center gap-3 flex-1 justify-end">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+
+              <input
+                placeholder="Tìm theo tiêu đề, mô tả…"
+                value={kw}
+                onChange={(e) => setKw(e.target.value)}
+                className="pl-9 pr-3 py-2 border rounded-lg text-sm w-full focus:outline-none focus:ring-2 focus:ring-orange-500/40"
+              />
+            </div>
+
+            <select
+              className="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/40"
+              value={status}
+              onChange={(e) => {
+                const s = e.target.value as RequestStatus | "";
+                setStatus(s);
+                setReqPageIndex(0);
+                loadReqs(0, { status: s });
+              }}
+            >
+              {STATUS_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {clubId && (
+          <Link
+            to={`/myclub/${clubId}/news-editor`}
+            className="px-3 py-2 rounded bg-orange-500 hover:bg-orange-600 text-white flex items-center gap-2"
+          >
+            <Plus className="h-4 w-4" />
+            Tạo tin tức
+          </Link>
+        )}
+      </div>
+
+      {/* ==================================================================================
+         INFO & ERROR BANNER
+         ================================================================================== */}
+
       {info && (
         <div className="flex items-center gap-2 bg-blue-50 text-blue-700 px-3 py-2 rounded-lg border border-blue-200">
           <Info className="h-4 w-4" /> <span>{info}</span>
         </div>
       )}
+
       {errBanner && (
         <div className="flex items-center gap-2 bg-rose-50 text-rose-700 px-3 py-2 rounded-lg border border-rose-200">
           <AlertTriangle className="h-4 w-4" /> <span>{errBanner}</span>
         </div>
       )}
 
-      {Tabs}
+      {/* ==================================================================================
+         TAB CONTENT
+         ================================================================================== */}
 
-      {/* ===== TAB DRAFTS ===== */}
       {tab === "drafts" ? (
         <div className="overflow-x-auto border rounded-lg bg-white shadow-sm">
           {loadingDrafts ? (
@@ -597,7 +769,7 @@ function PresidentNewsListImpl() {
                         <div className="w-14 h-14 rounded-lg bg-slate-100 overflow-hidden flex items-center justify-center flex-shrink-0">
                           {d.thumbnailUrl ? (
                             <img
-                              src={d.thumbnailUrl || "/placeholder.svg"}
+                              src={d.thumbnailUrl}
                               alt=""
                               className="w-full h-full object-cover"
                             />
@@ -606,26 +778,31 @@ function PresidentNewsListImpl() {
                           )}
                         </div>
                       </td>
+
                       <td className="px-6 py-4">
                         <div className="line-clamp-2 font-medium text-slate-900">
                           {d.title}
                         </div>
                       </td>
+
                       <td className="px-6 py-4">
                         <div className="text-sm text-slate-700">
                           {d.clubName || "—"}
                         </div>
                       </td>
+
                       <td className="px-6 py-4">
                         <span className={badgeClass("DRAFT")}>
                           {VN_STATUS.DRAFT}
                         </span>
                       </td>
+
                       <td className="px-6 py-4">
                         <div className="text-sm text-slate-600">
                           {fmt(d.updatedAt)}
                         </div>
                       </td>
+
                       <td className="px-6 py-4">
                         <div className="flex items-center justify-center gap-2">
                           <ActionBtn
@@ -635,11 +812,13 @@ function PresidentNewsListImpl() {
                               nav(`/myclub/${clubId}/news/drafts/${d.id}`)
                             }
                           />
+
                           <ActionBtn
                             icon={<Pencil className="h-4 w-4" />}
                             title="Sửa"
                             onClick={() => onEditDraft(d)}
                           />
+
                           <ActionBtn
                             icon={<Send className="h-4 w-4" />}
                             title="Submit"
@@ -647,6 +826,7 @@ function PresidentNewsListImpl() {
                             onClick={() => onSubmitDraft(d.id)}
                             variant="success"
                           />
+
                           <ActionBtn
                             icon={<Trash2 className="h-4 w-4" />}
                             title="Xóa"
@@ -660,16 +840,20 @@ function PresidentNewsListImpl() {
                   ))}
                 </tbody>
               </table>
+
               <TablePagination
                 page={draftPageIndex}
-                totalPages={draftTotalPages}
+                totalPages={draftPages}
                 onChange={(next) => loadDrafts(next)}
               />
             </>
           )}
         </div>
       ) : (
-        // ===== TAB REQUESTS =====
+        /* ==================================================================================
+           REQUESTS TAB
+           ================================================================================== */
+
         <div className="overflow-x-auto border rounded-lg bg-white shadow-sm">
           {loadingReqs ? (
             <table className="w-full">
@@ -741,6 +925,7 @@ function PresidentNewsListImpl() {
                     </th>
                   </tr>
                 </thead>
+
                 <tbody className="divide-y">
                   {reqs.map((r) => (
                     <tr
@@ -751,7 +936,7 @@ function PresidentNewsListImpl() {
                         <div className="w-14 h-14 rounded-lg bg-slate-100 overflow-hidden flex items-center justify-center flex-shrink-0">
                           {r.thumbnailUrl ? (
                             <img
-                              src={r.thumbnailUrl || "/placeholder.svg"}
+                              src={r.thumbnailUrl}
                               alt=""
                               className="w-full h-full object-cover"
                             />
@@ -760,11 +945,13 @@ function PresidentNewsListImpl() {
                           )}
                         </div>
                       </td>
+
                       <td className="px-6 py-4">
                         <div className="line-clamp-2 font-medium text-slate-900">
                           {r.requestTitle}
                         </div>
                       </td>
+
                       <td className="px-6 py-4">
                         <div className="space-y-0.5">
                           <p className="text-sm font-semibold text-slate-900">
@@ -775,16 +962,19 @@ function PresidentNewsListImpl() {
                           </p>
                         </div>
                       </td>
+
                       <td className="px-6 py-4">
                         <span className={badgeClass(r.status)}>
                           {VN_STATUS[r.status] || r.status}
                         </span>
                       </td>
+
                       <td className="px-6 py-4">
                         <div className="text-sm text-slate-600">
                           {fmt(r.requestDate)}
                         </div>
                       </td>
+
                       <td className="px-6 py-4">
                         <div className="flex items-center justify-center gap-2">
                           <ActionBtn
@@ -794,6 +984,7 @@ function PresidentNewsListImpl() {
                               nav(`/myclub/${clubId}/news/requests/${r.id}`)
                             }
                           />
+
                           {r.status === "PENDING_CLUB" && (
                             <>
                               <ActionBtn
@@ -803,6 +994,7 @@ function PresidentNewsListImpl() {
                                 onClick={() => onApproveSubmit(r.id)}
                                 variant="success"
                               />
+
                               <ActionBtn
                                 icon={<XCircle className="h-4 w-4" />}
                                 title="Từ chối"
@@ -818,9 +1010,10 @@ function PresidentNewsListImpl() {
                   ))}
                 </tbody>
               </table>
+
               <TablePagination
                 page={reqPageIndex}
-                totalPages={reqTotalPages}
+                totalPages={reqPages}
                 onChange={(next) => loadReqs(next)}
               />
             </>
@@ -828,17 +1021,20 @@ function PresidentNewsListImpl() {
         </div>
       )}
 
-      {/* Confirm modal */}
+      {/* ==================================================================================
+         MODALS
+         ================================================================================== */}
+
       {confirmState && (
         <ConfirmModal
-          onCancel={handleConfirmCancel}
+          onCancel={() => setConfirmState(null)}
           onOk={handleConfirmOk}
           title={
             confirmState.type === "submitDraft"
               ? "Submit bản nháp"
               : confirmState.type === "deleteDraft"
                 ? "Xóa bản nháp"
-                : "Duyệt & gửi lên Staff"
+                : "Duyệt & gửi request lên Staff"
           }
           message={
             confirmState.type === "submitDraft"
@@ -852,247 +1048,13 @@ function PresidentNewsListImpl() {
         />
       )}
 
-      {/* Reject modal */}
       {rejectState && (
         <RejectModal
+          requestId={rejectState.id}
           onCancel={() => setRejectState(null)}
           onOk={handleRejectOk}
-          requestId={rejectState.id}
         />
       )}
-    </div>
-  );
-}
-
-function TabButton({
-  active,
-  children,
-  onClick,
-}: {
-  active: boolean;
-  children: React.ReactNode;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`px-3 py-2 rounded-lg text-sm transition-colors ${
-        active
-          ? "bg-orange-600 text-white shadow-sm"
-          : "bg-white text-slate-700 hover:bg-slate-50"
-      }`}
-    >
-      {children}
-    </button>
-  );
-}
-
-function ActionBtn({
-  icon,
-  title,
-  onClick,
-  loading,
-  variant = "default",
-}: {
-  icon: React.ReactNode;
-  title: string;
-  onClick?: () => void;
-  loading?: boolean;
-  variant?: "default" | "success" | "danger";
-}) {
-  const baseStyles =
-    "p-2 rounded-lg hover:bg-slate-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed";
-  const variantStyles =
-    variant === "success"
-      ? "text-emerald-600 hover:bg-emerald-50"
-      : variant === "danger"
-        ? "text-rose-600 hover:bg-rose-50"
-        : "text-slate-600 hover:bg-slate-100";
-
-  return (
-    <button
-      title={title}
-      className={`${baseStyles} ${variantStyles}`}
-      disabled={loading}
-      onClick={onClick}
-    >
-      {loading ? <RefreshCw className="h-4 w-4 animate-spin" /> : icon}
-    </button>
-  );
-}
-
-/* ===== Pagination nhỏ gọn ===== */
-function TablePagination({
-  page,
-  totalPages,
-  onChange,
-}: {
-  page: number; // 0-based
-  totalPages: number;
-  onChange: (page: number) => void;
-}) {
-  if (totalPages <= 1) return null;
-
-  const current = page + 1;
-
-  const pages: number[] = [];
-  const maxButtons = 5;
-
-  if (totalPages <= maxButtons) {
-    for (let i = 1; i <= totalPages; i++) pages.push(i);
-  } else if (current <= 3) {
-    for (let i = 1; i <= maxButtons; i++) pages.push(i);
-  } else if (current >= totalPages - 2) {
-    for (let i = totalPages - 4; i <= totalPages; i++) pages.push(i);
-  } else {
-    for (let i = current - 2; i <= current + 2; i++) pages.push(i);
-  }
-
-  return (
-    <div className="flex items-center justify-between px-6 py-3 border-t bg-slate-50 text-sm text-slate-600">
-      <span>
-        Trang {current} / {totalPages}
-      </span>
-
-      <div className="flex items-center gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => onChange(page - 1)}
-          disabled={current === 1}
-        >
-          Trước
-        </Button>
-
-        <div className="flex items-center gap-1">
-          {pages.map((p) => (
-            <Button
-              key={p}
-              variant={current === p ? "default" : "outline"}
-              size="sm"
-              onClick={() => onChange(p - 1)} // convert về 0-based
-              className="w-10 h-10"
-            >
-              {p}
-            </Button>
-          ))}
-        </div>
-
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => onChange(page + 1)}
-          disabled={current === totalPages}
-        >
-          Sau
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-/* ===== Lightweight modals ===== */
-function ConfirmModal({
-  title,
-  message,
-  onOk,
-  onCancel,
-  okText = "Xác nhận",
-  cancelText = "Hủy",
-  okVariant = "primary",
-}: {
-  title: string;
-  message: string;
-  onOk: () => void;
-  onCancel: () => void;
-  okText?: string;
-  cancelText?: string;
-  okVariant?: "primary" | "danger";
-}) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/30" onClick={onCancel} />
-      <div className="relative w-full max-w-md rounded-2xl bg-white shadow-xl p-5">
-        <h3 className="text-base font-semibold text-slate-900">{title}</h3>
-        <p className="mt-2 text-sm text-slate-700">{message}</p>
-        <div className="mt-4 flex justify-end gap-2">
-          <button
-            className="px-3 py-1.5 rounded-lg border hover:bg-slate-50"
-            onClick={onCancel}
-          >
-            {cancelText}
-          </button>
-          <button
-            onClick={onOk}
-            className={`px-3 py-1.5 rounded-lg text-white ${
-              okVariant === "danger"
-                ? "bg-rose-600 hover:bg-rose-700"
-                : "bg-indigo-600 hover:bg-indigo-700"
-            }`}
-          >
-            {okText}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function RejectModal({
-  requestId,
-  onOk,
-  onCancel,
-}: {
-  requestId: number;
-  onOk: (reason: string, setReasonErr: (s: string | null) => void) => void;
-  onCancel: () => void;
-}) {
-  const [reason, setReason] = useState("");
-  const [reasonErr, setReasonErr] = useState<string | null>(null);
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/30" onClick={onCancel} />
-      <div className="relative w-full max-w-md rounded-2xl bg-white shadow-xl p-5">
-        <h3 className="text-base font-semibold text-slate-900">
-          Từ chối request #{requestId}
-        </h3>
-        <div className="mt-3">
-          <label className="text-sm font-medium text-slate-700">
-            Lý do từ chối
-          </label>
-          <textarea
-            className={`mt-1 w-full min-h-[90px] border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 ${
-              reasonErr
-                ? "border-rose-300 focus:ring-rose-200"
-                : "focus:ring-indigo-200"
-            }`}
-            placeholder="Nhập lý do…"
-            value={reason}
-            onChange={(e) => {
-              setReason(e.target.value);
-              if (reasonErr && e.target.value.trim()) setReasonErr(null);
-            }}
-          />
-          {reasonErr && (
-            <p className="mt-1 text-xs text-rose-600">{reasonErr}</p>
-          )}
-        </div>
-        <div className="mt-4 flex justify-end gap-2">
-          <button
-            className="px-3 py-1.5 rounded-lg border hover:bg-slate-50"
-            onClick={onCancel}
-          >
-            Hủy
-          </button>
-          <button
-            onClick={() => onOk(reason, setReasonErr)}
-            className="px-3 py-1.5 rounded-lg text-white bg-rose-600 hover:bg-rose-700"
-          >
-            Từ chối
-          </button>
-        </div>
-      </div>
     </div>
   );
 }

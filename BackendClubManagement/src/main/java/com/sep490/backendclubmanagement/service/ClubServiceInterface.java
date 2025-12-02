@@ -9,6 +9,7 @@ import com.sep490.backendclubmanagement.dto.response.ClubManagementResponse;
 import com.sep490.backendclubmanagement.dto.response.PageResponse;
 import com.sep490.backendclubmanagement.exception.AppException;
 import org.springframework.data.domain.Pageable;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -112,10 +113,12 @@ public interface ClubServiceInterface {
      * @param clubId Club ID
      * @param request Update request with club information
      * @param userId User ID (must be club officer)
+     * @param logoFile Logo file (optional)
+     * @param bannerFile Banner file (optional)
      * @return Updated ClubDetailData
      * @throws AppException if club not found, validation fails, or user is not club officer
      */
-    ClubDetailData updateClubInfo(Long clubId, UpdateClubInfoRequest request, Long userId) throws AppException;
+    ClubDetailData updateClubInfo(Long clubId, UpdateClubInfoRequest request, Long userId, MultipartFile logoFile, MultipartFile bannerFile) throws AppException;
 }
 
 

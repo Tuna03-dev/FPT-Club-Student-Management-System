@@ -144,6 +144,14 @@ public class ClubManagementService {
      */
     @Transactional(readOnly = true)
     public List<ClubRoleInfo> getUserClubRoles(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with id " + userId));
+
+        // Adjust this check if your User entity uses a different field/name for active status
+        if (!user.getIsActive()) {
+            throw new ResourceNotFoundException("User is not active.");
+        }
+
         Semester currentSemester = semesterRepository.findCurrentSemester()
                 .orElseThrow(() -> new ResourceNotFoundException("Current semester not found."));
 

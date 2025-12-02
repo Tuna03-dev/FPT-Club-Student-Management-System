@@ -40,6 +40,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
+import { authService } from "@/services/authService";
 
 // Helper function to map BE status to FE status
 const mapStatusToFE = (status: string): ClubRequest["status"] => {
@@ -75,10 +84,10 @@ const getStepCodeFromStatus = (status: string): string | null => {
     CONTACT_CONFIRMATION_PENDING: "REQUEST_REVIEW",
     CONTACT_CONFIRMED: "REQUEST_REVIEW",
     NAME_REVISION_REQUIRED: "REQUEST_REVIEW",
-    PROPOSAL_REQUIRED: "PROPOSAL_REQUIRED", // Staff đã yêu cầu, đang chờ sinh viên nộp
+    PROPOSAL_REQUIRED: "PROPOSAL_REQUIRED", // Nhân viên phòng IC-PDP đã yêu cầu, đang chờ sinh viên nộp
     PROPOSAL_SUBMITTED: "PROPOSAL_SUBMITTED",
-    PROPOSAL_APPROVED: "PROPOSAL_REVIEW", // Staff đã duyệt đề án
-    PROPOSAL_REJECTED: "PROPOSAL_REVIEW", // Đã trải qua bước staff duyệt (dù bị từ chối)
+    PROPOSAL_APPROVED: "PROPOSAL_REVIEW", // Nhân viên phòng IC-PDP đã duyệt đề án
+    PROPOSAL_REJECTED: "PROPOSAL_REVIEW", // Đã trải qua bước Nhân viên phòng IC-PDP duyệt (dù bị từ chối)
     DEFENSE_SCHEDULE_PROPOSED: "PROPOSE_DEFENSE_TIME",
     DEFENSE_SCHEDULE_APPROVED: "DEFENSE_SCHEDULE_CONFIRMED",
     DEFENSE_SCHEDULE_REJECTED: "PROPOSE_DEFENSE_TIME", // Từ chối lịch bảo vệ vẫn thuộc bước lịch bảo vệ
@@ -90,8 +99,43 @@ const getStepCodeFromStatus = (status: string): string | null => {
 };
 
 // Helper function to calculate current step from status using steps from API
-const getCurrentStep = (status: string, steps: ClubCreationStepResponse[]): number => {
-  if (status === "DRAFT" || status === "REJECTED" || status === "CONTACT_REJECTED") {
+// Calculate currentStep from workflow history (for rejected requests)
+const getCurrentStepFromHistory = (
+  history: WorkflowHistoryResponse[],
+  steps: ClubCreationStepResponse[]
+): number => {
+  if (!history || history.length === 0) {
+    return 1;
+  }
+
+  // Find the highest orderIndex from completed steps in history
+  let maxStep = 1;
+  for (const h of history) {
+    if (h.stepCode) {
+      const step = steps.find((s) => s.code === h.stepCode);
+      if (step && step.orderIndex) {
+        maxStep = Math.max(maxStep, step.orderIndex);
+      }
+    }
+  }
+
+  return maxStep;
+};
+
+const getCurrentStep = (
+  status: string,
+  steps: ClubCreationStepResponse[],
+  workflowHistory?: WorkflowHistoryResponse[]
+): number => {
+  // For rejected requests, calculate from workflow history
+  if (status === "REJECTED" || status === "CONTACT_REJECTED") {
+    if (workflowHistory && workflowHistory.length > 0) {
+      return getCurrentStepFromHistory(workflowHistory, steps);
+    }
+    return 1;
+  }
+
+  if (status === "DRAFT") {
     return 1;
   }
   
@@ -111,7 +155,8 @@ const getCurrentStep = (status: string, steps: ClubCreationStepResponse[]): numb
 // Convert BE response to FE ClubRequest
 const convertToClubRequest = (
   response: RequestEstablishmentResponse,
-  steps: ClubCreationStepResponse[]
+  steps: ClubCreationStepResponse[],
+  workflowHistory?: WorkflowHistoryResponse[]
 ): ClubRequest => {
   return {
     id: response.id.toString(),
@@ -120,7 +165,7 @@ const convertToClubRequest = (
     submittedDate: response.sendDate || response.createdAt,
     rawStatus: response.status,
     status: mapStatusToFE(response.status),
-    currentStep: getCurrentStep(response.status, steps),
+    currentStep: getCurrentStep(response.status, steps, workflowHistory),
     totalSteps: steps.length > 0 ? steps.length : 1,
     reviewer: response.assignedStaffFullName,
   };
@@ -134,6 +179,13 @@ const CreateClubPage = () => {
   );
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  // Pagination state (for client-side pagination of filtered results)
+  // Separate page state for each tab
+  const [pendingPage, setPendingPage] = useState(0);
+  const [completedPage, setCompletedPage] = useState(0);
+  const [rejectedPage, setRejectedPage] = useState(0);
+  const [pageSize] = useState(6);
+
   const [isProposalDialogOpen, setIsProposalDialogOpen] = useState(false);
   const [isDefenseScheduleDialogOpen, setIsDefenseScheduleDialogOpen] = useState(false);
   const [isFinalFormDialogOpen, setIsFinalFormDialogOpen] = useState(false);
@@ -150,6 +202,8 @@ const CreateClubPage = () => {
   const [nameRevisionRequestId, setNameRevisionRequestId] = useState<number | null>(null);
   const [nameRevisionValue, setNameRevisionValue] = useState("");
   const [nameRevisionError, setNameRevisionError] = useState("");
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [deleteRequestId, setDeleteRequestId] = useState<number | null>(null);
 
   // Proposal form state
   const [proposalTitle, setProposalTitle] = useState("");
@@ -196,12 +250,12 @@ const CreateClubPage = () => {
       switch (msg.action) {
         case "REQUEST_ASSIGNED":
           toast.info("Yêu cầu của bạn đã được nhận", {
-            description: `Staff ${payload.assignedStaffName} đã nhận yêu cầu. Hạn xác nhận: ${payload.deadline ? new Date(payload.deadline).toLocaleString("vi-VN") : "N/A"}`,
+            description: `Nhân viên phòng IC-PDP ${payload.assignedStaffName} đã nhận yêu cầu. Hạn xác nhận: ${payload.deadline ? new Date(payload.deadline).toLocaleString("vi-VN") : "N/A"}`,
           });
           break;
         case "CONTACT_CONFIRMED":
           toast.success("Liên hệ đã được xác nhận", {
-            description: payload.message || "Staff đã xác nhận liên hệ với bạn",
+            description: payload.message || "Nhân viên phòng IC-PDP đã xác nhận liên hệ với bạn",
           });
           break;
         case "CONTACT_REJECTED":
@@ -211,12 +265,12 @@ const CreateClubPage = () => {
           break;
         case "PROPOSAL_REQUIRED":
           toast.warning("Yêu cầu nộp đề án", {
-            description: payload.comment || payload.message || "Staff yêu cầu bạn nộp đề án chi tiết",
+            description: payload.comment || payload.message || "Nhân viên phòng IC-PDP yêu cầu bạn nộp đề án chi tiết",
           });
           break;
         case "NAME_REVISION_REQUIRED":
           toast.warning("Cần cập nhật tên CLB", {
-            description: payload.comment || payload.message || "Staff yêu cầu bạn chỉnh sửa tên CLB",
+            description: payload.comment || payload.message || "Nhân viên phòng IC-PDP yêu cầu bạn chỉnh sửa tên CLB",
           });
           break;
         case "PROPOSAL_APPROVED":
@@ -262,12 +316,29 @@ const CreateClubPage = () => {
               : payload.message,
             duration: 10000,
           });
-          // Navigate to club page if clubId is available
-          if (payload.clubId) {
-            setTimeout(() => {
-              window.location.href = `/myclub/${payload.clubId}`;
-            }, 2000);
-          }
+
+          // Sau khi CLB được tạo, refresh token để cập nhật quyền (CLUB_PRESIDENT, CLUB_OFFICER, ...)
+          (async () => {
+            try {
+              const res = await authService.refreshToken();
+              if (res.code === 200 && res.data) {
+                authService.setTokens(res.data.accessToken);
+                if (res.data.user) {
+                  authService.setUser(res.data.user);
+                }
+              }
+            } catch (error) {
+              console.error("Failed to refresh token after club creation:", error);
+            } finally {
+              // Dù refresh thành công hay không, vẫn điều hướng sang trang CLB mới nếu có clubId
+              if (payload.clubId) {
+                setTimeout(() => {
+                  window.location.href = `/myclub/${payload.clubId}`;
+                }, 2000);
+              }
+            }
+          })();
+
           break;
         default:
           // Handle other actions silently or with generic message
@@ -309,7 +380,7 @@ const CreateClubPage = () => {
       const responses = await clubCreationApi.getFinalForms(requestId);
       setFinalFormHistory(responses);
     } catch (error: any) {
-      toast.error("Không thể tải danh sách form cuối", {
+      toast.error("Không thể tải danh sách Hồ sơ hoàn thiện", {
         description: error.message || "Đã xảy ra lỗi",
       });
       setFinalFormHistory([]);
@@ -348,7 +419,7 @@ const CreateClubPage = () => {
     }
   };
 
-  // Load requests
+  // Load requests (load all, then paginate filtered results on client)
   const loadRequests = async () => {
     setIsLoading(true);
     try {
@@ -358,13 +429,59 @@ const CreateClubPage = () => {
         setWorkflowSteps(steps);
       }
 
-      const requests = await clubCreationApi.getMyRequests(0, 100);
-      if (Array.isArray(requests)) {
-        setClubRequests(requests.map((req) => convertToClubRequest(req, steps)));
-      } else {
-        console.error("Invalid response format:", requests);
-        toast.error("Dữ liệu trả về không đúng định dạng");
-      }
+      // Load all requests (with large page size to get all)
+      const response = await clubCreationApi.getMyRequests(0, 200);
+      
+      // Convert requests
+      const convertedRequests = response.content.map((req) => convertToClubRequest(req, steps));
+      
+      // For rejected requests, load workflow history to calculate correct currentStep
+      const rejectedRequests = convertedRequests.filter(
+        (r) => r.rawStatus === "REJECTED" || r.rawStatus === "CONTACT_REJECTED"
+      );
+      
+      // Load workflow history for rejected requests in parallel
+      const historyPromises = rejectedRequests.map(async (req) => {
+        try {
+          const historyResponse = await clubCreationApi.getWorkflowHistory(
+            parseInt(req.id),
+            0,
+            100
+          );
+          return {
+            requestId: req.id,
+            history: historyResponse.content,
+          };
+        } catch (error) {
+          console.error(`Failed to load history for request ${req.id}:`, error);
+          return {
+            requestId: req.id,
+            history: [],
+          };
+        }
+      });
+      
+      const histories = await Promise.all(historyPromises);
+      const historyMap = new Map(
+        histories.map((h) => [h.requestId, h.history])
+      );
+      
+      // Update currentStep for rejected requests based on history
+      const updatedRequests = convertedRequests.map((req) => {
+        if (
+          (req.rawStatus === "REJECTED" || req.rawStatus === "CONTACT_REJECTED") &&
+          historyMap.has(req.id)
+        ) {
+          const history = historyMap.get(req.id) || [];
+          return {
+            ...req,
+            currentStep: getCurrentStep(req.rawStatus, steps, history),
+          };
+        }
+        return req;
+      });
+      
+      setClubRequests(updatedRequests);
     } catch (error: any) {
       toast.error("Không thể tải danh sách yêu cầu", {
         description: error.message || "Đã xảy ra lỗi",
@@ -383,6 +500,17 @@ const CreateClubPage = () => {
       loadRequests();
     }
   }, [workflowSteps]);
+
+  // Handle page change (client-side pagination)
+  const handlePageChange = (page: number) => {
+    if (page >= 0) {
+      if (activeTab === "pending") setPendingPage(page);
+      else if (activeTab === "completed") setCompletedPage(page);
+      else if (activeTab === "rejected") setRejectedPage(page);
+      // Scroll to top when page changes
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  };
 
   // Load workflow history when dialog opens
   const loadWorkflowHistory = async (requestId: number) => {
@@ -432,19 +560,30 @@ const CreateClubPage = () => {
 
   // Handle form submission (create request)
   const handleFormSubmit = async (formData: ClubRequestFormData) => {
-    const phoneRegex = /^(0|\+84)[0-9]{9}$/;
-    const emailRegex = /^\S+@\S+\.\S+$/;
-    if (!formData.email || !emailRegex.test(formData.email.trim())) {
-      toast.error("Email không hợp lệ", {
-        description: "Vui lòng nhập đúng định dạng email.",
-      });
-      return;
+    // Email pattern khớp với BE: ^[A-Za-z0-9+_.-]+@([A-Za-z0-9.-]+\.[A-Za-z]{2,})$
+    const emailRegex = /^[A-Za-z0-9+_.-]+@([A-Za-z0-9.-]+\.[A-Za-z]{2,})$/;
+    // Phone pattern khớp với BE: hỗ trợ 0[0-9]{9}, 84[0-9]{9}, +84[0-9]{9}
+    const phoneRegex = /^(0[0-9]{9}|84[0-9]{9}|\+84[0-9]{9})$/;
+    
+    // Validate email nếu có
+    if (formData.email && formData.email.trim()) {
+      if (!emailRegex.test(formData.email.trim())) {
+        toast.error("Email không hợp lệ", {
+          description: "Vui lòng nhập đúng định dạng email.",
+        });
+        return;
+      }
     }
-    if (!formData.phone || !phoneRegex.test(formData.phone.trim())) {
-      toast.error("Số điện thoại không hợp lệ", {
-        description: "Vui lòng nhập số gồm 10 chữ số bắt đầu bằng 0 hoặc +84.",
-      });
-      return;
+    
+    // Validate phone nếu có
+    if (formData.phone && formData.phone.trim()) {
+      const trimmedPhone = formData.phone.trim().replace(/[\s-]/g, "");
+      if (!phoneRegex.test(trimmedPhone)) {
+        toast.error("Số điện thoại không hợp lệ", {
+          description: "Vui lòng nhập số điện thoại Việt Nam (bắt đầu bằng 0, 84 hoặc +84).",
+        });
+        return;
+      }
     }
     try {
       setIsLoading(true);
@@ -535,14 +674,22 @@ const CreateClubPage = () => {
     }
   };
 
-  // Handle delete request
-  const handleDeleteRequest = async (requestId: number) => {
-    if (!confirm("Bạn có chắc chắn muốn xóa yêu cầu này?")) return;
+  // Handle delete request - open confirmation dialog
+  const handleDeleteRequest = (requestId: number) => {
+    setDeleteRequestId(requestId);
+    setIsDeleteDialogOpen(true);
+  };
+
+  // Confirm and execute delete
+  const confirmDeleteRequest = async () => {
+    if (!deleteRequestId) return;
 
     try {
       setIsLoading(true);
-      await clubCreationApi.deleteRequest(requestId);
+      await clubCreationApi.deleteRequest(deleteRequestId);
       toast.success("Đã xóa yêu cầu thành công!");
+      setIsDeleteDialogOpen(false);
+      setDeleteRequestId(null);
       await loadRequests();
     } catch (error: any) {
       toast.error("Không thể xóa yêu cầu", {
@@ -556,6 +703,56 @@ const CreateClubPage = () => {
   // Handle update request
   const handleUpdateRequest = async () => {
     if (!editingRequest) return;
+
+    // Validate required fields
+    const clubName = editingRequest.clubName?.trim();
+    if (!clubName || clubName.length === 0) {
+      toast.error("Tên CLB không được để trống", {
+        description: "Vui lòng nhập tên CLB.",
+      });
+      return;
+    }
+
+    const clubCategory = editingRequest.clubCategory?.trim();
+    if (!clubCategory || clubCategory.length === 0) {
+      toast.error("Danh mục CLB không được để trống", {
+        description: "Vui lòng chọn lĩnh vực hoạt động.",
+      });
+      return;
+    }
+
+    if (!editingRequest.expectedMemberCount || editingRequest.expectedMemberCount <= 0) {
+      toast.error("Số lượng thành viên dự kiến không hợp lệ", {
+        description: "Số lượng thành viên dự kiến phải lớn hơn 0.",
+      });
+      return;
+    }
+
+    // Email pattern khớp với BE: ^[A-Za-z0-9+_.-]+@([A-Za-z0-9.-]+\.[A-Za-z]{2,})$
+    const emailRegex = /^[A-Za-z0-9+_.-]+@([A-Za-z0-9.-]+\.[A-Za-z]{2,})$/;
+    // Phone pattern khớp với BE: hỗ trợ 0[0-9]{9}, 84[0-9]{9}, +84[0-9]{9}
+    const phoneRegex = /^(0[0-9]{9}|84[0-9]{9}|\+84[0-9]{9})$/;
+
+    // Validate email nếu có
+    if (editingRequest.email && editingRequest.email.trim()) {
+      if (!emailRegex.test(editingRequest.email.trim())) {
+        toast.error("Email không hợp lệ", {
+          description: "Vui lòng nhập đúng định dạng email.",
+        });
+        return;
+      }
+    }
+
+    // Validate phone nếu có
+    if (editingRequest.phone && editingRequest.phone.trim()) {
+      const trimmedPhone = editingRequest.phone.trim().replace(/[\s-]/g, "");
+      if (!phoneRegex.test(trimmedPhone)) {
+        toast.error("Số điện thoại không hợp lệ", {
+          description: "Vui lòng nhập số điện thoại Việt Nam (bắt đầu bằng 0, 84 hoặc +84).",
+        });
+        return;
+      }
+    }
 
     try {
       setIsLoading(true);
@@ -576,8 +773,14 @@ const CreateClubPage = () => {
       setEditingRequest(null);
       await loadRequests();
     } catch (error: any) {
+      // Lấy error message từ BE response (có thể là trùng tên CLB, trùng mã CLB, etc.)
+      const apiMessage =
+        error?.response?.data?.message ||
+        error?.response?.data?.error ||
+        error?.message ||
+        "Đã xảy ra lỗi";
       toast.error("Không thể cập nhật yêu cầu", {
-        description: error.message || "Đã xảy ra lỗi",
+        description: apiMessage,
       });
     } finally {
       setIsLoading(false);
@@ -661,6 +864,18 @@ const CreateClubPage = () => {
       return;
     }
 
+    // Validate file size (max 20MB)
+    if (proposalFile) {
+      const maxFileSize = 20 * 1024 * 1024; // 20MB in bytes
+      if (proposalFile.size > maxFileSize) {
+        const fileSizeMB = (proposalFile.size / (1024 * 1024)).toFixed(2);
+        toast.error("Dung lượng file quá lớn", {
+          description: `Kích thước tối đa cho phép là 20MB. File của bạn: ${fileSizeMB} MB`,
+        });
+        return;
+      }
+    }
+
     try {
       setIsLoading(true);
       await clubCreationApi.submitProposal(
@@ -686,8 +901,14 @@ const CreateClubPage = () => {
       setProposalNote("");
       await loadRequests();
     } catch (error: any) {
+      // Lấy error message từ BE response (có thể là file quá lớn, sai format, etc.)
+      const apiMessage =
+        error?.response?.data?.message ||
+        error?.response?.data?.error ||
+        error?.message ||
+        "Đã xảy ra lỗi";
       toast.error("Không thể nộp đề án", {
-        description: error.message || "Đã xảy ra lỗi",
+        description: apiMessage,
       });
     } finally {
       setIsLoading(false);
@@ -698,12 +919,24 @@ const CreateClubPage = () => {
   const handleSubmitFinalForm = async () => {
     if (!selectedRequest) return;
     if (!finalFormTitle.trim()) {
-      toast.error("Vui lòng nhập tiêu đề form!");
+      toast.error("Vui lòng nhập tiêu đề Hồ sơ hoàn thiện!");
       return;
     }
     if (!finalFormFile && !finalFormFileUrl) {
-      toast.error("Vui lòng upload file form cuối hoặc nhập fileUrl!");
+      toast.error("Vui lòng upload file Hồ sơ hoàn thiện hoặc nhập fileUrl!");
       return;
+    }
+
+    // Validate file size (max 20MB)
+    if (finalFormFile) {
+      const maxFileSize = 20 * 1024 * 1024; // 20MB in bytes
+      if (finalFormFile.size > maxFileSize) {
+        const fileSizeMB = (finalFormFile.size / (1024 * 1024)).toFixed(2);
+        toast.error("Dung lượng file quá lớn", {
+          description: `Kích thước tối đa cho phép là 20MB. File của bạn: ${fileSizeMB} MB`,
+        });
+        return;
+      }
     }
 
     try {
@@ -719,8 +952,8 @@ const CreateClubPage = () => {
       );
       const finalFormToastMessage =
         selectedRequest.rawStatus === "FINAL_FORM_SUBMITTED"
-          ? "Đã cập nhật form cuối thành công!"
-          : "Đã nộp form cuối thành công!";
+          ? "Đã cập nhật Hồ sơ hoàn thiện thành công!"
+          : "Đã nộp Hồ sơ hoàn thiện thành công!";
       toast.success(finalFormToastMessage);
       setIsFinalFormDialogOpen(false);
       setFinalFormTitle("");
@@ -729,8 +962,14 @@ const CreateClubPage = () => {
       setFinalFormNote("");
       await loadRequests();
     } catch (error: any) {
-      toast.error("Không thể nộp form cuối", {
-        description: error.message || "Đã xảy ra lỗi",
+      // Lấy error message từ BE response (có thể là file quá lớn, sai format, etc.)
+      const apiMessage =
+        error?.response?.data?.message ||
+        error?.response?.data?.error ||
+        error?.message ||
+        "Đã xảy ra lỗi";
+      toast.error("Không thể nộp Hồ sơ hoàn thiện", {
+        description: apiMessage,
       });
     } finally {
       setIsLoading(false);
@@ -760,6 +999,22 @@ const CreateClubPage = () => {
 
   const completedRequests = clubRequests.filter((r) => r.status === "approved");
   const rejectedRequests = clubRequests.filter((r) => r.status === "rejected");
+
+  // Paginate filtered results
+  const getPaginatedRequests = (requests: ClubRequest[], page: number) => {
+    const startIndex = page * pageSize;
+    const endIndex = startIndex + pageSize;
+    return requests.slice(startIndex, endIndex);
+  };
+
+  const getTotalPages = (requests: ClubRequest[]) => {
+    return Math.ceil(requests.length / pageSize);
+  };
+
+  // Get paginated requests for each tab
+  const paginatedPendingRequests = getPaginatedRequests(pendingRequests, pendingPage);
+  const paginatedCompletedRequests = getPaginatedRequests(completedRequests, completedPage);
+  const paginatedRejectedRequests = getPaginatedRequests(rejectedRequests, rejectedPage);
 
   // Get request detail for actions
   const getRequestDetail = async (requestId: number) => {
@@ -833,7 +1088,7 @@ const CreateClubPage = () => {
           ) : (
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {pendingRequests.map((request) => {
+                {paginatedPendingRequests.map((request) => {
                   return (
                     <Card key={request.id} className="hover:shadow-lg transition-shadow">
                       <div className="p-4 space-y-4">
@@ -963,8 +1218,8 @@ const CreateClubPage = () => {
                             >
                               <FileText className="mr-2 h-4 w-4" />
                               {request.rawStatus === "FINAL_FORM_SUBMITTED"
-                                ? "Cập nhật form cuối"
-                                : "Nộp form cuối"}
+                                ? "Cập nhật Hồ sơ hoàn thiện"
+                                : "Nộp Hồ sơ hoàn thiện"}
                             </Button>
                           )}
                         </div>
@@ -973,6 +1228,46 @@ const CreateClubPage = () => {
                   );
                 })}
                 </div>
+              {pendingRequests.length > pageSize && (
+                <Pagination>
+                  <PaginationContent>
+                    <PaginationItem>
+                      <PaginationPrevious
+                        href="#"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          if (pendingPage > 0) handlePageChange(pendingPage - 1);
+                        }}
+                        className={pendingPage === 0 ? "pointer-events-none opacity-50" : ""}
+                      />
+                    </PaginationItem>
+                    {Array.from({ length: getTotalPages(pendingRequests) }, (_, i) => (
+                      <PaginationItem key={i}>
+                        <PaginationLink
+                          href="#"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            handlePageChange(i);
+                          }}
+                          isActive={pendingPage === i}
+                        >
+                          {i + 1}
+                        </PaginationLink>
+                      </PaginationItem>
+                    ))}
+                    <PaginationItem>
+                      <PaginationNext
+                        href="#"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          if (pendingPage < getTotalPages(pendingRequests) - 1) handlePageChange(pendingPage + 1);
+                        }}
+                        className={pendingPage >= getTotalPages(pendingRequests) - 1 ? "pointer-events-none opacity-50" : ""}
+                      />
+                    </PaginationItem>
+                  </PaginationContent>
+                </Pagination>
+              )}
             </>
           )}
         </TabsContent>
@@ -988,15 +1283,57 @@ const CreateClubPage = () => {
               <p>Chưa có CLB nào được phê duyệt</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {completedRequests.map((request) => (
-                <ClubRequestCard
-                  key={request.id}
-                  request={request}
-                  onViewDetails={handleViewDetails}
-                />
-              ))}
-            </div>
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {paginatedCompletedRequests.map((request) => (
+                  <ClubRequestCard
+                    key={request.id}
+                    request={request}
+                    onViewDetails={handleViewDetails}
+                  />
+                ))}
+              </div>
+              {completedRequests.length > pageSize && (
+                <Pagination>
+                  <PaginationContent>
+                    <PaginationItem>
+                      <PaginationPrevious
+                        href="#"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          if (completedPage > 0) handlePageChange(completedPage - 1);
+                        }}
+                        className={completedPage === 0 ? "pointer-events-none opacity-50" : ""}
+                      />
+                    </PaginationItem>
+                    {Array.from({ length: getTotalPages(completedRequests) }, (_, i) => (
+                      <PaginationItem key={i}>
+                        <PaginationLink
+                          href="#"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            handlePageChange(i);
+                          }}
+                          isActive={completedPage === i}
+                        >
+                          {i + 1}
+                        </PaginationLink>
+                      </PaginationItem>
+                    ))}
+                    <PaginationItem>
+                      <PaginationNext
+                        href="#"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          if (completedPage < getTotalPages(completedRequests) - 1) handlePageChange(completedPage + 1);
+                        }}
+                        className={completedPage >= getTotalPages(completedRequests) - 1 ? "pointer-events-none opacity-50" : ""}
+                      />
+                    </PaginationItem>
+                  </PaginationContent>
+                </Pagination>
+              )}
+            </>
           )}
         </TabsContent>
 
@@ -1011,15 +1348,57 @@ const CreateClubPage = () => {
               <p>Chưa có đơn nào bị từ chối</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {rejectedRequests.map((request) => (
-                <ClubRequestCard
-                  key={request.id}
-                  request={request}
-                  onViewDetails={handleViewDetails}
-                />
-              ))}
-            </div>
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {paginatedRejectedRequests.map((request) => (
+                  <ClubRequestCard
+                    key={request.id}
+                    request={request}
+                    onViewDetails={handleViewDetails}
+                  />
+                ))}
+              </div>
+              {rejectedRequests.length > pageSize && (
+                <Pagination>
+                  <PaginationContent>
+                    <PaginationItem>
+                      <PaginationPrevious
+                        href="#"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          if (rejectedPage > 0) handlePageChange(rejectedPage - 1);
+                        }}
+                        className={rejectedPage === 0 ? "pointer-events-none opacity-50" : ""}
+                      />
+                    </PaginationItem>
+                    {Array.from({ length: getTotalPages(rejectedRequests) }, (_, i) => (
+                      <PaginationItem key={i}>
+                        <PaginationLink
+                          href="#"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            handlePageChange(i);
+                          }}
+                          isActive={rejectedPage === i}
+                        >
+                          {i + 1}
+                        </PaginationLink>
+                      </PaginationItem>
+                    ))}
+                    <PaginationItem>
+                      <PaginationNext
+                        href="#"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          if (rejectedPage < getTotalPages(rejectedRequests) - 1) handlePageChange(rejectedPage + 1);
+                        }}
+                        className={rejectedPage >= getTotalPages(rejectedRequests) - 1 ? "pointer-events-none opacity-50" : ""}
+                      />
+                    </PaginationItem>
+                  </PaginationContent>
+                </Pagination>
+              )}
+            </>
           )}
         </TabsContent>
       </Tabs>
@@ -1258,9 +1637,9 @@ const CreateClubPage = () => {
             </DialogTitle>
             <DialogDescription>
               {selectedRequest?.status === "revision_required"
-                ? "Vui lòng chỉnh sửa và nộp lại đề án theo yêu cầu của staff"
+                ? "Vui lòng chỉnh sửa và nộp lại đề án theo yêu cầu của Nhân viên phòng IC-PDP"
                 : selectedRequest?.rawStatus === "PROPOSAL_SUBMITTED"
-                ? "Bạn có thể cập nhật file đề án mới trước khi staff duyệt"
+                ? "Bạn có thể cập nhật file đề án mới trước khi Nhân viên phòng IC-PDP duyệt"
                 : "Upload file đề án (Word, Excel, PDF, PowerPoint)"}
             </DialogDescription>
           </DialogHeader>
@@ -1293,7 +1672,7 @@ const CreateClubPage = () => {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="proposalNote">Ghi chú cho staff (không bắt buộc)</Label>
+              <Label htmlFor="proposalNote">Ghi chú cho Nhân viên phòng IC-PDP (không bắt buộc)</Label>
               <Textarea
                 id="proposalNote"
                 value={proposalNote}
@@ -1302,7 +1681,7 @@ const CreateClubPage = () => {
                 rows={3}
               />
               <p className="text-xs text-muted-foreground">
-                Ghi chú sẽ được lưu trong lịch sử quy trình để staff hiểu rõ nội dung cập nhật.
+                Ghi chú sẽ được lưu trong lịch sử quy trình để Nhân viên phòng IC-PDP hiểu rõ nội dung cập nhật.
               </p>
             </div>
           </div>
@@ -1348,7 +1727,7 @@ const CreateClubPage = () => {
             </DialogTitle>
             <DialogDescription>
               {selectedRequest?.status === "revision_required"
-                ? "Vui lòng chỉnh sửa và đề xuất lại lịch bảo vệ theo yêu cầu của staff"
+                ? "Vui lòng chỉnh sửa và đề xuất lại lịch bảo vệ theo yêu cầu của Nhân viên phòng IC-PDP"
                 : "Vui lòng chọn ngày, thời gian và địa điểm để bảo vệ đề án thành lập CLB"}
             </DialogDescription>
           </DialogHeader>
@@ -1437,27 +1816,27 @@ const CreateClubPage = () => {
           <DialogHeader>
             <DialogTitle>
               {selectedRequest?.rawStatus === "FINAL_FORM_SUBMITTED"
-                ? "Cập nhật form cuối"
-                : "Nộp form cuối"}
+                ? "Cập nhật Hồ sơ hoàn thiện"
+                : "Nộp Hồ sơ hoàn thiện"}
             </DialogTitle>
             <DialogDescription>
               {selectedRequest?.rawStatus === "FINAL_FORM_SUBMITTED"
-                ? "Bạn có thể thay thế file form cuối trước khi staff duyệt."
-                : "Upload file form cuối (Word, Excel, PDF, PowerPoint)."}
+                ? "Bạn có thể thay thế file Hồ sơ hoàn thiện trước khi Nhân viên phòng IC-PDP duyệt."
+                : "Upload file Hồ sơ hoàn thiện (Word, Excel, PDF, PowerPoint)."}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="finalFormTitle">Tiêu đề form *</Label>
+              <Label htmlFor="finalFormTitle">Tiêu đề Hồ sơ hoàn thiện *</Label>
               <Input
                 id="finalFormTitle"
                 value={finalFormTitle}
                 onChange={(e) => setFinalFormTitle(e.target.value)}
-                placeholder="VD: Form cuối thành lập CLB"
+                placeholder="VD: Hồ sơ hoàn thiện thành lập CLB"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="finalFormFile">File form cuối *</Label>
+              <Label htmlFor="finalFormFile">File Hồ sơ hoàn thiện *</Label>
               <Input
                 id="finalFormFile"
                 type="file"
@@ -1475,7 +1854,7 @@ const CreateClubPage = () => {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="finalFormNote">Ghi chú cho staff (không bắt buộc)</Label>
+              <Label htmlFor="finalFormNote">Ghi chú cho Nhân viên phòng IC-PDP (không bắt buộc)</Label>
               <Textarea
                 id="finalFormNote"
                 value={finalFormNote}
@@ -1484,11 +1863,11 @@ const CreateClubPage = () => {
                 rows={3}
               />
               <p className="text-xs text-muted-foreground">
-                Ghi chú sẽ hiển thị trong lịch sử quy trình để staff hiểu nội dung cập nhật.
+                Ghi chú sẽ hiển thị trong lịch sử quy trình để Nhân viên phòng IC-PDP hiểu nội dung cập nhật.
               </p>
             </div>
             <div className="space-y-2">
-              <Label>Lịch sử form đã nộp</Label>
+              <Label>Lịch sử Hồ sơ hoàn thiện đã nộp</Label>
               {isFinalFormHistoryLoading ? (
                 <p className="text-sm text-muted-foreground">Đang tải...</p>
               ) : finalFormHistory.length === 0 ? (
@@ -1539,8 +1918,8 @@ const CreateClubPage = () => {
             <Button onClick={handleSubmitFinalForm}>
               <Upload className="mr-2 h-4 w-4" />
               {selectedRequest?.rawStatus === "FINAL_FORM_SUBMITTED"
-                ? "Cập nhật form cuối"
-                : "Nộp form cuối"}
+                ? "Cập nhật Hồ sơ hoàn thiện"
+                : "Nộp Hồ sơ hoàn thiện"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1561,7 +1940,7 @@ const CreateClubPage = () => {
           <DialogHeader>
             <DialogTitle>Cập nhật tên câu lạc bộ</DialogTitle>
             <DialogDescription>
-              Staff đã yêu cầu bạn cập nhật tên CLB để tiếp tục quy trình xét duyệt.
+              Nhân viên phòng IC-PDP đã yêu cầu bạn cập nhật tên CLB để tiếp tục quy trình xét duyệt.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
@@ -1686,6 +2065,37 @@ const CreateClubPage = () => {
               </DialogFooter>
             </>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Xác nhận xóa</DialogTitle>
+            <DialogDescription>
+              Bạn có chắc chắn muốn xóa yêu cầu này? Hành động này không thể hoàn tác.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsDeleteDialogOpen(false);
+                setDeleteRequestId(null);
+              }}
+              disabled={isLoading}
+            >
+              Hủy
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={confirmDeleteRequest}
+              disabled={isLoading}
+            >
+              {isLoading ? "Đang xóa..." : "Xóa"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

@@ -14,4 +14,5 @@ public interface TeamService {
     List<AvailableMemberDTO> getAvailableMembers(Long clubId);
     TeamResponse updateTeam(Long teamId, UpdateTeamRequest request);
     void deleteTeam(Long teamId);
+
 }

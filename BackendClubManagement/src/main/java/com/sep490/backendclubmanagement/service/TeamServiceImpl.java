@@ -5,10 +5,7 @@ import com.sep490.backendclubmanagement.dto.request.UpdateTeamRequest;
 import com.sep490.backendclubmanagement.dto.response.AvailableMemberDTO;
 import com.sep490.backendclubmanagement.dto.response.TeamResponse;
 import com.sep490.backendclubmanagement.entity.*;
-import com.sep490.backendclubmanagement.exception.AccessDeniedException;
-import com.sep490.backendclubmanagement.exception.AppException;
-import com.sep490.backendclubmanagement.exception.DuplicateResourceException;
-import com.sep490.backendclubmanagement.exception.ResourceNotFoundException;
+import com.sep490.backendclubmanagement.exception.*;
 import com.sep490.backendclubmanagement.mapper.TeamMapper;
 import com.sep490.backendclubmanagement.repository.*;
 import com.sep490.backendclubmanagement.security.RoleGuard;
@@ -16,6 +13,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -43,7 +41,7 @@ public class TeamServiceImpl implements TeamService {
 
     @Override
     public List<TeamResponse> getTeamsByClubId(Long clubId) {
-        return teamRepository.findByClubId(clubId).stream()
+        return teamRepository.findVisibleTeams(clubId).stream()
                 .map(teamMapper::toDto)
                 .toList();
     }
@@ -82,7 +80,7 @@ public class TeamServiceImpl implements TeamService {
 
         // Check trùng tên ban (ignore-case)
         if (teamRepository.existsByClubIdAndTeamNameIgnoreCase(club.getId(), normalizedTeamName)) {
-            throw new DuplicateResourceException("Tên ban '" + normalizedTeamName + "' đã tồn tại trong CLB này.");
+             throw new AppException(ErrorCode.TEAM_NAME_EXISTED,"Tên ban '" + normalizedTeamName + "' đã tồn tại trong CLB này.");
         }
 
         // Gom user
@@ -114,12 +112,11 @@ public class TeamServiceImpl implements TeamService {
                 throw new ResourceNotFoundException("Các User ID không thuộc CLB: " + notInClub);
             }
 
-            List<Long> alreadyInTeam = roleMembershipRepository
-                    .findExistingTeamMembersInSemester(club.getId(), currentSemester.getId(), distinctUserIds);
-
-            if (!alreadyInTeam.isEmpty()) {
-                throw new DuplicateResourceException("Các User ID đã thuộc một ban khác trong kỳ hiện tại: " + alreadyInTeam);
-            }
+            roleMembershipRepository.deactivateActiveRolesForUsers(
+                    distinctUserIds,
+                    club.getId(),
+                    currentSemester.getId()
+            );
         }
 
         // Tạo team
@@ -228,8 +225,8 @@ public class TeamServiceImpl implements TeamService {
             if (!normalizedName.equalsIgnoreCase(oldName)) {
                 if (teamRepository.existsByClubIdAndTeamNameIgnoreCaseAndIdNot(
                         club.getId(), normalizedName, teamId)) {
-                    throw new DuplicateResourceException(
-                            "Tên ban '" + normalizedName + "' đã tồn tại trong CLB này.");
+                     throw new AppException(ErrorCode.TEAM_NAME_EXISTED,
+                             "Tên ban '" + normalizedName + "' đã tồn tại trong CLB này.");
                 }
                 team.setTeamName(normalizedName);
                 nameChanged = true;
@@ -319,7 +316,8 @@ public class TeamServiceImpl implements TeamService {
     @Transactional
     public void deleteTeam(Long teamId) {
         Team team = teamRepository.findById(teamId)
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy phòng ban với ID: " + teamId));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Không tìm thấy phòng ban với ID: " + teamId));
 
         Club club = team.getClub();
         if (club == null) {
@@ -330,30 +328,24 @@ public class TeamServiceImpl implements TeamService {
         boolean canManage = guard.isClubPresident(currentUserId, club.getId())
                 || guard.isClubVice(currentUserId, club.getId());
         if (!canManage) {
-            throw new AccessDeniedException("Chỉ Chủ nhiệm hoặc Phó chủ nhiệm CLB mới được phép xoá phòng ban.");
+            throw new AccessDeniedException(
+                    "Chỉ Chủ nhiệm hoặc Phó chủ nhiệm CLB mới được phép xoá phòng ban.");
         }
 
-        // Lấy member trong ban trước khi xoá
-        List<RoleMemberShip> activeRoles = roleMembershipRepository.findByTeamIdAndIsActiveTrue(teamId);
-        Set<Long> memberIds = activeRoles.stream()
-                .map(rm -> rm.getClubMemberShip().getUser().getId())
-                .collect(Collectors.toSet());
-
-        // Gỡ liên kết team + deactivate membership để tránh lỗi FK
-        for (RoleMemberShip rm : activeRoles) {
-            rm.setIsActive(false);
-            rm.setTeam(null);
-        }
-        if (!activeRoles.isEmpty()) {
-            roleMembershipRepository.saveAll(activeRoles);
+        // 🔥 NEW: chỉ cho xoá nếu team chưa từng có role_membership nào
+        boolean hasAnyRoleHistory = roleMembershipRepository.existsByTeamId(teamId);
+        if (hasAnyRoleHistory) {
+            // dùng AppException để GlobalExceptionHandler trả ra ApiResponse đẹp
+            throw new AppException(
+                    ErrorCode.TEAM_HAS_HISTORY,
+                    "Không thể xoá phòng ban '" + team.getTeamName()
+                            + "' vì đã từng có thành viên thuộc phòng ban này.");
         }
 
-        String teamName = team.getTeamName();
-
-        // Xoá team
+        // Nếu không có lịch sử gì ⇒ xoá hẳn luôn
         teamRepository.delete(team);
 
-        // Realtime: báo cho cả CLB biết ban đã bị xoá
+        // (tuỳ bạn: có thể broadcast realtime nhẹ nếu vẫn muốn cập nhật UI cho president)
         webSocketService.broadcastToClub(
                 club.getId(),
                 "TEAM",
@@ -361,42 +353,12 @@ public class TeamServiceImpl implements TeamService {
                 Map.of(
                         "teamId", teamId,
                         "clubId", club.getId(),
-                        "teamName", teamName
+                        "teamName", team.getTeamName()
                 )
         );
-
-        // Notification cho tất cả thành viên từng ở trong ban
-        if (!memberIds.isEmpty()) {
-            String title = "Ban của bạn đã bị xoá khỏi CLB";
-            String message = String.format(
-                    "Chủ nhiệm CLB đã xoá Ban %s khỏi CLB %s. "
-                            + "Bạn sẽ nhận được thông báo mới nếu được phân vào ban khác trong tương lai.",
-                    teamName,
-                    club.getClubName()
-            );
-
-            // Team đã xoá nên không còn trang chi tiết; có thể dẫn về dashboard CLB
-            String actionUrl = "/myclub/" + club.getId();
-
-            try {
-                notificationService.sendToUsers(
-                        new ArrayList<>(memberIds),
-                        currentUserId,
-                        title,
-                        message,
-                        NotificationType.TEAM_ASSIGNMENT,
-                        NotificationPriority.NORMAL,
-                        actionUrl,
-                        club.getId(),
-                        null,
-                        null,   // relatedTeamId null vì ban đã bị xoá
-                        null
-                );
-            } catch (Exception e) {
-                // ignore
-            }
-        }
     }
+
+
 
     // ========== HELPER ==========
 
@@ -417,36 +379,39 @@ public class TeamServiceImpl implements TeamService {
 
     // Validate tên ban có “nghĩa” (lọc bớt tên rác)
     private void validateMeaningfulTeamName(String name) {
-        if (name == null) {
+        if (name == null || name.isBlank()) {
             throw new IllegalArgumentException("Tên ban không được để trống.");
         }
 
-        String n = name.trim();
+        String n = name.trim().replaceAll("\\s+", " ");
 
-        // Độ dài tối thiểu
+        // Độ dài
         if (n.length() < 3) {
             throw new IllegalArgumentException("Tên ban phải có ít nhất 3 ký tự.");
         }
 
-        // Phải có ít nhất 1 chữ cái (unicode – hỗ trợ tiếng Việt, tiếng Anh,…)
-        boolean hasLetter = n.codePoints().anyMatch(Character::isLetter);
-        if (!hasLetter) {
+        // Phải chứa chữ cái
+        if (!n.codePoints().anyMatch(Character::isLetter)) {
             throw new IllegalArgumentException("Tên ban phải chứa ít nhất một chữ cái.");
         }
 
-        // Không cho tên chỉ toàn số
-        boolean allDigits = n.codePoints().allMatch(Character::isDigit);
-        if (allDigits) {
+        // ❌ Không cho phép số
+        if (n.matches(".*\\d.*")) {
+            throw new IllegalArgumentException("Tên ban không được chứa số.");
+        }
+
+        // Không tên toàn số
+        if (n.codePoints().allMatch(Character::isDigit)) {
             throw new IllegalArgumentException("Tên ban không được chỉ gồm chữ số.");
         }
 
-        // Không cho tên toàn 1 ký tự lặp (aaa, 1111,…)
+        // Không toàn ký tự lặp
         String compact = n.replaceAll("\\s+", "");
         if (compact.length() >= 3 && compact.chars().distinct().count() == 1) {
             throw new IllegalArgumentException("Tên ban không hợp lệ. Vui lòng nhập tên có nghĩa hơn.");
         }
 
-        // Hạn chế quá nhiều ký tự đặc biệt
+        // Hạn chế ký tự đặc biệt
         long specialCount = n.codePoints()
                 .filter(cp -> !Character.isLetterOrDigit(cp) && !Character.isWhitespace(cp))
                 .count();
@@ -467,6 +432,12 @@ public class TeamServiceImpl implements TeamService {
             throw new ResourceNotFoundException("User ID " + userId + " không phải là thành viên của CLB.");
         }
 
+        // 🔥 Remove toàn bộ role active ở các ban trước
+        roleMembershipRepository.deactivateActiveTeamRoles(
+                membership.getId(),
+                semester.getId()
+        );
+
         RoleMemberShip newRoleAssignment = new RoleMemberShip();
         newRoleAssignment.setClubMemberShip(membership);
         newRoleAssignment.setClubRole(role);
@@ -476,7 +447,7 @@ public class TeamServiceImpl implements TeamService {
 
         roleMembershipRepository.save(newRoleAssignment);
 
-        // SOCKET: báo riêng cho user đó là vừa được gán vào ban
+        // SOCKET thông báo user được chuyển/gán vào ban mới
         webSocketService.broadcastToUser(
                 userId,
                 "TEAM",
@@ -488,10 +459,8 @@ public class TeamServiceImpl implements TeamService {
                 )
         );
 
-        // Notification DB + bell realtime
         sendTeamWelcomeNotification(userId, actorId, membership.getClub(), team, role);
     }
-
     private void sendTeamWelcomeNotification(
             Long recipientId,
             Long actorId,
@@ -544,7 +513,8 @@ public class TeamServiceImpl implements TeamService {
         Semester currentSemester = semesterRepository.findCurrentSemester()
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy học kỳ hiện tại."));
 
-        List<Long> ids = roleMembershipRepository.findAvailableMemberUserIds(clubId, currentSemester.getId());
+        List<Long> ids = clubMembershipRepository.findAllActiveNonLeadersMemberIds(clubId);
+
         if (ids.isEmpty()) return List.of();
 
         return userRepository.findByIdIn(ids).stream()
@@ -556,4 +526,5 @@ public class TeamServiceImpl implements TeamService {
                         .build())
                 .toList();
     }
+
 }

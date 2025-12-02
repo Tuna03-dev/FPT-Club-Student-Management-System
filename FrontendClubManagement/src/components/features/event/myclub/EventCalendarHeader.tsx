@@ -42,8 +42,13 @@ export function EventCalendarHeader({
   const isStaff = user.systemRole === "STAFF"
   const clubRole = clubId ? authService.getClubRole(clubId) : null
   const systemRoleInClub = clubRole?.systemRole?.toUpperCase()
-  const canCreate = isStaff || 
-    (clubId && systemRoleInClub && ["CLUB_OFFICER", "TEAM_OFFICER"].includes(systemRoleInClub))
+  const canCreate =
+    isStaff ||
+    (clubId &&
+      systemRoleInClub &&
+      ["CLUB_OFFICER", "TEAM_OFFICER", "CLUB_TREASURE", "CLUB_TREASURER"].includes(
+        systemRoleInClub
+      ))
 
   return (
     <div className="flex items-center justify-between mb-6">

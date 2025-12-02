@@ -396,7 +396,8 @@ export function ApplicationsList({
             {applications.map((application) => (
               <Card
                 key={application.application_id}
-                className="hover:shadow-lg transition-shadow"
+                onClick={() => setSelectedApplication(application)}
+                className="hover:shadow-lg transition-shadow cursor-pointer flex flex-col h-full"
               >
                 <CardHeader>
                   <div className="flex items-start justify-between">
@@ -418,8 +419,8 @@ export function ApplicationsList({
                     </div>
                   </div>
                 </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
+                <CardContent className="flex flex-col flex-1">
+                  <div className="space-y-3 flex-1">
                     <div className="flex items-center justify-between">
                       <Badge
                         className={applicationStatusColors[application.status]}
@@ -510,18 +511,21 @@ export function ApplicationsList({
                           </div>
                         </div>
                       )}
+                  </div>
 
-                    <div className="flex gap-2 pt-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setSelectedApplication(application)}
-                        className="bg-transparent"
-                      >
-                        <Eye className="h-4 w-4 mr-1" />
-                        Xem chi tiết
-                      </Button>
-                    </div>
+                  <div className="flex gap-2 pt-4 mt-auto">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedApplication(application);
+                      }}
+                      className="bg-transparent"
+                    >
+                      <Eye className="h-4 w-4 mr-1" />
+                      Xem chi tiết
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
@@ -979,22 +983,27 @@ export function ApplicationsList({
                     selectedApplication.interviewTime &&
                     new Date(selectedApplication.interviewTime) >
                       new Date() && (
-                      <Button
-                        variant="outline"
-                        className="bg-transparent"
-                        onClick={() =>
-                          handleOpenInterviewDialog(
-                            selectedApplication.application_id,
-                            selectedApplication.user_name,
-                            selectedApplication.interviewTime,
-                            selectedApplication.interviewAddress,
-                            selectedApplication.interviewPreparationRequirements
-                          )
-                        }
-                      >
-                        <Edit className="h-4 w-4 mr-2" />
-                        Chỉnh sửa lịch PV
-                      </Button>
+                      <>
+                        <Button
+                          variant="outline"
+                          className="bg-transparent"
+                          onClick={() =>
+                            handleOpenInterviewDialog(
+                              selectedApplication.application_id,
+                              selectedApplication.user_name,
+                              selectedApplication.interviewTime,
+                              selectedApplication.interviewAddress,
+                              selectedApplication.interviewPreparationRequirements
+                            )
+                          }
+                        >
+                          <Edit className="h-4 w-4 mr-2" />
+                          Chỉnh sửa lịch PV
+                        </Button>
+                        <span className="text-sm font-bold self-center text-orange-500 mr-2">
+                          Có thể thực hiện đánh giá khi đến thời gian phỏng vấn
+                        </span>
+                      </>
                     )}
                   <Button
                     variant="outline"

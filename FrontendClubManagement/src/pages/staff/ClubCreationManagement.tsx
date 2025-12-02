@@ -23,6 +23,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
+import {
   Calendar,
   CheckCircle2,
   Clock,
@@ -131,7 +139,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
     color: "bg-indigo-100 text-indigo-800",
   },
   FINAL_FORM_SUBMITTED: {
-    label: "Đã nộp form cuối",
+    label: "Đã nộp Hồ sơ hoàn thiện",
     color: "bg-blue-100 text-blue-800",
   },
   APPROVED: {
@@ -154,7 +162,7 @@ const getStepCodeFromStatus = (status: string): string | null => {
     PROPOSAL_REQUIRED: "PROPOSAL_REQUIRED",
     PROPOSAL_SUBMITTED: "PROPOSAL_SUBMITTED",
     PROPOSAL_APPROVED: "PROPOSAL_REVIEW",
-    PROPOSAL_REJECTED: "PROPOSAL_REVIEW", // Đã trải qua bước staff duyệt (dù bị từ chối)
+    PROPOSAL_REJECTED: "PROPOSAL_REVIEW", // Đã trải qua bước Nhân viên phòng IC-PDP duyệt (dù bị từ chối)
     DEFENSE_SCHEDULE_PROPOSED: "PROPOSE_DEFENSE_TIME",
     DEFENSE_SCHEDULE_APPROVED: "DEFENSE_SCHEDULE_CONFIRMED",
     DEFENSE_SCHEDULE_REJECTED: "PROPOSE_DEFENSE_TIME", // Từ chối lịch bảo vệ vẫn thuộc bước lịch bảo vệ
@@ -166,8 +174,39 @@ const getStepCodeFromStatus = (status: string): string | null => {
 };
 
 // Helper function to calculate current step from status using steps from API
-const getCurrentStep = (status: string, steps: ClubCreationStepResponse[]): number => {
+// Calculate currentStep from workflow history (for rejected requests)
+const getCurrentStepFromHistory = (
+  history: WorkflowHistoryResponse[],
+  steps: ClubCreationStepResponse[]
+): number => {
+  if (!history || history.length === 0) {
+    return 1;
+  }
+
+  // Find the highest orderIndex from completed steps in history
+  let maxStep = 1;
+  for (const h of history) {
+    if (h.stepCode) {
+      const step = steps.find((s) => s.code === h.stepCode);
+      if (step && step.orderIndex) {
+        maxStep = Math.max(maxStep, step.orderIndex);
+      }
+    }
+  }
+
+  return maxStep;
+};
+
+const getCurrentStep = (
+  status: string,
+  steps: ClubCreationStepResponse[],
+  workflowHistory?: WorkflowHistoryResponse[]
+): number => {
+  // For rejected requests, calculate from workflow history
   if (status === "REJECTED" || status === "CONTACT_REJECTED") {
+    if (workflowHistory && workflowHistory.length > 0) {
+      return getCurrentStepFromHistory(workflowHistory, steps);
+    }
     return 1;
   }
   
@@ -187,7 +226,8 @@ const getCurrentStep = (status: string, steps: ClubCreationStepResponse[]): numb
 // Convert BE response to FE ClubCreationRequest
 const convertToClubCreationRequest = (
   response: RequestEstablishmentResponse,
-  steps: ClubCreationStepResponse[]
+  steps: ClubCreationStepResponse[],
+  workflowHistory?: WorkflowHistoryResponse[]
 ): ClubCreationRequest => {
   return {
     id: response.id.toString(),
@@ -201,7 +241,7 @@ const convertToClubCreationRequest = (
     requestedBy: response.createdByFullName,
     requestedAt: response.sendDate || response.createdAt,
     status: response.status,
-    currentStep: getCurrentStep(response.status, steps),
+    currentStep: getCurrentStep(response.status, steps, workflowHistory),
     totalSteps: steps.length,
     assignedStaff: response.assignedStaffFullName,
   };
@@ -244,6 +284,13 @@ export default function ClubCreationManagement() {
   const [proposalRequestTarget, setProposalRequestTarget] = useState<ClubCreationRequest | null>(null);
   const [isNameRevisionDialogOpen, setIsNameRevisionDialogOpen] = useState(false);
   const [nameRevisionComment, setNameRevisionComment] = useState("");
+  
+  // Pagination state (for client-side pagination of filtered results)
+  const [pendingPage, setPendingPage] = useState(0);
+  const [approvedPage, setApprovedPage] = useState(0);
+  const [completedPage, setCompletedPage] = useState(0);
+  const [rejectedPage, setRejectedPage] = useState(0);
+  const [pageSize] = useState(6);
 
   // WebSocket connection
   const token = localStorage.getItem("accessToken") || null;
@@ -262,7 +309,7 @@ export default function ClubCreationManagement() {
     }
   };
 
-  // Load pending requests
+  // Load pending requests (load all, then paginate filtered results on client)
   const loadPendingRequests = useCallback(async () => {
     try {
       // Đảm bảo workflowSteps đã được load
@@ -272,8 +319,59 @@ export default function ClubCreationManagement() {
         setWorkflowSteps(steps);
       }
       
-      const response = await clubCreationStaffApi.getPendingRequests(0, 20);
-      setClubRequests(response.content.map((req) => convertToClubCreationRequest(req, steps)));
+      // Load all requests (with large page size to get all)
+      const response = await clubCreationStaffApi.getPendingRequests(0, 200);
+      
+      // Convert requests
+      const convertedRequests = response.content.map((req) => convertToClubCreationRequest(req, steps));
+      
+      // For rejected requests, load workflow history to calculate correct currentStep
+      const rejectedRequests = convertedRequests.filter(
+        (r) => r.status === "REJECTED" || r.status === "CONTACT_REJECTED"
+      );
+      
+      // Load workflow history for rejected requests in parallel
+      const historyPromises = rejectedRequests.map(async (req) => {
+        try {
+          const historyResponse = await clubCreationStaffApi.getWorkflowHistory(
+            parseInt(req.id),
+            0,
+            100
+          );
+          return {
+            requestId: req.id,
+            history: historyResponse.content,
+          };
+        } catch (error) {
+          console.error(`Failed to load history for request ${req.id}:`, error);
+          return {
+            requestId: req.id,
+            history: [],
+          };
+        }
+      });
+      
+      const histories = await Promise.all(historyPromises);
+      const historyMap = new Map(
+        histories.map((h) => [h.requestId, h.history])
+      );
+      
+      // Update currentStep for rejected requests based on history
+      const updatedRequests = convertedRequests.map((req) => {
+        if (
+          (req.status === "REJECTED" || req.status === "CONTACT_REJECTED") &&
+          historyMap.has(req.id)
+        ) {
+          const history = historyMap.get(req.id) || [];
+          return {
+            ...req,
+            currentStep: getCurrentStep(req.status, steps, history),
+          };
+        }
+        return req;
+      });
+      
+      setClubRequests(updatedRequests);
     } catch (error: any) {
       toast.error("Không thể tải danh sách yêu cầu", {
         description: error.message || "Đã xảy ra lỗi",
@@ -330,9 +428,9 @@ export default function ClubCreationManagement() {
           }
           break;
         case "FINAL_FORM_SUBMITTED":
-          toast.info("Form cuối đã được nộp", {
+          toast.info("Hồ sơ hoàn thiện đã được nộp", {
             description: payload.finalFormTitle
-              ? `Form cuối "${payload.finalFormTitle}" đã được nộp cho yêu cầu "${payload.clubName}"`
+              ? `Hồ sơ hoàn thiện "${payload.finalFormTitle}" đã được nộp cho yêu cầu "${payload.clubName}"`
               : payload.message,
           });
           // Refresh request list để hiển thị nút duyệt (luôn refresh, không cần check activeTab)
@@ -596,13 +694,13 @@ export default function ClubCreationManagement() {
     try {
       setIsLoading(true);
       await clubCreationStaffApi.approveFinalForm(requestId);
-      toast.success("Đã duyệt form cuối và tạo CLB thành công!");
+      toast.success("Đã duyệt Hồ sơ hoàn thiện và tạo CLB thành công!");
       await loadPendingRequests();
       if (selectedRequest) {
         await loadRequestDetail(parseInt(selectedRequest.id));
       }
     } catch (error: any) {
-      toast.error("Không thể duyệt form cuối", {
+      toast.error("Không thể duyệt Hồ sơ hoàn thiện", {
         description: error.message || "Đã xảy ra lỗi",
       });
     } finally {
@@ -749,7 +847,7 @@ export default function ClubCreationManagement() {
   };
 
   // Filter requests by status
-  // Pending: Chưa được staff xử lý (SUBMITTED, CONTACT_CONFIRMATION_PENDING)
+  // Pending: Chưa được Nhân viên phòng IC-PDP xử lý (SUBMITTED, CONTACT_CONFIRMATION_PENDING)
   const pendingRequests = clubRequests.filter(
     (r) =>
       r.status === "SUBMITTED" || r.status === "CONTACT_CONFIRMATION_PENDING"
@@ -779,6 +877,35 @@ export default function ClubCreationManagement() {
   );
 
   const completedRequests = clubRequests.filter((r) => r.status === "APPROVED");
+
+  // Paginate filtered results
+  const getPaginatedRequests = (requests: ClubCreationRequest[], page: number) => {
+    const startIndex = page * pageSize;
+    const endIndex = startIndex + pageSize;
+    return requests.slice(startIndex, endIndex);
+  };
+
+  const getTotalPages = (requests: ClubCreationRequest[]) => {
+    return Math.ceil(requests.length / pageSize);
+  };
+
+  // Get paginated requests for each tab
+  const paginatedPendingRequests = getPaginatedRequests(pendingRequests, pendingPage);
+  const paginatedApprovedRequests = getPaginatedRequests(approvedRequests, approvedPage);
+  const paginatedCompletedRequests = getPaginatedRequests(completedRequests, completedPage);
+  const paginatedRejectedRequests = getPaginatedRequests(rejectedRequests, rejectedPage);
+
+  // Handle page change (client-side pagination)
+  const handlePageChange = (page: number) => {
+    if (page >= 0) {
+      if (activeTab === "pending") setPendingPage(page);
+      else if (activeTab === "approved") setApprovedPage(page);
+      else if (activeTab === "completed") setCompletedPage(page);
+      else if (activeTab === "rejected") setRejectedPage(page);
+      // Scroll to top when page changes
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  };
 
   // Render request card
   const renderRequestCard = (request: ClubCreationRequest) => {
@@ -977,9 +1104,51 @@ export default function ClubCreationManagement() {
               <p>Không có yêu cầu nào đang chờ xử lý</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {pendingRequests.map((request) => renderRequestCard(request))}
-            </div>
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {paginatedPendingRequests.map((request) => renderRequestCard(request))}
+              </div>
+              {pendingRequests.length > pageSize && (
+                <Pagination>
+                  <PaginationContent>
+                    <PaginationItem>
+                      <PaginationPrevious
+                        href="#"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          if (pendingPage > 0) handlePageChange(pendingPage - 1);
+                        }}
+                        className={pendingPage === 0 ? "pointer-events-none opacity-50" : ""}
+                      />
+                    </PaginationItem>
+                    {Array.from({ length: getTotalPages(pendingRequests) }, (_, i) => (
+                      <PaginationItem key={i}>
+                        <PaginationLink
+                          href="#"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            handlePageChange(i);
+                          }}
+                          isActive={pendingPage === i}
+                        >
+                          {i + 1}
+                        </PaginationLink>
+                      </PaginationItem>
+                    ))}
+                    <PaginationItem>
+                      <PaginationNext
+                        href="#"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          if (pendingPage < getTotalPages(pendingRequests) - 1) handlePageChange(pendingPage + 1);
+                        }}
+                        className={pendingPage >= getTotalPages(pendingRequests) - 1 ? "pointer-events-none opacity-50" : ""}
+                      />
+                    </PaginationItem>
+                  </PaginationContent>
+                </Pagination>
+              )}
+            </>
           )}
         </TabsContent>
 
@@ -990,9 +1159,51 @@ export default function ClubCreationManagement() {
               <p>Chưa có CLB nào được phê duyệt</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {approvedRequests.map((request) => renderRequestCard(request))}
-            </div>
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {paginatedApprovedRequests.map((request) => renderRequestCard(request))}
+              </div>
+              {approvedRequests.length > pageSize && (
+                <Pagination>
+                  <PaginationContent>
+                    <PaginationItem>
+                      <PaginationPrevious
+                        href="#"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          if (approvedPage > 0) handlePageChange(approvedPage - 1);
+                        }}
+                        className={approvedPage === 0 ? "pointer-events-none opacity-50" : ""}
+                      />
+                    </PaginationItem>
+                    {Array.from({ length: getTotalPages(approvedRequests) }, (_, i) => (
+                      <PaginationItem key={i}>
+                        <PaginationLink
+                          href="#"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            handlePageChange(i);
+                          }}
+                          isActive={approvedPage === i}
+                        >
+                          {i + 1}
+                        </PaginationLink>
+                      </PaginationItem>
+                    ))}
+                    <PaginationItem>
+                      <PaginationNext
+                        href="#"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          if (approvedPage < getTotalPages(approvedRequests) - 1) handlePageChange(approvedPage + 1);
+                        }}
+                        className={approvedPage >= getTotalPages(approvedRequests) - 1 ? "pointer-events-none opacity-50" : ""}
+                      />
+                    </PaginationItem>
+                  </PaginationContent>
+                </Pagination>
+              )}
+            </>
           )}
         </TabsContent>
 
@@ -1003,9 +1214,51 @@ export default function ClubCreationManagement() {
               <p>Chưa có yêu cầu nào bị từ chối</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {rejectedRequests.map((request) => renderRequestCard(request))}
-            </div>
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {paginatedRejectedRequests.map((request) => renderRequestCard(request))}
+              </div>
+              {rejectedRequests.length > pageSize && (
+                <Pagination>
+                  <PaginationContent>
+                    <PaginationItem>
+                      <PaginationPrevious
+                        href="#"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          if (rejectedPage > 0) handlePageChange(rejectedPage - 1);
+                        }}
+                        className={rejectedPage === 0 ? "pointer-events-none opacity-50" : ""}
+                      />
+                    </PaginationItem>
+                    {Array.from({ length: getTotalPages(rejectedRequests) }, (_, i) => (
+                      <PaginationItem key={i}>
+                        <PaginationLink
+                          href="#"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            handlePageChange(i);
+                          }}
+                          isActive={rejectedPage === i}
+                        >
+                          {i + 1}
+                        </PaginationLink>
+                      </PaginationItem>
+                    ))}
+                    <PaginationItem>
+                      <PaginationNext
+                        href="#"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          if (rejectedPage < getTotalPages(rejectedRequests) - 1) handlePageChange(rejectedPage + 1);
+                        }}
+                        className={rejectedPage >= getTotalPages(rejectedRequests) - 1 ? "pointer-events-none opacity-50" : ""}
+                      />
+                    </PaginationItem>
+                  </PaginationContent>
+                </Pagination>
+              )}
+            </>
           )}
         </TabsContent>
 
@@ -1016,9 +1269,51 @@ export default function ClubCreationManagement() {
               <p>Chưa có yêu cầu nào đã hoàn thành</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {completedRequests.map((request) => renderRequestCard(request))}
-            </div>
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {paginatedCompletedRequests.map((request) => renderRequestCard(request))}
+              </div>
+              {completedRequests.length > pageSize && (
+                <Pagination>
+                  <PaginationContent>
+                    <PaginationItem>
+                      <PaginationPrevious
+                        href="#"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          if (completedPage > 0) handlePageChange(completedPage - 1);
+                        }}
+                        className={completedPage === 0 ? "pointer-events-none opacity-50" : ""}
+                      />
+                    </PaginationItem>
+                    {Array.from({ length: getTotalPages(completedRequests) }, (_, i) => (
+                      <PaginationItem key={i}>
+                        <PaginationLink
+                          href="#"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            handlePageChange(i);
+                          }}
+                          isActive={completedPage === i}
+                        >
+                          {i + 1}
+                        </PaginationLink>
+                      </PaginationItem>
+                    ))}
+                    <PaginationItem>
+                      <PaginationNext
+                        href="#"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          if (completedPage < getTotalPages(completedRequests) - 1) handlePageChange(completedPage + 1);
+                        }}
+                        className={completedPage >= getTotalPages(completedRequests) - 1 ? "pointer-events-none opacity-50" : ""}
+                      />
+                    </PaginationItem>
+                  </PaginationContent>
+                </Pagination>
+              )}
+            </>
           )}
         </TabsContent>
       </Tabs>
@@ -1524,7 +1819,7 @@ export default function ClubCreationManagement() {
                 {/* Final Form Section */}
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <h3 className="font-semibold">Form cuối đã nộp</h3>
+                    <h3 className="font-semibold">Hồ sơ hoàn thiện đã nộp</h3>
                     {finalForms.length > 0 && (
                       <Badge variant="outline">{finalForms.length} form</Badge>
                     )}
@@ -1533,7 +1828,7 @@ export default function ClubCreationManagement() {
                     <p className="text-sm text-muted-foreground">Đang tải danh sách form...</p>
                   ) : finalForms.length === 0 ? (
                     <p className="text-sm text-muted-foreground italic">
-                      Chưa có form cuối nào được nộp
+                      Chưa có Hồ sơ hoàn thiện nào được nộp
                     </p>
                   ) : (
                     <div className="space-y-2">
@@ -1546,7 +1841,7 @@ export default function ClubCreationManagement() {
                                 <div>
                                   <div className="flex items-center gap-2">
                                     <p className="font-medium">
-                                      {data.title || `Form cuối #${form.id}`}
+                                      {data.title || `Hồ sơ hoàn thiện #${form.id}`}
                                     </p>
                                     {index === 0 && (
                                       <Badge className="bg-blue-100 text-blue-800 text-xs">
@@ -1774,7 +2069,7 @@ export default function ClubCreationManagement() {
                     )}
                     {selectedRequest.status === "DEFENSE_COMPLETED" && (
                       <div className="text-sm text-muted-foreground italic">
-                        Bảo vệ đã hoàn tất. Đang chờ sinh viên nộp form cuối...
+                        Bảo vệ đã hoàn tất. Đang chờ sinh viên nộp Hồ sơ hoàn thiện...
                       </div>
                     )}
                   </DialogFooter>

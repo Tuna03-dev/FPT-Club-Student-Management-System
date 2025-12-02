@@ -1,85 +1,66 @@
 import { useEffect, useState, useCallback } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { Bell, CheckCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Tabs,
-  TabsList,
-  TabsTrigger,
-  TabsContent,
-} from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import type { NotificationItem } from "@/types/notification";
+
 import {
   getNotifications,
   markAllNotificationsAsRead,
   markNotificationAsRead,
 } from "@/api/notifications";
 
-import { useWebSocket } from "@/hooks/useWebSocket";   
+import { useWebSocket } from "@/hooks/useWebSocket";
 
 type TabKey = "all" | "unread";
 
 export const Notifications = () => {
-  const { clubId = "0" } = useParams();
   const navigate = useNavigate();
   const [tab, setTab] = useState<TabKey>("all");
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // ⭐ NEW — websocket
   const token = localStorage.getItem("accessToken") || null;
   const { isConnected, subscribeToUserQueue } = useWebSocket(token);
 
-  // ===== LOAD DATA =====
-  const loadData = useCallback(
-    async (currentTab: TabKey) => {
-      setLoading(true);
-      try {
-        const page = await getNotifications({
-          page: 0,
-          size: 20,
-          unreadOnly: currentTab === "unread",
-        });
-        setNotifications(page.content ?? []);
-      } catch {
-        // ignore
-      } finally {
-        setLoading(false);
-      }
-    },
-    []
-  );
+  // LOAD DATA
+  const loadData = useCallback(async (currentTab: TabKey) => {
+    setLoading(true);
+    try {
+      const page = await getNotifications({
+        page: 0,
+        size: 20,
+        unreadOnly: currentTab === "unread",
+      });
+      setNotifications(page.content ?? []);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     loadData(tab);
   }, [tab, loadData]);
 
-  // ⭐⭐ NEW: REALTIME UPDATE
+  // REALTIME UPDATE
   useEffect(() => {
     if (!isConnected) return;
 
     const off = subscribeToUserQueue((msg) => {
-      // message từ backend: { type, action, payload... }
-      if (msg.type === "NOTIFICATION") {
-        // Khi có NEW, READ-UPDATE, BULK-READ => reload ngay
-        loadData(tab);
-      }
+      if (msg.type === "NOTIFICATION") loadData(tab);
     });
 
     return () => off?.();
   }, [isConnected, subscribeToUserQueue, loadData, tab]);
 
-  // ===== MARK ALL =====
+  // MARK ALL
   const handleMarkAll = async () => {
-    try {
-      await markAllNotificationsAsRead();
-      await loadData(tab); // load lại tab hiện tại
-    } catch {
-      // ignore
-    }
+    await markAllNotificationsAsRead();
+    await loadData(tab);
   };
 
-  // ===== ITEM CLICK =====
+  // NAVIGATE ITEM
   const handleClickItem = async (n: NotificationItem) => {
     try {
       if (!n.read) {
@@ -90,19 +71,27 @@ export const Notifications = () => {
       }
     } catch {}
 
-    if (n.actionUrl) {
-      navigate(`/myclub/${clubId}${n.actionUrl}`);
-    }
+    if (!n.actionUrl) return;
+
+    /**
+     * RULE:
+     * - actionUrl đã luôn là full path hợp lệ từ backend
+     *   ví dụ:
+     *   /myclub/5/events/10
+     *   /events/100
+     *   /club/20
+     *   /staff/news/10
+     */
+    navigate(n.actionUrl);
   };
 
   return (
     <div className="p-6 space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Thông báo</h1>
+          <h1 className="text-3xl font-bold">Thông báo hệ thống</h1>
           <p className="text-muted-foreground mt-1">
-            Các thông báo và cập nhật mới nhất
+            Tất cả thông báo dành cho bạn
           </p>
         </div>
         <Button variant="outline" className="gap-2" onClick={handleMarkAll}>
@@ -121,51 +110,45 @@ export const Notifications = () => {
           <TabsTrigger value="unread">Chưa đọc</TabsTrigger>
         </TabsList>
 
-        {/* TAB ALL */}
         <TabsContent value="all" className="space-y-4">
-          {loading && <p className="text-sm text-muted-foreground">Đang tải…</p>}
+          {loading && <p>Đang tải…</p>}
           {!loading && notifications.length === 0 && (
-            <p className="text-sm text-muted-foreground">Không có thông báo nào.</p>
+            <p>Không có thông báo nào.</p>
           )}
-
           {!loading &&
-            notifications.map((notification) => (
+            notifications.map((n) => (
               <button
-                key={notification.id}
-                onClick={() => handleClickItem(notification)}
+                key={n.id}
+                onClick={() => handleClickItem(n)}
                 className={`w-full text-left p-4 rounded-lg border transition shadow-sm ${
-                  notification.read
-                    ? "bg-card"
-                    : "bg-primary/5 border-primary/20"
+                  n.read ? "bg-card" : "bg-primary/5 border-primary/20"
                 }`}
               >
                 <div className="flex items-start gap-4">
                   <div
                     className={`h-10 w-10 rounded-full flex items-center justify-center ${
-                      notification.read ? "bg-secondary" : "bg-primary/10"
+                      n.read ? "bg-secondary" : "bg-primary/10"
                     }`}
                   >
                     <Bell
                       className={`h-5 w-5 ${
-                        notification.read ? "text-muted-foreground" : "text-primary"
+                        n.read ? "text-muted-foreground" : "text-primary"
                       }`}
                     />
                   </div>
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2">
-                      <h3 className="font-semibold">{notification.title}</h3>
-                      {!notification.read && (
+                      <h3 className="font-semibold">{n.title}</h3>
+                      {!n.read && (
                         <span className="h-2 w-2 rounded-full bg-primary mt-2" />
                       )}
                     </div>
-
                     <p className="text-sm text-muted-foreground mt-1">
-                      {notification.message}
+                      {n.message}
                     </p>
-
                     <p className="text-xs text-muted-foreground mt-2">
-                      {new Date(notification.createdAt).toLocaleString()}
+                      {new Date(n.createdAt).toLocaleString()}
                     </p>
                   </div>
                 </div>
@@ -173,56 +156,32 @@ export const Notifications = () => {
             ))}
         </TabsContent>
 
-        {/* TAB UNREAD */}
         <TabsContent value="unread" className="space-y-4">
-          {loading && <p className="text-sm text-muted-foreground">Đang tải…</p>}
-          {!loading && notifications.length === 0 && (
-            <p className="text-sm text-muted-foreground">Không có thông báo chưa đọc.</p>
-          )}
-
           {!loading &&
-            notifications.map((notification) => (
-              <button
-                key={notification.id}
-                onClick={() => handleClickItem(notification)}
-                className={`w-full text-left p-4 rounded-lg border transition shadow-sm ${
-                  notification.read
-                    ? "bg-card"
-                    : "bg-primary/5 border-primary/20"
-                }`}
-              >
-                <div className="flex items-start gap-4">
-                  <div
-                    className={`h-10 w-10 rounded-full flex items-center justify-center ${
-                      notification.read ? "bg-secondary" : "bg-primary/10"
-                    }`}
-                  >
-                    <Bell
-                      className={`h-5 w-5 ${
-                        notification.read ? "text-muted-foreground" : "text-primary"
-                      }`}
-                    />
-                  </div>
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-2">
-                      <h3 className="font-semibold">{notification.title}</h3>
-                      {!notification.read && (
-                        <span className="h-2 w-2 rounded-full bg-primary mt-2" />
-                      )}
+            notifications
+              .filter((n) => !n.read)
+              .map((n) => (
+                <button
+                  key={n.id}
+                  onClick={() => handleClickItem(n)}
+                  className="w-full text-left p-4 rounded-lg border shadow-sm bg-primary/5 border-primary/20"
+                >
+                  <div className="flex items-start gap-4">
+                    <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                      <Bell className="h-5 w-5 text-primary" />
                     </div>
-
-                    <p className="text-sm text-muted-foreground mt-1">
-                      {notification.message}
-                    </p>
-
-                    <p className="text-xs text-muted-foreground mt-2">
-                      {new Date(notification.createdAt).toLocaleString()}
-                    </p>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold">{n.title}</h3>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        {n.message}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-2">
+                        {new Date(n.createdAt).toLocaleString()}
+                      </p>
+                    </div>
                   </div>
-                </div>
-              </button>
-            ))}
+                </button>
+              ))}
         </TabsContent>
       </Tabs>
     </div>

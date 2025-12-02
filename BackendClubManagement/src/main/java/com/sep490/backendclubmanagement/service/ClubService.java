@@ -22,6 +22,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.Collections;
 import java.util.List;
@@ -45,6 +46,10 @@ public class ClubService implements ClubServiceInterface {
     private final SystemRoleRepository systemRoleRepository;
     private final RoleService roleService;
     private final NotificationService notificationService;
+    private final CloudinaryService cloudinaryService;
+
+    // Maximum allowed upload size for logo/banner: 10 MB
+    private static final long MAX_UPLOAD_SIZE_BYTES = 10L * 1024L * 1024L;
 
     @Override
     @Transactional(readOnly = true)
@@ -264,7 +269,7 @@ public class ClubService implements ClubServiceInterface {
 
         // Send notification to the new club president
         try {
-            String actionUrl = "/clubs/" + savedClub.getId();
+            String actionUrl = "/myclub/" + savedClub.getId();
             String title = "Bạn được chỉ định làm Chủ nhiệm CLB";
             String message = "Bạn đã được chỉ định làm Chủ nhiệm của CLB " + savedClub.getClubName() +
                     " (" + savedClub.getClubCode() + "). Chúc mừng bạn!";
@@ -510,7 +515,7 @@ public class ClubService implements ClubServiceInterface {
             List<Long> memberIds = getActiveClubMembers(clubId);
 
             if (!memberIds.isEmpty()) {
-                String actionUrl = "/clubs/" + clubId;
+                String actionUrl = "/myclub/" + clubId;
                 String title = "Câu lạc bộ đã bị vô hiệu hóa";
                 String message = "CLB " + club.getClubName() + " đã bị vô hiệu hóa bởi nhà trường. " +
                         "Mọi hoạt động của CLB sẽ tạm ngưng cho đến khi được kích hoạt lại.";
@@ -554,7 +559,7 @@ public class ClubService implements ClubServiceInterface {
             List<Long> memberIds = getActiveClubMembers(clubId);
 
             if (!memberIds.isEmpty()) {
-                String actionUrl = "/clubs/" + clubId;
+                String actionUrl = "//" + clubId;
                 String title = "Câu lạc bộ đã được kích hoạt lại";
                 String message = "CLB " + club.getClubName() + " đã được kích hoạt lại bởi nhà trường. " +
                         "Các hoạt động của CLB có thể tiếp tục.";
@@ -616,7 +621,7 @@ public class ClubService implements ClubServiceInterface {
 
     @Override
     @Transactional
-    public ClubDetailData updateClubInfo(Long clubId, UpdateClubInfoRequest request, Long userId) throws AppException {
+    public ClubDetailData updateClubInfo(Long clubId, UpdateClubInfoRequest request, Long userId, MultipartFile logoFile, MultipartFile bannerFile) throws AppException {
         boolean isClubOfficer = roleMemberShipRepository.existsClubAdmin(userId, clubId);
         if (!isClubOfficer) {
             throw new AppException(ErrorCode.FORBIDDEN);
@@ -629,6 +634,54 @@ public class ClubService implements ClubServiceInterface {
         // Check if club is active (only active clubs can update information)
         if (!"ACTIVE".equalsIgnoreCase(club.getStatus())) {
             throw new AppException(ErrorCode.CLUB_NOT_ACTIVE);
+        }
+
+        // ===== Handle logo removal =====
+        if (Boolean.TRUE.equals(request.getRemoveLogo())) {
+            club.setLogoUrl(null);
+            log.info("Removed logo for club {}", clubId);
+        }
+        // ===== Handle logo file upload =====
+        else if (logoFile != null && !logoFile.isEmpty()) {
+            // Validate file size
+            if (logoFile.getSize() > MAX_UPLOAD_SIZE_BYTES) {
+                log.warn("Logo upload rejected for club {}: file size {} exceeds {} bytes", clubId, logoFile.getSize(), MAX_UPLOAD_SIZE_BYTES);
+                // Provide custom message indicating 10MB limit
+                throw new AppException(ErrorCode.FILE_TOO_LARGE, "Kích thước tập tin vượt quá giới hạn 10MB");
+            }
+
+            try {
+                CloudinaryService.UploadResult uploadResult = cloudinaryService.uploadImage(logoFile, "club/logos");
+                club.setLogoUrl(uploadResult.url());
+                log.info("Uploaded logo for club {}: {}", clubId, uploadResult.url());
+            } catch (Exception e) {
+                log.error("Failed to upload logo for club {}: {}", clubId, e.getMessage());
+                throw new RuntimeException("Failed to upload file: " + e.getMessage(), e);
+            }
+        }
+
+        // ===== Handle banner removal =====
+        if (Boolean.TRUE.equals(request.getRemoveBanner())) {
+            club.setBannerUrl(null);
+            log.info("Removed banner for club {}", clubId);
+        }
+        // ===== Handle banner file upload =====
+        else if (bannerFile != null && !bannerFile.isEmpty()) {
+            // Validate file size
+            if (bannerFile.getSize() > MAX_UPLOAD_SIZE_BYTES) {
+                log.warn("Banner upload rejected for club {}: file size {} exceeds {} bytes", clubId, bannerFile.getSize(), MAX_UPLOAD_SIZE_BYTES);
+                // Provide custom message indicating 10MB limit
+                throw new AppException(ErrorCode.FILE_TOO_LARGE, "Kích thước tập tin vượt quá giới hạn 10MB");
+            }
+
+            try {
+                CloudinaryService.UploadResult uploadResult = cloudinaryService.uploadImage(bannerFile, "club/banners");
+                club.setBannerUrl(uploadResult.url());
+                log.info("Uploaded banner for club {}: {}", clubId, uploadResult.url());
+            } catch (Exception e) {
+                log.error("Failed to upload banner for club {}: {}", clubId, e.getMessage());
+                throw new RuntimeException("Failed to upload template file: " + e.getMessage(), e);
+            }
         }
 
         // ===== Validate and update clubCode (allow updating clubCode) =====
@@ -662,10 +715,12 @@ public class ClubService implements ClubServiceInterface {
         if (request.getDescription() != null) {
             club.setDescription(request.getDescription());
         }
-        if (request.getLogoUrl() != null) {
+        // Only update logoUrl from request if no file was uploaded
+        if (request.getLogoUrl() != null && (logoFile == null || logoFile.isEmpty())) {
             club.setLogoUrl(request.getLogoUrl());
         }
-        if (request.getBannerUrl() != null) {
+        // Only update bannerUrl from request if no file was uploaded
+        if (request.getBannerUrl() != null && (bannerFile == null || bannerFile.isEmpty())) {
             club.setBannerUrl(request.getBannerUrl());
         }
         if (request.getEmail() != null) {

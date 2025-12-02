@@ -15,6 +15,7 @@ import { Plus, Search, X } from "lucide-react";
 import { createTeam } from "@/api/teams";
 import type { CreateTeamPayload } from "@/types/team";
 import { getAvailableMembers } from "@/api/members";
+import { toast } from "sonner";
 
 type MemberRole = "leader" | "deputy" | "member";
 
@@ -61,8 +62,14 @@ function MemberSelector({
             name: m.fullName,
           }))
         );
-      } catch {
+      } catch (err: any) {
         if (!alive) return;
+
+        toast.error(
+          err?.response?.data?.message ||
+            "Không thể tải danh sách thành viên. Vui lòng thử lại."
+        );
+
         setAvailableMembers([]);
       } finally {
         if (!alive) return;
@@ -224,6 +231,12 @@ export default function TeamCreatePage() {
       return "Tên phòng ban phải chứa ít nhất một chữ cái.";
     }
 
+    // ❌ Cấm chứa số giống BE
+    if (/\d/.test(trimmedName)) {
+      return "Tên phòng ban không được chứa số.";
+    }
+
+    // Không cho toàn số (phòng hờ)
     const allDigits = /^\d+$/.test(trimmedName);
     if (allDigits) {
       return "Tên phòng ban không được chỉ gồm chữ số.";
@@ -305,7 +318,29 @@ export default function TeamCreatePage() {
       const result = await createTeam(payload);
       navigate(`/myclub/${clubId}/teams/${result.id}`);
     } catch (err: any) {
-      const msg = err?.message || "Không thể tạo phòng ban. Vui lòng thử lại.";
+      const msg =
+        err?.response?.data?.message ||
+        err?.response?.data?.error ||
+        err?.message ||
+        "Không thể tạo phòng ban. Vui lòng thử lại.";
+
+      // Lỗi trùng tên ban -> hiện cạnh input
+      if (msg.toLowerCase().includes("tên ban")) {
+        setErrors((prev) => ({
+          ...prev,
+          teamName: msg,
+          general: undefined,
+        }));
+        return;
+      }
+
+      // Lỗi khác -> hiện toast
+      toast.error(msg);
+
+      setErrors((prev) => ({
+        ...prev,
+        general: undefined,
+      }));
 
       if (msg.toLowerCase().includes("tên ban")) {
         setErrors((prev) => ({

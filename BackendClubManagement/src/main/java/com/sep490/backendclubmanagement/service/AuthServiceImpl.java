@@ -92,13 +92,12 @@ public class AuthServiceImpl implements AuthService{
         authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
         SecurityContextHolder.getContext().setAuthentication(authToken);
 
-        // Get club roles
+        // Get club roles for response only (not stored in JWT)
         List<ClubRoleInfo> clubRoleList = clubManagementService.getUserClubRoles(user.getId());
 
         Map<String, Object> extraClaims = new HashMap<>();
         extraClaims.put("fullName", user.getFullName());
         extraClaims.put("avatarUrl", user.getAvatarUrl());
-        extraClaims.put("clubRoles", clubRoleList);
 
         String accessToken = jwtUtil.generateAccessToken(extraClaims, securityUser);
         String refreshToken = jwtUtil.generateRefreshToken(securityUser);
@@ -183,14 +182,13 @@ public class AuthServiceImpl implements AuthService{
         authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
         SecurityContextHolder.getContext().setAuthentication(authToken);
 
-        // Get club roles
+        // Get club roles for response only (not stored in JWT)
         List<ClubRoleInfo> clubRoleList = clubManagementService.getUserClubRoles(user.getId());
 
         Map<String, Object> extraClaims = new HashMap<>();
         extraClaims.put("fullName", user.getFullName());
         extraClaims.put("avatarUrl", user.getAvatarUrl());
         extraClaims.put("systemRole", systemRole);
-        extraClaims.put("clubRoles", clubRoleList);
 
         String newAccessToken = jwtUtil.generateAccessToken(extraClaims, securityUser);
         String newRefreshToken = jwtUtil.generateRefreshToken(securityUser);

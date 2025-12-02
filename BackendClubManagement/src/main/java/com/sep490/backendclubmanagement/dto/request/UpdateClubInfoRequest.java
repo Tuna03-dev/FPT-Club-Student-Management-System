@@ -1,6 +1,7 @@
 package com.sep490.backendclubmanagement.dto.request;
 
 import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
@@ -8,10 +9,10 @@ import lombok.Data;
 @Data
 public class UpdateClubInfoRequest {
 
-    @Size(max = 255, message = "Tên câu lạc bộ không được quá 255 ký tự")
+    @NotBlank(message = "Tên câu lạc bộ không được để trống")
     private String clubName;
 
-    @Size(max = 10, message = "Tên câu lạc bộ không được quá 10 ký tự")
+    @NotBlank(message = "Mã câu lạc bộ không được để trống")
     private String clubCode;
 
     @Size(max = 2000, message = "Mô tả không được quá 2000 ký tự")
@@ -40,5 +41,8 @@ public class UpdateClubInfoRequest {
 
     @Size(max = 500, message = "YouTube URL không được quá 500 ký tự")
     private String ytUrl;
+
+    private Boolean removeLogo;
+    private Boolean removeBanner;
 }
 
