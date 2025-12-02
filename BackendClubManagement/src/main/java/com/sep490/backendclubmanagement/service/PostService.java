@@ -528,10 +528,14 @@ public class PostService {
             sorted.get(i).setDisplayOrder(i);
         }
     }
-    public Long getClubIdByPostId(Long postId) throws AppException {
+    public Long getClubIdByPostId(Long postId) {
         Post p = postRepository.findById(postId)
-                .orElseThrow(() -> new AppException(ErrorCode.POST_NOT_FOUND));
+                .orElseThrow(() ->
+                        new IllegalArgumentException("Post not found with id = " + postId));
 
+        if (p.getClub() == null) {
+            throw new IllegalStateException("Post " + postId + " does not belong to any club");
+        }
         return p.getClub().getId();
     }
 
