@@ -42,6 +42,19 @@ public interface ClubReportRequirementRepository extends JpaRepository<ClubRepor
     );
 
     /**
+     * Find all ClubReportRequirements by multiple submissionReportRequirementIds
+     * Fetch club and report eagerly to avoid N+1 queries and LazyInitializationException
+     * Used for batch loading in getAllReportRequirements()
+     */
+    @Query("SELECT crr FROM ClubReportRequirement crr " +
+           "JOIN FETCH crr.club " +
+           "LEFT JOIN FETCH crr.report r " +
+           "WHERE crr.submissionReportRequirement.id IN :submissionReportRequirementIds")
+    List<ClubReportRequirement> findBySubmissionReportRequirementIdIn(
+            @Param("submissionReportRequirementIds") List<Long> submissionReportRequirementIds
+    );
+
+    /**
      * Find all ClubReportRequirements by clubId
      * Fetch submissionReportRequirement eagerly to avoid LazyInitializationException
      * Ordered by creation time (newest first)
