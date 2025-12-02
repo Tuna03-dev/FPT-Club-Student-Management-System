@@ -70,6 +70,26 @@ export interface RecruitmentApplicationData {
   answers?: ApplicationAnswerData[];
 }
 
+// Lightweight interface for application list (without answers)
+export interface RecruitmentApplicationListData {
+  id: number;
+  recruitmentId: number;
+  applicantId: number;
+  userName: string;
+  userEmail: string;
+  userPhone?: string;
+  studentId: string;
+  avatar?: string;
+  teamId?: number;
+  teamName?: string;
+  submittedDate: string;
+  interviewTime?: string; // ISO string
+  interviewAddress?: string;
+  interviewPreparationRequirements?: string;
+  status: "UNDER_REVIEW" | "ACCEPTED" | "REJECTED" | "INTERVIEW";
+  reviewNotes?: string;
+}
+
 export interface ApplicationAnswerData {
   questionId: number;
   questionText: string;
@@ -122,7 +142,7 @@ export async function getRecruitmentsByClubId(
   const {
     status,
     keyword,
-    page = 0,
+    page = 1,
     size = 10,
     sort = "endDate,desc",
   } = params;
@@ -153,7 +173,7 @@ export async function getOpenRecruitmentsByClubId(
   const {
     status = "OPEN",
     keyword,
-    page = 0,
+    page = 1,
     size = 10,
     sort = "endDate,desc",
   } = params;
@@ -184,11 +204,11 @@ export async function getRecruitmentById(id: number): Promise<RecruitmentData> {
 export async function getApplicationsByRecruitmentId(
   recruitmentId: number,
   params: ApplicationFilterRequest = {}
-): Promise<PagedResponse<RecruitmentApplicationData>> {
+): Promise<PagedResponse<RecruitmentApplicationListData>> {
   const {
     status,
     keyword,
-    page = 0,
+    page = 1,
     size = 10,
     sort = "submittedDate,desc",
   } = params;
@@ -200,12 +220,11 @@ export async function getApplicationsByRecruitmentId(
   queryParams.append("size", size.toString());
   queryParams.append("sort", sort);
 
-  const res = await axiosClient.get<PagedResponse<RecruitmentApplicationData>>(
-    `/recruitments/${recruitmentId}/applications?${queryParams.toString()}`,
-    {
-      timeout: 30000, // 30 seconds
-    }
-  );
+  const res = await axiosClient.get<
+    PagedResponse<RecruitmentApplicationListData>
+  >(`/recruitments/${recruitmentId}/applications?${queryParams.toString()}`, {
+    timeout: 30000, // 30 seconds
+  });
 
   if (!res.data) throw new Error("Empty response");
   return res.data;
@@ -247,12 +266,8 @@ export async function updateRecruitment(
 export async function changeRecruitmentStatus(
   id: number,
   status: "DRAFT" | "OPEN" | "CLOSED" | "CANCELLED"
-): Promise<RecruitmentData> {
-  const res = await axiosClient.patch<RecruitmentData>(
-    `/recruitments/${id}/status?status=${status}`
-  );
-  if (!res.data) throw new Error("Failed to change recruitment status");
-  return res.data;
+): Promise<void> {
+  await axiosClient.patch<void>(`/recruitments/${id}/status?status=${status}`);
 }
 
 // Delete recruitment
@@ -307,11 +322,11 @@ export async function submitApplication(
 // Get my applications (for current user)
 export async function getMyApplications(
   params: ApplicationFilterRequest = {}
-): Promise<PagedResponse<RecruitmentApplicationData>> {
+): Promise<PagedResponse<RecruitmentApplicationListData>> {
   const {
     status,
     keyword,
-    page = 0,
+    page = 1,
     size = 10,
     sort = "submittedDate,desc",
   } = params;
@@ -323,12 +338,11 @@ export async function getMyApplications(
   queryParams.append("size", size.toString());
   queryParams.append("sort", sort);
 
-  const res = await axiosClient.get<PagedResponse<RecruitmentApplicationData>>(
-    `/recruitments/myApplications?${queryParams.toString()}`,
-    {
-      timeout: 30000, // 30 seconds
-    }
-  );
+  const res = await axiosClient.get<
+    PagedResponse<RecruitmentApplicationListData>
+  >(`/recruitments/myApplications?${queryParams.toString()}`, {
+    timeout: 30000, // 30 seconds
+  });
 
   if (!res.data) throw new Error("Empty response");
   return res.data;
@@ -340,6 +354,18 @@ export async function getMyApplicationDetail(
 ): Promise<RecruitmentApplicationData> {
   const res = await axiosClient.get<RecruitmentApplicationData>(
     `/recruitments/myApplications/${applicationId}`
+  );
+
+  if (!res.data) throw new Error("Application not found");
+  return res.data;
+}
+
+// Get application detail (for club officers)
+export async function getApplicationDetail(
+  applicationId: number
+): Promise<RecruitmentApplicationData> {
+  const res = await axiosClient.get<RecruitmentApplicationData>(
+    `/recruitments/applications/${applicationId}`
   );
 
   if (!res.data) throw new Error("Application not found");

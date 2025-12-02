@@ -111,15 +111,14 @@ type ReportStatusFilter =
   | "RESUBMITTED_UNIVERSITY";
 
 interface ReportRequest {
-  request_id: string; // clubReportRequirementId
-  submission_requirement_id: string; // submissionReportRequirementId (used for API calls)
-  request_type: ReportType;
+  clubReportRequirementId: number; // clubReportRequirementId
+  submissionRequirementId: number; // submissionReportRequirementId (used for API calls)
+  reportType: ReportType;
   title: string;
   description: string;
   deadline: string;
-  created_by: string;
-  created_at: string;
-  required_details: string[];
+  createdBy: string;
+  createdAt: string;
   templateUrl?: string;
   status?: string; // UNSUBMITTED, SUBMITTED, APPROVED, REJECTED, RESUBMITTED
   teamId?: number | null; // Team ID assigned to this requirement
@@ -137,30 +136,8 @@ interface ReportRequest {
       email: string;
       studentCode?: string;
     };
+    createdByUserName: string;
   };
-}
-
-interface ReportSubmission {
-  submission_id: string;
-  request_id: string;
-  report_type: ReportType;
-  title: string;
-  period_month?: string;
-  event_name?: string;
-  created_by_name: string;
-  created_by_id: string;
-  created_at: string;
-  updated_at: string;
-  submitted_at?: string;
-  content: string;
-  attachments?: Array<{
-    name: string;
-    url: string;
-    type: string;
-  }>;
-  approval_notes?: string;
-  approved_by?: string;
-  rejection_reason?: string;
 }
 
 const reportTypeLabels: Record<ReportType, string> = {
@@ -284,14 +261,6 @@ export function ClubReportManagement() {
   const mapRequirementToReportRequest = (req: any): ReportRequest => {
     const reportType = mapBackendToFrontendReportType(req.reportType);
 
-    // Extract required details from description (split by newlines or bullet points)
-    const requiredDetails = req.description
-      ? req.description
-          .split(/\r?\n|•|\u2022|-/)
-          .map((s: string) => s.trim())
-          .filter((s: string) => s.length > 0)
-      : [];
-
     const finalReportType: ReportType =
       reportType === "post-event"
         ? "post_event"
@@ -302,8 +271,8 @@ export function ClubReportManagement() {
     // Extract IDs from new backend structure
     // req.id is submissionReportRequirementId
     // req.clubRequirement.id is clubReportRequirementId
-    const submissionReqId = req.id ?? null;
-    const clubReqId = req.clubRequirement?.id ?? null;
+    const submissionReqId = req.id ?? 0;
+    const clubReqId = req.clubRequirement?.id ?? 0;
     const teamId = req.clubRequirement?.teamId ?? null;
 
     // Extract report info from nested clubRequirement.report
@@ -324,6 +293,7 @@ export function ClubReportManagement() {
                 email: "",
               }
             : undefined,
+          createdByUserName: nestedReport.createdByUserName || "",
         }
       : undefined;
 
@@ -334,20 +304,14 @@ export function ClubReportManagement() {
     const finalStatus = reportInfo?.status ?? "UNSUBMITTED";
 
     return {
-      // Use clubReportRequirementId for request_id (for assign-team API)
-      request_id: String(clubReqId ?? ""),
-      // Use submissionReportRequirementId for fetching report
-      submission_requirement_id: String(submissionReqId ?? ""),
-      request_type: finalReportType,
+      clubReportRequirementId: clubReqId,
+      submissionRequirementId: submissionReqId,
+      reportType: finalReportType,
       title: req.title,
       description: req.description || "",
       deadline: req.dueDate,
-      created_by: req.createdByName || "Phòng Quản lý Sinh viên",
-      created_at: req.createdAt || "",
-      required_details:
-        requiredDetails.length > 0
-          ? requiredDetails
-          : ["Báo cáo chi tiết về hoạt động của câu lạc bộ"],
+      createdBy: req.createdByName || "Phòng Quản lý Sinh viên",
+      createdAt: req.createdAt || "",
       templateUrl: req.templateUrl,
       status: finalStatus,
       report: reportInfo,
@@ -361,7 +325,6 @@ export function ClubReportManagement() {
   const [selectedRequest, setSelectedRequest] = useState<ReportRequest | null>(
     null
   );
-  const [selectedSubmission] = useState<ReportSubmission | null>(null);
   const [selectedReportDetail, setSelectedReportDetail] =
     useState<ReportDetailResponse | null>(null);
   const [loadingReportDetailId, setLoadingReportDetailId] = useState<
@@ -761,7 +724,9 @@ export function ClubReportManagement() {
     }
 
     setSelectedRequest(
-      reportRequests.find((r) => r.request_id === requestId) || null
+      reportRequests.find(
+        (r) => r.clubReportRequirementId === Number(requestId)
+      ) || null
     );
     setEditingReportId(null);
     setDraftTitle("");
@@ -787,9 +752,8 @@ export function ClubReportManagement() {
       setAssigningTeam(true);
 
       await assignTeamToReportRequirement(clubId, {
-        clubReportRequirementId: Number(
-          selectedRequirementForAssign.request_id
-        ),
+        clubReportRequirementId:
+          selectedRequirementForAssign.clubReportRequirementId,
         teamId: selectedTeamId,
       });
 
@@ -1092,7 +1056,7 @@ export function ClubReportManagement() {
 
                   // Debug: Log để kiểm tra dữ liệu
                   console.log("Request data:", {
-                    request_id: request.request_id,
+                    clubReportRequirementId: request.clubReportRequirementId,
                     status: request.status,
                     report: request.report,
                     reportStatus: request.report?.status,
@@ -1115,13 +1079,12 @@ export function ClubReportManagement() {
                   const handleCardClick = async () => {
                     if (!cardClickable) return;
                     try {
-                      setLoadingReportDetailId(request.request_id);
+                      setLoadingReportDetailId(
+                        String(request.clubReportRequirementId)
+                      );
                       const reportDetail =
                         await getClubReportByRequirementForOfficer(
-                          Number(
-                            request.submission_requirement_id ||
-                              request.request_id
-                          ),
+                          request.submissionRequirementId,
                           clubId!
                         );
                       if (reportDetail) {
@@ -1140,7 +1103,7 @@ export function ClubReportManagement() {
 
                   return (
                     <Card
-                      key={request.request_id}
+                      key={request.clubReportRequirementId}
                       onClick={cardClickable ? handleCardClick : undefined}
                       className={`hover:shadow-lg transition-shadow flex flex-col h-full ${
                         cardClickable ? "cursor-pointer" : ""
@@ -1151,11 +1114,9 @@ export function ClubReportManagement() {
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-2 flex-wrap">
                               <Badge
-                                className={
-                                  reportTypeColors[request.request_type]
-                                }
+                                className={reportTypeColors[request.reportType]}
                               >
-                                {reportTypeLabels[request.request_type]}
+                                {reportTypeLabels[request.reportType]}
                               </Badge>
                               {/* Hiển thị trạng thái yêu cầu (requirement status) - đây là trạng thái chính từ backend */}
                               <Badge
@@ -1207,7 +1168,7 @@ export function ClubReportManagement() {
 
                           <div className="flex items-center gap-2 text-sm text-muted-foreground">
                             <Users className="h-4 w-4" />
-                            <span>Yêu cầu từ: {request.created_by}</span>
+                            <span>Yêu cầu từ: {request.createdBy}</span>
                           </div>
 
                           {/* Template URL */}
@@ -1229,21 +1190,14 @@ export function ClubReportManagement() {
                             </div>
                           )}
 
-                          {/* Required details */}
+                          {/* Description */}
                           <div>
                             <Label className="text-xs text-muted-foreground mb-2">
-                              Thông tin yêu cầu:
+                              Mô tả:
                             </Label>
-                            <ul className="text-sm space-y-1 ml-4">
-                              {request.required_details.map((detail, idx) => (
-                                <li
-                                  key={idx}
-                                  className="list-disc text-muted-foreground"
-                                >
-                                  {detail}
-                                </li>
-                              ))}
-                            </ul>
+                            <p className="text-sm text-muted-foreground ml-4">
+                              {request.description || "Không có mô tả"}
+                            </p>
                           </div>
 
                           {/* Báo cáo đang chờ phê duyệt từ CLB */}
@@ -1323,13 +1277,19 @@ export function ClubReportManagement() {
                           )}
 
                           {/* Hiển thị thông báo khi báo cáo đã được giao cho phòng ban */}
-                          {request.teamId && isClubOfficer && teams?.find((t) => t.teamId === request.teamId)?.teamName && (
-                            <div className="p-3 bg-green-50 border border-green-200 rounded text-sm text-green-800">
-                              <UserPlus className="h-4 w-4 inline mr-2" />
-                              Báo cáo đã được giao cho phòng{" "}
-                              {teams.find((t) => t.teamId === request.teamId)?.teamName}
-                            </div>
-                          )}
+                          {request.teamId &&
+                            isClubOfficer &&
+                            teams?.find((t) => t.teamId === request.teamId)
+                              ?.teamName && (
+                              <div className="p-3 bg-green-50 border border-green-200 rounded text-sm text-green-800">
+                                <UserPlus className="h-4 w-4 inline mr-2" />
+                                Báo cáo đã được giao cho phòng{" "}
+                                {
+                                  teams.find((t) => t.teamId === request.teamId)
+                                    ?.teamName
+                                }
+                              </div>
+                            )}
 
                           {/* Hiển thị thông báo khi báo cáo ở trạng thái DRAFT và user không phải người tạo */}
                           {request.status === "DRAFT" &&
@@ -1343,7 +1303,7 @@ export function ClubReportManagement() {
                                 return (
                                   <div className="p-3 bg-gray-50 border border-gray-200 rounded text-sm text-gray-800">
                                     <FileText className="h-4 w-4 inline mr-2" />
-                                    {request.report.createdBy.fullName} đã tạo
+                                    {request.report.createdByUserName} đã tạo
                                     báo cáo ở trạng thái bản nháp
                                   </div>
                                 );
@@ -1373,14 +1333,13 @@ export function ClubReportManagement() {
                                           e.stopPropagation();
                                           try {
                                             setLoadingReportDetailId(
-                                              request.request_id
+                                              String(
+                                                request.clubReportRequirementId
+                                              )
                                             );
                                             const reportDetail =
                                               await getClubReportByRequirementForOfficer(
-                                                Number(
-                                                  request.submission_requirement_id ||
-                                                    request.request_id
-                                                ),
+                                                request.submissionRequirementId,
                                                 clubId!
                                               );
                                             if (reportDetail) {
@@ -1408,12 +1367,14 @@ export function ClubReportManagement() {
                                         className="bg-transparent"
                                         disabled={
                                           loadingReportDetailId ===
-                                          request.request_id
+                                          String(
+                                            request.clubReportRequirementId
+                                          )
                                         }
                                       >
                                         <Eye className="h-4 w-4 mr-1" />
                                         {loadingReportDetailId ===
-                                        request.request_id
+                                        String(request.clubReportRequirementId)
                                           ? "Đang tải..."
                                           : "Xem bản nháp"}
                                       </Button>
@@ -1431,14 +1392,13 @@ export function ClubReportManagement() {
                                       e.stopPropagation();
                                       try {
                                         setLoadingReportDetailId(
-                                          request.request_id
+                                          String(
+                                            request.clubReportRequirementId
+                                          )
                                         );
                                         const reportDetail =
                                           await getClubReportByRequirementForOfficer(
-                                            Number(
-                                              request.submission_requirement_id ||
-                                                request.request_id
-                                            ),
+                                            request.submissionRequirementId,
                                             clubId!
                                           );
                                         if (reportDetail) {
@@ -1462,12 +1422,12 @@ export function ClubReportManagement() {
                                     className="bg-transparent"
                                     disabled={
                                       loadingReportDetailId ===
-                                      request.request_id
+                                      String(request.clubReportRequirementId)
                                     }
                                   >
                                     <Eye className="h-4 w-4 mr-1" />
                                     {loadingReportDetailId ===
-                                    request.request_id
+                                    String(request.clubReportRequirementId)
                                       ? "Đang tải..."
                                       : "Xem báo cáo"}
                                   </Button>
@@ -1483,7 +1443,9 @@ export function ClubReportManagement() {
                                 <Button
                                   size="sm"
                                   onClick={() =>
-                                    handleSubmitReport(request.request_id)
+                                    handleSubmitReport(
+                                      String(request.clubReportRequirementId)
+                                    )
                                   }
                                   className="bg-blue-600 hover:bg-blue-700"
                                   disabled={
@@ -2601,7 +2563,9 @@ export function ClubReportManagement() {
                             selectedReportDetail.reportRequirement?.id;
                           if (requirementId) {
                             const request = reportRequests.find(
-                              (r) => r.request_id === requirementId.toString()
+                              (r) =>
+                                r.clubReportRequirementId ===
+                                Number(requirementId)
                             );
                             if (request) {
                               setSelectedRequest(request);
@@ -2691,7 +2655,9 @@ export function ClubReportManagement() {
                             selectedReportDetail.reportRequirement?.id;
                           if (requirementId) {
                             const request = reportRequests.find(
-                              (r) => r.request_id === requirementId.toString()
+                              (r) =>
+                                r.clubReportRequirementId ===
+                                Number(requirementId)
                             );
                             if (request) {
                               setSelectedRequest(request);
@@ -2895,7 +2861,9 @@ export function ClubReportManagement() {
                             selectedReportDetail.reportRequirement?.id;
                           if (requirementId) {
                             const request = reportRequests.find(
-                              (r) => r.request_id === requirementId.toString()
+                              (r) =>
+                                r.clubReportRequirementId ===
+                                Number(requirementId)
                             );
                             if (request) {
                               setSelectedRequest(request);
@@ -2986,7 +2954,9 @@ export function ClubReportManagement() {
                             selectedReportDetail.reportRequirement?.id;
                           if (requirementId) {
                             const request = reportRequests.find(
-                              (r) => r.request_id === requirementId.toString()
+                              (r) =>
+                                r.clubReportRequirementId ===
+                                Number(requirementId)
                             );
                             if (request) {
                               setSelectedRequest(request);
@@ -3032,7 +3002,9 @@ export function ClubReportManagement() {
                             selectedReportDetail.reportRequirement?.id;
                           if (requirementId) {
                             const request = reportRequests.find(
-                              (r) => r.request_id === requirementId.toString()
+                              (r) =>
+                                r.clubReportRequirementId ===
+                                Number(requirementId)
                             );
                             if (request) {
                               setSelectedRequest(request);
@@ -3222,7 +3194,9 @@ export function ClubReportManagement() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="mt-4">
-                <Label>Tiêu đề báo cáo</Label>
+                <Label>
+                  Tiêu đề báo cáo <span className="text-red-500">*</span>
+                </Label>
                 <Input
                   placeholder="Nhập tiêu đề báo cáo"
                   value={draftTitle}
@@ -3231,9 +3205,11 @@ export function ClubReportManagement() {
                 />
               </div>
               <div>
-                <Label>Nội dung chi tiết</Label>
+                <Label>
+                  Nội dung <span className="text-red-500">*</span>
+                </Label>
                 <Textarea
-                  placeholder="Nhập nội dung chi tiết của báo cáo..."
+                  placeholder="Nhập nội dung có trong báo cáo..."
                   rows={8}
                   value={draftContent}
                   onChange={(e) => setDraftContent(e.target.value)}
@@ -3381,10 +3357,8 @@ export function ClubReportManagement() {
                               content: draftContent,
                               fileUrl: draftFileUrl || undefined,
                               clubId: clubId,
-                              reportRequirementId: Number(
-                                selectedRequest.submission_requirement_id ||
-                                  selectedRequest.request_id
-                              ),
+                              reportRequirementId:
+                                selectedRequest.submissionRequirementId,
                               autoSubmit: false,
                             };
 
@@ -3449,7 +3423,6 @@ export function ClubReportManagement() {
                           setSubmittingReport(true);
 
                           let reportIdToSubmit = editingReportId;
-                          let currentReportStatus: string | null = null;
 
                           // Nếu chưa có report, tạo mới với autoSubmit=false (DRAFT)
                           if (!reportIdToSubmit) {
@@ -3458,10 +3431,8 @@ export function ClubReportManagement() {
                               content: draftContent,
                               fileUrl: draftFileUrl || undefined,
                               clubId: clubId,
-                              reportRequirementId: Number(
-                                selectedRequest.submission_requirement_id ||
-                                  selectedRequest.request_id
-                              ),
+                              reportRequirementId:
+                                selectedRequest.submissionRequirementId,
                               autoSubmit: false, // Tạo với status DRAFT
                             };
 
@@ -3470,9 +3441,7 @@ export function ClubReportManagement() {
                               draftFile || undefined
                             );
                             reportIdToSubmit = createdReport.id;
-                            currentReportStatus = createdReport.status;
                             setEditingReportId(reportIdToSubmit);
-                            setDraftFile(null);
                           } else {
                             // Update existing report trước khi submit
                             // Nếu có file mới, gửi file trực tiếp với API (backend sẽ xử lý upload)
@@ -3482,48 +3451,22 @@ export function ClubReportManagement() {
                               content: draftContent,
                               fileUrl: draftFile
                                 ? undefined
-                                : draftFileUrl || undefined, // Chỉ dùng fileUrl cũ nếu không có file mới
+                                : draftFileUrl || undefined,
                             };
                             await updateReport(
                               reportIdToSubmit,
                               updateRequest,
                               draftFile || undefined
                             );
-
-                            // Lấy trạng thái hiện tại của report sau khi update
-                            const currentReport =
-                              await getClubReportByRequirementForOfficer(
-                                Number(
-                                  selectedRequest.submission_requirement_id ||
-                                    selectedRequest.request_id
-                                ),
-                                clubId
-                              );
-                            currentReportStatus = currentReport?.status || null;
                           }
 
-                          // Nếu report đang ở trạng thái DRAFT, submit nó để chuyển sang PENDING_CLUB
-                          if (currentReportStatus === "DRAFT") {
-                            const submitRequest: SubmitReportRequest = {
-                              reportId: reportIdToSubmit,
-                            };
-                            await submitReport(submitRequest);
-                            // Sau khi submit, status sẽ là PENDING_CLUB
-                            currentReportStatus = "PENDING_CLUB";
-                          }
-
-                          // Nếu report đang ở PENDING_CLUB hoặc UPDATED_PENDING_CLUB,
-                          // gọi reviewReportByClub  để nộp lên trường (PENDING_UNIVERSITY)
-                          if (
-                            currentReportStatus === "PENDING_CLUB" ||
-                            currentReportStatus === "UPDATED_PENDING_CLUB"
-                          ) {
-                            const reviewRequest = {
-                              reportId: reportIdToSubmit,
-                              status: "PENDING_UNIVERSITY" as const,
-                            };
-                            await reviewReportByClub(reviewRequest);
-                          }
+                          // Gọi reviewReportByClub trực tiếp để nộp lên trường
+                          // Backend hỗ trợ review từ DRAFT và sẽ tự động set submittedDate
+                          const reviewRequest = {
+                            reportId: reportIdToSubmit,
+                            status: "PENDING_UNIVERSITY" as const,
+                          };
+                          await reviewReportByClub(reviewRequest);
 
                           toast.success(
                             "Báo cáo đã được nộp lên trường thành công"
@@ -3561,7 +3504,7 @@ export function ClubReportManagement() {
                     <Button
                       onClick={() =>
                         handleSaveDraft(
-                          selectedRequest.submission_requirement_id
+                          String(selectedRequest.submissionRequirementId)
                         )
                       }
                       className="bg-blue-600 hover:bg-blue-700"
@@ -3606,10 +3549,8 @@ export function ClubReportManagement() {
                               content: draftContent,
                               fileUrl: draftFileUrl || undefined,
                               clubId: clubId,
-                              reportRequirementId: Number(
-                                selectedRequest.submission_requirement_id ||
-                                  selectedRequest.request_id
-                              ),
+                              reportRequirementId:
+                                selectedRequest.submissionRequirementId,
                               autoSubmit: false, // Tạo draft trước, sau đó submit
                             };
 
@@ -3662,7 +3603,7 @@ export function ClubReportManagement() {
         </div>
       )}
 
-      {showEditDialog && (selectedSubmission || selectedReportDetail) && (
+      {showEditDialog && selectedReportDetail && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <CardHeader>
@@ -3686,9 +3627,9 @@ export function ClubReportManagement() {
                 />
               </div>
               <div>
-                <Label>Nội dung chi tiết</Label>
+                <Label>Nội dung </Label>
                 <Textarea
-                  placeholder="Nhập nội dung chi tiết của báo cáo..."
+                  placeholder="Nhập nội dung có trong báo cáo..."
                   rows={8}
                   value={draftContent}
                   onChange={(e) => setDraftContent(e.target.value)}
@@ -3914,7 +3855,9 @@ export function ClubReportManagement() {
                         // Lấy requestId từ selectedRequest hoặc selectedReportDetail
                         let requestId: string | undefined;
                         if (selectedRequest) {
-                          requestId = selectedRequest.submission_requirement_id;
+                          requestId = String(
+                            selectedRequest.submissionRequirementId
+                          );
                         } else if (
                           selectedReportDetail?.reportRequirement?.id
                         ) {
@@ -3974,7 +3917,21 @@ export function ClubReportManagement() {
                                     "Báo cáo đã được nộp lên trường thành công"
                                   );
                                 } else {
-                                  // Nếu không, gọi API submitReport như bình thường
+                                  // Nếu không (team officer), cập nhật báo cáo trước rồi nộp lên câu lạc bộ
+                                  const updateRequest: UpdateReportRequest = {
+                                    reportTitle: draftTitle,
+                                    content: draftContent,
+                                    fileUrl: draftFile
+                                      ? undefined
+                                      : draftFileUrl || undefined, // Chỉ dùng fileUrl cũ nếu không có file mới
+                                  };
+                                  await updateReport(
+                                    editingReportId,
+                                    updateRequest,
+                                    draftFile || undefined
+                                  );
+
+                                  // Sau đó gọi API submitReport để nộp lên câu lạc bộ
                                   const submitRequest: SubmitReportRequest = {
                                     reportId: editingReportId,
                                   };

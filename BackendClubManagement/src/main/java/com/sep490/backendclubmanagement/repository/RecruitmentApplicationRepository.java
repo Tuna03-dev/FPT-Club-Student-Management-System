@@ -13,6 +13,18 @@ import java.util.Optional;
 public interface RecruitmentApplicationRepository extends JpaRepository<RecruitmentApplication, Long> {
     Optional<RecruitmentApplication> findByApplicant_IdAndRecruitment_Id(Long applicantId, Long recruitmentId);
     
+    /**
+     * Find application by ID with recruitment, club, and applicant eagerly loaded
+     * @param id Application ID
+     * @return Optional application with relationships
+     */
+    @Query("SELECT ra FROM RecruitmentApplication ra " +
+           "LEFT JOIN FETCH ra.recruitment r " +
+           "LEFT JOIN FETCH r.club " +
+           "LEFT JOIN FETCH ra.applicant " +
+           "WHERE ra.id = :id")
+    Optional<RecruitmentApplication> findByIdWithDetails(@Param("id") Long id);
+
     // Dynamic search for my applications - supports all combinations of parameters
     // Uses database function to handle Vietnamese text search efficiently
     @Query("SELECT ra FROM RecruitmentApplication ra " +

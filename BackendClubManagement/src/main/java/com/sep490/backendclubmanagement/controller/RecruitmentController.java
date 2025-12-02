@@ -37,12 +37,13 @@ public class RecruitmentController {
             @PathVariable Long clubId,
             @RequestParam(required = false) RecruitmentStatus status,
             @RequestParam(required = false) String keyword,
-            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(defaultValue = "startDate,desc") String sort
     ) throws AppException {
         Long userId = SecurityUtils.getCurrentUserId();
-        Pageable pageable = PageRequest.of(page, size, parseSort(sort));
+        // Convert from 1-based to 0-based pagination for Spring Data
+        Pageable pageable = PageRequest.of(page - 1, size, parseSort(sort));
         PagedResponse<RecruitmentData> data = recruitmentService.listRecruitments(userId,clubId, status, keyword, pageable);
         return ResponseEntity.ok(ApiResponse.success(data));
     }
@@ -51,11 +52,12 @@ public class RecruitmentController {
     public ResponseEntity<ApiResponse<PagedResponse<RecruitmentData>>> listOpenRecruitments (
             @PathVariable Long clubId,
             @RequestParam(required = false) String keyword,
-            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(defaultValue = "startDate,desc") String sort
     ) throws AppException {
-        Pageable pageable = PageRequest.of(page, size, parseSort(sort));
+        // Convert from 1-based to 0-based pagination for Spring Data
+        Pageable pageable = PageRequest.of(page - 1, size, parseSort(sort));
         PagedResponse<RecruitmentData> data = recruitmentService.listRecruitmentsForGuest(clubId, RecruitmentStatus.OPEN, pageable);
         return ResponseEntity.ok(ApiResponse.success(data));
     }
@@ -168,18 +170,19 @@ public class RecruitmentController {
      */
     @GetMapping("/{recruitmentId}/applications")
     @PreAuthorize("@clubSecurity.isClubOfficerForRecruitment(#recruitmentId)")
-    public ResponseEntity<ApiResponse<PagedResponse<RecruitmentApplicationData>>> listApplications(
+    public ResponseEntity<ApiResponse<PagedResponse<RecruitmentApplicationListData>>> listApplications(
             @PathVariable Long recruitmentId,
             @RequestParam(required = false) RecruitmentApplicationStatus status,
             @RequestParam(required = false) String keyword,
-            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(defaultValue = "submittedDate,desc") String sort
     ) throws AppException {
         Long userId = SecurityUtils.getCurrentUserId();
         
-        Pageable pageable = PageRequest.of(page, size, parseSort(sort));
-        PagedResponse<RecruitmentApplicationData> data = recruitmentService.listApplications(userId, recruitmentId, status, keyword, pageable);
+        // Convert from 1-based to 0-based pagination for Spring Data
+        Pageable pageable = PageRequest.of(page - 1, size, parseSort(sort));
+        PagedResponse<RecruitmentApplicationListData> data = recruitmentService.listApplications(userId, recruitmentId, status, keyword, pageable);
         return ResponseEntity.ok(ApiResponse.success(data));
     }
 
@@ -202,17 +205,18 @@ public class RecruitmentController {
      * Any authenticated user can view their own applications
      */
     @GetMapping("/myApplications")
-    public ResponseEntity<ApiResponse<PagedResponse<RecruitmentApplicationData>>> getMyApplications(
+    public ResponseEntity<ApiResponse<PagedResponse<RecruitmentApplicationListData>>> getMyApplications(
             @RequestParam(required = false) RecruitmentApplicationStatus status,
             @RequestParam(required = false) String keyword,
-            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(defaultValue = "submittedDate,desc") String sort
     ) throws AppException {
         Long userId = SecurityUtils.getCurrentUserId();
         
-        Pageable pageable = PageRequest.of(page, size, parseSort(sort));
-        PagedResponse<RecruitmentApplicationData> data = recruitmentService.listMyApplications(userId, status, keyword, pageable);
+        // Convert from 1-based to 0-based pagination for Spring Data
+        Pageable pageable = PageRequest.of(page - 1, size, parseSort(sort));
+        PagedResponse<RecruitmentApplicationListData> data = recruitmentService.listMyApplications(userId, status, keyword, pageable);
         return ResponseEntity.ok(ApiResponse.success(data));
     }
 

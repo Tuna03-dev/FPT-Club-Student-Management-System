@@ -29,7 +29,7 @@ import { UpdateReportRequirementDialog } from "@/components/features/report/Upda
 import {
   getClubsByReportRequirement,
   getClubReportByRequirement,
-  getAllReportRequirements,
+  getReportRequirementById,
 } from "@/services/reportService";
 import type { ReportRequirementResponse } from "@/types/dto/reportRequirement.dto";
 import { toast } from "sonner";
@@ -94,15 +94,12 @@ interface Report {
   type: "periodic" | "post-event" | "other";
   status: ReportStatus;
   submittedBy: string;
-  submittedByAvatar: string;
   department: string;
   createdAt: string;
   dueDate: string;
   content: string;
-  score?: number;
   reviewer?: string;
   reviewDate?: string;
-  notes?: string;
   approvalNotes?: string;
   rejectionReason?: string;
   clubId?: string;
@@ -113,8 +110,6 @@ interface Club {
   id: string;
   name: string;
   code: string;
-  avatar: string;
-  description: string;
 }
 
 interface ClubWithReport extends Club {
@@ -171,8 +166,6 @@ export function PeriodicReportClubs() {
           id: club.clubId.toString(),
           name: club.clubName,
           code: club.clubCode,
-          avatar: "",
-          description: "",
           reportStatus: mapBackendStatusToFrontend(club.status),
           backendStatus: club.status || null,
           mustResubmit: club.report?.mustResubmit || false,
@@ -201,15 +194,8 @@ export function PeriodicReportClubs() {
     try {
       const requirementId = parseInt(reportId);
 
-      // Fetch report requirement details
-      const requirementsResponse = await getAllReportRequirements({
-        page: 0,
-        size: 1000,
-      });
-
-      const requirement = requirementsResponse.content.find(
-        (r) => r.id === requirementId
-      );
+      // Fetch report requirement by ID directly
+      const requirement = await getReportRequirementById(requirementId);
 
       if (requirement) {
         setPeriodicReport(requirement);
@@ -242,15 +228,8 @@ export function PeriodicReportClubs() {
           return;
         }
 
-        // Fetch report requirement details
-        const requirementsResponse = await getAllReportRequirements({
-          page: 0,
-          size: 1000, // Get all to find the one we need
-        });
-
-        const requirement = requirementsResponse.content.find(
-          (r) => r.id === requirementId
-        );
+        // Fetch report requirement by ID directly
+        const requirement = await getReportRequirementById(requirementId);
 
         if (!requirement) {
           toast.error("Không tìm thấy yêu cầu báo cáo");
@@ -274,8 +253,6 @@ export function PeriodicReportClubs() {
             id: club.clubId.toString(),
             name: club.clubName,
             code: club.clubCode,
-            avatar: "",
-            description: "",
             reportStatus: mapBackendStatusToFrontend(club.status),
             backendStatus: club.status || null, // Store the original backend status
             mustResubmit: club.report?.mustResubmit || false, // Store mustResubmit flag
@@ -486,7 +463,7 @@ export function PeriodicReportClubs() {
                       <span>Số CLB cần nộp</span>
                     </div>
                     <p className="text-sm font-medium text-foreground">
-                      {clubsWithReports.length} câu lạc bộ
+                      {periodicReport.clubCount || 0} câu lạc bộ
                     </p>
                   </div>
                 </div>
@@ -668,7 +645,7 @@ export function PeriodicReportClubs() {
                         <div className="flex items-center gap-2">
                           <div className="w-8 h-8 rounded-full bg-secondary flex-shrink-0 flex items-center justify-center">
                             <span className="text-xs font-semibold">
-                              {club.avatar || club.name.charAt(0).toUpperCase()}
+                              {club.name.charAt(0).toUpperCase()}
                             </span>
                           </div>
                           <span className="truncate">{club.name}</span>
@@ -721,7 +698,6 @@ export function PeriodicReportClubs() {
                                     ),
                                     submittedBy:
                                       reportDetail.createdBy?.fullName || "N/A",
-                                    submittedByAvatar: "",
                                     department:
                                       reportDetail.club?.clubName || "",
                                     createdAt: reportDetail.submittedDate

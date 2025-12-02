@@ -30,7 +30,8 @@ export interface ReportRequirementResponse {
   createdAt: string;
   updatedAt: string;
   createdBy?: UserInfo;
-  clubRequirements?: ClubRequirementInfo[];
+  clubRequirements?: ClubRequirementInfo[]; // Only populated in specific endpoints
+  clubCount?: number; // Count of clubs - returned by getAllReportRequirements
 }
 
 export interface UserInfo {
@@ -178,7 +179,8 @@ export interface OfficerReportRequirementResponse {
       id: number;
       status?: string; // ReportStatus enum
       mustResubmit?: boolean;
-      createdBy?: number; // User ID only
+      createdBy?: number;
+      createdByUserName: string;
     };
   };
 }

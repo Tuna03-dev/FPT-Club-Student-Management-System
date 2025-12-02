@@ -43,6 +43,8 @@ import {
   updateApplicationStatus,
   updateInterviewSchedule,
   type RecruitmentCreateRequest,
+  type RecruitmentApplicationListData,
+  type RecruitmentData,
 } from "@/services/recruitmentService";
 import { toast } from "sonner";
 import { RecruitmentForm } from "@/components/features/recruitment/RecruitmentForm";
@@ -57,67 +59,20 @@ import {
 } from "@/components/ui/dialog";
 import { useDebounce } from "@/hooks/useDebounce";
 
-type RecruitmentStatus = "draft" | "open" | "closed";
-type ApplicationStatus = "under_review" | "accepted" | "rejected" | "interview";
-type QuestionType = "TEXT" | "MCQ" | "CHECKBOX" | "FILE";
+type ApplicationStatus = "UNDER_REVIEW" | "ACCEPTED" | "REJECTED" | "INTERVIEW";
 
-interface RecruitmentForm {
-  form_id?: string; // Optional for new questions
-  question_text: string;
-  question_type: QuestionType;
-  question_order: number;
-  options?: string[]; // For MCQ and CHECKBOX
-  required?: boolean;
-}
-
-interface RecruitmentApplication {
-  application_id: string;
-  user_id: string;
-  user_name: string;
-  user_email: string;
-  user_phone?: string;
-  student_id: string;
-  submitted_at: string;
-  status: ApplicationStatus;
-  answers: Record<string, any>;
-  score?: number;
-  notes?: string;
-  avatar?: string;
-  interviewTime?: string;
-  interviewAddress?: string;
-  interviewPreparationRequirements?: string;
-}
-
-interface Recruitment {
-  recruitment_id: string;
-  club_id: string;
-  semester_id: string;
-  semester_name: string;
-  title: string;
-  description: string;
-  end_date: string;
-  status: RecruitmentStatus;
-  requirements?: string[];
-  benefits?: string[];
-  form_questions: RecruitmentForm[];
-  teamOptions?: Array<{ id: number; teamName: string; description?: string }>;
-  applications: RecruitmentApplication[];
-  totalApplications?: number; // Tổng số đơn ứng tuyển đã nộp từ API
-  acceptedApplications?: number; // Số đơn đã được chấp nhận từ API
-  created_at: string;
-  updated_at: string;
-}
-
-const statusLabels: Record<RecruitmentStatus, string> = {
-  draft: "Bản nháp",
-  open: "Đang mở",
-  closed: "Đã đóng",
+const statusLabels: Record<string, string> = {
+  DRAFT: "Bản nháp",
+  OPEN: "Đang mở",
+  CLOSED: "Đã đóng",
+  CANCELLED: "Đã hủy",
 };
 
-const statusColors: Record<RecruitmentStatus, string> = {
-  draft: "bg-gray-100 text-gray-700",
-  open: "bg-green-100 text-green-700",
-  closed: "bg-red-100 text-red-700",
+const statusColors: Record<string, string> = {
+  DRAFT: "bg-gray-100 text-gray-700",
+  OPEN: "bg-green-100 text-green-700",
+  CLOSED: "bg-red-100 text-red-700",
+  CANCELLED: "bg-orange-100 text-orange-700",
 };
 
 export function RecruitmentManagement() {
@@ -129,35 +84,35 @@ export function RecruitmentManagement() {
     "list" | "create" | "applications"
   >("list");
   const [selectedRecruitment, setSelectedRecruitment] =
-    useState<Recruitment | null>(null);
+    useState<RecruitmentData | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
-  const [statusFilter, setStatusFilter] = useState<RecruitmentStatus | "all">(
-    "all"
-  );
+  const [statusFilter, setStatusFilter] = useState<
+    "DRAFT" | "OPEN" | "CLOSED" | "CANCELLED" | "all"
+  >("all");
 
   // API data states
-  const [recruitments, setRecruitments] = useState<Recruitment[]>([]);
-  const [applications, setApplications] = useState<RecruitmentApplication[]>(
-    []
-  );
+  const [recruitments, setRecruitments] = useState<RecruitmentData[]>([]);
+  const [applications, setApplications] = useState<
+    RecruitmentApplicationListData[]
+  >([]);
   const [loading, setLoading] = useState(false);
   const [applicationsLoading, setApplicationsLoading] = useState(false);
   const [createLoading, setCreateLoading] = useState(false);
   const [editLoading, setEditLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editingRecruitment, setEditingRecruitment] =
-    useState<Recruitment | null>(null);
-  const [changingStatusId, setChangingStatusId] = useState<string | null>(null);
+    useState<RecruitmentData | null>(null);
+  const [changingStatusId, setChangingStatusId] = useState<number | null>(null);
 
   // Pagination states for recruitments
-  const [recruitmentsPage, setRecruitmentsPage] = useState(0);
+  const [recruitmentsPage, setRecruitmentsPage] = useState(1);
   const [recruitmentsTotalPages, setRecruitmentsTotalPages] = useState(0);
   const [recruitmentsTotalElements, setRecruitmentsTotalElements] = useState(0);
   const recruitmentsPageSize = 10;
 
   // Pagination states for applications
-  const [applicationsPage, setApplicationsPage] = useState(0);
+  const [applicationsPage, setApplicationsPage] = useState(1);
   const [applicationsTotalPages, setApplicationsTotalPages] = useState(0);
   const [applicationsTotalElements, setApplicationsTotalElements] = useState(0);
   const applicationsPageSize = 10;
@@ -177,7 +132,7 @@ export function RecruitmentManagement() {
   // Dialog states
   const [statusChangeDialog, setStatusChangeDialog] = useState<{
     open: boolean;
-    recruitmentId: string;
+    recruitmentId: number;
     newStatus: "OPEN" | "CLOSED";
     title: string;
   } | null>(null);
@@ -207,7 +162,7 @@ export function RecruitmentManagement() {
       const response = await getRecruitmentsByClubId(clubId, {
         status: apiStatus,
         keyword: debouncedSearchQuery || undefined,
-        page: recruitmentsPage,
+        page: recruitmentsPage, // Backend now accepts 1-based pagination
         size: recruitmentsPageSize,
       });
 
@@ -215,37 +170,8 @@ export function RecruitmentManagement() {
       setRecruitmentsTotalPages(response.totalPages);
       setRecruitmentsTotalElements(response.totalElements);
 
-      // Map API data to component format
-      const mappedRecruitments: Recruitment[] = response.content.map((r) => ({
-        recruitment_id: r.id.toString(),
-        club_id: r.clubId.toString(),
-        semester_id: "Fall2024", // TODO: Get from API if available
-        semester_name: "Fall 2024", // TODO: Get from API if available
-        title: r.title,
-        description: r.description,
-        end_date: r.endDate,
-        status: r.status.toLowerCase() as RecruitmentStatus,
-        requirements: r.requirements ? r.requirements.split("\n") : [],
-        benefits: [], // TODO: Get from API if available
-        form_questions: (r.questions || []).map((q) => ({
-          form_id: q.id.toString(),
-          question_text: q.questionText,
-          question_type: (q.questionType === "FILE_UPLOAD"
-            ? "FILE"
-            : q.questionType) as QuestionType,
-          question_order: q.questionOrder,
-          options: q.options,
-          required: q.isRequired === 1, // Map from API isRequired field
-        })),
-        teamOptions: r.teamOptions,
-        applications: [], // Will be fetched separately when needed
-        totalApplications: r.totalApplications || 0,
-        acceptedApplications: r.acceptedApplications || 0,
-        created_at: r.createdAt,
-        updated_at: r.updatedAt,
-      }));
-
-      setRecruitments(mappedRecruitments);
+      // Use API data directly (no mapping needed)
+      setRecruitments(response.content);
     } catch (err: any) {
       console.error("Error fetching recruitments:", err);
       const errorMessage =
@@ -264,9 +190,9 @@ export function RecruitmentManagement() {
     fetchRecruitments();
   }, [fetchRecruitments]);
 
-  // Reset to page 0 when filter or debounced search query changes
+  // Reset to page 1 when filter or debounced search query changes
   useEffect(() => {
-    setRecruitmentsPage(0);
+    setRecruitmentsPage(1);
   }, [statusFilter, debouncedSearchQuery]);
 
   // Fetch applications when a recruitment is selected
@@ -289,11 +215,11 @@ export function RecruitmentManagement() {
             : undefined;
 
         const response = await getApplicationsByRecruitmentId(
-          parseInt(selectedRecruitment.recruitment_id),
+          selectedRecruitment.id,
           {
             status: apiStatus,
             keyword: debouncedApplicationsSearchQuery || undefined,
-            page: applicationsPage,
+            page: applicationsPage, // Backend now accepts 1-based pagination
             size: applicationsPageSize,
           }
         );
@@ -302,45 +228,8 @@ export function RecruitmentManagement() {
         setApplicationsTotalPages(response.totalPages);
         setApplicationsTotalElements(response.totalElements);
 
-        // Map API data to component format
-        const mappedApplications: RecruitmentApplication[] =
-          response.content.map((a) => {
-            // Convert answers array to object format for the component
-            const answersMap: Record<string, any> = {};
-            if (a.answers && Array.isArray(a.answers)) {
-              a.answers.forEach((answer) => {
-                answersMap[answer.questionId.toString()] =
-                  answer.answerText || answer.fileUrl || "";
-              });
-            }
-
-            return {
-              application_id: a.id.toString(),
-              user_id: a.applicantId.toString(),
-              user_name: a.userName,
-              user_email: a.userEmail,
-              user_phone: a.userPhone,
-              student_id: a.studentId,
-              submitted_at: a.submittedDate,
-              status: a.status.toLowerCase() as ApplicationStatus,
-              answers: answersMap,
-              score: a.score,
-              notes: a.reviewNotes,
-              teamId: a.teamId?.toString(),
-              teamName: a.teamName,
-              interviewTime: a.interviewTime,
-              interviewAddress: a.interviewAddress,
-              interviewPreparationRequirements:
-                a.interviewPreparationRequirements,
-            };
-          });
-
-        setApplications(mappedApplications);
-
-        // Update selected recruitment with applications
-        setSelectedRecruitment((prev) =>
-          prev ? { ...prev, applications: mappedApplications } : null
-        );
+        // Use API data directly (no mapping needed)
+        setApplications(response.content);
       } catch (err: any) {
         console.error("Error fetching applications:", err);
         const errorMessage =
@@ -355,25 +244,25 @@ export function RecruitmentManagement() {
 
     fetchApplications();
   }, [
-    selectedRecruitment?.recruitment_id,
+    selectedRecruitment?.id,
     applicationsPage,
     debouncedApplicationsSearchQuery,
     applicationsStatusFilter,
     applicationsRefreshTrigger,
   ]);
 
-  // Reset applications page when recruitment, debounced search, or filter changes
+  // Reset to page 1 when applications filter changes
   useEffect(() => {
-    setApplicationsPage(0);
+    setApplicationsPage(1);
   }, [
-    selectedRecruitment?.recruitment_id,
+    selectedRecruitment?.id,
     debouncedApplicationsSearchQuery,
     applicationsStatusFilter,
   ]);
 
-  const handleEditRecruitment = async (recruitment: Recruitment) => {
+  const handleEditRecruitment = async (recruitment: RecruitmentData) => {
     // Check if recruitment is closed
-    if (recruitment.status === "closed") {
+    if (recruitment.status === "CLOSED") {
       toast.error("Không thể chỉnh sửa đợt tuyển dụng đã đóng");
       return;
     }
@@ -383,44 +272,10 @@ export function RecruitmentManagement() {
       setActiveTab("create"); // Switch to create tab immediately to show skeleton
 
       // Fetch fresh data from API to ensure we have the latest data
-      const freshData = await getRecruitmentById(
-        parseInt(recruitment.recruitment_id)
-      );
+      const freshData = await getRecruitmentById(recruitment.id);
 
-      // Map API data to component format
-      const mappedRecruitment: Recruitment = {
-        recruitment_id: freshData.id.toString(),
-        club_id: freshData.clubId.toString(),
-        semester_id: "Fall2024",
-        semester_name: "Fall 2024",
-        title: freshData.title,
-        description: freshData.description,
-        end_date: freshData.endDate,
-        status: freshData.status.toLowerCase() as RecruitmentStatus,
-        requirements: freshData.requirements
-          ? freshData.requirements.split("\n")
-          : [],
-        benefits: [],
-        form_questions: (freshData.questions || []).map((q) => ({
-          form_id: q.id.toString(),
-          question_text: q.questionText,
-          question_type: (q.questionType === "FILE_UPLOAD"
-            ? "FILE"
-            : q.questionType) as QuestionType,
-          question_order: q.questionOrder,
-          options: q.options,
-          required: q.isRequired === 1, // Map from API isRequired field
-        })),
-        teamOptions: freshData.teamOptions, // Map team options
-        applications: [],
-        totalApplications: freshData.totalApplications || 0,
-        acceptedApplications: freshData.acceptedApplications || 0,
-        created_at: freshData.createdAt,
-        updated_at: freshData.updatedAt,
-      };
-
-      // Load recruitment data into form
-      setEditingRecruitment(mappedRecruitment);
+      // Load recruitment data into form (use directly from API)
+      setEditingRecruitment(freshData);
     } catch (err: any) {
       console.error("Error loading recruitment for edit:", err);
       const errorMessage =
@@ -473,10 +328,7 @@ export function RecruitmentManagement() {
     try {
       if (isEdit && editingRecruitment) {
         // Update existing recruitment
-        await updateRecruitment(
-          parseInt(editingRecruitment.recruitment_id),
-          requestData
-        );
+        await updateRecruitment(editingRecruitment.id, requestData);
         toast.success("Cập nhật đợt tuyển dụng thành công!");
       } else {
         // Create new recruitment
@@ -535,13 +387,13 @@ export function RecruitmentManagement() {
       );
 
       // Map response back to component format
-      const mappedStatus =
-        updatedApplication.status.toLowerCase() as ApplicationStatus;
+      // No need to convert - backend already returns UPPERCASE
+      const mappedStatus = updatedApplication.status;
 
       // Update local state
       setApplications((prevApplications) =>
         prevApplications.map((app) =>
-          app.application_id === applicationId
+          app.id === parseInt(applicationId)
             ? {
                 ...app,
                 status: mappedStatus,
@@ -555,32 +407,12 @@ export function RecruitmentManagement() {
         )
       );
 
-      // Update selected recruitment applications
-      if (selectedRecruitment) {
-        setSelectedRecruitment({
-          ...selectedRecruitment,
-          applications: selectedRecruitment.applications.map((app) =>
-            app.application_id === applicationId
-              ? {
-                  ...app,
-                  status: mappedStatus,
-                  notes: updatedApplication.reviewNotes,
-                  interviewTime: updatedApplication.interviewTime,
-                  interviewAddress: updatedApplication.interviewAddress,
-                  interviewPreparationRequirements:
-                    updatedApplication.interviewPreparationRequirements,
-                }
-              : app
-          ),
-        });
-      }
-
       // Show success message
       const statusText = {
-        under_review: "đang xem xét",
-        accepted: "đã chấp nhận",
-        rejected: "đã từ chối",
-        interview: "đã mời phỏng vấn",
+        UNDER_REVIEW: "đang xem xét",
+        ACCEPTED: "đã chấp nhận",
+        REJECTED: "đã từ chối",
+        INTERVIEW: "đã mời phỏng vấn",
       }[mappedStatus];
 
       toast.success(`Đã cập nhật trạng thái đơn thành ${statusText}!`);
@@ -614,7 +446,7 @@ export function RecruitmentManagement() {
       // Update local state
       setApplications((prevApplications) =>
         prevApplications.map((app) =>
-          app.application_id === applicationId
+          app.id === parseInt(applicationId)
             ? {
                 ...app,
                 interviewTime: updatedApplication.interviewTime,
@@ -625,24 +457,6 @@ export function RecruitmentManagement() {
             : app
         )
       );
-
-      // Update selected recruitment applications
-      if (selectedRecruitment) {
-        setSelectedRecruitment({
-          ...selectedRecruitment,
-          applications: selectedRecruitment.applications.map((app) =>
-            app.application_id === applicationId
-              ? {
-                  ...app,
-                  interviewTime: updatedApplication.interviewTime,
-                  interviewAddress: updatedApplication.interviewAddress,
-                  interviewPreparationRequirements:
-                    updatedApplication.interviewPreparationRequirements,
-                }
-              : app
-          ),
-        });
-      }
 
       toast.success("Đã cập nhật thông tin phỏng vấn!");
 
@@ -660,7 +474,7 @@ export function RecruitmentManagement() {
 
   // Show status change confirmation dialog
   const showStatusChangeDialog = (
-    recruitmentId: string,
+    recruitmentId: number,
     newStatus: "OPEN" | "CLOSED",
     title: string
   ) => {
@@ -674,14 +488,14 @@ export function RecruitmentManagement() {
 
   // Actual status change function (called after confirmation)
   const handleChangeRecruitmentStatus = async (
-    recruitmentId: string,
+    recruitmentId: number,
     newStatus: "OPEN" | "CLOSED"
   ) => {
     try {
       // Set loading state for this specific button
       setChangingStatusId(recruitmentId);
 
-      await changeRecruitmentStatus(parseInt(recruitmentId), newStatus);
+      await changeRecruitmentStatus(recruitmentId, newStatus);
 
       const statusText = newStatus === "OPEN" ? "mở" : "đóng";
       toast.success(
@@ -691,9 +505,7 @@ export function RecruitmentManagement() {
       // Update the recruitment in the local state immediately for instant UI update
       setRecruitments((prevRecruitments) =>
         prevRecruitments.map((r) =>
-          r.recruitment_id === recruitmentId
-            ? { ...r, status: newStatus.toLowerCase() as RecruitmentStatus }
-            : r
+          r.id === recruitmentId ? { ...r, status: newStatus } : r
         )
       );
 
@@ -820,7 +632,9 @@ export function RecruitmentManagement() {
               <Select
                 value={statusFilter}
                 onValueChange={(value) =>
-                  setStatusFilter(value as RecruitmentStatus | "all")
+                  setStatusFilter(
+                    value as "DRAFT" | "OPEN" | "CLOSED" | "CANCELLED" | "all"
+                  )
                 }
               >
                 <SelectTrigger className="w-[180px]">
@@ -828,9 +642,9 @@ export function RecruitmentManagement() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Tất cả trạng thái</SelectItem>
-                  <SelectItem value="draft">Bản nháp</SelectItem>
-                  <SelectItem value="open">Đang mở</SelectItem>
-                  <SelectItem value="closed">Đã đóng</SelectItem>
+                  <SelectItem value="DRAFT">Bản nháp</SelectItem>
+                  <SelectItem value="OPEN">Đang mở</SelectItem>
+                  <SelectItem value="CLOSED">Đã đóng</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -909,7 +723,7 @@ export function RecruitmentManagement() {
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {recruitments.map((recruitment) => (
                   <Card
-                    key={recruitment.recruitment_id}
+                    key={recruitment.id}
                     className="hover:shadow-lg transition-shadow"
                   >
                     <CardHeader>
@@ -922,7 +736,7 @@ export function RecruitmentManagement() {
                             <Badge className={statusColors[recruitment.status]}>
                               {statusLabels[recruitment.status]}
                             </Badge>
-                            {recruitment.status === "closed" && (
+                            {recruitment.status === "CLOSED" && (
                               <Badge
                                 variant="outline"
                                 className="text-xs text-muted-foreground"
@@ -945,7 +759,7 @@ export function RecruitmentManagement() {
                             Kết thúc:
                           </span>
                           <div className="font-medium">
-                            {new Date(recruitment.end_date).toLocaleString(
+                            {new Date(recruitment.endDate).toLocaleString(
                               "vi-VN",
                               {
                                 year: "numeric",
@@ -994,9 +808,9 @@ export function RecruitmentManagement() {
                           size="sm"
                           className="bg-transparent"
                           onClick={() => handleEditRecruitment(recruitment)}
-                          disabled={recruitment.status === "closed"}
+                          disabled={recruitment.status === "CLOSED"}
                           title={
-                            recruitment.status === "closed"
+                            recruitment.status === "CLOSED"
                               ? "Không thể chỉnh sửa đợt tuyển dụng đã đóng"
                               : "Chỉnh sửa đợt tuyển dụng"
                           }
@@ -1004,23 +818,21 @@ export function RecruitmentManagement() {
                           <Edit className="h-4 w-4 mr-2" />
                           Chỉnh sửa
                         </Button>
-                        {recruitment.status === "draft" && (
+                        {recruitment.status === "DRAFT" && (
                           <Button
                             variant="outline"
                             size="sm"
                             onClick={() =>
                               showStatusChangeDialog(
-                                recruitment.recruitment_id,
+                                recruitment.id,
                                 "OPEN",
                                 recruitment.title
                               )
                             }
-                            disabled={
-                              changingStatusId === recruitment.recruitment_id
-                            }
+                            disabled={changingStatusId === recruitment.id}
                             className="bg-transparent text-green-600 border-green-200 hover:bg-green-50 hover:text-green-700"
                           >
-                            {changingStatusId === recruitment.recruitment_id ? (
+                            {changingStatusId === recruitment.id ? (
                               <>
                                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                                 Đang xử lý...
@@ -1033,23 +845,21 @@ export function RecruitmentManagement() {
                             )}
                           </Button>
                         )}
-                        {recruitment.status === "open" && (
+                        {recruitment.status === "OPEN" && (
                           <Button
                             variant="outline"
                             size="sm"
                             onClick={() =>
                               showStatusChangeDialog(
-                                recruitment.recruitment_id,
+                                recruitment.id,
                                 "CLOSED",
                                 recruitment.title
                               )
                             }
-                            disabled={
-                              changingStatusId === recruitment.recruitment_id
-                            }
+                            disabled={changingStatusId === recruitment.id}
                             className="bg-transparent text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
                           >
-                            {changingStatusId === recruitment.recruitment_id ? (
+                            {changingStatusId === recruitment.id ? (
                               <>
                                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                                 Đang xử lý...
@@ -1066,10 +876,10 @@ export function RecruitmentManagement() {
                           variant="outline"
                           size="sm"
                           className="bg-transparent"
-                          disabled={recruitment.status === "closed"}
+                          disabled={recruitment.status === "CLOSED"}
                           onClick={async () => {
                             try {
-                              const shareUrl = `${window.location.origin}/clubDetail/${recruitment.club_id}?tab=recruitment#recruitment-${recruitment.recruitment_id}`;
+                              const shareUrl = `${window.location.origin}/clubDetail/${recruitment.clubId}?tab=recruitment#recruitment-${recruitment.id}`;
                               await navigator.clipboard.writeText(shareUrl);
                               toast.success("Đã sao chép đường dẫn chia sẻ");
                             } catch (e) {
@@ -1112,13 +922,9 @@ export function RecruitmentManagement() {
                   <div>
                     Hiển thị{" "}
                     <span className="font-semibold">
+                      {(recruitmentsPage - 1) * recruitmentsPageSize + 1} -{" "}
                       {Math.min(
-                        recruitmentsPage * recruitmentsPageSize + 1,
-                        recruitmentsTotalElements
-                      )}{" "}
-                      -{" "}
-                      {Math.min(
-                        (recruitmentsPage + 1) * recruitmentsPageSize,
+                        recruitmentsPage * recruitmentsPageSize,
                         recruitmentsTotalElements
                       )}
                     </span>{" "}
@@ -1129,7 +935,7 @@ export function RecruitmentManagement() {
                     đợt tuyển dụng
                   </div>
                   <div>
-                    Trang {recruitmentsPage + 1} / {recruitmentsTotalPages}
+                    Trang {recruitmentsPage} / {recruitmentsTotalPages}
                   </div>
                 </div>
 
@@ -1140,7 +946,7 @@ export function RecruitmentManagement() {
                       <PaginationItem>
                         <PaginationPrevious
                           onClick={() => {
-                            if (recruitmentsPage > 0) {
+                            if (recruitmentsPage > 1) {
                               setRecruitmentsPage(recruitmentsPage - 1);
                               window.scrollTo({
                                 top: 0,
@@ -1149,7 +955,7 @@ export function RecruitmentManagement() {
                             }
                           }}
                           className={
-                            recruitmentsPage === 0
+                            recruitmentsPage === 1
                               ? "pointer-events-none opacity-50"
                               : "cursor-pointer"
                           }
@@ -1157,12 +963,12 @@ export function RecruitmentManagement() {
                       </PaginationItem>
 
                       {/* First page */}
-                      {recruitmentsPage > 2 && (
+                      {recruitmentsPage > 4 && (
                         <>
                           <PaginationItem>
                             <PaginationLink
                               onClick={() => {
-                                setRecruitmentsPage(0);
+                                setRecruitmentsPage(1);
                                 window.scrollTo({
                                   top: 0,
                                   behavior: "smooth",
@@ -1173,7 +979,7 @@ export function RecruitmentManagement() {
                               1
                             </PaginationLink>
                           </PaginationItem>
-                          {recruitmentsPage > 3 && (
+                          {recruitmentsPage > 4 && (
                             <PaginationItem>
                               <PaginationEllipsis />
                             </PaginationItem>
@@ -1187,25 +993,25 @@ export function RecruitmentManagement() {
                         (_, i) => {
                           let pageNum;
                           if (recruitmentsTotalPages <= 5) {
-                            pageNum = i;
-                          } else if (recruitmentsPage <= 2) {
-                            pageNum = i;
+                            pageNum = i + 1;
+                          } else if (recruitmentsPage <= 4) {
+                            pageNum = i + 1;
                           } else if (
                             recruitmentsPage >=
                             recruitmentsTotalPages - 3
                           ) {
-                            pageNum = recruitmentsTotalPages - 5 + i;
+                            pageNum = recruitmentsTotalPages - 4 + i;
                           } else {
                             pageNum = recruitmentsPage - 2 + i;
                           }
 
-                          if (pageNum < 0 || pageNum >= recruitmentsTotalPages)
+                          if (pageNum < 1 || pageNum > recruitmentsTotalPages)
                             return null;
-                          if (recruitmentsPage > 2 && pageNum === 0)
+                          if (recruitmentsPage > 4 && pageNum === 1)
                             return null;
                           if (
                             recruitmentsPage < recruitmentsTotalPages - 3 &&
-                            pageNum === recruitmentsTotalPages - 1
+                            pageNum === recruitmentsTotalPages
                           )
                             return null;
 
@@ -1222,7 +1028,7 @@ export function RecruitmentManagement() {
                                 isActive={recruitmentsPage === pageNum}
                                 className="cursor-pointer"
                               >
-                                {pageNum + 1}
+                                {pageNum}
                               </PaginationLink>
                             </PaginationItem>
                           );
@@ -1240,7 +1046,7 @@ export function RecruitmentManagement() {
                           <PaginationItem>
                             <PaginationLink
                               onClick={() => {
-                                setRecruitmentsPage(recruitmentsTotalPages - 1);
+                                setRecruitmentsPage(recruitmentsTotalPages);
                                 window.scrollTo({
                                   top: 0,
                                   behavior: "smooth",
@@ -1257,7 +1063,7 @@ export function RecruitmentManagement() {
                       <PaginationItem>
                         <PaginationNext
                           onClick={() => {
-                            if (recruitmentsPage < recruitmentsTotalPages - 1) {
+                            if (recruitmentsPage < recruitmentsTotalPages) {
                               setRecruitmentsPage(recruitmentsPage + 1);
                               window.scrollTo({
                                 top: 0,
@@ -1266,7 +1072,7 @@ export function RecruitmentManagement() {
                             }
                           }}
                           className={
-                            recruitmentsPage === recruitmentsTotalPages - 1
+                            recruitmentsPage >= recruitmentsTotalPages
                               ? "pointer-events-none opacity-50"
                               : "cursor-pointer"
                           }
@@ -1295,7 +1101,7 @@ export function RecruitmentManagement() {
         {/* Applications Tab */}
         {activeTab === "applications" && selectedRecruitment && (
           <ApplicationsList
-            selectedRecruitment={selectedRecruitment}
+            recruitmentTitle={selectedRecruitment.title}
             applications={applications}
             applicationsLoading={applicationsLoading}
             onUpdateApplicationStatus={handleUpdateApplicationStatus}

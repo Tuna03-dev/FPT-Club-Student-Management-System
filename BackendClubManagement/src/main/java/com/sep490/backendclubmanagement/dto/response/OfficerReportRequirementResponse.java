@@ -48,6 +48,7 @@ public class OfficerReportRequirementResponse {
         private Long id;
         private String status;
         private Boolean mustResubmit;
-        private Long createdBy; // ID of the user who created the report
+        private Long createdBy;
+        private String createdByUserName;
     }
 }

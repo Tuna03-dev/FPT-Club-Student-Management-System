@@ -2,6 +2,7 @@ package com.sep490.backendclubmanagement.service;
 
 import com.sep490.backendclubmanagement.dto.request.*;
 import com.sep490.backendclubmanagement.dto.response.RecruitmentApplicationData;
+import com.sep490.backendclubmanagement.dto.response.RecruitmentApplicationListData;
 import com.sep490.backendclubmanagement.dto.response.PagedResponse;
 import com.sep490.backendclubmanagement.dto.response.RecruitmentData;
 import com.sep490.backendclubmanagement.entity.RecruitmentApplicationStatus;
@@ -21,8 +22,8 @@ public interface RecruitmentServiceInterface {
     void changeRecruitmentStatus(Long userId, Long id, RecruitmentStatus status) throws AppException;
 
     // Application management
-    PagedResponse<RecruitmentApplicationData> listApplications(Long userId, Long recruitmentId, RecruitmentApplicationStatus status,String keyword, Pageable pageable) throws AppException;
-    PagedResponse<RecruitmentApplicationData> listMyApplications(Long applicantId, RecruitmentApplicationStatus status, String keyword, Pageable pageable);
+    PagedResponse<RecruitmentApplicationListData> listApplications(Long userId, Long recruitmentId, RecruitmentApplicationStatus status,String keyword, Pageable pageable) throws AppException;
+    PagedResponse<RecruitmentApplicationListData> listMyApplications(Long applicantId, RecruitmentApplicationStatus status, String keyword, Pageable pageable);
     RecruitmentApplicationData submitApplication(Long applicantId, ApplicationSubmitRequest request, MultipartFile file) throws AppException;
     RecruitmentApplicationData getApplication(Long userId, Long applicationId) throws AppException;
     RecruitmentApplicationData getMyApplication(Long applicantId, Long applicationId) throws AppException;

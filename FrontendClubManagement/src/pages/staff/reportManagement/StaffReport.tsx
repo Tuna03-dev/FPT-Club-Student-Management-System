@@ -155,16 +155,10 @@ export function StaffReportManagement() {
           dueDate: req.dueDate,
           description: req.description,
           createdBy: req.createdBy?.fullName || "N/A",
-          clubCount: req.clubRequirements?.length || 0,
+          clubCount: req.clubCount || 0,
           reportType: req.reportType,
         })
       );
-
-      // Store full data in map for quick access
-      const fullDataMap = new Map<number, ReportRequirementResponse>();
-      response.content.forEach((req) => {
-        fullDataMap.set(req.id, req);
-      });
 
       setReports(mappedReports);
       setTotalPages(response.totalPages);
@@ -297,9 +291,11 @@ export function StaffReportManagement() {
 
       toast.success("Tạo yêu cầu báo cáo thành công!");
 
-      // Reload list after successful creation
-      await fetchReportRequirements();
+      // Close modal immediately
       setIsSubmitDialogOpen(false);
+
+      // Reload list after successful creation with loading state
+      await fetchReportRequirements();
     } catch (error: any) {
       console.error("Error creating report requirement:", error);
       toast.error(error.message || "Không thể tạo yêu cầu báo cáo");
@@ -560,7 +556,7 @@ export function StaffReportManagement() {
                         Ngày nộp
                       </TableHead>
                       <TableHead className="w-[120px] font-semibold text-foreground">
-                        Ngày duyệt
+                        Ngày đánh giá
                       </TableHead>
                       <TableHead className="w-[150px] font-semibold text-foreground">
                         Trạng thái
