@@ -484,7 +484,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
                     clubOfficersMap.computeIfAbsent(clubId, k -> new ArrayList<>()).add(userOfficerId);
                 }
 
-                // ⚡ Parallel: Send notifications to all clubs simultaneously
+                //  Parallel: Send notifications to all clubs simultaneously
                 List<CompletableFuture<Void>> notificationFutures = clubs.stream()
                     .map(club -> CompletableFuture.runAsync(() -> {
                         try {
@@ -636,7 +636,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
                     clubOfficersMap.computeIfAbsent(clubId, k -> new ArrayList<>()).add(userOfficerId);
                 }
 
-                // ⚡ Parallel: Process all club notifications simultaneously
+                //  Parallel: Process all club notifications simultaneously
                 List<CompletableFuture<Void>> notificationFutures = clubRequirements.stream()
                     .map(clubReq -> CompletableFuture.runAsync(() -> {
                         try {
@@ -813,7 +813,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
                 String reportTitle = report.getReportTitle() != null ? report.getReportTitle() : "Báo cáo";
                 String actionUrl = "/myclub/" + club.getId() + "/reports";
 
-                // ⚡ Parallel: Get club officers
+                //  Parallel: Get club officers
                 CompletableFuture<List<Long>> officerIdsFuture =
                     CompletableFuture.supplyAsync(() ->
                         roleMemberShipRepository.findClubOfficerUserIdsByClubIdAndSemesterId(club.getId(), semesterId),
@@ -1029,7 +1029,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
                 String actionUrl = "/myclub/" + club.getId() + "/reports";
 
                 if (newStatus == ReportStatus.PENDING_CLUB || newStatus == ReportStatus.UPDATED_PENDING_CLUB) {
-                    // ⚡ Parallel: Notify Club Officers when report is submitted to club level
+                    //  Parallel: Notify Club Officers when report is submitted to club level
                     CompletableFuture<List<Long>> officerIdsFuture =
                         CompletableFuture.supplyAsync(() ->
                             roleMemberShipRepository.findClubOfficerUserIdsByClubIdAndSemesterId(club.getId(), semesterId),
@@ -1061,7 +1061,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
                         );
                     }
                 } else if (newStatus == ReportStatus.RESUBMITTED_UNIVERSITY) {
-                    // ⚡ Parallel: Notify Staff when report is resubmitted to university level
+                    //  Parallel: Notify Staff when report is resubmitted to university level
                     CompletableFuture<List<Long>> staffIdsFuture =
                         CompletableFuture.supplyAsync(() -> getStaffUsers(), taskExecutor);
 
@@ -1857,7 +1857,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
                 String reportTitle = report.getReportTitle() != null ? report.getReportTitle() : "Báo cáo";
 
                 if (request.getStatus() == ReportStatus.PENDING_UNIVERSITY) {
-                    // ⚡ Parallel: Notify Staff AND Creator simultaneously
+                    //  Parallel: Notify Staff AND Creator simultaneously
                     CompletableFuture<List<Long>> staffIdsFuture =
                         CompletableFuture.supplyAsync(() -> getStaffUsers(), taskExecutor);
 
@@ -2017,7 +2017,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
         // Send notification to team members about the new assignment - async with parallel query
         CompletableFuture.runAsync(() -> {
             try {
-                // ⚡ Parallel: Get team members
+                //  Parallel: Get team members
                 CompletableFuture<List<Long>> teamMemberIdsFuture =
                     CompletableFuture.supplyAsync(() -> getTeamOfficersOrTreasurerInCurrentSemester(teamId, clubId), taskExecutor);
 

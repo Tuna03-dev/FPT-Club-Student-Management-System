@@ -2,12 +2,11 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
   getMyApplications,
-  getRecruitmentById,
   getMyApplicationDetail,
 } from "@/services/recruitmentService";
 import type {
   RecruitmentApplicationData,
-  RecruitmentData,
+  RecruitmentApplicationListData,
 } from "@/services/recruitmentService";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -49,7 +48,7 @@ import {
 
 export function StudentRecruitment() {
   const [myApplications, setMyApplications] = useState<
-    RecruitmentApplicationData[]
+    RecruitmentApplicationListData[]
   >([]);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -58,7 +57,7 @@ export function StudentRecruitment() {
   const [myAppStatusFilter, setMyAppStatusFilter] = useState<string>("all");
 
   // Pagination states
-  const [currentPage, setCurrentPage] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
   const pageSize = 10;
@@ -66,8 +65,6 @@ export function StudentRecruitment() {
   // Application detail dialog
   const [selectedApplicationDetail, setSelectedApplicationDetail] =
     useState<RecruitmentApplicationData | null>(null);
-  const [recruitmentDetail, setRecruitmentDetail] =
-    useState<RecruitmentData | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
   // Load my applications from API
@@ -103,24 +100,21 @@ export function StudentRecruitment() {
     fetchMyApplications();
   }, [myAppStatusFilter, currentPage, myAppSearchQuery]);
 
-  // Reset to page 0 when filter or search changes
+  // Reset to page 1 when filter or search changes
   useEffect(() => {
-    setCurrentPage(0);
+    setCurrentPage(1);
   }, [myAppStatusFilter, myAppSearchQuery]);
 
   const handleViewApplicationDetail = async (
-    application: RecruitmentApplicationData
+    application: RecruitmentApplicationListData
   ) => {
     try {
-      setSelectedApplicationDetail(application);
       setDetailLoading(true);
+      setSelectedApplicationDetail(null); // Clear previous data
       const fullApplicationDetail = await getMyApplicationDetail(
         application.id
       );
       setSelectedApplicationDetail(fullApplicationDetail);
-
-      const recruitment = await getRecruitmentById(application.recruitmentId);
-      setRecruitmentDetail(recruitment);
     } catch (error) {
       console.error("Failed to fetch application details:", error);
       alert("Không thể tải thông tin chi tiết đơn ứng tuyển");
@@ -132,7 +126,6 @@ export function StudentRecruitment() {
 
   const handleCloseApplicationDetail = () => {
     setSelectedApplicationDetail(null);
-    setRecruitmentDetail(null);
   };
 
   const getStatusColor = (status: string) => {
@@ -301,14 +294,13 @@ export function StudentRecruitment() {
                         <div className="flex items-start space-x-4">
                           <div>
                             <CardTitle className="text-lg">
-                              Ứng tuyển vào {application.clubName}
+                              Đơn ứng tuyển của {application.userName}
                             </CardTitle>
-                            <p className="text-sm text-muted-foreground">
-                              Đợt tuyển: {application.recruitmentTitle}
-                            </p>
-                            <p className="text-sm text-muted-foreground">
-                              {application.userName}
-                            </p>
+                            {application.teamName && (
+                              <p className="text-sm text-muted-foreground">
+                                Phòng ban: {application.teamName}
+                              </p>
+                            )}
                             <p className="text-xs text-muted-foreground mt-1">
                               Nộp đơn:{" "}
                               {new Date(
@@ -489,25 +481,25 @@ export function StudentRecruitment() {
                       <PaginationItem>
                         <PaginationPrevious
                           onClick={() => {
-                            if (currentPage > 0) {
+                            if (currentPage > 1) {
                               setCurrentPage(currentPage - 1);
                               window.scrollTo({ top: 0, behavior: "smooth" });
                             }
                           }}
                           className={
-                            currentPage === 0
+                            currentPage === 1
                               ? "pointer-events-none opacity-50"
                               : "cursor-pointer"
                           }
                         />
                       </PaginationItem>
 
-                      {currentPage > 2 && (
+                      {currentPage > 3 && (
                         <>
                           <PaginationItem>
                             <PaginationLink
                               onClick={() => {
-                                setCurrentPage(0);
+                                setCurrentPage(1);
                                 window.scrollTo({ top: 0, behavior: "smooth" });
                               }}
                               className="cursor-pointer"
@@ -528,20 +520,20 @@ export function StudentRecruitment() {
                         (_, i) => {
                           let pageNum;
                           if (totalPages <= 5) {
-                            pageNum = i;
-                          } else if (currentPage <= 2) {
-                            pageNum = i;
-                          } else if (currentPage >= totalPages - 3) {
-                            pageNum = totalPages - 5 + i;
+                            pageNum = i + 1;
+                          } else if (currentPage <= 3) {
+                            pageNum = i + 1;
+                          } else if (currentPage >= totalPages - 2) {
+                            pageNum = totalPages - 4 + i;
                           } else {
                             pageNum = currentPage - 2 + i;
                           }
 
-                          if (pageNum < 0 || pageNum >= totalPages) return null;
-                          if (currentPage > 2 && pageNum === 0) return null;
+                          if (pageNum < 1 || pageNum > totalPages) return null;
+                          if (currentPage > 3 && pageNum === 1) return null;
                           if (
-                            currentPage < totalPages - 3 &&
-                            pageNum === totalPages - 1
+                            currentPage < totalPages - 2 &&
+                            pageNum === totalPages
                           )
                             return null;
 
@@ -558,16 +550,16 @@ export function StudentRecruitment() {
                                 isActive={currentPage === pageNum}
                                 className="cursor-pointer"
                               >
-                                {pageNum + 1}
+                                {pageNum}
                               </PaginationLink>
                             </PaginationItem>
                           );
                         }
                       )}
 
-                      {currentPage < totalPages - 3 && (
+                      {currentPage < totalPages - 2 && (
                         <>
-                          {currentPage < totalPages - 4 && (
+                          {currentPage < totalPages - 3 && (
                             <PaginationItem>
                               <PaginationEllipsis />
                             </PaginationItem>
@@ -575,7 +567,7 @@ export function StudentRecruitment() {
                           <PaginationItem>
                             <PaginationLink
                               onClick={() => {
-                                setCurrentPage(totalPages - 1);
+                                setCurrentPage(totalPages);
                                 window.scrollTo({ top: 0, behavior: "smooth" });
                               }}
                               className="cursor-pointer"
@@ -589,13 +581,13 @@ export function StudentRecruitment() {
                       <PaginationItem>
                         <PaginationNext
                           onClick={() => {
-                            if (currentPage < totalPages - 1) {
+                            if (currentPage < totalPages) {
                               setCurrentPage(currentPage + 1);
                               window.scrollTo({ top: 0, behavior: "smooth" });
                             }
                           }}
                           className={
-                            currentPage === totalPages - 1
+                            currentPage === totalPages
                               ? "pointer-events-none opacity-50"
                               : "cursor-pointer"
                           }
@@ -649,13 +641,16 @@ export function StudentRecruitment() {
 
       {/* Application Detail Dialog */}
       <Dialog
-        open={!!selectedApplicationDetail}
+        open={detailLoading || !!selectedApplicationDetail}
         onOpenChange={(open) => !open && handleCloseApplicationDetail()}
       >
         <DialogContent className="!max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
-              Chi tiết đơn ứng tuyển vào {selectedApplicationDetail?.clubName}
+              Chi tiết đơn ứng tuyển
+              {selectedApplicationDetail?.recruitmentTitle
+                ? ` - ${selectedApplicationDetail.recruitmentTitle}`
+                : ""}
             </DialogTitle>
             <DialogDescription>
               Thông tin chi tiết về đơn ứng tuyển của bạn
@@ -664,6 +659,7 @@ export function StudentRecruitment() {
 
           {detailLoading ? (
             <div className="space-y-6">
+              {/* Recruitment Info Skeleton */}
               <div className="border rounded-lg p-4 bg-primary/5">
                 <div className="flex items-center gap-2 mb-3">
                   <Skeleton className="h-4 w-4 rounded" />
@@ -672,46 +668,44 @@ export function StudentRecruitment() {
                 <div className="space-y-2">
                   <Skeleton className="h-3 w-full" />
                   <Skeleton className="h-3 w-3/4" />
+                  <Skeleton className="h-3 w-1/2" />
                 </div>
               </div>
-              <div className="border rounded-lg p-4">
-                <Skeleton className="h-20 w-full" />
+
+              {/* Application Info Skeleton */}
+              <div className="border rounded-lg p-4 bg-muted/30">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Skeleton className="h-4 w-32 mb-2" />
+                    <Skeleton className="h-3 w-full" />
+                    <Skeleton className="h-3 w-5/6" />
+                    <Skeleton className="h-3 w-4/6" />
+                  </div>
+                  <div className="space-y-2">
+                    <Skeleton className="h-4 w-32 mb-2" />
+                    <Skeleton className="h-3 w-full" />
+                    <Skeleton className="h-3 w-5/6" />
+                    <Skeleton className="h-3 w-4/6" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Answers Skeleton */}
+              <div>
+                <Skeleton className="h-5 w-32 mb-3" />
+                <div className="space-y-4">
+                  {[...Array(3)].map((_, index) => (
+                    <div key={index} className="border rounded-lg p-4">
+                      <Skeleton className="h-4 w-3/4 mb-2" />
+                      <Skeleton className="h-20 w-full mt-2" />
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           ) : (
             selectedApplicationDetail && (
               <div className="space-y-6">
-                {recruitmentDetail && (
-                  <div className="border rounded-lg p-4 bg-primary/5">
-                    <h4 className="font-medium mb-3 flex items-center gap-2">
-                      <FileText className="h-4 w-4" />
-                      Thông tin tuyển dụng
-                    </h4>
-                    <div className="space-y-2 text-sm">
-                      <div>
-                        <span className="text-muted-foreground">Tiêu đề: </span>
-                        <span className="font-medium">
-                          {recruitmentDetail.title}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Mô tả: </span>
-                        <span>{recruitmentDetail.description}</span>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">
-                          Hạn nộp đơn:{" "}
-                        </span>
-                        <span>
-                          {new Date(
-                            recruitmentDetail.endDate
-                          ).toLocaleDateString("vi-VN")}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
                 <div className="border rounded-lg p-4 bg-muted/30">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
