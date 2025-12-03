@@ -298,4 +298,328 @@ class NewsDraftServiceTest {
                 isNull()
         );
     }
+    @Test
+    void createDraft_staffWithClub_success() {
+        Long me = staffUser.getId();
+
+        CreateDraftRequest body = new CreateDraftRequest();
+        body.setTitle("Tiêu đề nháp");
+        body.setContent("Nội dung nháp");
+        body.setClubId(club.getId());
+
+        when(userRepo.findById(me)).thenReturn(Optional.of(staffUser));
+        when(guard.isStaff(me)).thenReturn(true);
+        when(clubRepo.findById(club.getId())).thenReturn(Optional.of(club));
+
+        when(newsRepo.save(any())).thenAnswer(inv -> {
+            News n = inv.getArgument(0);
+            n.setId(111L);
+            return n;
+        });
+        when(newsMapper.toDto(any())).thenReturn(new NewsData());
+
+        NewsData result = newsDraftService.createDraft(me, body);
+
+        assertNotNull(result);
+        verify(newsRepo).save(any());
+    }
+    @Test
+    void createDraft_leadWrongTeam_throwsSecurity() {
+        Long me = 5L;
+
+        CreateDraftRequest body = new CreateDraftRequest();
+        body.setTitle("Draft");
+        body.setContent("Content");
+        body.setClubId(club.getId());
+        body.setTeamId(999L);
+
+        when(userRepo.findById(me)).thenReturn(Optional.of(staffUser));
+        when(guard.isStaff(me)).thenReturn(false);
+        when(guard.isTeamLead(me, club.getId(), body.getTeamId())).thenReturn(false);
+
+        assertThrows(SecurityException.class,
+                () -> newsDraftService.createDraft(me, body));
+    }
+    @Test
+    void updateDraft_creatorCanEdit_success() {
+        Long me = 1L;
+        News draft = new News();
+        draft.setId(10L);
+        draft.setIsDraft(true);
+        draft.setCreatedBy(staffUser);
+
+        when(newsRepo.findById(10L)).thenReturn(Optional.of(draft));
+        UpdateDraftRequest body = new UpdateDraftRequest();
+        body.setTitle("New title");
+
+        when(newsMapper.toDto(any())).thenReturn(new NewsData());
+
+        NewsData result = newsDraftService.updateDraft(me, 10L, body);
+
+        assertEquals("New title", draft.getTitle());
+        verify(newsRepo).save(draft);
+    }
+    @Test
+    void updateDraft_noPermission_throwsSecurity() {
+        Long me = 999L; // không phải creator, không staff
+
+        News draft = new News();
+        draft.setId(10L);
+        draft.setIsDraft(true);
+        draft.setCreatedBy(staffUser);
+        draft.setClub(club);
+
+        when(newsRepo.findById(10L)).thenReturn(Optional.of(draft));
+        when(guard.isStaff(me)).thenReturn(false);
+        when(guard.canApproveAtClub(me, club.getId())).thenReturn(false);
+        when(guard.isLead(me, club.getId())).thenReturn(false);
+
+        assertThrows(SecurityException.class,
+                () -> newsDraftService.updateDraft(me, 10L, new UpdateDraftRequest()));
+    }
+    @Test
+    void deleteDraft_creatorCanDelete_success() {
+        Long me = staffUser.getId();
+        News draft = new News();
+        draft.setId(5L);
+        draft.setIsDraft(true);
+        draft.setCreatedBy(staffUser);
+
+        when(newsRepo.findById(5L)).thenReturn(Optional.of(draft));
+        when(guard.isStaff(me)).thenReturn(false);
+        when(requestRepo.existsPendingByNewsId(5L)).thenReturn(false);
+
+        newsDraftService.deleteDraft(me, 5L);
+
+        verify(newsRepo).delete(draft);
+    }
+    @Test
+    void submitDraftToRequest_staffPendingUniversity_success() throws AppException {
+        Long me = staffUser.getId();
+
+        News draft = new News();
+        draft.setId(5L);
+        draft.setIsDraft(true);
+        draft.setCreatedBy(staffUser);
+        draft.setClub(club);
+
+        when(newsRepo.findById(5L)).thenReturn(Optional.of(draft));
+        when(guard.isStaff(me)).thenReturn(true);
+        when(requestRepo.existsPendingByNewsId(5L)).thenReturn(false);
+        when(userRepo.findById(me)).thenReturn(Optional.of(staffUser));
+
+        when(requestRepo.save(any())).thenAnswer(inv -> {
+            RequestNews r = inv.getArgument(0);
+            r.setId(200L);
+            return r;
+        });
+
+        Map<String, Object> result = newsDraftService.submitDraftToRequest(me, 5L);
+
+        assertEquals(200L, result.get("requestId"));
+
+        verify(webSocketService).broadcastToSystemRole(
+                eq("STAFF"), eq("NEWS_REQUEST"), eq("CREATED"), any()
+        );
+        verify(newsRepo).delete(draft);
+    }
+    @Test
+    void submitDraftToRequest_noPermission_throwsSecurity() {
+        Long me = 50L;
+
+        News draft = new News();
+        draft.setId(5L);
+        draft.setIsDraft(true);
+        draft.setCreatedBy(staffUser);
+        draft.setClub(club);
+
+        when(newsRepo.findById(5L)).thenReturn(Optional.of(draft));
+        when(guard.isStaff(me)).thenReturn(false);
+        when(guard.canApproveAtClub(me, club.getId())).thenReturn(false);
+        when(guard.isLead(me, club.getId())).thenReturn(false);
+
+        assertThrows(SecurityException.class,
+                () -> newsDraftService.submitDraftToRequest(me, 5L));
+    }
+    @Test
+    void publishDraftByStaff_notStaff_throwsSecurity() {
+        Long me = 99L;
+        when(guard.isStaff(me)).thenReturn(false);
+
+        assertThrows(SecurityException.class,
+                () -> newsDraftService.publishDraftByStaff(me, 10L));
+    }
+    @Test
+    void getDraftDetail_noPermission_throwsSecurity() {
+        Long me = 99L;
+
+        News draft = new News();
+        draft.setId(10L);
+        draft.setIsDraft(true);
+        draft.setCreatedBy(staffUser);
+        draft.setClub(club);
+
+        when(newsRepo.findById(10L)).thenReturn(Optional.of(draft));
+        when(guard.isStaff(me)).thenReturn(false);
+        when(guard.canApproveAtClub(me, club.getId())).thenReturn(false);
+        when(guard.isLead(me, club.getId())).thenReturn(false);
+
+        assertThrows(SecurityException.class,
+                () -> newsDraftService.getDraftDetail(me, 10L));
+    }
+    @Test
+    void createDraft_managerWithClub_success() {
+        Long me = clubManager.getId();
+
+        CreateDraftRequest body = new CreateDraftRequest();
+        body.setTitle("Tiêu đề nháp");
+        body.setContent("Nội dung nháp");
+        body.setClubId(club.getId());
+
+        when(userRepo.findById(me)).thenReturn(Optional.of(clubManager));
+        when(guard.isStaff(me)).thenReturn(false);
+        when(guard.isClubManager(me, club.getId())).thenReturn(true);
+        when(clubRepo.findById(club.getId())).thenReturn(Optional.of(club));
+
+        when(newsRepo.save(any())).thenAnswer(inv -> {
+            News n = inv.getArgument(0);
+            n.setId(500L);
+            return n;
+        });
+
+        when(newsMapper.toDto(any())).thenReturn(new NewsData());
+
+        NewsData result = newsDraftService.createDraft(me, body);
+
+        assertNotNull(result);
+        verify(newsRepo).save(any());
+    }
+    @Test
+    void createDraft_leadCorrectTeam_success() {
+        Long me = 5L;
+        Long teamId = 88L;
+
+        Team team = new Team();
+        team.setId(teamId);
+
+        CreateDraftRequest body = new CreateDraftRequest();
+        body.setTitle("Tiêu đề");
+        body.setContent("Nội dung");
+        body.setClubId(club.getId());
+        body.setTeamId(teamId);
+
+        when(userRepo.findById(me)).thenReturn(Optional.of(staffUser));
+        when(guard.isStaff(me)).thenReturn(false);
+        when(guard.isTeamLead(me, club.getId(), teamId)).thenReturn(true);
+        when(clubRepo.findById(club.getId())).thenReturn(Optional.of(club));
+
+        when(newsRepo.save(any())).thenAnswer(inv -> {
+            News n = inv.getArgument(0);
+            n.setId(600L);
+            return n;
+        });
+
+        when(newsMapper.toDto(any())).thenReturn(new NewsData());
+
+        NewsData result = newsDraftService.createDraft(me, body);
+
+        assertNotNull(result);
+        verify(newsRepo).save(any());
+    }
+    @Test
+    void updateDraft_staffCanEdit_success() {
+        Long me = staffUser.getId();
+
+        News draft = new News();
+        draft.setId(10L);
+        draft.setIsDraft(true);
+        draft.setCreatedBy(clubManager);
+        draft.setClub(club);
+
+        UpdateDraftRequest body = new UpdateDraftRequest();
+        body.setTitle("Updated Draft");
+
+        when(newsRepo.findById(10L)).thenReturn(Optional.of(draft));
+        when(guard.isStaff(me)).thenReturn(true);
+        when(newsMapper.toDto(any())).thenReturn(new NewsData());
+
+        NewsData result = newsDraftService.updateDraft(me, 10L, body);
+
+        assertEquals("Updated Draft", draft.getTitle());
+    }
+    @Test
+    void deleteDraft_managerCanDelete_success() {
+        Long me = clubManager.getId();
+
+        News draft = new News();
+        draft.setId(10L);
+        draft.setIsDraft(true);
+        draft.setCreatedBy(staffUser);
+        draft.setClub(club);
+
+        when(newsRepo.findById(10L)).thenReturn(Optional.of(draft));
+        when(guard.isStaff(me)).thenReturn(false);
+        when(guard.canApproveAtClub(me, club.getId())).thenReturn(true);
+        when(requestRepo.existsPendingByNewsId(10L)).thenReturn(false);
+
+        newsDraftService.deleteDraft(me, 10L);
+
+        verify(newsRepo).delete(draft);
+    }
+    @Test
+    void deleteDraft_leadCanDelete_success() {
+        Long me = 5L;
+
+        News draft = new News();
+        draft.setId(10L);
+        draft.setIsDraft(true);
+        draft.setCreatedBy(staffUser);
+        draft.setClub(club);
+
+        when(newsRepo.findById(10L)).thenReturn(Optional.of(draft));
+        when(guard.isStaff(me)).thenReturn(false);
+        when(guard.canApproveAtClub(me, club.getId())).thenReturn(false);
+        when(guard.isLead(me, club.getId())).thenReturn(true);
+        when(requestRepo.existsPendingByNewsId(10L)).thenReturn(false);
+
+        newsDraftService.deleteDraft(me, 10L);
+
+        verify(newsRepo).delete(draft);
+    }
+    @Test
+    void getDraftDetail_staff_success() {
+        Long me = staffUser.getId();
+
+        News draft = new News();
+        draft.setId(10L);
+        draft.setIsDraft(true);
+        draft.setCreatedBy(clubManager);
+        draft.setClub(club);
+
+        when(newsRepo.findById(10L)).thenReturn(Optional.of(draft));
+        when(guard.isStaff(me)).thenReturn(true);
+        when(newsMapper.toDto(draft)).thenReturn(new NewsData());
+
+        NewsData data = newsDraftService.getDraftDetail(me, 10L);
+
+        assertNotNull(data);
+    }
+    @Test
+    void getDraftDetail_creator_success() {
+        Long me = staffUser.getId();
+
+        News draft = new News();
+        draft.setId(10L);
+        draft.setIsDraft(true);
+        draft.setCreatedBy(staffUser);
+
+        when(newsRepo.findById(10L)).thenReturn(Optional.of(draft));
+        when(guard.isStaff(me)).thenReturn(false);
+        when(newsMapper.toDto(any())).thenReturn(new NewsData());
+
+        NewsData result = newsDraftService.getDraftDetail(me, 10L);
+
+        assertNotNull(result);
+    }
+
 }
