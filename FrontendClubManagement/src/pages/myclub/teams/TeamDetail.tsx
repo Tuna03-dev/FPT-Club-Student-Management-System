@@ -14,7 +14,6 @@ import {
   Edit2,
   Plus,
   Search,
-  Clock,
   Trash2,
   ExternalLink,
 } from "lucide-react";
@@ -638,18 +637,18 @@ export default function TeamDetailPage() {
                     icon: Users,
                     show: true,
                   },
-                  {
-                    id: "drafts",
-                    label: "Bản Nháp tin tức",
-                    icon: FileText,
-                    show: !!isLead,
-                  },
-                  {
-                    id: "requests",
-                    label: "Tin tức chờ duyệt",
-                    icon: Clock,
-                    show: !!isLead,
-                  },
+                  // {
+                  //   id: "drafts",
+                  //   label: "Bản Nháp tin tức",
+                  //   icon: FileText,
+                  //   show: !!isLead,
+                  // },
+                  // {
+                  //   id: "requests",
+                  //   label: "Tin tức chờ duyệt",
+                  //   icon: Clock,
+                  //   show: !!isLead,
+                  // },
                 ]
                   .filter((t) => t.show)
                   .map((tab) => {

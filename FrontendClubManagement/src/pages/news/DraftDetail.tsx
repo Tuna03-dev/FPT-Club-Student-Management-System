@@ -198,9 +198,12 @@ export default function DraftDetail() {
       <div className="rounded-2xl overflow-hidden bg-slate-100">
         {item.thumbnailUrl ? (
           <img
-            src={item.thumbnailUrl || "/placeholder.svg"}
+            src={item.thumbnailUrl || "/default-fallback-image.png"}
             alt={item.title || "thumbnail"}
             className="w-full h-[340px] object-cover"
+            onError={(e) =>
+              (e.currentTarget.src = "/default-fallback-image.png")
+            }
           />
         ) : (
           <div className="w-full h-[220px] bg-gradient-to-br from-slate-100 to-slate-200" />
