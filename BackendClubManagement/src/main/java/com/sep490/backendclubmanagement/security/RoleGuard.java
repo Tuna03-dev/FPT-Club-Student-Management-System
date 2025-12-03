@@ -35,8 +35,9 @@ public class RoleGuard {
     }
 
     public boolean isClubPresident(Long userId, Long clubId) {
-        return rmRepo.isClubPresidentExact(userId, clubId, currentSemesterIdOrNull());
+        return rmRepo.isPresidentSimple(userId, clubId);
     }
+
 
     public boolean isClubVice(Long userId, Long clubId) {
         return rmRepo.isClubViceExact(userId, clubId, currentSemesterIdOrNull());

@@ -117,11 +117,20 @@ function MemberListRow({
 
 /* ================= Main Page ================= */
 export default function TeamDetailPage() {
+  // 🧨 RESET toàn bộ state khi teamId đổi
+
   const nav = useNavigate();
   const { clubId = "0", teamId = "0" } = useParams();
   const cId = Number(clubId);
   const tId = Number(teamId);
-
+  useEffect(() => {
+    setLocalTeamInfo(null); // reset team info
+    setPosts([]); // reset posts
+    setSearch(""); // reset search
+    setActiveTab("posts"); // reset tab
+    setCurrentPage(0); // reset page
+    setTotalPages(0); // reset total
+  }, [tId]);
   // đọc & ghi tab từ URL
   const [sp, setSp] = useSearchParams();
   const tabInUrl = (sp.get("tab") as Tab) || "posts";
@@ -148,15 +157,25 @@ export default function TeamDetailPage() {
     linkGroupChat?: string | null;
   } | null>(null);
 
+  // useEffect(() => {
+  //   if (data && !localTeamInfo) {
+  //     setLocalTeamInfo({
+  //       teamName: data.teamName ?? "",
+  //       description: data.description ?? "",
+  //       linkGroupChat: (data as any).linkGroupChat ?? null, // nếu DTO có
+  //     });
+  //   }
+  // }, [data, localTeamInfo]);
+  // 🔥 Luôn sync info khi đổi team
   useEffect(() => {
-    if (data && !localTeamInfo) {
+    if (data) {
       setLocalTeamInfo({
         teamName: data.teamName ?? "",
         description: data.description ?? "",
-        linkGroupChat: (data as any).linkGroupChat ?? null, // nếu DTO có
+        linkGroupChat: data.linkGroupChat ?? null,
       });
     }
-  }, [data, localTeamInfo]);
+  }, [data, tId]);
 
   const teamName = localTeamInfo?.teamName ?? data?.teamName ?? "";
   const teamDesc = localTeamInfo?.description ?? data?.description ?? "";
@@ -211,11 +230,20 @@ export default function TeamDetailPage() {
   );
 
   // Load initial posts when tab is active and user can view posts
+  // useEffect(() => {
+  //   if (activeTab === "posts" && canViewPosts && !loading) {
+  //     loadPosts(0, false);
+  //   }
+  // }, [activeTab, canViewPosts, loading, loadPosts]);
+  // 🔥 Load posts khi đổi phòng ban hoặc đổi tab
   useEffect(() => {
     if (activeTab === "posts" && canViewPosts && !loading) {
+      setPosts([]);
+      setCurrentPage(0);
+      setTotalPages(0);
       loadPosts(0, false);
     }
-  }, [activeTab, canViewPosts, loading, loadPosts]);
+  }, [tId, activeTab, canViewPosts, loading, loadPosts]);
 
   // Infinite scroll
   const sentinelRef = useRef<HTMLDivElement | null>(null);
