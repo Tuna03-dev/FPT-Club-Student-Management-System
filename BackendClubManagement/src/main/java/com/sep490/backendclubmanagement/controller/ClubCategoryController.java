@@ -40,11 +40,11 @@ public class ClubCategoryController {
     @GetMapping("/staff/filter")
     public ApiResponse<PageResponse<ClubCategoryDTO>> getAllClubCategoriesWithFilter(
             @RequestParam(required = false) String keyword,
-            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(defaultValue = "id,desc") String sort
     ) throws AppException {
-        Pageable pageable = PageRequest.of(page, size, parseSort(sort));
+        Pageable pageable = PageRequest.of(page - 1, size, parseSort(sort));
         PageResponse<ClubCategoryDTO> data = clubCategoryService.getAllClubCategoriesWithFilter(keyword, pageable);
         return ApiResponse.success(data);
     }

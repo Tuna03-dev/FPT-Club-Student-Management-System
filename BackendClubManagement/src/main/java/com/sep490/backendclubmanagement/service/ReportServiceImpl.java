@@ -175,7 +175,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
         // Note: totalElements and totalPages reflect the filtered results
         return PageResponse.<ReportListItemResponse>builder()
                 .content(filteredContent)
-                .pageNumber(reportPage.getNumber())
+                .pageNumber(reportPage.getNumber() + 1)
                 .pageSize(reportPage.getSize())
                 .totalElements(filteredContent.size())
                 .totalPages((int) Math.ceil((double) filteredContent.size() / reportPage.getSize()))
@@ -1151,7 +1151,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
 
         return PageResponse.<ReportListItemResponse>builder()
                 .content(content)
-                .pageNumber(reportPage.getNumber())
+                .pageNumber(reportPage.getNumber() + 1)
                 .pageSize(reportPage.getSize())
                 .totalElements(reportPage.getTotalElements())
                 .totalPages(reportPage.getTotalPages())
@@ -1221,7 +1221,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
 
         return PageResponse.<ReportListItemResponse>builder()
                 .content(content)
-                .pageNumber(reportPage.getNumber())
+                .pageNumber(reportPage.getNumber() + 1)
                 .pageSize(reportPage.getSize())
                 .totalElements(reportPage.getTotalElements())
                 .totalPages(reportPage.getTotalPages())
@@ -1311,7 +1311,15 @@ public class ReportServiceImpl implements ReportServiceInterface {
             return response;
         });
 
-        return PageResponse.of(responsePage);
+        return PageResponse.<ReportRequirementResponse>builder()
+                .content(responsePage.getContent())
+                .pageNumber(responsePage.getNumber() + 1)
+                .pageSize(responsePage.getSize())
+                .totalElements(responsePage.getTotalElements())
+                .totalPages(responsePage.getTotalPages())
+                .hasNext(responsePage.hasNext())
+                .hasPrevious(responsePage.hasPrevious())
+                .build();
     }
 
     /**
@@ -1407,7 +1415,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
 
         return PageResponse.<ReportRequirementResponse.ClubRequirementInfo>builder()
                 .content(content)
-                .pageNumber(pageable.getPageNumber())
+                .pageNumber(pageable.getPageNumber() + 1)
                 .pageSize(pageable.getPageSize())
                 .totalElements(totalElements)
                 .totalPages(totalPages)
@@ -1607,7 +1615,15 @@ public class ReportServiceImpl implements ReportServiceInterface {
                     .build();
         });
 
-        return PageResponse.of(responsePage);
+        return PageResponse.<OfficerReportRequirementResponse>builder()
+                .content(responsePage.getContent())
+                .pageNumber(responsePage.getNumber() + 1)
+                .pageSize(responsePage.getSize())
+                .totalElements(responsePage.getTotalElements())
+                .totalPages(responsePage.getTotalPages())
+                .hasNext(responsePage.hasNext())
+                .hasPrevious(responsePage.hasPrevious())
+                .build();
     }
 
     /**

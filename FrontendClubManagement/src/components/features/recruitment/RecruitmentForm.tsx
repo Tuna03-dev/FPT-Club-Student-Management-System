@@ -318,8 +318,7 @@ export function RecruitmentForm({
       questions: formQuestions.map((q, index) => ({
         id: q.id ? q.id : null,
         questionText: q.questionText,
-        questionType:
-          q.questionType === "FILE" ? "FILE_UPLOAD" : q.questionType,
+        questionType: q.questionType,
         questionOrder: index + 1,
         isRequired: q.isRequired,
         options:
@@ -717,7 +716,7 @@ export function RecruitmentForm({
                       <SelectItem value="CHECKBOX">
                         Lựa chọn nhiều đáp án
                       </SelectItem>
-                      <SelectItem value="FILE">Tải lên file</SelectItem>
+                      <SelectItem value="FILE_UPLOAD">Tải lên file</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -793,7 +792,7 @@ export function RecruitmentForm({
                 </div>
               )}
 
-              {question.questionType === "FILE" && (
+              {question.questionType === "FILE_UPLOAD" && (
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
                   <p className="font-medium mb-1">
                     📎 Lưu ý về câu hỏi tải file:

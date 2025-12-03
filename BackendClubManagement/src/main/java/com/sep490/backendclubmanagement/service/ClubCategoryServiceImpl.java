@@ -44,10 +44,6 @@ public class ClubCategoryServiceImpl implements ClubCategoryService {
     @Override
     @Transactional(readOnly = true)
     public PageResponse<ClubCategoryDTO> getAllClubCategoriesWithFilter(String keyword, Pageable pageable) throws AppException {
-        Long userId = SecurityUtils.getCurrentUserId();
-        if (!roleService.isStaff(userId)) {
-            throw new ForbiddenException("Chỉ STAFF mới có quyền truy cập");
-        }
 
         Page<ClubCategory> categoryPage;
 
@@ -91,17 +87,22 @@ public class ClubCategoryServiceImpl implements ClubCategoryService {
         }
 
         Page<ClubCategoryDTO> dtoPage = categoryPage.map(clubCategoryMapper::toDTO);
-        return PageResponse.of(dtoPage);
+
+        // Convert to 1-based pagination
+        return PageResponse.<ClubCategoryDTO>builder()
+                .content(dtoPage.getContent())
+                .pageNumber(dtoPage.getNumber() + 1) // Convert from 0-based to 1-based
+                .pageSize(dtoPage.getSize())
+                .totalElements(dtoPage.getTotalElements())
+                .totalPages(dtoPage.getTotalPages())
+                .hasNext(dtoPage.hasNext())
+                .hasPrevious(dtoPage.hasPrevious())
+                .build();
     }
 
     @Override
     @Transactional(readOnly = true)
     public ClubCategoryDTO getClubCategoryById(Long id) throws AppException {
-        Long userId = SecurityUtils.getCurrentUserId();
-        if (!roleService.isStaff(userId)) {
-            throw new ForbiddenException("Chỉ STAFF mới có quyền truy cập");
-        }
-
         ClubCategory category = clubCategoryRepository.findById(id)
             .orElseThrow(() -> new NotFoundException("Không tìm thấy thể loại câu lạc bộ với ID: " + id));
         return clubCategoryMapper.toDTO(category);
@@ -110,10 +111,6 @@ public class ClubCategoryServiceImpl implements ClubCategoryService {
     @Override
     @Transactional
     public ClubCategoryDTO createClubCategory(CreateClubCategoryRequest request) throws AppException {
-        Long userId = SecurityUtils.getCurrentUserId();
-        if (!roleService.isStaff(userId)) {
-            throw new ForbiddenException("Chỉ STAFF mới có quyền tạo thể loại câu lạc bộ");
-        }
 
         // Kiểm tra tên thể loại đã tồn tại chưa
         if (clubCategoryRepository.existsByCategoryNameIgnoreCase(request.getCategoryName())) {
@@ -133,10 +130,6 @@ public class ClubCategoryServiceImpl implements ClubCategoryService {
     @Override
     @Transactional
     public ClubCategoryDTO updateClubCategory(Long id, UpdateClubCategoryRequest request) throws AppException {
-        Long userId = SecurityUtils.getCurrentUserId();
-        if (!roleService.isStaff(userId)) {
-            throw new ForbiddenException("Chỉ STAFF mới có quyền cập nhật thể loại câu lạc bộ");
-        }
 
         ClubCategory category = clubCategoryRepository.findById(id)
             .orElseThrow(() -> new NotFoundException("Không tìm thấy thể loại câu lạc bộ với ID: " + id));

@@ -142,10 +142,6 @@ public class ClubService implements ClubServiceInterface {
     public PageResponse<ClubManagementResponse> getClubsByFilter(
             String keyword, Long campusId, Long categoryId, String status,
             Pageable pageable, Long staffId) throws AppException {
-        // Kiểm tra quyền STAFF
-        if (!roleService.isStaff(staffId)) {
-            throw new AppException(ErrorCode.FORBIDDEN);
-        }
 
         Page<Club> page;
 
@@ -205,7 +201,7 @@ public class ClubService implements ClubServiceInterface {
 
         return PageResponse.<ClubManagementResponse>builder()
                 .content(content)
-                .pageNumber(page.getNumber())
+                .pageNumber(page.getNumber() + 1) // Convert to 1-based pagination
                 .pageSize(page.getSize())
                 .totalElements(page.getTotalElements())
                 .totalPages(page.getTotalPages())
@@ -217,10 +213,6 @@ public class ClubService implements ClubServiceInterface {
     @Override
     @Transactional
     public ClubManagementResponse createClub(CreateClubRequest request, Long staffId) throws AppException {
-        // Kiểm tra quyền STAFF
-        if (!roleService.isStaff(staffId)) {
-            throw new AppException(ErrorCode.FORBIDDEN);
-        }
 
         // Validate club code uniqueness
         if (clubRepository.findByClubCode(request.getClubCode()).isPresent()) {
@@ -267,15 +259,15 @@ public class ClubService implements ClubServiceInterface {
         // Tạo membership cho chủ CLB
         createPresidentMembership(savedClub, president);
 
-        // Send notification to the new club president
+        // Send notification to the new club president (async for better performance)
         try {
             String actionUrl = "/myclub/" + savedClub.getId();
             String title = "Bạn được chỉ định làm Chủ nhiệm CLB";
             String message = "Bạn đã được chỉ định làm Chủ nhiệm của CLB " + savedClub.getClubName() +
                     " (" + savedClub.getClubCode() + "). Chúc mừng bạn!";
 
-            notificationService.sendToUser(
-                    president.getId(),
+            notificationService.sendToUsersAsync(
+                    List.of(president.getId()),
                     staffId,
                     title,
                     message,
@@ -283,7 +275,6 @@ public class ClubService implements ClubServiceInterface {
                     NotificationPriority.HIGH,
                     actionUrl,
                     savedClub.getId(),
-                    null,
                     null,
                     null,
                     null
@@ -415,10 +406,6 @@ public class ClubService implements ClubServiceInterface {
     @Override
     @Transactional
     public ClubManagementResponse updateClub(Long clubId, UpdateClubRequest request, Long staffId) throws AppException {
-        // Kiểm tra quyền STAFF
-        if (!roleService.isStaff(staffId)) {
-            throw new AppException(ErrorCode.FORBIDDEN);
-        }
 
         Club club = clubRepository.findById(clubId)
                 .orElseThrow(() -> new AppException(ErrorCode.CLUB_NOT_FOUND));
@@ -466,23 +453,6 @@ public class ClubService implements ClubServiceInterface {
     }
 
     /**
-     * Get list of Club Officer user IDs in current semester for a specific club
-     * @param clubId Club ID
-     * @return List of user IDs who are Club Officers
-     */
-    private List<Long> getClubOfficersInCurrentSemester(Long clubId) {
-        Semester currentSemester = semesterRepository.findByIsCurrentTrue()
-                .orElse(null);
-
-        if (currentSemester == null) {
-            return Collections.emptyList();
-        }
-
-        return roleMemberShipRepository.findClubOfficerUserIdsByClubIdAndSemesterId(
-                clubId, currentSemester.getId());
-    }
-
-    /**
      * Get all active members of a club
      * @param clubId Club ID
      * @return List of user IDs who are active members
@@ -498,10 +468,6 @@ public class ClubService implements ClubServiceInterface {
     @Override
     @Transactional
     public void deactivateClub(Long clubId, Long staffId) throws AppException {
-        // Kiểm tra quyền STAFF
-        if (!roleService.isStaff(staffId)) {
-            throw new AppException(ErrorCode.FORBIDDEN);
-        }
 
         Club club = clubRepository.findById(clubId)
                 .orElseThrow(() -> new AppException(ErrorCode.CLUB_NOT_FOUND));
@@ -510,7 +476,7 @@ public class ClubService implements ClubServiceInterface {
         clubRepository.save(club);
         log.info("Deactivated club with ID: {}", clubId);
 
-        // Send notification to all club members about deactivation
+        // Send notification to all club members about deactivation (async)
         try {
             List<Long> memberIds = getActiveClubMembers(clubId);
 
@@ -520,7 +486,7 @@ public class ClubService implements ClubServiceInterface {
                 String message = "CLB " + club.getClubName() + " đã bị vô hiệu hóa bởi nhà trường. " +
                         "Mọi hoạt động của CLB sẽ tạm ngưng cho đến khi được kích hoạt lại.";
 
-                notificationService.sendToUsers(
+                notificationService.sendToUsersAsync(
                         memberIds,
                         staffId,
                         title,
@@ -542,10 +508,6 @@ public class ClubService implements ClubServiceInterface {
     @Override
     @Transactional
     public void activateClub(Long clubId, Long staffId) throws AppException {
-        // Kiểm tra quyền STAFF
-        if (!roleService.isStaff(staffId)) {
-            throw new AppException(ErrorCode.FORBIDDEN);
-        }
 
         Club club = clubRepository.findById(clubId)
                 .orElseThrow(() -> new AppException(ErrorCode.CLUB_NOT_FOUND));
@@ -554,17 +516,17 @@ public class ClubService implements ClubServiceInterface {
         clubRepository.save(club);
         log.info("Activated club with ID: {}", clubId);
 
-        // Send notification to all club members about activation
+        // Send notification to all club members about activation (async)
         try {
             List<Long> memberIds = getActiveClubMembers(clubId);
 
             if (!memberIds.isEmpty()) {
-                String actionUrl = "//" + clubId;
+                String actionUrl = "/myclub/" + clubId;
                 String title = "Câu lạc bộ đã được kích hoạt lại";
                 String message = "CLB " + club.getClubName() + " đã được kích hoạt lại bởi nhà trường. " +
                         "Các hoạt động của CLB có thể tiếp tục.";
 
-                notificationService.sendToUsers(
+                notificationService.sendToUsersAsync(
                         memberIds,
                         staffId,
                         title,
@@ -586,10 +548,6 @@ public class ClubService implements ClubServiceInterface {
     @Override
     @Transactional(readOnly = true)
     public ClubManagementResponse getClubForManagement(Long clubId, Long staffId) throws AppException {
-        // Kiểm tra quyền STAFF
-        if (!roleService.isStaff(staffId)) {
-            throw new AppException(ErrorCode.FORBIDDEN);
-        }
 
         Club club = clubRepository.findById(clubId)
                 .orElseThrow(() -> new AppException(ErrorCode.CLUB_NOT_FOUND));
@@ -622,11 +580,6 @@ public class ClubService implements ClubServiceInterface {
     @Override
     @Transactional
     public ClubDetailData updateClubInfo(Long clubId, UpdateClubInfoRequest request, Long userId, MultipartFile logoFile, MultipartFile bannerFile) throws AppException {
-        boolean isClubOfficer = roleMemberShipRepository.existsClubAdmin(userId, clubId);
-        if (!isClubOfficer) {
-            throw new AppException(ErrorCode.FORBIDDEN);
-        }
-
         // Tìm club
         Club club = clubRepository.findById(clubId)
                 .orElseThrow(() -> new AppException(ErrorCode.CLUB_NOT_FOUND));

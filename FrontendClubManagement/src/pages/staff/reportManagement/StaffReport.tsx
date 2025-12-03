@@ -138,7 +138,7 @@ export function StaffReportManagement() {
             )
           : undefined;
       const response = await getAllReportRequirements({
-        page: currentPage - 1,
+        page: currentPage,
         size: pageSize,
         sort: "createdAt,desc",
         reportType: backendType,
@@ -184,7 +184,7 @@ export function StaffReportManagement() {
     setReportListLoading(true);
     try {
       const response = await getAllReports({
-        page: reportListPage - 1,
+        page: reportListPage,
         size: pageSize,
         sort: "submittedDate,desc",
         status:

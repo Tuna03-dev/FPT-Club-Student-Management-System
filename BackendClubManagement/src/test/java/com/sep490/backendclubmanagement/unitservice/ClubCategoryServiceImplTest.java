@@ -110,138 +110,195 @@ class ClubCategoryServiceImplTest {
     // ================= getAllClubCategoriesWithFilter Tests =================
 
     @Test
-    void getAllClubCategoriesWithFilter_asStaff_noKeyword_returnsPage() throws AppException {
+    void getAllClubCategoriesWithFilter_noKeyword_returnsPageWith1BasedPagination() throws AppException {
         // Arrange
-        Pageable pageable = PageRequest.of(0, 10);
-        Page<ClubCategory> categoryPage = new PageImpl<>(List.of(testCategory));
+        Pageable pageable = PageRequest.of(0, 10); // Request page 0
+        Page<ClubCategory> categoryPage = new PageImpl<>(List.of(testCategory), pageable, 1);
 
-        try (MockedStatic<SecurityUtils> mockedSecurityUtils = mockStatic(SecurityUtils.class)) {
-            mockedSecurityUtils.when(SecurityUtils::getCurrentUserId).thenReturn(testUserId);
-            when(roleService.isStaff(testUserId)).thenReturn(true);
-            when(clubCategoryRepository.findAllWithFilter(null, pageable)).thenReturn(categoryPage);
-            when(clubCategoryMapper.toDTO(testCategory)).thenReturn(testCategoryDTO);
+        when(clubCategoryRepository.findAllWithFilter(null, pageable)).thenReturn(categoryPage);
+        when(clubCategoryMapper.toDTO(testCategory)).thenReturn(testCategoryDTO);
 
-            // Act
-            PageResponse<ClubCategoryDTO> result = clubCategoryService.getAllClubCategoriesWithFilter(null, pageable);
+        // Act
+        PageResponse<ClubCategoryDTO> result = clubCategoryService.getAllClubCategoriesWithFilter(null, pageable);
 
-            // Assert
-            assertNotNull(result);
-            assertEquals(1, result.getContent().size());
-            assertEquals(testCategoryName, result.getContent().getFirst().getCategoryName());
+        // Assert
+        assertNotNull(result);
+        assertEquals(1, result.getContent().size());
+        assertEquals(testCategoryName, result.getContent().getFirst().getCategoryName());
 
-            verify(roleService, times(1)).isStaff(testUserId);
-            verify(clubCategoryRepository, times(1)).findAllWithFilter(null, pageable);
-        }
+        // Verify 1-based pagination
+        assertEquals(1, result.getPageNumber(), "Page 0 should become page 1 (1-based)");
+        assertEquals(10, result.getPageSize());
+        assertEquals(1, result.getTotalElements());
+        assertFalse(result.isHasNext());
+        assertFalse(result.isHasPrevious());
+
+        verify(clubCategoryRepository, times(1)).findAllWithFilter(null, pageable);
     }
 
     @Test
-    void getAllClubCategoriesWithFilter_asStaff_withKeyword_returnsFilteredPage() throws AppException {
+    void getAllClubCategoriesWithFilter_page1_returnsPageNumber2() throws AppException {
+        // Arrange
+        Pageable pageable = PageRequest.of(1, 10); // Request page 1 (0-based)
+        Page<ClubCategory> categoryPage = new PageImpl<>(List.of(testCategory), pageable, 25);
+
+        when(clubCategoryRepository.findAllWithFilter(null, pageable)).thenReturn(categoryPage);
+        when(clubCategoryMapper.toDTO(testCategory)).thenReturn(testCategoryDTO);
+
+        // Act
+        PageResponse<ClubCategoryDTO> result = clubCategoryService.getAllClubCategoriesWithFilter(null, pageable);
+
+        // Assert
+        assertNotNull(result);
+        assertEquals(2, result.getPageNumber(), "Page 1 should become page 2 (1-based)");
+        assertTrue(result.isHasPrevious(), "Page 2 should have previous");
+        assertTrue(result.isHasNext(), "Should have next page with 25 total elements");
+        assertEquals(3, result.getTotalPages(), "Should have 3 total pages (25 elements / 10 per page)");
+    }
+
+    @Test
+    void getAllClubCategoriesWithFilter_withKeyword_returnsFilteredPage() throws AppException {
         // Arrange
         String keyword = "the thao";
         Pageable pageable = PageRequest.of(0, 10);
         Page<ClubCategory> allCategories = new PageImpl<>(List.of(testCategory), PageRequest.of(0, Integer.MAX_VALUE), 1);
 
-        try (MockedStatic<SecurityUtils> mockedSecurityUtils = mockStatic(SecurityUtils.class)) {
-            mockedSecurityUtils.when(SecurityUtils::getCurrentUserId).thenReturn(testUserId);
-            when(roleService.isStaff(testUserId)).thenReturn(true);
-            when(clubCategoryRepository.findAllWithFilter(isNull(), any(PageRequest.class))).thenReturn(allCategories);
-            when(clubCategoryMapper.toDTO(testCategory)).thenReturn(testCategoryDTO);
+        when(clubCategoryRepository.findAllWithFilter(isNull(), any(PageRequest.class))).thenReturn(allCategories);
+        when(clubCategoryMapper.toDTO(testCategory)).thenReturn(testCategoryDTO);
 
-            // Act
-            PageResponse<ClubCategoryDTO> result = clubCategoryService.getAllClubCategoriesWithFilter(keyword, pageable);
+        // Act
+        PageResponse<ClubCategoryDTO> result = clubCategoryService.getAllClubCategoriesWithFilter(keyword, pageable);
 
-            // Assert
-            assertNotNull(result);
-            assertTrue(result.getContent().size() <= 1);
+        // Assert
+        assertNotNull(result);
+        assertEquals(1, result.getContent().size(), "Should contain 1 category matching normalized keyword");
+        assertEquals(testCategoryName, result.getContent().getFirst().getCategoryName());
+        assertEquals(1, result.getPageNumber(), "Should return 1-based page number");
+        assertEquals(1, result.getTotalElements());
 
-            verify(roleService, times(1)).isStaff(testUserId);
-        }
+        verify(clubCategoryRepository, times(1)).findAllWithFilter(isNull(), any(PageRequest.class));
+        verify(clubCategoryMapper, times(1)).toDTO(testCategory);
     }
 
     @Test
-    void getAllClubCategoriesWithFilter_asNonStaff_throwsForbiddenException() {
+    void getAllClubCategoriesWithFilter_withEmptyKeyword_usesRepositoryFilter() throws AppException {
         // Arrange
+        String keyword = "   ";
+        Pageable pageable = PageRequest.of(0, 10);
+        Page<ClubCategory> categoryPage = new PageImpl<>(List.of(testCategory), pageable, 1);
+
+        when(clubCategoryRepository.findAllWithFilter(keyword, pageable)).thenReturn(categoryPage);
+        when(clubCategoryMapper.toDTO(testCategory)).thenReturn(testCategoryDTO);
+
+        // Act
+        PageResponse<ClubCategoryDTO> result = clubCategoryService.getAllClubCategoriesWithFilter(keyword, pageable);
+
+        // Assert
+        assertNotNull(result);
+        assertEquals(1, result.getContent().size());
+        assertEquals(1, result.getPageNumber());
+
+        verify(clubCategoryRepository, times(1)).findAllWithFilter(keyword, pageable);
+    }
+
+    @Test
+    void getAllClubCategoriesWithFilter_keywordNotMatching_returnsEmptyPage() throws AppException {
+        // Arrange
+        String keyword = "khoa hoc";
+        Pageable pageable = PageRequest.of(0, 10);
+        Page<ClubCategory> allCategories = new PageImpl<>(List.of(testCategory), PageRequest.of(0, Integer.MAX_VALUE), 1);
+
+        when(clubCategoryRepository.findAllWithFilter(isNull(), any(PageRequest.class))).thenReturn(allCategories);
+
+        // Act
+        PageResponse<ClubCategoryDTO> result = clubCategoryService.getAllClubCategoriesWithFilter(keyword, pageable);
+
+        // Assert
+        assertNotNull(result);
+        assertEquals(0, result.getContent().size(), "Should return empty list when keyword doesn't match");
+        assertEquals(0, result.getTotalElements());
+
+        verify(clubCategoryRepository, times(1)).findAllWithFilter(isNull(), any(PageRequest.class));
+        verify(clubCategoryMapper, never()).toDTO(any());
+    }
+
+    @Test
+    void getAllClubCategoriesWithFilter_withKeywordMultipleCategories_returnsFilteredResults() throws AppException {
+        // Arrange
+        String keyword = "thao";
         Pageable pageable = PageRequest.of(0, 10);
 
-        try (MockedStatic<SecurityUtils> mockedSecurityUtils = mockStatic(SecurityUtils.class)) {
-            mockedSecurityUtils.when(SecurityUtils::getCurrentUserId).thenReturn(testUserId);
-            when(roleService.isStaff(testUserId)).thenReturn(false);
+        ClubCategory category1 = ClubCategory.builder().id(1L).categoryName("Thể thao").build();
+        ClubCategory category2 = ClubCategory.builder().id(2L).categoryName("Văn hóa").build();
+        ClubCategory category3 = ClubCategory.builder().id(3L).categoryName("Thể thao điện tử").build();
 
-            // Act & Assert
-            ForbiddenException exception = assertThrows(ForbiddenException.class, () ->
-                    clubCategoryService.getAllClubCategoriesWithFilter(null, pageable));
-            assertEquals("Chỉ STAFF mới có quyền truy cập", exception.getMessage());
+        ClubCategoryDTO dto1 = new ClubCategoryDTO();
+        dto1.setId(1L);
+        dto1.setCategoryName("Thể thao");
 
-            verify(roleService, times(1)).isStaff(testUserId);
-            verify(clubCategoryRepository, never()).findAllWithFilter(any(), any());
-        }
+        ClubCategoryDTO dto3 = new ClubCategoryDTO();
+        dto3.setId(3L);
+        dto3.setCategoryName("Thể thao điện tử");
+
+        Page<ClubCategory> allCategories = new PageImpl<>(
+            List.of(category1, category2, category3),
+            PageRequest.of(0, Integer.MAX_VALUE),
+            3
+        );
+
+        when(clubCategoryRepository.findAllWithFilter(isNull(), any(PageRequest.class))).thenReturn(allCategories);
+        when(clubCategoryMapper.toDTO(category1)).thenReturn(dto1);
+        when(clubCategoryMapper.toDTO(category3)).thenReturn(dto3);
+
+        // Act
+        PageResponse<ClubCategoryDTO> result = clubCategoryService.getAllClubCategoriesWithFilter(keyword, pageable);
+
+        // Assert
+        assertNotNull(result);
+        assertEquals(2, result.getContent().size(), "Should return 2 categories containing 'thao'");
+        assertEquals(2, result.getTotalElements());
+
+        verify(clubCategoryRepository, times(1)).findAllWithFilter(isNull(), any(PageRequest.class));
     }
 
     // ================= getClubCategoryById Tests =================
 
     @Test
-    void getClubCategoryById_asStaff_existingId_returnsCategory() throws AppException {
+    void getClubCategoryById_existingId_returnsCategory() throws AppException {
         // Arrange
-        try (MockedStatic<SecurityUtils> mockedSecurityUtils = mockStatic(SecurityUtils.class)) {
-            mockedSecurityUtils.when(SecurityUtils::getCurrentUserId).thenReturn(testUserId);
-            when(roleService.isStaff(testUserId)).thenReturn(true);
-            when(clubCategoryRepository.findById(testCategoryId)).thenReturn(Optional.of(testCategory));
-            when(clubCategoryMapper.toDTO(testCategory)).thenReturn(testCategoryDTO);
+        when(clubCategoryRepository.findById(testCategoryId)).thenReturn(Optional.of(testCategory));
+        when(clubCategoryMapper.toDTO(testCategory)).thenReturn(testCategoryDTO);
 
-            // Act
-            ClubCategoryDTO result = clubCategoryService.getClubCategoryById(testCategoryId);
+        // Act
+        ClubCategoryDTO result = clubCategoryService.getClubCategoryById(testCategoryId);
 
-            // Assert
-            assertNotNull(result);
-            assertEquals(testCategoryId, result.getId());
-            assertEquals(testCategoryName, result.getCategoryName());
+        // Assert
+        assertNotNull(result);
+        assertEquals(testCategoryId, result.getId());
+        assertEquals(testCategoryName, result.getCategoryName());
 
-            verify(roleService, times(1)).isStaff(testUserId);
-            verify(clubCategoryRepository, times(1)).findById(testCategoryId);
-            verify(clubCategoryMapper, times(1)).toDTO(testCategory);
-        }
+        verify(clubCategoryRepository, times(1)).findById(testCategoryId);
+        verify(clubCategoryMapper, times(1)).toDTO(testCategory);
     }
 
     @Test
-    void getClubCategoryById_asStaff_nonExistingId_throwsNotFoundException() {
+    void getClubCategoryById_nonExistingId_throwsNotFoundException() {
         // Arrange
-        try (MockedStatic<SecurityUtils> mockedSecurityUtils = mockStatic(SecurityUtils.class)) {
-            mockedSecurityUtils.when(SecurityUtils::getCurrentUserId).thenReturn(testUserId);
-            when(roleService.isStaff(testUserId)).thenReturn(true);
-            when(clubCategoryRepository.findById(testCategoryId)).thenReturn(Optional.empty());
+        when(clubCategoryRepository.findById(testCategoryId)).thenReturn(Optional.empty());
 
-            // Act & Assert
-            NotFoundException exception = assertThrows(NotFoundException.class, () ->
-                    clubCategoryService.getClubCategoryById(testCategoryId));
-            assertTrue(exception.getMessage().contains("Không tìm thấy thể loại câu lạc bộ"));
+        // Act & Assert
+        NotFoundException exception = assertThrows(NotFoundException.class, () ->
+                clubCategoryService.getClubCategoryById(testCategoryId));
+        assertTrue(exception.getMessage().contains("Không tìm thấy thể loại câu lạc bộ"));
 
-            verify(roleService, times(1)).isStaff(testUserId);
-            verify(clubCategoryRepository, times(1)).findById(testCategoryId);
-            verify(clubCategoryMapper, never()).toDTO(any());
-        }
-    }
-
-    @Test
-    void getClubCategoryById_asNonStaff_throwsForbiddenException() {
-        // Arrange
-        try (MockedStatic<SecurityUtils> mockedSecurityUtils = mockStatic(SecurityUtils.class)) {
-            mockedSecurityUtils.when(SecurityUtils::getCurrentUserId).thenReturn(testUserId);
-            when(roleService.isStaff(testUserId)).thenReturn(false);
-
-            // Act & Assert
-            ForbiddenException exception = assertThrows(ForbiddenException.class, () ->
-                    clubCategoryService.getClubCategoryById(testCategoryId));
-            assertEquals("Chỉ STAFF mới có quyền truy cập", exception.getMessage());
-
-            verify(roleService, times(1)).isStaff(testUserId);
-            verify(clubCategoryRepository, never()).findById(any());
-        }
+        verify(clubCategoryRepository, times(1)).findById(testCategoryId);
+        verify(clubCategoryMapper, never()).toDTO(any());
     }
 
     // ================= createClubCategory Tests =================
 
     @Test
-    void createClubCategory_asStaff_validRequest_returnsCreatedCategory() throws AppException {
+    void createClubCategory_validRequest_returnsCreatedCategory() throws AppException {
         // Arrange
         CreateClubCategoryRequest request = new CreateClubCategoryRequest();
         request.setCategoryName("  Văn hóa  ");
@@ -255,73 +312,43 @@ class ClubCategoryServiceImplTest {
         newCategoryDTO.setId(2L);
         newCategoryDTO.setCategoryName("Văn hóa");
 
-        try (MockedStatic<SecurityUtils> mockedSecurityUtils = mockStatic(SecurityUtils.class)) {
-            mockedSecurityUtils.when(SecurityUtils::getCurrentUserId).thenReturn(testUserId);
-            when(roleService.isStaff(testUserId)).thenReturn(true);
-            when(clubCategoryRepository.existsByCategoryNameIgnoreCase("  Văn hóa  ")).thenReturn(false);
-            when(clubCategoryRepository.save(any(ClubCategory.class))).thenReturn(newCategory);
-            when(clubCategoryMapper.toDTO(newCategory)).thenReturn(newCategoryDTO);
+        when(clubCategoryRepository.existsByCategoryNameIgnoreCase("  Văn hóa  ")).thenReturn(false);
+        when(clubCategoryRepository.save(any(ClubCategory.class))).thenReturn(newCategory);
+        when(clubCategoryMapper.toDTO(newCategory)).thenReturn(newCategoryDTO);
 
-            // Act
-            ClubCategoryDTO result = clubCategoryService.createClubCategory(request);
+        // Act
+        ClubCategoryDTO result = clubCategoryService.createClubCategory(request);
 
-            // Assert
-            assertNotNull(result);
-            assertEquals("Văn hóa", result.getCategoryName());
+        // Assert
+        assertNotNull(result);
+        assertEquals("Văn hóa", result.getCategoryName());
 
-            verify(roleService, times(1)).isStaff(testUserId);
-            verify(clubCategoryRepository, times(1)).existsByCategoryNameIgnoreCase("  Văn hóa  ");
-            verify(clubCategoryRepository, times(1)).save(any(ClubCategory.class));
-            verify(clubCategoryMapper, times(1)).toDTO(newCategory);
-        }
+        verify(clubCategoryRepository, times(1)).existsByCategoryNameIgnoreCase("  Văn hóa  ");
+        verify(clubCategoryRepository, times(1)).save(any(ClubCategory.class));
+        verify(clubCategoryMapper, times(1)).toDTO(newCategory);
     }
 
     @Test
-    void createClubCategory_asStaff_duplicateName_throwsAppException() {
+    void createClubCategory_duplicateName_throwsAppException() {
         // Arrange
         CreateClubCategoryRequest request = new CreateClubCategoryRequest();
         request.setCategoryName(testCategoryName);
 
-        try (MockedStatic<SecurityUtils> mockedSecurityUtils = mockStatic(SecurityUtils.class)) {
-            mockedSecurityUtils.when(SecurityUtils::getCurrentUserId).thenReturn(testUserId);
-            when(roleService.isStaff(testUserId)).thenReturn(true);
-            when(clubCategoryRepository.existsByCategoryNameIgnoreCase(testCategoryName)).thenReturn(true);
+        when(clubCategoryRepository.existsByCategoryNameIgnoreCase(testCategoryName)).thenReturn(true);
 
-            // Act & Assert
-            AppException exception = assertThrows(AppException.class, () ->
-                    clubCategoryService.createClubCategory(request));
-            assertEquals(ErrorCode.CLUB_CATEGORY_ALREADY_EXISTS, exception.getErrorCode());
+        // Act & Assert
+        AppException exception = assertThrows(AppException.class, () ->
+                clubCategoryService.createClubCategory(request));
+        assertEquals(ErrorCode.CLUB_CATEGORY_ALREADY_EXISTS, exception.getErrorCode());
 
-            verify(roleService, times(1)).isStaff(testUserId);
-            verify(clubCategoryRepository, times(1)).existsByCategoryNameIgnoreCase(testCategoryName);
-            verify(clubCategoryRepository, never()).save(any());
-        }
-    }
-
-    @Test
-    void createClubCategory_asNonStaff_throwsForbiddenException() {
-        // Arrange
-        CreateClubCategoryRequest request = new CreateClubCategoryRequest();
-        request.setCategoryName("New Category");
-
-        try (MockedStatic<SecurityUtils> mockedSecurityUtils = mockStatic(SecurityUtils.class)) {
-            mockedSecurityUtils.when(SecurityUtils::getCurrentUserId).thenReturn(testUserId);
-            when(roleService.isStaff(testUserId)).thenReturn(false);
-
-            // Act & Assert
-            ForbiddenException exception = assertThrows(ForbiddenException.class, () ->
-                    clubCategoryService.createClubCategory(request));
-            assertEquals("Chỉ STAFF mới có quyền tạo thể loại câu lạc bộ", exception.getMessage());
-
-            verify(roleService, times(1)).isStaff(testUserId);
-            verify(clubCategoryRepository, never()).save(any());
-        }
+        verify(clubCategoryRepository, times(1)).existsByCategoryNameIgnoreCase(testCategoryName);
+        verify(clubCategoryRepository, never()).save(any());
     }
 
     // ================= updateClubCategory Tests =================
 
     @Test
-    void updateClubCategory_asStaff_validRequest_returnsUpdatedCategory() throws AppException {
+    void updateClubCategory_validRequest_returnsUpdatedCategory() throws AppException {
         // Arrange
         UpdateClubCategoryRequest request = new UpdateClubCategoryRequest();
         request.setCategoryName("  Thể thao cập nhật  ");
@@ -335,91 +362,56 @@ class ClubCategoryServiceImplTest {
         updatedDTO.setId(testCategoryId);
         updatedDTO.setCategoryName("Thể thao cập nhật");
 
-        try (MockedStatic<SecurityUtils> mockedSecurityUtils = mockStatic(SecurityUtils.class)) {
-            mockedSecurityUtils.when(SecurityUtils::getCurrentUserId).thenReturn(testUserId);
-            when(roleService.isStaff(testUserId)).thenReturn(true);
-            when(clubCategoryRepository.findById(testCategoryId)).thenReturn(Optional.of(testCategory));
-            when(clubCategoryRepository.existsByCategoryNameIgnoreCaseAndIdNot("  Thể thao cập nhật  ", testCategoryId)).thenReturn(false);
-            when(clubCategoryRepository.save(any(ClubCategory.class))).thenReturn(updatedCategory);
-            when(clubCategoryMapper.toDTO(updatedCategory)).thenReturn(updatedDTO);
+        when(clubCategoryRepository.findById(testCategoryId)).thenReturn(Optional.of(testCategory));
+        when(clubCategoryRepository.existsByCategoryNameIgnoreCaseAndIdNot("  Thể thao cập nhật  ", testCategoryId)).thenReturn(false);
+        when(clubCategoryRepository.save(any(ClubCategory.class))).thenReturn(updatedCategory);
+        when(clubCategoryMapper.toDTO(updatedCategory)).thenReturn(updatedDTO);
 
-            // Act
-            ClubCategoryDTO result = clubCategoryService.updateClubCategory(testCategoryId, request);
+        // Act
+        ClubCategoryDTO result = clubCategoryService.updateClubCategory(testCategoryId, request);
 
-            // Assert
-            assertNotNull(result);
-            assertEquals("Thể thao cập nhật", result.getCategoryName());
+        // Assert
+        assertNotNull(result);
+        assertEquals("Thể thao cập nhật", result.getCategoryName());
 
-            verify(roleService, times(1)).isStaff(testUserId);
-            verify(clubCategoryRepository, times(1)).findById(testCategoryId);
-            verify(clubCategoryRepository, times(1)).save(any(ClubCategory.class));
-            verify(clubCategoryMapper, times(1)).toDTO(updatedCategory);
-        }
+        verify(clubCategoryRepository, times(1)).findById(testCategoryId);
+        verify(clubCategoryRepository, times(1)).save(any(ClubCategory.class));
+        verify(clubCategoryMapper, times(1)).toDTO(updatedCategory);
     }
 
     @Test
-    void updateClubCategory_asStaff_nonExistingId_throwsNotFoundException() {
+    void updateClubCategory_nonExistingId_throwsNotFoundException() {
         // Arrange
         UpdateClubCategoryRequest request = new UpdateClubCategoryRequest();
         request.setCategoryName("New Name");
 
-        try (MockedStatic<SecurityUtils> mockedSecurityUtils = mockStatic(SecurityUtils.class)) {
-            mockedSecurityUtils.when(SecurityUtils::getCurrentUserId).thenReturn(testUserId);
-            when(roleService.isStaff(testUserId)).thenReturn(true);
-            when(clubCategoryRepository.findById(testCategoryId)).thenReturn(Optional.empty());
+        when(clubCategoryRepository.findById(testCategoryId)).thenReturn(Optional.empty());
 
-            // Act & Assert
-            NotFoundException exception = assertThrows(NotFoundException.class, () ->
-                    clubCategoryService.updateClubCategory(testCategoryId, request));
-            assertTrue(exception.getMessage().contains("Không tìm thấy thể loại câu lạc bộ"));
+        // Act & Assert
+        NotFoundException exception = assertThrows(NotFoundException.class, () ->
+                clubCategoryService.updateClubCategory(testCategoryId, request));
+        assertTrue(exception.getMessage().contains("Không tìm thấy thể loại câu lạc bộ"));
 
-            verify(roleService, times(1)).isStaff(testUserId);
-            verify(clubCategoryRepository, times(1)).findById(testCategoryId);
-            verify(clubCategoryRepository, never()).save(any());
-        }
+        verify(clubCategoryRepository, times(1)).findById(testCategoryId);
+        verify(clubCategoryRepository, never()).save(any());
     }
 
     @Test
-    void updateClubCategory_asStaff_duplicateName_throwsAppException() {
+    void updateClubCategory_duplicateName_throwsAppException() {
         // Arrange
         UpdateClubCategoryRequest request = new UpdateClubCategoryRequest();
-        request.setCategoryName("Existing Category");
+        request.setCategoryName("Existing Name");
 
-        try (MockedStatic<SecurityUtils> mockedSecurityUtils = mockStatic(SecurityUtils.class)) {
-            mockedSecurityUtils.when(SecurityUtils::getCurrentUserId).thenReturn(testUserId);
-            when(roleService.isStaff(testUserId)).thenReturn(true);
-            when(clubCategoryRepository.findById(testCategoryId)).thenReturn(Optional.of(testCategory));
-            when(clubCategoryRepository.existsByCategoryNameIgnoreCaseAndIdNot("Existing Category", testCategoryId)).thenReturn(true);
+        when(clubCategoryRepository.findById(testCategoryId)).thenReturn(Optional.of(testCategory));
+        when(clubCategoryRepository.existsByCategoryNameIgnoreCaseAndIdNot("Existing Name", testCategoryId)).thenReturn(true);
 
-            // Act & Assert
-            AppException exception = assertThrows(AppException.class, () ->
-                    clubCategoryService.updateClubCategory(testCategoryId, request));
-            assertEquals(ErrorCode.CLUB_CATEGORY_ALREADY_EXISTS, exception.getErrorCode());
+        // Act & Assert
+        AppException exception = assertThrows(AppException.class, () ->
+                clubCategoryService.updateClubCategory(testCategoryId, request));
+        assertEquals(ErrorCode.CLUB_CATEGORY_ALREADY_EXISTS, exception.getErrorCode());
 
-            verify(roleService, times(1)).isStaff(testUserId);
-            verify(clubCategoryRepository, times(1)).findById(testCategoryId);
-            verify(clubCategoryRepository, never()).save(any());
-        }
-    }
-
-    @Test
-    void updateClubCategory_asNonStaff_throwsForbiddenException() {
-        // Arrange
-        UpdateClubCategoryRequest request = new UpdateClubCategoryRequest();
-        request.setCategoryName("Updated Name");
-
-        try (MockedStatic<SecurityUtils> mockedSecurityUtils = mockStatic(SecurityUtils.class)) {
-            mockedSecurityUtils.when(SecurityUtils::getCurrentUserId).thenReturn(testUserId);
-            when(roleService.isStaff(testUserId)).thenReturn(false);
-
-            // Act & Assert
-            ForbiddenException exception = assertThrows(ForbiddenException.class, () ->
-                    clubCategoryService.updateClubCategory(testCategoryId, request));
-            assertEquals("Chỉ STAFF mới có quyền cập nhật thể loại câu lạc bộ", exception.getMessage());
-
-            verify(roleService, times(1)).isStaff(testUserId);
-            verify(clubCategoryRepository, never()).findById(any());
-        }
+        verify(clubCategoryRepository, times(1)).findById(testCategoryId);
+        verify(clubCategoryRepository, never()).save(any());
     }
 
     // ================= deleteClubCategory Tests =================
