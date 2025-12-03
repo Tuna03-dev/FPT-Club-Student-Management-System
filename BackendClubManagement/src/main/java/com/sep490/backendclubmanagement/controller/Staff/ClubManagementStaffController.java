@@ -46,12 +46,12 @@ public class ClubManagementStaffController {
             @RequestParam(required = false) Long campusId,
             @RequestParam(required = false) Long categoryId,
             @RequestParam(required = false) String status,
-            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(defaultValue = "createdAt,desc") String sort
     ) throws AppException {
         Long userId = SecurityUtils.getCurrentUserId();
-        Pageable pageable = PageRequest.of(page, size, parseSort(sort));
+        Pageable pageable = PageRequest.of(page - 1, size, parseSort(sort));
         PageResponse<ClubManagementResponse> response = clubService.getClubsByFilter(
                 keyword, campusId, categoryId, status, pageable, userId);
         return ResponseEntity.ok(ApiResponse.success(response));

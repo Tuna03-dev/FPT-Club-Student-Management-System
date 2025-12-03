@@ -12,6 +12,7 @@ import com.sep490.backendclubmanagement.repository.NotificationRepository;
 import com.sep490.backendclubmanagement.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.*;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -100,6 +101,15 @@ public class NotificationServiceImpl implements NotificationService {
                 // Có thể log ở đây nếu bạn muốn
             }
         }
+    }
+
+    @Override
+    @Async("uploadExecutor")
+    public void sendToUsersAsync(List<Long> recipientIds, Long actorId, String title, String message,
+                                 NotificationType type, NotificationPriority priority, String actionUrl,
+                                 Long relatedClubId, Long relatedNewsId, Long relatedTeamId, Long relatedRequestId) {
+        sendToUsers(recipientIds, actorId, title, message, type, priority, actionUrl,
+                relatedClubId, relatedNewsId, relatedTeamId, relatedRequestId);
     }
 
     @Override

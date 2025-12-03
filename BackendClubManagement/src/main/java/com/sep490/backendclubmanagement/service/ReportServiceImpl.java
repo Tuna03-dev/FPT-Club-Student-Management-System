@@ -1,14 +1,12 @@
 package com.sep490.backendclubmanagement.service;
 
-import com.sep490.backendclubmanagement.dto.request.ClubReportRequirementFilterRequest;
 import com.sep490.backendclubmanagement.dto.request.CreateReportRequirementRequest;
 import com.sep490.backendclubmanagement.dto.request.CreateReportRequest;
-import com.sep490.backendclubmanagement.dto.request.ReportFilterRequest;
-import com.sep490.backendclubmanagement.dto.request.ReportRequirementFilterRequest;
 import com.sep490.backendclubmanagement.dto.request.ReportReviewRequest;
 import com.sep490.backendclubmanagement.dto.request.SubmitReportRequest;
 import com.sep490.backendclubmanagement.dto.request.UpdateReportRequest;
 import com.sep490.backendclubmanagement.dto.request.UpdateReportRequirementRequest;
+import com.sep490.backendclubmanagement.dto.response.OfficerReportRequirementResponse;
 import com.sep490.backendclubmanagement.dto.response.PageResponse;
 import com.sep490.backendclubmanagement.dto.response.ReportDetailResponse;
 import com.sep490.backendclubmanagement.dto.response.ReportListItemResponse;
@@ -32,6 +30,8 @@ import com.sep490.backendclubmanagement.repository.TeamRepository;
 import com.sep490.backendclubmanagement.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -43,8 +43,14 @@ import org.springframework.web.multipart.MultipartFile;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 import java.util.stream.Collectors;
 
 @Service
@@ -68,8 +74,20 @@ public class ReportServiceImpl implements ReportServiceInterface {
     private final TeamRepository teamRepository;
     private final NotificationService notificationService;
 
+    @Autowired
+    @Qualifier("taskExecutor")
+    private Executor taskExecutor;
+
     // Maximum allowed file size for uploads: 20 MB
     private static final long MAX_FILE_SIZE_BYTES = 20L * 1024L * 1024L;
+
+    // University-level report statuses for staff access
+    private static final Set<ReportStatus> UNIVERSITY_LEVEL_STATUSES = EnumSet.of(
+            ReportStatus.PENDING_UNIVERSITY,
+            ReportStatus.APPROVED_UNIVERSITY,
+            ReportStatus.REJECTED_UNIVERSITY,
+            ReportStatus.RESUBMITTED_UNIVERSITY
+    );
 
     /**
      * Check that the provided MultipartFile does not exceed the configured max file size.
@@ -91,25 +109,17 @@ public class ReportServiceImpl implements ReportServiceInterface {
      * Only returns reports with university-level status: PENDING_UNIVERSITY, APPROVED_UNIVERSITY, REJECTED_UNIVERSITY, RESUBMITTED_UNIVERSITY
      */
     @Override
+    @Transactional(readOnly = true)
     public PageResponse<ReportListItemResponse> getAllReports(
             ReportStatus status, Long clubId, Long semesterId, ReportType reportType,
             String keyword, Pageable pageable, Long userId) {
-        // Check staff permission
-        if (!roleService.isStaff(userId)) {
-            throw new ForbiddenException("Only staff can view report list");
-        }
 
         // Staff can only view university-level reports
         // If status is provided, validate it's a university-level status
-        if (status != null) {
-            if (status != ReportStatus.PENDING_UNIVERSITY
-                    && status != ReportStatus.APPROVED_UNIVERSITY
-                    && status != ReportStatus.REJECTED_UNIVERSITY
-                    && status != ReportStatus.RESUBMITTED_UNIVERSITY) {
-                throw new ForbiddenException(
-                        "Staff can only view reports with status: PENDING_UNIVERSITY, APPROVED_UNIVERSITY, REJECTED_UNIVERSITY, or RESUBMITTED_UNIVERSITY"
-                );
-            }
+        if (status != null && !UNIVERSITY_LEVEL_STATUSES.contains(status)) {
+            throw new ForbiddenException(
+                    "Staff can only view reports with status: PENDING_UNIVERSITY, APPROVED_UNIVERSITY, REJECTED_UNIVERSITY, or RESUBMITTED_UNIVERSITY"
+            );
         }
 
         Page<Report> reportPage;
@@ -127,23 +137,12 @@ public class ReportServiceImpl implements ReportServiceInterface {
                     PageRequest.of(0, Integer.MAX_VALUE)
             );
 
-            // Filter using Vietnamese normalization
+            // Filter using Vietnamese normalization - optimized with helper method
             List<Report> filteredList = reportPage.getContent().stream()
-                    .filter(report -> {
-                        String title = normalizeVietnamese(report.getReportTitle() != null ? report.getReportTitle() : "");
-                        String content = normalizeVietnamese(report.getContent() != null ? report.getContent() : "");
-
-                        // Split keyword into individual words for better matching
-                        String[] keywords = trimmedKeyword.split("\\s+");
-                        for (String kw : keywords) {
-                            String normalizedKw = normalizeVietnamese(kw);
-                            if (title.contains(normalizedKw) || content.contains(normalizedKw)) {
-                                return true;
-                            }
-                        }
-                        return false;
-                    })
-                    .collect(Collectors.toList());
+                    .filter(report -> matchesVietnameseKeyword(trimmedKeyword,
+                            report.getReportTitle(),
+                            report.getContent()))
+                    .toList();
 
             // Apply pagination manually
             int start = (int) pageable.getOffset();
@@ -162,14 +161,9 @@ public class ReportServiceImpl implements ReportServiceInterface {
             );
         }
 
-        // Filter to only include university-level reports
+        // Filter to only include university-level reports - optimized with EnumSet
         List<Report> filteredReports = reportPage.getContent().stream()
-                .filter(report ->
-                        report.getStatus() == ReportStatus.PENDING_UNIVERSITY
-                                || report.getStatus() == ReportStatus.APPROVED_UNIVERSITY
-                                || report.getStatus() == ReportStatus.REJECTED_UNIVERSITY
-                                || report.getStatus() == ReportStatus.RESUBMITTED_UNIVERSITY
-                )
+                .filter(report -> UNIVERSITY_LEVEL_STATUSES.contains(report.getStatus()))
                 .toList();
 
         // Map to response
@@ -181,7 +175,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
         // Note: totalElements and totalPages reflect the filtered results
         return PageResponse.<ReportListItemResponse>builder()
                 .content(filteredContent)
-                .pageNumber(reportPage.getNumber())
+                .pageNumber(reportPage.getNumber() + 1)
                 .pageSize(reportPage.getSize())
                 .totalElements(filteredContent.size())
                 .totalPages((int) Math.ceil((double) filteredContent.size() / reportPage.getSize()))
@@ -195,20 +189,14 @@ public class ReportServiceImpl implements ReportServiceInterface {
      * Only allows viewing reports with university-level status
      */
     @Override
+    @Transactional(readOnly = true)
     public ReportDetailResponse getReportDetail(Long reportId, Long userId) {
-        // Check staff permission
-        if (!roleService.isStaff(userId)) {
-            throw new ForbiddenException("Only staff can view report details");
-        }
 
         Report report = reportRepository.findByIdWithRelations(reportId)
                 .orElseThrow(() -> new NotFoundException("Report not found with ID: " + reportId));
 
-        // Staff can only view university-level reports
-        if (report.getStatus() != ReportStatus.PENDING_UNIVERSITY
-                && report.getStatus() != ReportStatus.APPROVED_UNIVERSITY
-                && report.getStatus() != ReportStatus.REJECTED_UNIVERSITY
-                && report.getStatus() != ReportStatus.RESUBMITTED_UNIVERSITY) {
+        // Staff can only view university-level reports - optimized with EnumSet
+        if (!UNIVERSITY_LEVEL_STATUSES.contains(report.getStatus())) {
             throw new ForbiddenException(
                     "Staff can only view reports with status: PENDING_UNIVERSITY, APPROVED_UNIVERSITY, REJECTED_UNIVERSITY, or RESUBMITTED_UNIVERSITY. " +
                     "Current status: " + report.getStatus()
@@ -225,10 +213,6 @@ public class ReportServiceImpl implements ReportServiceInterface {
     @Override
     @Transactional
     public void reviewReport(ReportReviewRequest request, Long userId) {
-        // Check staff permission
-        if (!roleService.isStaff(userId)) {
-            throw new ForbiddenException("Only staff can review reports");
-        }
 
         Report report = reportRepository.findByIdWithRelations(request.getReportId())
                 .orElseThrow(() -> new NotFoundException("Report not found with ID: " + request.getReportId()));
@@ -289,72 +273,84 @@ public class ReportServiceImpl implements ReportServiceInterface {
 
         log.info("Staff {} has reviewed report {} with status {}", userId, request.getReportId(), newReportStatus);
 
-        // Send notification to club officers and report creator
-        try {
-            if (report.getClubReportRequirement() != null && report.getClubReportRequirement().getClub() != null) {
-                Club club = report.getClubReportRequirement().getClub();
-                Long reportClubId = club.getId();
-                String reportTitle = report.getReportTitle() != null ? report.getReportTitle() : "Báo cáo";
-                String actionUrl = "/myclub/"+reportClubId+"/reports";
+        // Send notification asynchronously to club officers and report creator
+        sendReviewNotificationAsync(report, newReportStatus, request, userId);
+    }
 
-                // Get recipients: club officers + creator
-                List<Long> officerIds = getClubOfficersInCurrentSemester(reportClubId);
-                List<Long> recipientIds = new ArrayList<>(officerIds);
+    /**
+     * Send review notification - Async to improve performance
+     */
+    private void sendReviewNotificationAsync(Report report, ReportStatus newReportStatus, ReportReviewRequest request, Long userId) {
+        CompletableFuture.runAsync(() -> {
+            try {
+                if (report.getClubReportRequirement() != null && report.getClubReportRequirement().getClub() != null) {
+                    Club club = report.getClubReportRequirement().getClub();
+                    Long reportClubId = club.getId();
+                    String reportTitle = report.getReportTitle() != null ? report.getReportTitle() : "Báo cáo";
+                    String actionUrl = "/myclub/"+reportClubId+"/reports";
 
-                // Add creator if not already in the list
-                if (report.getCreatedBy() != null) {
-                    Long creatorId = report.getCreatedBy().getId();
-                    if (!recipientIds.contains(creatorId)) {
-                        recipientIds.add(creatorId);
+                    // Parallel: Get recipients (club officers)
+                    CompletableFuture<List<Long>> officerIdsFuture =
+                        CompletableFuture.supplyAsync(() -> getClubOfficersInCurrentSemester(reportClubId), taskExecutor);
+
+                    // Wait for query to complete
+                    List<Long> recipientIds = new ArrayList<>(officerIdsFuture.join());
+
+                    // Add creator if not already in the list
+                    if (report.getCreatedBy() != null) {
+                        Long creatorId = report.getCreatedBy().getId();
+                        if (!recipientIds.contains(creatorId)) {
+                            recipientIds.add(creatorId);
+                        }
                     }
-                }
 
-                if (!recipientIds.isEmpty()) {
-                    String title = "";
-                    String message = "";
-                    NotificationType notificationType = null;
-                    NotificationPriority priority = NotificationPriority.NORMAL;
+                    if (!recipientIds.isEmpty()) {
+                        String title = "";
+                        String message = "";
+                        NotificationType notificationType = null;
+                        NotificationPriority priority = NotificationPriority.NORMAL;
 
-                    if (newReportStatus == ReportStatus.APPROVED_UNIVERSITY) {
-                        title = "Báo cáo được nhà trường phê duyệt";
-                        message = "Báo cáo \"" + reportTitle + "\" của CLB " + club.getClubName() + " đã được nhà trường phê duyệt.";
-                        notificationType = NotificationType.REPORT_APPROVED;
-                        priority = NotificationPriority.HIGH;
-                    } else if (newReportStatus == ReportStatus.REJECTED_UNIVERSITY) {
-                        title = "Báo cáo bị nhà trường từ chối";
-                        message = "Báo cáo \"" + reportTitle + "\" của CLB " + club.getClubName() + " đã bị nhà trường từ chối.";
+                        if (newReportStatus == ReportStatus.APPROVED_UNIVERSITY) {
+                            title = "Báo cáo được nhà trường phê duyệt";
+                            message = "Báo cáo \"" + reportTitle + "\" của CLB " + club.getClubName() + " đã được nhà trường phê duyệt.";
+                            notificationType = NotificationType.REPORT_APPROVED;
+                            priority = NotificationPriority.HIGH;
+                        } else if (newReportStatus == ReportStatus.REJECTED_UNIVERSITY) {
+                            title = "Báo cáo bị nhà trường từ chối";
+                            message = "Báo cáo \"" + reportTitle + "\" của CLB " + club.getClubName() + " đã bị nhà trường từ chối.";
 
-                        if (request.getReviewerFeedback() != null && !request.getReviewerFeedback().trim().isEmpty()) {
-                            message += " Phản hồi: " + request.getReviewerFeedback();
+                            if (request.getReviewerFeedback() != null && !request.getReviewerFeedback().trim().isEmpty()) {
+                                message += " Phản hồi: " + request.getReviewerFeedback();
+                            }
+
+                            if (report.isMustResubmit()) {
+                                message += " Vui lòng chỉnh sửa và nộp lại.";
+                            }
+
+                            notificationType = NotificationType.REPORT_REJECTED;
                         }
 
-                        if (report.isMustResubmit()) {
-                            message += " Vui lòng chỉnh sửa và nộp lại.";
+                        if (notificationType != null) {
+                            notificationService.sendToUsersAsync(
+                                    recipientIds,
+                                    userId,
+                                    title,
+                                    message,
+                                    notificationType,
+                                    priority,
+                                    actionUrl,
+                                    reportClubId,
+                                    null,
+                                    null,
+                                    null
+                            );
                         }
-
-                        notificationType = NotificationType.REPORT_REJECTED;
-                    }
-
-                    if (notificationType != null) {
-                        notificationService.sendToUsers(
-                                recipientIds,
-                                userId,
-                                title,
-                                message,
-                                notificationType,
-                                priority,
-                                actionUrl,
-                                reportClubId,
-                                null,
-                                null,
-                                null
-                        );
                     }
                 }
+            } catch (Exception e) {
+                log.error("Failed to send staff review notification: {}", e.getMessage());
             }
-        } catch (Exception e) {
-            log.error("Failed to send staff review notification: {}", e.getMessage());
-        }
+        }, taskExecutor);
     }
 
     /**
@@ -363,10 +359,6 @@ public class ReportServiceImpl implements ReportServiceInterface {
     @Override
     @Transactional
     public ReportRequirementResponse createReportRequirement(CreateReportRequirementRequest request, MultipartFile file, Long userId) throws AppException {
-        // Check staff permission
-        if (!roleService.isStaff(userId)) {
-            throw new ForbiddenException("Only staff can create report requirements");
-        }
 
         // Validate due date is not in the past
         if (request.getDueDate() != null && request.getDueDate().isBefore(LocalDateTime.now())) {
@@ -378,6 +370,12 @@ public class ReportServiceImpl implements ReportServiceInterface {
             checkFileSize(file);
         }
 
+        // Validate and get all clubs (batch load) - moved before event check for fail-fast
+        List<Club> clubs = clubRepository.findAllById(request.getClubIds());
+        if (clubs.size() != request.getClubIds().size()) {
+            throw new NotFoundException("One or more clubs not found");
+        }
+
         // Validate and get event if provided
         Event event = null;
         if (request.getEventId() != null) {
@@ -385,11 +383,15 @@ public class ReportServiceImpl implements ReportServiceInterface {
                     .orElseThrow(() -> new NotFoundException("Event not found"));
         }
 
-        // Upload file if provided and get URL
+        // Get current user
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new NotFoundException("User not found with ID: " + userId));
+
+        // Upload file if provided
         String templateUrl = request.getTemplateUrl();
         if (file != null && !file.isEmpty()) {
             try {
-                CloudinaryService.UploadResult uploadResult = cloudinaryService.uploadFile(file);
+                CloudinaryService.UploadResult uploadResult = cloudinaryService.uploadFile(file, "report_requirements");
                 templateUrl = uploadResult.url();
                 log.info("Uploaded template file for report requirement: {}", templateUrl);
             } catch (Exception e) {
@@ -397,10 +399,6 @@ public class ReportServiceImpl implements ReportServiceInterface {
                 throw new RuntimeException("Failed to upload template file: " + e.getMessage(), e);
             }
         }
-
-        // Get current user
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new NotFoundException("User not found with ID: " + userId));
 
         // Create SubmissionReportRequirement
         SubmissionReportRequirement submissionRequirement = SubmissionReportRequirement.builder()
@@ -415,22 +413,23 @@ public class ReportServiceImpl implements ReportServiceInterface {
 
         SubmissionReportRequirement savedSubmissionRequirement = submissionReportRequirementRepository.save(submissionRequirement);
 
-        // Validate and get all clubs
-        List<Club> clubs = clubRepository.findAllById(request.getClubIds());
-        if (clubs.size() != request.getClubIds().size()) {
-            throw new NotFoundException("One or more clubs not found");
-        }
-
-        // Create ClubReportRequirement for each club
-        List<ReportRequirementResponse.ClubRequirementInfo> clubRequirementInfos = new ArrayList<>();
+        // Create ClubReportRequirement for each club - batch create to reduce DB round trips
+        List<ClubReportRequirement> clubRequirements = new ArrayList<>(clubs.size());
         for (Club club : clubs) {
             ClubReportRequirement clubRequirement = ClubReportRequirement.builder()
                     .club(club)
                     .submissionReportRequirement(savedSubmissionRequirement)
                     .build();
+            clubRequirements.add(clubRequirement);
+        }
 
-            ClubReportRequirement savedClubRequirement = clubReportRequirementRepository.save(clubRequirement);
-            
+        // Batch save all club requirements
+        List<ClubReportRequirement> savedClubRequirements = clubReportRequirementRepository.saveAll(clubRequirements);
+
+        // Build response infos
+        List<ReportRequirementResponse.ClubRequirementInfo> clubRequirementInfos = new ArrayList<>(savedClubRequirements.size());
+        for (ClubReportRequirement savedClubRequirement : savedClubRequirements) {
+            Club club = savedClubRequirement.getClub();
             clubRequirementInfos.add(ReportRequirementResponse.ClubRequirementInfo.builder()
                     .id(savedClubRequirement.getId())
                     .clubId(club.getId())
@@ -448,42 +447,86 @@ public class ReportServiceImpl implements ReportServiceInterface {
         // Set clubRequirements (not mapped by mapper as it comes from ClubReportRequirement)
         response.setClubRequirements(clubRequirementInfos);
 
-        // Send notification to club officers of affected clubs
-        try {
-            String requirementTitle = request.getTitle() != null ? request.getTitle() : "Yêu cầu báo cáo mới";
-
-
-            for (Club club : clubs) {
-                List<Long> officerIds = getClubOfficersInCurrentSemester(club.getId());
-                String actionUrl = "/myclub/" + club.getId() + "/reports";
-                if (!officerIds.isEmpty()) {
-                    String title = "Yêu cầu báo cáo mới từ nhà trường";
-                    String message = "CLB " + club.getClubName() + " có yêu cầu báo cáo mới: \"" + requirementTitle + "\"";
-
-                    if (request.getDueDate() != null) {
-                        message += ". Hạn nộp: " + request.getDueDate();
-                    }
-
-                    notificationService.sendToUsers(
-                            officerIds,
-                            userId,
-                            title,
-                            message,
-                            NotificationType.SYSTEM_ANNOUNCEMENT,
-                            NotificationPriority.HIGH,
-                            actionUrl,
-                            club.getId(),
-                            null,
-                            null,
-                            null
-                    );
-                }
-            }
-        } catch (Exception e) {
-            log.error("Failed to send report requirement notification: {}", e.getMessage());
-        }
+        // Send notification asynchronously to club officers of affected clubs
+        sendReportRequirementCreatedNotificationsAsync(clubs, request, userId);
 
         return response;
+    }
+
+    /**
+     * Send notification for report requirement creation - Async to improve performance
+     * Optimized: Batch load all club officers to avoid N+1 queries
+     */
+    private void sendReportRequirementCreatedNotificationsAsync(List<Club> clubs, CreateReportRequirementRequest request, Long userId) {
+        CompletableFuture.runAsync(() -> {
+            try {
+                String requirementTitle = request.getTitle() != null ? request.getTitle() : "Yêu cầu báo cáo mới";
+
+                // Fetch current semester once for all clubs
+                Semester currentSemester = semesterRepository.findByIsCurrentTrue()
+                        .orElse(null);
+
+                if (currentSemester == null) {
+                    log.warn("Current semester not found, skipping notifications");
+                    return;
+                }
+
+                // ✅ FIX N+1: Batch load all club officers for all clubs in ONE query
+                List<Long> clubIds = clubs.stream().map(Club::getId).toList();
+                List<Object[]> officerData = roleMemberShipRepository
+                        .findClubOfficerUserIdsByClubIdsAndSemesterId(clubIds, currentSemester.getId());
+
+                // Group officers by clubId: Map<ClubId, List<UserId>>
+                Map<Long, List<Long>> clubOfficersMap = new HashMap<>();
+                for (Object[] row : officerData) {
+                    Long clubId = (Long) row[0];
+                    Long userOfficerId = (Long) row[1];
+                    clubOfficersMap.computeIfAbsent(clubId, k -> new ArrayList<>()).add(userOfficerId);
+                }
+
+                //  Parallel: Send notifications to all clubs simultaneously
+                List<CompletableFuture<Void>> notificationFutures = clubs.stream()
+                    .map(club -> CompletableFuture.runAsync(() -> {
+                        try {
+                            // ✅ Get from pre-loaded map - NO database query!
+                            List<Long> officerIds = clubOfficersMap.getOrDefault(club.getId(), Collections.emptyList());
+                            String actionUrl = "/myclub/" + club.getId() + "/reports";
+
+                            if (!officerIds.isEmpty()) {
+                                String title = "Yêu cầu báo cáo mới từ nhà trường";
+                                String message = "CLB " + club.getClubName() + " có yêu cầu báo cáo mới: \"" + requirementTitle + "\"";
+
+                                if (request.getDueDate() != null) {
+                                    message += ". Hạn nộp: " + request.getDueDate();
+                                }
+
+                                notificationService.sendToUsersAsync(
+                                        officerIds,
+                                        userId,
+                                        title,
+                                        message,
+                                        NotificationType.SYSTEM_ANNOUNCEMENT,
+                                        NotificationPriority.HIGH,
+                                        actionUrl,
+                                        club.getId(),
+                                        null,
+                                        null,
+                                        null
+                                );
+                            }
+                        } catch (Exception e) {
+                            log.error("Failed to send notification for club {}: {}", club.getId(), e.getMessage());
+                        }
+                    }, taskExecutor))
+                    .toList();
+
+                // Wait for all notifications to be sent
+                CompletableFuture.allOf(notificationFutures.toArray(new CompletableFuture[0])).join();
+
+            } catch (Exception e) {
+                log.error("Failed to send report requirement notification: {}", e.getMessage());
+            }
+        }, taskExecutor);
     }
 
     /**
@@ -492,10 +535,6 @@ public class ReportServiceImpl implements ReportServiceInterface {
     @Override
     @Transactional
     public ReportRequirementResponse updateReportRequirement(Long requirementId, UpdateReportRequirementRequest request, MultipartFile file, Long userId) throws AppException {
-        // Check staff permission
-        if (!roleService.isStaff(userId)) {
-            throw new ForbiddenException("Only staff can update report requirements");
-        }
 
         // Validate due date is not in the past
         if (request.getDueDate() != null && request.getDueDate().isBefore(LocalDateTime.now())) {
@@ -515,7 +554,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
         String templateUrl = request.getTemplateUrl();
         if (file != null && !file.isEmpty()) {
             try {
-                CloudinaryService.UploadResult uploadResult = cloudinaryService.uploadFile(file);
+                CloudinaryService.UploadResult uploadResult = cloudinaryService.uploadFile(file, "report_requirements");
                 templateUrl = uploadResult.url();
                 log.info("Uploaded new template file for report requirement: {}", templateUrl);
             } catch (Exception e) {
@@ -556,42 +595,91 @@ public class ReportServiceImpl implements ReportServiceInterface {
         ReportRequirementResponse response = submissionReportRequirementMapper.toDto(updatedSubmissionRequirement);
         response.setClubRequirements(clubRequirementInfos);
 
-        // Send notification to club officers of affected clubs about the update
-        try {
-            String requirementTitle = request.getTitle() != null ? request.getTitle() : "Yêu cầu báo cáo";
-
-            for (ClubReportRequirement clubReq : clubRequirements) {
-                Club club = clubReq.getClub();
-                List<Long> officerIds = getClubOfficersInCurrentSemester(club.getId());
-                String actionUrl = "/myclub/" + club.getId() + "/reports";
-                if (!officerIds.isEmpty()) {
-                    String title = "Cập nhật yêu cầu báo cáo từ nhà trường";
-                    String message = "CLB " + club.getClubName() + " - Yêu cầu báo cáo \"" + requirementTitle + "\" đã được cập nhật";
-
-                    if (request.getDueDate() != null) {
-                        message += ". Hạn nộp mới: " + request.getDueDate();
-                    }
-
-                    notificationService.sendToUsers(
-                            officerIds,
-                            userId,
-                            title,
-                            message,
-                            NotificationType.SYSTEM_ANNOUNCEMENT,
-                            NotificationPriority.HIGH,
-                            actionUrl,
-                            club.getId(),
-                            null,
-                            null,
-                            null
-                    );
-                }
-            }
-        } catch (Exception e) {
-            log.error("Failed to send report requirement update notification: {}", e.getMessage());
-        }
+        // Send notification asynchronously to club officers of affected clubs about the update
+        sendReportRequirementUpdatedNotificationsAsync(clubRequirements, request, userId);
 
         return response;
+    }
+
+    /**
+     * Send notification for report requirement update - Async to improve performance
+     * Optimized: Batch load all club officers to avoid N+1 queries
+     */
+    private void sendReportRequirementUpdatedNotificationsAsync(List<ClubReportRequirement> clubRequirements, UpdateReportRequirementRequest request, Long userId) {
+        CompletableFuture.runAsync(() -> {
+            try {
+                String requirementTitle = request.getTitle() != null ? request.getTitle() : "Yêu cầu báo cáo";
+
+                // Fetch current semester once for all clubs
+                Semester currentSemester = semesterRepository.findByIsCurrentTrue()
+                        .orElse(null);
+
+                if (currentSemester == null) {
+                    log.warn("Current semester not found, skipping notifications");
+                    return;
+                }
+
+                // ✅ FIX N+1: Batch load all club officers for all clubs in ONE query
+                List<Long> clubIds = clubRequirements.stream()
+                        .map(crr -> crr.getClub().getId())
+                        .distinct()
+                        .toList();
+
+                List<Object[]> officerData = roleMemberShipRepository
+                        .findClubOfficerUserIdsByClubIdsAndSemesterId(clubIds, currentSemester.getId());
+
+                // Group officers by clubId: Map<ClubId, List<UserId>>
+                Map<Long, List<Long>> clubOfficersMap = new HashMap<>();
+                for (Object[] row : officerData) {
+                    Long clubId = (Long) row[0];
+                    Long userOfficerId = (Long) row[1];
+                    clubOfficersMap.computeIfAbsent(clubId, k -> new ArrayList<>()).add(userOfficerId);
+                }
+
+                //  Parallel: Process all club notifications simultaneously
+                List<CompletableFuture<Void>> notificationFutures = clubRequirements.stream()
+                    .map(clubReq -> CompletableFuture.runAsync(() -> {
+                        try {
+                            Club club = clubReq.getClub();
+                            // ✅ Get from pre-loaded map - NO database query!
+                            List<Long> officerIds = clubOfficersMap.getOrDefault(club.getId(), Collections.emptyList());
+                            String actionUrl = "/myclub/" + club.getId() + "/reports";
+
+                            if (!officerIds.isEmpty()) {
+                                String title = "Cập nhật yêu cầu báo cáo từ nhà trường";
+                                String message = "CLB " + club.getClubName() + " - Yêu cầu báo cáo \"" + requirementTitle + "\" đã được cập nhật";
+
+                                if (request.getDueDate() != null) {
+                                    message += ". Hạn nộp mới: " + request.getDueDate();
+                                }
+
+                                notificationService.sendToUsersAsync(
+                                        officerIds,
+                                        userId,
+                                        title,
+                                        message,
+                                        NotificationType.SYSTEM_ANNOUNCEMENT,
+                                        NotificationPriority.HIGH,
+                                        actionUrl,
+                                        club.getId(),
+                                        null,
+                                        null,
+                                        null
+                                );
+                            }
+                        } catch (Exception e) {
+                            log.error("Failed to send notification for club {}: {}", clubReq.getClub().getId(), e.getMessage());
+                        }
+                    }, taskExecutor))
+                    .toList();
+
+                // Wait for all notifications to complete
+                CompletableFuture.allOf(notificationFutures.toArray(new CompletableFuture[0])).join();
+
+            } catch (Exception e) {
+                log.error("Failed to send report requirement update notification: {}", e.getMessage());
+            }
+        }, taskExecutor);
     }
 
     /**
@@ -602,30 +690,15 @@ public class ReportServiceImpl implements ReportServiceInterface {
     @Transactional
     public ReportDetailResponse createReport(CreateReportRequest request, MultipartFile file, Long userId) throws AppException {
 
-        // Get current semester
+        // Get current semester early
         Semester currentSemester = semesterRepository.findCurrentSemester()
                 .orElseThrow(() -> new NotFoundException("Current semester not found"));
-        // Get user
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new NotFoundException("User not found with ID: " + userId));
-
-        // Check if user is team officer,treasurer or club president in current semester and active
-        boolean isClubOfficerOrTeamOfficerOrTreasurer = roleMemberShipRepository.isClubOfficerOrTeamOfficerOrTreasurerInCurrentSemester(
-                userId, request.getClubId(), currentSemester.getId());
 
 
-        if (!isClubOfficerOrTeamOfficerOrTreasurer) {
-            throw new ForbiddenException(
-                    "Chỉ cán bộ ban (team officer), thủ quỹ hoặc chủ nhiệm câu lạc bộ (club president) " +
-                            "trong kỳ hiện tại và đang hoạt động mới có quyền tạo báo cáo."
-            );
-        }
-
-        // Validate club exists
+        // Validate club exists and is active
         Club club = clubRepository.findById(request.getClubId())
                 .orElseThrow(() -> new NotFoundException("Club not found with ID: " + request.getClubId()));
 
-        // Check if club is active (only active clubs can create reports)
         if (!"ACTIVE".equalsIgnoreCase(club.getStatus())) {
             throw new AppException(ErrorCode.CLUB_NOT_ACTIVE);
         }
@@ -634,10 +707,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
         SubmissionReportRequirement reportRequirement = submissionReportRequirementRepository.findById(request.getReportRequirementId())
                 .orElseThrow(() -> new NotFoundException("Report requirement not found with ID: " + request.getReportRequirementId()));
 
-
-
-        // Find or get ClubReportRequirement for this club and submission requirement
-        // Fetch report if exists to properly check if report already exists
+        // Find ClubReportRequirement for this club and submission requirement
         ClubReportRequirement clubReportRequirement = clubReportRequirementRepository
                 .findByClubIdAndSubmissionReportRequirementId(request.getClubId(), request.getReportRequirementId())
                 .orElseThrow(() -> new NotFoundException(
@@ -657,6 +727,10 @@ public class ReportServiceImpl implements ReportServiceInterface {
         if (file != null && !file.isEmpty()) {
             checkFileSize(file);
         }
+
+        // Get user (moved after validations for fail-fast)
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new NotFoundException("User not found with ID: " + userId));
 
         // Upload file if provided
         String fileUrl = request.getFileUrl(); // Use provided fileUrl if any
@@ -710,28 +784,70 @@ public class ReportServiceImpl implements ReportServiceInterface {
             report.setSubmittedDate(LocalDateTime.now());
         }
 
-        // Set bidirectional relationship: Report -> ClubReportRequirement (already set in builder)
-        // and ClubReportRequirement -> Report
-        // This ensures the relationship is properly maintained on both sides in memory
+        // Set bidirectional relationship
         clubReportRequirement.setReport(report);
 
-        // Save Report (Report is the owning side with the foreign key club_report_requirement_id)
-        // The foreign key will be set when saving Report
-        // Note: We don't need to save ClubReportRequirement separately because:
-        // 1. Report is the owning side (has the foreign key)
-        // 2. ClubReportRequirement doesn't have a foreign key to Report
-        // 3. Setting clubReportRequirement.setReport(report) is just for bidirectional relationship in memory
+        // Save Report
         Report savedReport = reportRepository.save(report);
 
         log.info("User {} created report {} with status {} for club {} (autoSubmit: {})",
                 userId, savedReport.getId(), status, request.getClubId(), shouldAutoSubmit);
 
-        // If autoSubmit is true and report was created as PENDING_CLUB, the report is already submitted
-        // No need to call submitReport separately as it's already in PENDING_CLUB status
+        // Map to response using already loaded data (no need to query again)
+        ReportDetailResponse reportDetailResponse = reportMapper.toDetail(savedReport);
 
-        // Fetch the saved report with all relations for response
-        return reportMapper.toDetail(reportRepository.findByIdWithRelations(savedReport.getId())
-                .orElse(savedReport));
+        // Send notification asynchronously if report was auto-submitted
+        if (shouldAutoSubmit && status == ReportStatus.PENDING_CLUB) {
+            sendReportSubmittedNotificationAsync(savedReport, club, userId, currentSemester.getId());
+        }
+
+        return reportDetailResponse;
+    }
+
+    /**
+     * Send notification when report is submitted - Async to improve performance
+     */
+    private void sendReportSubmittedNotificationAsync(Report report, Club club, Long userId, Long semesterId) {
+        CompletableFuture.runAsync(() -> {
+            try {
+                String reportTitle = report.getReportTitle() != null ? report.getReportTitle() : "Báo cáo";
+                String actionUrl = "/myclub/" + club.getId() + "/reports";
+
+                //  Parallel: Get club officers
+                CompletableFuture<List<Long>> officerIdsFuture =
+                    CompletableFuture.supplyAsync(() ->
+                        roleMemberShipRepository.findClubOfficerUserIdsByClubIdAndSemesterId(club.getId(), semesterId),
+                        taskExecutor);
+
+                List<Long> recipientIds = officerIdsFuture.join().stream()
+                        .filter(id -> !id.equals(userId))
+                        .collect(Collectors.toList());
+
+                if (!recipientIds.isEmpty()) {
+                    User submitter = report.getCreatedBy();
+                    String submitterName = submitter != null ? submitter.getFullName() : "Người dùng";
+
+                    String title = "Có báo cáo mới cần duyệt";
+                    String message = submitterName + " đã nộp báo cáo \"" + reportTitle + "\" cần phê duyệt.";
+
+                    notificationService.sendToUsersAsync(
+                            recipientIds,
+                            userId,
+                            title,
+                            message,
+                            NotificationType.REPORT_SUBMITTED,
+                            NotificationPriority.NORMAL,
+                            actionUrl,
+                            club.getId(),
+                            null,
+                            null,
+                            null
+                    );
+                }
+            } catch (Exception e) {
+                log.error("Failed to send report submission notification: {}", e.getMessage());
+            }
+        }, taskExecutor);
     }
 
 
@@ -838,7 +954,6 @@ public class ReportServiceImpl implements ReportServiceInterface {
         }
 
         Long clubId = club.getId();
-        boolean isCreator = report.getCreatedBy() != null && report.getCreatedBy().getId().equals(userId);
 
         // Get current semester once (avoid multiple queries)
         Semester currentSemester = semesterRepository.findCurrentSemester()
@@ -850,22 +965,8 @@ public class ReportServiceImpl implements ReportServiceInterface {
         boolean isClubOfficer = roleMemberShipRepository.isClubOfficerInCurrentSemester(
                 userId, clubId, semesterId);
 
-        // Only check team officer if not club officer and user is creator
-        boolean isTeamOfficer = false;
-        if (!isClubOfficer && isCreator) {
-            isTeamOfficer = roleMemberShipRepository.isTeamOfficerOrTreasurerInCurrentSemester(
-                    userId, clubId, semesterId);
-        }
-
-        if (!isClubOfficer && !(isTeamOfficer && isCreator)) {
-            throw new ForbiddenException(
-                    "Chỉ chủ nhiệm câu lạc bộ (club president) hoặc cán bộ ban (team officer) là người tạo " +
-                    "trong kỳ hiện tại và đang hoạt động mới có quyền nộp báo cáo."
-            );
-        }
-
         // Get report requirement and check deadline
-        if (report.getClubReportRequirement() != null && 
+        if (report.getClubReportRequirement() != null &&
             report.getClubReportRequirement().getSubmissionReportRequirement() != null) {
             SubmissionReportRequirement reportRequirement = report.getClubReportRequirement()
                     .getSubmissionReportRequirement();
@@ -875,7 +976,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
         // Determine the appropriate status based on current status and user role
         ReportStatus currentStatus = report.getStatus();
         ReportStatus newStatus;
-        
+
         if (currentStatus == ReportStatus.DRAFT) {
             // First submission: PENDING_CLUB
             newStatus = ReportStatus.PENDING_CLUB;
@@ -896,7 +997,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
             // Fallback (should not happen due to validation above)
             newStatus = ReportStatus.PENDING_CLUB;
         }
-        
+
         // Reset reviewerFeedback when resubmitting to university (from REJECTED_UNIVERSITY to RESUBMITTED_UNIVERSITY)
         // Only reset when club president resubmits to university level
         if (currentStatus == ReportStatus.REJECTED_UNIVERSITY && newStatus == ReportStatus.RESUBMITTED_UNIVERSITY) {
@@ -906,106 +1007,103 @@ public class ReportServiceImpl implements ReportServiceInterface {
         // Update report status
         report.setStatus(newStatus);
         report.setSubmittedDate(LocalDateTime.now());
-        
+
         // Reset mustResubmit when report is resubmitted
        // report.setMustResubmit(false);
 
         Report submittedReport = reportRepository.save(report);
 
-        // Send notification based on new status (async operation)
-        try {
-            String reportTitle = report.getReportTitle() != null ? report.getReportTitle() : "Báo cáo";
-            String actionUrl = "/myclub/" + club.getId() + "/reports";
-
-            if (newStatus == ReportStatus.PENDING_CLUB || newStatus == ReportStatus.UPDATED_PENDING_CLUB) {
-                // Notify Club Officers when report is submitted to club level
-                // Reuse semesterId that was already fetched earlier
-                List<Long> officerIds = roleMemberShipRepository.findClubOfficerUserIdsByClubIdAndSemesterId(
-                        clubId, semesterId);
-                List<Long> recipientIds = officerIds.stream()
-                        .filter(id -> !id.equals(userId)) // Don't notify submitter
-                        .collect(Collectors.toList());
-
-                if (!recipientIds.isEmpty()) {
-                    // Get submitter name only if needed
-                    User submitter = report.getCreatedBy(); // Already loaded via JOIN FETCH
-                    String submitterName = submitter != null ? submitter.getFullName() : "Người dùng";
-
-                    String title = "Có báo cáo mới cần duyệt";
-                    String message = submitterName + " đã nộp báo cáo \"" + reportTitle + "\" cần phê duyệt.";
-
-                    notificationService.sendToUsers(
-                            recipientIds,
-                            userId,
-                            title,
-                            message,
-                            NotificationType.REPORT_SUBMITTED,
-                            NotificationPriority.NORMAL,
-                            actionUrl,
-                            clubId,
-                            null,
-                            null,
-                            null
-                    );
-                }
-            } else if (newStatus == ReportStatus.RESUBMITTED_UNIVERSITY) {
-                // Notify Staff when report is resubmitted to university level
-                List<Long> staffIds = getStaffUsers();
-                actionUrl = "/staff/reports";
-                if (!staffIds.isEmpty()) {
-                    String title = "Báo cáo được nộp lại từ CLB";
-                    String message = "CLB " + club.getClubName() + " đã nộp lại báo cáo \"" + reportTitle + "\" cần xem xét.";
-
-                    notificationService.sendToUsers(
-                            staffIds,
-                            userId,
-                            title,
-                            message,
-                            NotificationType.REPORT_SUBMITTED,
-                            NotificationPriority.NORMAL,
-                            actionUrl,
-                            clubId,
-                            null,
-                            null,
-                            null
-                    );
-                }
-            }
-        } catch (Exception e) {
-            log.error("Failed to send report submission notification: {}", e.getMessage());
-        }
+        // Send notification asynchronously based on new status
+        sendSubmitReportNotificationAsync(submittedReport, newStatus, club, userId, semesterId);
 
         return reportMapper.toDetail(submittedReport);
+    }
+
+    /**
+     * Send notification when report is submitted/resubmitted - Async to improve performance
+     */
+    private void sendSubmitReportNotificationAsync(Report report, ReportStatus newStatus, Club club, Long userId, Long semesterId) {
+        CompletableFuture.runAsync(() -> {
+            try {
+                String reportTitle = report.getReportTitle() != null ? report.getReportTitle() : "Báo cáo";
+                String actionUrl = "/myclub/" + club.getId() + "/reports";
+
+                if (newStatus == ReportStatus.PENDING_CLUB || newStatus == ReportStatus.UPDATED_PENDING_CLUB) {
+                    //  Parallel: Notify Club Officers when report is submitted to club level
+                    CompletableFuture<List<Long>> officerIdsFuture =
+                        CompletableFuture.supplyAsync(() ->
+                            roleMemberShipRepository.findClubOfficerUserIdsByClubIdAndSemesterId(club.getId(), semesterId),
+                            taskExecutor);
+
+                    List<Long> recipientIds = officerIdsFuture.join().stream()
+                            .filter(id -> !id.equals(userId)) // Don't notify submitter
+                            .collect(Collectors.toList());
+
+                    if (!recipientIds.isEmpty()) {
+                        User submitter = report.getCreatedBy();
+                        String submitterName = submitter != null ? submitter.getFullName() : "Người dùng";
+
+                        String title = "Có báo cáo mới cần duyệt";
+                        String message = submitterName + " đã nộp báo cáo \"" + reportTitle + "\" cần phê duyệt.";
+
+                        notificationService.sendToUsersAsync(
+                                recipientIds,
+                                userId,
+                                title,
+                                message,
+                                NotificationType.REPORT_SUBMITTED,
+                                NotificationPriority.NORMAL,
+                                actionUrl,
+                                club.getId(),
+                                null,
+                                null,
+                                null
+                        );
+                    }
+                } else if (newStatus == ReportStatus.RESUBMITTED_UNIVERSITY) {
+                    //  Parallel: Notify Staff when report is resubmitted to university level
+                    CompletableFuture<List<Long>> staffIdsFuture =
+                        CompletableFuture.supplyAsync(() -> getStaffUsers(), taskExecutor);
+
+                    List<Long> staffIds = staffIdsFuture.join();
+                    actionUrl = "/staff/reports";
+
+                    if (!staffIds.isEmpty()) {
+                        String title = "Báo cáo được nộp lại từ CLB";
+                        String message = "CLB " + club.getClubName() + " đã nộp lại báo cáo \"" + reportTitle + "\" cần xem xét.";
+
+                        notificationService.sendToUsersAsync(
+                                staffIds,
+                                userId,
+                                title,
+                                message,
+                                NotificationType.REPORT_SUBMITTED,
+                                NotificationPriority.NORMAL,
+                                actionUrl,
+                                club.getId(),
+                                null,
+                                null,
+                                null
+                        );
+                    }
+                }
+            } catch (Exception e) {
+                log.error("Failed to send report submission notification: {}", e.getMessage());
+            }
+        }, taskExecutor);
     }
 
     /**
      * Get all reports for a club (club president can see all)
      */
     @Override
+    @Transactional(readOnly = true)
     public PageResponse<ReportListItemResponse> getClubReports(
             Long clubId, ReportStatus status, Long semesterId, ReportType reportType,
             String keyword, Pageable pageable, Long userId) {
-        // Validate club exists
-        Club club = clubRepository.findById(clubId)
-                .orElseThrow(() -> new NotFoundException("Club not found with ID: " + clubId));
-
-        // Get current semester
-        Semester currentSemester = semesterRepository.findCurrentSemester()
-                .orElse(null);
-
-        // Check if user is club president or team officer
-        boolean isClubOfficer = false;
-
-        if (currentSemester != null) {
-            isClubOfficer = roleMemberShipRepository.isClubOfficerInCurrentSemester(
-                    userId, clubId, currentSemester.getId());
-        }
-
-        if (!isClubOfficer) {
-            throw new ForbiddenException(
-                    "Chỉ cán bộ chủ nhiệm câu lạc bộ (club president) " +
-                    "trong kỳ hiện tại và đang hoạt động mới có quyền xem báo cáo."
-            );
+        // Validate club exists - optimized: only check existence
+        if (!clubRepository.existsById(clubId)) {
+            throw new NotFoundException("Club not found with ID: " + clubId);
         }
 
         Page<Report> reportPage;
@@ -1023,23 +1121,12 @@ public class ReportServiceImpl implements ReportServiceInterface {
                     PageRequest.of(0, Integer.MAX_VALUE)
             );
 
-            // Filter using Vietnamese normalization
+            // Filter using Vietnamese normalization - optimized with helper method
             List<Report> filteredList = reportPage.getContent().stream()
-                    .filter(report -> {
-                        String title = normalizeVietnamese(report.getReportTitle() != null ? report.getReportTitle() : "");
-                        String content = normalizeVietnamese(report.getContent() != null ? report.getContent() : "");
-
-                        // Split keyword into individual words for better matching
-                        String[] keywords = trimmedKeyword.split("\\s+");
-                        for (String kw : keywords) {
-                            String normalizedKw = normalizeVietnamese(kw);
-                            if (title.contains(normalizedKw) || content.contains(normalizedKw)) {
-                                return true;
-                            }
-                        }
-                        return false;
-                    })
-                    .collect(Collectors.toList());
+                    .filter(report -> matchesVietnameseKeyword(trimmedKeyword,
+                            report.getReportTitle(),
+                            report.getContent()))
+                    .toList();
 
             // Apply pagination manually
             int start = (int) pageable.getOffset();
@@ -1064,7 +1151,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
 
         return PageResponse.<ReportListItemResponse>builder()
                 .content(content)
-                .pageNumber(reportPage.getNumber())
+                .pageNumber(reportPage.getNumber() + 1)
                 .pageSize(reportPage.getSize())
                 .totalElements(reportPage.getTotalElements())
                 .totalPages(reportPage.getTotalPages())
@@ -1078,30 +1165,13 @@ public class ReportServiceImpl implements ReportServiceInterface {
      * Get my draft reports for a club
      */
     @Override
+    @Transactional(readOnly = true)
     public PageResponse<ReportListItemResponse> getMyReports(
             Long clubId, ReportStatus status, Long semesterId, ReportType reportType,
             String keyword, Pageable pageable, Long userId) {
-        // Validate club exists
-        Club club = clubRepository.findById(clubId)
-                .orElseThrow(() -> new NotFoundException("Club not found with ID: " + clubId));
-
-        // Get current semester
-        Semester currentSemester = semesterRepository.findCurrentSemester()
-                .orElse(null);
-
-        // Check if user is team officer or club president
-        boolean isClubOfficerOrTeamOfficerOrTreasurer = false;
-
-        if (currentSemester != null) {
-            isClubOfficerOrTeamOfficerOrTreasurer = roleMemberShipRepository.isClubOfficerOrTeamOfficerOrTreasurerInCurrentSemester(
-                    userId, clubId, currentSemester.getId());
-        }
-
-        if (!isClubOfficerOrTeamOfficerOrTreasurer) {
-            throw new ForbiddenException(
-                    "Chỉ cán bộ ban (team officer) hoặc cán bộ câu lạc bộ (club officer) " +
-                    "trong kỳ hiện tại và đang hoạt động mới có quyền xem báo cáo nháp."
-            );
+        // Validate club exists - optimized: only check existence
+        if (!clubRepository.existsById(clubId)) {
+            throw new NotFoundException("Club not found with ID: " + clubId);
         }
 
         Page<Report> reportPage;
@@ -1120,23 +1190,12 @@ public class ReportServiceImpl implements ReportServiceInterface {
                     PageRequest.of(0, Integer.MAX_VALUE)
             );
 
-            // Filter using Vietnamese normalization
+            // Filter using Vietnamese normalization - optimized with helper method
             List<Report> filteredList = reportPage.getContent().stream()
-                    .filter(report -> {
-                        String title = normalizeVietnamese(report.getReportTitle() != null ? report.getReportTitle() : "");
-                        String content = normalizeVietnamese(report.getContent() != null ? report.getContent() : "");
-
-                        // Split keyword into individual words for better matching
-                        String[] keywords = trimmedKeyword.split("\\s+");
-                        for (String kw : keywords) {
-                            String normalizedKw = normalizeVietnamese(kw);
-                            if (title.contains(normalizedKw) || content.contains(normalizedKw)) {
-                                return true;
-                            }
-                        }
-                        return false;
-                    })
-                    .collect(Collectors.toList());
+                    .filter(report -> matchesVietnameseKeyword(trimmedKeyword,
+                            report.getReportTitle(),
+                            report.getContent()))
+                    .toList();
 
             // Apply pagination manually
             int start = (int) pageable.getOffset();
@@ -1162,7 +1221,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
 
         return PageResponse.<ReportListItemResponse>builder()
                 .content(content)
-                .pageNumber(reportPage.getNumber())
+                .pageNumber(reportPage.getNumber() + 1)
                 .pageSize(reportPage.getSize())
                 .totalElements(reportPage.getTotalElements())
                 .totalPages(reportPage.getTotalPages())
@@ -1176,12 +1235,9 @@ public class ReportServiceImpl implements ReportServiceInterface {
      * Get all report requirements with filters and pagination (for staff only)
      */
     @Override
+    @Transactional(readOnly = true)
     public PageResponse<ReportRequirementResponse> getAllReportRequirements(
             ReportType reportType, Long clubId, String keyword, Pageable pageable, Long userId) {
-        // Check staff permission
-        if (!roleService.isStaff(userId)) {
-            throw new ForbiddenException("Only staff can view report requirements");
-        }
 
         Page<SubmissionReportRequirement> requirementPage;
 
@@ -1196,23 +1252,12 @@ public class ReportServiceImpl implements ReportServiceInterface {
                     PageRequest.of(0, Integer.MAX_VALUE)
             );
 
-            // Filter using Vietnamese normalization
+            // Filter using Vietnamese normalization - optimized with helper method
             List<SubmissionReportRequirement> filteredList = requirementPage.getContent().stream()
-                    .filter(requirement -> {
-                        String title = normalizeVietnamese(requirement.getTitle() != null ? requirement.getTitle() : "");
-                        String description = normalizeVietnamese(requirement.getDescription() != null ? requirement.getDescription() : "");
-
-                        // Split keyword into individual words for better matching
-                        String[] keywords = trimmedKeyword.split("\\s+");
-                        for (String kw : keywords) {
-                            String normalizedKw = normalizeVietnamese(kw);
-                            if (title.contains(normalizedKw) || description.contains(normalizedKw)) {
-                                return true;
-                            }
-                        }
-                        return false;
-                    })
-                    .collect(Collectors.toList());
+                    .filter(requirement -> matchesVietnameseKeyword(trimmedKeyword,
+                            requirement.getTitle(),
+                            requirement.getDescription()))
+                    .toList();
 
             // Apply pagination manually
             int start = (int) pageable.getOffset();
@@ -1230,52 +1275,91 @@ public class ReportServiceImpl implements ReportServiceInterface {
         }
 
         // Map to response with club requirements
+        // Fix N+1 queries: Load all club requirements in a single query
+        List<Long> requirementIds = requirementPage.getContent().stream()
+                .map(SubmissionReportRequirement::getId)
+                .toList();
+
+        // Batch load all club requirements for all submission requirements in ONE query
+        Map<Long, List<ClubReportRequirement>> clubRequirementsMap = new HashMap<>();
+        if (!requirementIds.isEmpty()) {
+            List<ClubReportRequirement> allClubRequirements = clubReportRequirementRepository
+                    .findBySubmissionReportRequirementIdIn(requirementIds);
+
+            // Group by SubmissionReportRequirement ID
+            clubRequirementsMap = allClubRequirements.stream()
+                    .collect(Collectors.groupingBy(
+                            crr -> crr.getSubmissionReportRequirement().getId()
+                    ));
+        }
+
+        // Final map for use in lambda (must be effectively final)
+        final Map<Long, List<ClubReportRequirement>> clubRequirementsMapFinal = clubRequirementsMap;
+
         Page<ReportRequirementResponse> responsePage = requirementPage.map(requirement -> {
             ReportRequirementResponse response = submissionReportRequirementMapper.toDto(requirement);
             
-            // Load club requirements for this submission requirement
-            List<ClubReportRequirement> clubRequirements = clubReportRequirementRepository
-                    .findBySubmissionReportRequirementId(requirement.getId());
-            
-            List<ReportRequirementResponse.ClubRequirementInfo> clubRequirementInfos = clubRequirements.stream()
-                    .map(crr -> {
-                        // Get status from report if exists, otherwise null
-                        String statusStr = null;
-                        if (crr.getReport() != null && crr.getReport().getStatus() != null) {
-                            statusStr = crr.getReport().getStatus().name();
-                        }
-                        return ReportRequirementResponse.ClubRequirementInfo.builder()
-                                .id(crr.getId())
-                                .clubId(crr.getClub().getId())
-                                .clubName(crr.getClub().getClubName())
-                                .clubCode(crr.getClub().getClubCode())
-                                .status(statusStr)
-                                .teamId(crr.getTeamId())
-                                .build();
-                    })
-                    .toList();
-            
-            response.setClubRequirements(clubRequirementInfos);
+            // Get club requirements from pre-loaded map (NO additional queries!)
+            List<ClubReportRequirement> clubRequirements = clubRequirementsMapFinal
+                    .getOrDefault(requirement.getId(), Collections.emptyList());
+
+            // Set club count instead of returning full club requirements list
+            response.setClubCount(clubRequirements.size());
+            // Set clubRequirements to null to avoid returning unnecessary data
+            response.setClubRequirements(null);
+
             return response;
         });
 
-        return PageResponse.of(responsePage);
+        return PageResponse.<ReportRequirementResponse>builder()
+                .content(responsePage.getContent())
+                .pageNumber(responsePage.getNumber() + 1)
+                .pageSize(responsePage.getSize())
+                .totalElements(responsePage.getTotalElements())
+                .totalPages(responsePage.getTotalPages())
+                .hasNext(responsePage.hasNext())
+                .hasPrevious(responsePage.hasPrevious())
+                .build();
+    }
+
+    /**
+     * Get a single report requirement by ID (for staff only)
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public ReportRequirementResponse getReportRequirementById(Long requirementId, Long userId) {
+
+        // Get submission report requirement
+        SubmissionReportRequirement requirement = submissionReportRequirementRepository.findById(requirementId)
+                .orElseThrow(() -> new NotFoundException("Report requirement not found with ID: " + requirementId));
+
+        // Map to response using mapper
+        ReportRequirementResponse response = submissionReportRequirementMapper.toDto(requirement);
+
+        // Get club requirements count
+        List<ClubReportRequirement> clubRequirements = clubReportRequirementRepository
+                .findBySubmissionReportRequirementId(requirementId);
+
+        // Set club count instead of returning full club requirements list
+        response.setClubCount(clubRequirements.size());
+        // Set clubRequirements to null to avoid returning unnecessary data
+        response.setClubRequirements(null);
+
+        return response;
     }
 
     /**
      * Get list of clubs that need to submit reports for a specific report requirement (for staff only)
      */
     @Override
+    @Transactional(readOnly = true)
     public PageResponse<ReportRequirementResponse.ClubRequirementInfo> getClubsByReportRequirement(
             Long requirementId, String keyword, Pageable pageable, Long userId) {
-        // Check staff permission
-        if (!roleService.isStaff(userId)) {
-            throw new ForbiddenException("Only staff can view clubs for report requirements");
-        }
 
         // Validate submission report requirement exists
-        SubmissionReportRequirement requirement = submissionReportRequirementRepository.findById(requirementId)
-                .orElseThrow(() -> new NotFoundException("Report requirement not found with ID: " + requirementId));
+        if (!submissionReportRequirementRepository.existsById(requirementId)) {
+            throw new NotFoundException("Report requirement not found with ID: " + requirementId);
+        }
 
         // Get all club requirements for this submission requirement
         List<ClubReportRequirement> clubRequirements = clubReportRequirementRepository
@@ -1288,18 +1372,9 @@ public class ReportServiceImpl implements ReportServiceInterface {
             filteredClubRequirements = clubRequirements.stream()
                     .filter(crr -> {
                         if (crr.getClub() == null) return false;
-                        String clubName = normalizeVietnamese(crr.getClub().getClubName() != null ? crr.getClub().getClubName() : "");
-                        String clubCode = normalizeVietnamese(crr.getClub().getClubCode() != null ? crr.getClub().getClubCode() : "");
-
-                        // Split keyword into individual words for better matching
-                        String[] keywords = trimmedKeyword.split("\\s+");
-                        for (String kw : keywords) {
-                            String normalizedKw = normalizeVietnamese(kw);
-                            if (clubName.contains(normalizedKw) || clubCode.contains(normalizedKw)) {
-                                return true;
-                            }
-                        }
-                        return false;
+                        return matchesVietnameseKeyword(trimmedKeyword,
+                                crr.getClub().getClubName(),
+                                crr.getClub().getClubCode());
                     })
                     .toList();
         }
@@ -1321,20 +1396,6 @@ public class ReportServiceImpl implements ReportServiceInterface {
                         if (report.getStatus() != null) {
                             statusStr = report.getStatus().name();
                         }
-                        // Build report info with only mustResubmit
-                        ReportRequirementResponse.UserInfo createdByInfo = null;
-                        if (report.getCreatedBy() != null) {
-                            createdByInfo = ReportRequirementResponse.UserInfo.builder()
-                                    .id(report.getCreatedBy().getId())
-                                    .fullName(report.getCreatedBy().getFullName())
-                                    .email(report.getCreatedBy().getEmail())
-                                    .studentCode(report.getCreatedBy().getStudentCode())
-                                    .build();
-                        }
-                        reportInfo = ReportRequirementResponse.ReportInfo.builder()
-                                .mustResubmit(report.isMustResubmit())
-                                .createdBy(createdByInfo)
-                                .build();
                     }
                     return ReportRequirementResponse.ClubRequirementInfo.builder()
                             .id(crr.getId())
@@ -1354,7 +1415,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
 
         return PageResponse.<ReportRequirementResponse.ClubRequirementInfo>builder()
                 .content(content)
-                .pageNumber(pageable.getPageNumber())
+                .pageNumber(pageable.getPageNumber() + 1)
                 .pageSize(pageable.getPageSize())
                 .totalElements(totalElements)
                 .totalPages(totalPages)
@@ -1368,19 +1429,18 @@ public class ReportServiceImpl implements ReportServiceInterface {
      * Only returns reports with university-level status
      */
     @Override
+    @Transactional(readOnly = true)
     public ReportDetailResponse getClubReportByRequirement(Long requirementId, Long clubId, Long userId) {
-        // Check staff permission
-        if (!roleService.isStaff(userId)) {
-            throw new ForbiddenException("Only staff can view club reports");
+
+        // Validate submission report requirement exists - optimized: only check existence
+        if (!submissionReportRequirementRepository.existsById(requirementId)) {
+            throw new NotFoundException("Report requirement not found with ID: " + requirementId);
         }
 
-        // Validate submission report requirement exists
-        SubmissionReportRequirement requirement = submissionReportRequirementRepository.findById(requirementId)
-                .orElseThrow(() -> new NotFoundException("Report requirement not found with ID: " + requirementId));
-
-        // Validate club exists
-        Club club = clubRepository.findById(clubId)
-                .orElseThrow(() -> new NotFoundException("Club not found with ID: " + clubId));
+        // Validate club exists - optimized: only check existence
+        if (!clubRepository.existsById(clubId)) {
+            throw new NotFoundException("Club not found with ID: " + clubId);
+        }
 
         // Find report by clubId and requirementId
         Optional<Report> reportOptional = reportRepository.findByClubIdAndReportRequirementId(clubId, requirementId);
@@ -1392,11 +1452,8 @@ public class ReportServiceImpl implements ReportServiceInterface {
 
         Report report = reportOptional.get();
         
-        // Staff can only view university-level reports
-        if (report.getStatus() != ReportStatus.PENDING_UNIVERSITY
-                && report.getStatus() != ReportStatus.APPROVED_UNIVERSITY
-                && report.getStatus() != ReportStatus.REJECTED_UNIVERSITY
-                && report.getStatus() != ReportStatus.RESUBMITTED_UNIVERSITY) {
+        // Staff can only view university-level reports - optimized with EnumSet
+        if (!UNIVERSITY_LEVEL_STATUSES.contains(report.getStatus())) {
             // Return null if report is not at university level (staff cannot view club-level reports)
             return null;
         }
@@ -1406,48 +1463,37 @@ public class ReportServiceImpl implements ReportServiceInterface {
 
     /**
      * Get all report requirements for a club with filters and pagination (for CLUB_OFFICER or TEAM_OFFICER)
+     * Optimized version that returns only essential fields
      */
     @Override
-    public PageResponse<ReportRequirementResponse> getClubReportRequirementsForOfficerWithFilters(
+    @Transactional(readOnly = true)
+    public PageResponse<OfficerReportRequirementResponse> getClubReportRequirementsForOfficerWithFilters(
             Long clubId, String status, Long semesterId, String keyword, Long teamId,
             Pageable pageable, Long userId) {
-        // Validate club exists
-        Club club = clubRepository.findById(clubId)
-                .orElseThrow(() -> new NotFoundException("Club not found with ID: " + clubId));
+        // Validate club exists - optimized: only check existence
+        if (!clubRepository.existsById(clubId)) {
+            throw new NotFoundException("Club not found with ID: " + clubId);
+        }
 
         // Get current semester
         Semester currentSemester = semesterRepository.findCurrentSemester()
                 .orElse(null);
 
         // Check if user is CLUB_OFFICER or TEAM_OFFICER (from club_roles table), TREASURER in current semester
-        boolean isClubOfficerOrTeamOfficerOrTreasurer = false;
         Long userTeamId = null; // Team ID of team officer
 
         if (currentSemester != null) {
-            isClubOfficerOrTeamOfficerOrTreasurer = roleMemberShipRepository.isClubOfficerOrTeamOfficerOrTreasurerInCurrentSemester(
+            // Check if user is club officer (not team officer)
+            boolean isClubOfficer = roleMemberShipRepository.isClubOfficerInCurrentSemester(
                     userId, clubId, currentSemester.getId());
-            
-            // If user is team officer, treasurer get their team ID
-            if (isClubOfficerOrTeamOfficerOrTreasurer) {
-                // Check if user is club officer (not team officer)
-                boolean isClubOfficer = roleMemberShipRepository.isClubOfficerInCurrentSemester(
-                        userId, clubId, currentSemester.getId());
-                
-                if (!isClubOfficer) {
-                    // User is team officer, get their team ID
-                    userTeamId = roleMemberShipRepository.findTeamIdByUserIdAndClubIdAndSemesterId(
-                            userId, clubId, currentSemester.getId()).orElse(null);
-                }
+
+            if (!isClubOfficer) {
+                // User is team officer, get their team ID
+                userTeamId = roleMemberShipRepository.findTeamIdByUserIdAndClubIdAndSemesterId(
+                        userId, clubId, currentSemester.getId()).orElse(null);
             }
         }
 
-        if (!isClubOfficerOrTeamOfficerOrTreasurer) {
-            throw new ForbiddenException(
-                    "Chỉ cán bộ câu lạc bộ (CLUB_OFFICER) hoặc cán bộ ban (TEAM_OFFICER), thủ quỹ " +
-                    "trong kỳ hiện tại và đang hoạt động mới có quyền xem danh sách yêu cầu báo cáo."
-            );
-        }
-        
         // Determine filterTeamId:
         // - If user is team officer, always use their teamId (ignore teamId param for security)
         // - If user is club officer, use teamId param if provided, otherwise null (show all)
@@ -1496,24 +1542,16 @@ public class ReportServiceImpl implements ReportServiceInterface {
                     PageRequest.of(0, Integer.MAX_VALUE)
             );
 
-            // Filter using Vietnamese normalization on the submission requirement's title and description
+            // Filter using Vietnamese normalization on the submission requirement's title and description - optimized
             List<ClubReportRequirement> filteredList = requirementPage.getContent().stream()
                     .filter(crr -> {
                         SubmissionReportRequirement srr = crr.getSubmissionReportRequirement();
-                        String title = normalizeVietnamese(srr != null && srr.getTitle() != null ? srr.getTitle() : "");
-                        String description = normalizeVietnamese(srr != null && srr.getDescription() != null ? srr.getDescription() : "");
-
-                        // Split keyword into individual words for better matching
-                        String[] keywords = trimmedKeyword.split("\\s+");
-                        for (String kw : keywords) {
-                            String normalizedKw = normalizeVietnamese(kw);
-                            if (title.contains(normalizedKw) || description.contains(normalizedKw)) {
-                                return true;
-                            }
-                        }
-                        return false;
+                        if (srr == null) return false;
+                        return matchesVietnameseKeyword(trimmedKeyword,
+                                srr.getTitle(),
+                                srr.getDescription());
                     })
-                    .collect(Collectors.toList());
+                    .toList();
 
             // Apply pagination manually
             int start = (int) pageable.getOffset();
@@ -1535,71 +1573,74 @@ public class ReportServiceImpl implements ReportServiceInterface {
             );
         }
 
-        // Map to response
-        Page<ReportRequirementResponse> responsePage = requirementPage.map(crr -> {
-            ReportRequirementResponse response = submissionReportRequirementMapper.toDto(crr.getSubmissionReportRequirement());
-            
-            // Build report info if exists
-            ReportRequirementResponse.ReportInfo reportInfo = null;
+        // Map to optimized response - only include essential fields
+        Page<OfficerReportRequirementResponse> responsePage = requirementPage.map(crr -> {
+            SubmissionReportRequirement srr = crr.getSubmissionReportRequirement();
+
+            // Build simplified club requirement with report info (only id, status, mustResubmit)
+            OfficerReportRequirementResponse.SimplifiedReport reportInfo = null;
             if (crr.getReport() != null) {
                 Report report = crr.getReport();
-                ReportRequirementResponse.UserInfo createdByInfo = null;
-                if (report.getCreatedBy() != null) {
-                    createdByInfo = ReportRequirementResponse.UserInfo.builder()
-                            .id(report.getCreatedBy().getId())
-                            .fullName(report.getCreatedBy().getFullName())
-                            .email(report.getCreatedBy().getEmail())
-                            .studentCode(report.getCreatedBy().getStudentCode())
-                            .build();
-                }
-                reportInfo = ReportRequirementResponse.ReportInfo.builder()
+                Long reportCreatedById = report.getCreatedBy() != null ? report.getCreatedBy().getId() : null;
+                reportInfo = OfficerReportRequirementResponse.SimplifiedReport.builder()
                         .id(report.getId())
-                        .reportTitle(report.getReportTitle())
                         .status(report.getStatus() != null ? report.getStatus().name() : null)
-                        .submittedDate(report.getSubmittedDate())
-                        .createdAt(report.getCreatedAt())
-                        .updatedAt(report.getUpdatedAt())
                         .mustResubmit(report.isMustResubmit())
-                        .createdBy(createdByInfo)
+                        .createdBy(reportCreatedById)
+                        .createdByUserName(report.getCreatedBy() != null ? report.getCreatedBy().getFullName() : null)
                         .build();
             }
             
-            // Get status from report if exists, otherwise null
-            String statusStr = null;
-            if (crr.getReport() != null && crr.getReport().getStatus() != null) {
-                statusStr = crr.getReport().getStatus().name();
-            }
-            
-            // Add the club requirement info for this specific club
-            ReportRequirementResponse.ClubRequirementInfo clubRequirementInfo = ReportRequirementResponse.ClubRequirementInfo.builder()
-                    .id(crr.getId())
-                    .clubId(crr.getClub().getId())
-                    .clubName(crr.getClub().getClubName())
-                    .clubCode(crr.getClub().getClubCode())
-                    .status(statusStr)
-                    .teamId(crr.getTeamId())
-                    .report(reportInfo)
+            // Use the provided clubId (all crr belong to this club) to avoid extra lazy loads
+            OfficerReportRequirementResponse.SimplifiedClubRequirement clubRequirement =
+                    OfficerReportRequirementResponse.SimplifiedClubRequirement.builder()
+                            .id(crr.getId())
+                            .clubId(clubId)
+                            .teamId(crr.getTeamId())
+                            .report(reportInfo)
+                            .build();
+
+            // Build main response with only essential requirement fields
+            return OfficerReportRequirementResponse.builder()
+                    .id(srr.getId())
+                    .title(srr.getTitle())
+                    .description(srr.getDescription())
+                    .dueDate(srr.getDueDate())
+                    .reportType(srr.getReportType())
+                    .templateUrl(srr.getTemplateUrl())
+                    .createdAt(srr.getCreatedAt())
+                    .updatedAt(srr.getUpdatedAt())
+                    .createdByName(srr.getCreatedBy() != null ? srr.getCreatedBy().getFullName() : null)
+                    .clubRequirement(clubRequirement)
                     .build();
-            
-            response.setClubRequirements(List.of(clubRequirementInfo));
-            return response;
         });
 
-        return PageResponse.of(responsePage);
+        return PageResponse.<OfficerReportRequirementResponse>builder()
+                .content(responsePage.getContent())
+                .pageNumber(responsePage.getNumber() + 1)
+                .pageSize(responsePage.getSize())
+                .totalElements(responsePage.getTotalElements())
+                .totalPages(responsePage.getTotalPages())
+                .hasNext(responsePage.hasNext())
+                .hasPrevious(responsePage.hasPrevious())
+                .build();
     }
 
     /**
      * Get report of a specific club for a specific report requirement (for CLUB_OFFICER or TEAM_OFFICER)
      */
     @Override
+    @Transactional(readOnly = true)
     public ReportDetailResponse getClubReportByRequirementForOfficer(Long requirementId, Long clubId, Long userId) {
-        // Validate club exists
-        Club club = clubRepository.findById(clubId)
-                .orElseThrow(() -> new NotFoundException("Club not found with ID: " + clubId));
+        // Validate club exists - optimized: only check existence
+        if (!clubRepository.existsById(clubId)) {
+            throw new NotFoundException("Club not found with ID: " + clubId);
+        }
 
-        // Validate submission report requirement exists
-        SubmissionReportRequirement requirement = submissionReportRequirementRepository.findById(requirementId)
-                .orElseThrow(() -> new NotFoundException("Report requirement not found with ID: " + requirementId));
+        // Validate submission report requirement exists - optimized: only check existence
+        if (!submissionReportRequirementRepository.existsById(requirementId)) {
+            throw new NotFoundException("Report requirement not found with ID: " + requirementId);
+        }
 
         // Get current semester
         Semester currentSemester = semesterRepository.findCurrentSemester()
@@ -1686,10 +1727,12 @@ public class ReportServiceImpl implements ReportServiceInterface {
      * Get report detail by report ID for (CLUB_OFFICER or TEAM_OFFICER)
      */
     @Override
+    @Transactional(readOnly = true)
     public ReportDetailResponse getClubReportDetail(Long reportId, Long clubId, Long userId) {
-        // Validate club exists
-        Club club = clubRepository.findById(clubId)
-                .orElseThrow(() -> new NotFoundException("Club not found with ID: " + clubId));
+        // Validate club exists - optimized: only check existence
+        if (!clubRepository.existsById(clubId)) {
+            throw new NotFoundException("Club not found with ID: " + clubId);
+        }
 
         // Get report with relations
         Report report = reportRepository.findByIdWithRelations(reportId)
@@ -1705,27 +1748,15 @@ public class ReportServiceImpl implements ReportServiceInterface {
         Semester currentSemester = semesterRepository.findCurrentSemester()
                 .orElse(null);
 
-        // Check if user is CLUB_OFFICER or TEAM_OFFICER, TREASURER in current semester
-        boolean isClubOfficerOrTeamOfficerOrTreasurer = false;
         boolean isClubOfficer = false;
 
         if (currentSemester != null) {
-            isClubOfficerOrTeamOfficerOrTreasurer = roleMemberShipRepository.isClubOfficerOrTeamOfficerOrTreasurerInCurrentSemester(
-                    userId, clubId, currentSemester.getId());
             isClubOfficer = roleMemberShipRepository.isClubOfficerInCurrentSemester(
                     userId, clubId, currentSemester.getId());
         }
 
-        // Check permissions
-        if (!isClubOfficerOrTeamOfficerOrTreasurer && !isClubOfficer) {
-            throw new ForbiddenException(
-                    "Chỉ cán bộ câu lạc bộ (CLUB_OFFICER), cán bộ ban (TEAM_OFFICER), Thủ quỹ " +
-                    "và đang hoạt động mới có quyền xem chi tiết báo cáo."
-            );
-        }
-
         // If user is team officer, treasurer only allow viewing their own reports
-        if (isClubOfficerOrTeamOfficerOrTreasurer && !isClubOfficer) {
+        if (!isClubOfficer) {
             if (report.getCreatedBy() == null || !report.getCreatedBy().getId().equals(userId)) {
                 throw new ForbiddenException("Bạn chỉ có thể xem báo cáo do chính bạn tạo");
             }
@@ -1792,7 +1823,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
         }
 
         // Get report requirement and check deadline (only if not mustResubmit)
-        if (report.getClubReportRequirement() != null && 
+        if (report.getClubReportRequirement() != null &&
             report.getClubReportRequirement().getSubmissionReportRequirement() != null) {
             SubmissionReportRequirement reportRequirement = report.getClubReportRequirement()
                     .getSubmissionReportRequirement();
@@ -1800,16 +1831,21 @@ public class ReportServiceImpl implements ReportServiceInterface {
         }
 
 
-        
+
         // Update report status
         report.setStatus(request.getStatus());
-        report.setReviewedDate(LocalDateTime.now());
+        // DO NOT set reviewedDate for club-level reviews
+        // Only staff reviews should have reviewedDate
         
         // Handle reviewerFeedback based on action
         if (request.getStatus() == ReportStatus.PENDING_UNIVERSITY) {
             // When approving and submitting to university, reset reviewerFeedback to null
             // This ensures that when a report is submitted to university level, any previous feedback is cleared
             report.setReviewerFeedback(null);
+            // Set submittedDate when submitting to university (if not already set)
+            if (report.getSubmittedDate() == null) {
+                report.setSubmittedDate(LocalDateTime.now());
+            }
         } else if (request.getStatus() == ReportStatus.REJECTED_CLUB) {
             // When rejecting, set feedback if provided
             if (request.getReviewerFeedback() != null && !request.getReviewerFeedback().trim().isEmpty()) {
@@ -1821,91 +1857,104 @@ public class ReportServiceImpl implements ReportServiceInterface {
 
         log.info("Club president {} reviewed report {} with status {}", userId, request.getReportId(), request.getStatus());
 
-        // Send notification based on review result
-        try {
-            Long reviewClubId = club.getId();
-            User reviewer = userRepository.findById(userId).orElse(null);
-            String reportTitle = report.getReportTitle() != null ? report.getReportTitle() : "Báo cáo";
-
-            if (request.getStatus() == ReportStatus.PENDING_UNIVERSITY) {
-                // Approved by club, notify Staff
-                List<Long> staffIds = getStaffUsers();
-
-                if (!staffIds.isEmpty()) {
-                    String actionUrl = "/staff/reports";
-                    String title = "Có báo cáo mới cần duyệt";
-                    String message = "CLB " + club.getClubName() + " đã gửi báo cáo \"" + reportTitle + "\" cần phê duyệt.";
-
-                    notificationService.sendToUsers(
-                            staffIds,
-                            userId,
-                            title,
-                            message,
-                            NotificationType.REPORT_SUBMITTED,
-                            NotificationPriority.NORMAL,
-                            actionUrl,
-                            reviewClubId,
-                            null,
-                            null,
-                            null
-                    );
-                }
-
-                // Also notify the creator that report was approved by club
-                if (report.getCreatedBy() != null && !report.getCreatedBy().getId().equals(userId)) {
-                    Long creatorId = report.getCreatedBy().getId();
-                    String actionUrl = "/myclub/" + club.getId() + "/reports";
-                    String title = "Báo cáo được CLB phê duyệt";
-                    String message = "Báo cáo \"" + reportTitle + "\" của bạn đã được CLB phê duyệt và gửi lên nhà trường.";
-
-                    notificationService.sendToUser(
-                            creatorId,
-                            userId,
-                            title,
-                            message,
-                            NotificationType.REPORT_APPROVED,
-                            NotificationPriority.NORMAL,
-                            actionUrl,
-                            reviewClubId,
-                            null,
-                            null,
-                            null,
-                            null
-                    );
-                }
-            } else if (request.getStatus() == ReportStatus.REJECTED_CLUB) {
-                // Rejected by club, notify creator
-                if (report.getCreatedBy() != null) {
-                    Long creatorId = report.getCreatedBy().getId();
-                    String actionUrl = "/myclub/" + club.getId() + "/reports";
-                    String title = "Báo cáo bị từ chối";
-                    String message = "Báo cáo \"" + reportTitle + "\" của bạn đã bị CLB từ chối.";
-
-                    if (request.getReviewerFeedback() != null && !request.getReviewerFeedback().trim().isEmpty()) {
-                        message += " Phản hồi: " + request.getReviewerFeedback();
-                    }
-
-                    notificationService.sendToUser(
-                            creatorId,
-                            userId,
-                            title,
-                            message,
-                            NotificationType.REPORT_REJECTED,
-                            NotificationPriority.NORMAL,
-                            actionUrl,
-                            reviewClubId,
-                            null,
-                            null,
-                            null,
-                            null
-                    );
-                }
-            }
-        } catch (Exception e) {
-            log.error("Failed to send report review notification: {}", e.getMessage());
-        }
+        // Send notification asynchronously based on review result
+        sendClubReviewNotificationAsync(reviewedReport, request, club, userId);
 
         return reportMapper.toDetail(reviewedReport);
+    }
+
+    /**
+     * Send notification for club review - Async to improve performance
+     */
+    private void sendClubReviewNotificationAsync(Report report, ReportReviewRequest request, Club club, Long userId) {
+        CompletableFuture.runAsync(() -> {
+            try {
+                Long reviewClubId = club.getId();
+                String reportTitle = report.getReportTitle() != null ? report.getReportTitle() : "Báo cáo";
+
+                if (request.getStatus() == ReportStatus.PENDING_UNIVERSITY) {
+                    //  Parallel: Notify Staff AND Creator simultaneously
+                    CompletableFuture<List<Long>> staffIdsFuture =
+                        CompletableFuture.supplyAsync(() -> getStaffUsers(), taskExecutor);
+
+                    // Send to staff
+                    staffIdsFuture.thenAccept(staffIds -> {
+                        if (!staffIds.isEmpty()) {
+                            String actionUrl = "/staff/reports";
+                            String title = "Có báo cáo mới cần duyệt";
+                            String message = "CLB " + club.getClubName() + " đã gửi báo cáo \"" + reportTitle + "\" cần phê duyệt.";
+
+                            notificationService.sendToUsersAsync(
+                                    staffIds,
+                                    userId,
+                                    title,
+                                    message,
+                                    NotificationType.REPORT_SUBMITTED,
+                                    NotificationPriority.NORMAL,
+                                    actionUrl,
+                                    reviewClubId,
+                                    null,
+                                    null,
+                                    null
+                            );
+                        }
+                    }).exceptionally(e -> {
+                        log.error("Failed to send staff notification: {}", e.getMessage());
+                        return null;
+                    });
+
+                    // Also notify the creator that report was approved by club (parallel)
+                    if (report.getCreatedBy() != null && !report.getCreatedBy().getId().equals(userId)) {
+                        Long creatorId = report.getCreatedBy().getId();
+                        String actionUrl = "/myclub/" + club.getId() + "/reports";
+                        String title = "Báo cáo được CLB phê duyệt";
+                        String message = "Báo cáo \"" + reportTitle + "\" của bạn đã được CLB phê duyệt và gửi lên nhà trường.";
+
+                        notificationService.sendToUsersAsync(
+                                List.of(creatorId),
+                                userId,
+                                title,
+                                message,
+                                NotificationType.REPORT_APPROVED,
+                                NotificationPriority.NORMAL,
+                                actionUrl,
+                                reviewClubId,
+                                null,
+                                null,
+                                null
+                        );
+                    }
+                } else if (request.getStatus() == ReportStatus.REJECTED_CLUB) {
+                    // Rejected by club, notify creator
+                    if (report.getCreatedBy() != null) {
+                        Long creatorId = report.getCreatedBy().getId();
+                        String actionUrl = "/myclub/" + club.getId() + "/reports";
+                        String title = "Báo cáo bị từ chối";
+                        String message = "Báo cáo \"" + reportTitle + "\" của bạn đã bị CLB từ chối.";
+
+                        if (request.getReviewerFeedback() != null && !request.getReviewerFeedback().trim().isEmpty()) {
+                            message += " Phản hồi: " + request.getReviewerFeedback();
+                        }
+
+                        notificationService.sendToUsersAsync(
+                                List.of(creatorId),
+                                userId,
+                                title,
+                                message,
+                                NotificationType.REPORT_REJECTED,
+                                NotificationPriority.NORMAL,
+                                actionUrl,
+                                reviewClubId,
+                                null,
+                                null,
+                                null
+                        );
+                    }
+                }
+            } catch (Exception e) {
+                log.error("Failed to send report review notification: {}", e.getMessage());
+            }
+        }, taskExecutor);
     }
 
     /**
@@ -1981,39 +2030,45 @@ public class ReportServiceImpl implements ReportServiceInterface {
         log.info("Club officer {} assigned team {} to report requirement {} for club {}",
                 userId, teamId, clubReportRequirementId, clubId);
 
-        // Send notification to team members about the new assignment
-        try {
-            List<Long> teamMemberIds = getTeamOfficersOrTreasurerInCurrentSemester(teamId, clubId);
+        // Send notification to team members about the new assignment - async with parallel query
+        CompletableFuture.runAsync(() -> {
+            try {
+                //  Parallel: Get team members
+                CompletableFuture<List<Long>> teamMemberIdsFuture =
+                    CompletableFuture.supplyAsync(() -> getTeamOfficersOrTreasurerInCurrentSemester(teamId, clubId), taskExecutor);
 
-            if (!teamMemberIds.isEmpty()) {
-                SubmissionReportRequirement reportRequirement = savedClubReportRequirement.getSubmissionReportRequirement();
-                String requirementTitle = reportRequirement != null ? reportRequirement.getTitle() : "Yêu cầu báo cáo";
-                String actionUrl = "/myclub/" + club.getId() + "/reports";
+                List<Long> teamMemberIds = teamMemberIdsFuture.join();
 
-                String title = "Ban của bạn được phân công báo cáo mới";
-                String message = "Ban " + team.getTeamName() + " đã được phân công chịu trách nhiệm cho yêu cầu báo cáo: \"" + requirementTitle + "\"";
+                if (!teamMemberIds.isEmpty()) {
+                    SubmissionReportRequirement reportRequirement = savedClubReportRequirement.getSubmissionReportRequirement();
+                    String requirementTitle = reportRequirement != null ? reportRequirement.getTitle() : "Yêu cầu báo cáo";
+                    String actionUrl = "/myclub/" + club.getId() + "/reports";
 
-                if (reportRequirement != null && reportRequirement.getDueDate() != null) {
-                    message += ". Hạn nộp: " + reportRequirement.getDueDate();
+                    String title = "Ban của bạn được phân công báo cáo mới";
+                    String message = "Ban " + team.getTeamName() + " đã được phân công chịu trách nhiệm cho yêu cầu báo cáo: \"" + requirementTitle + "\"";
+
+                    if (reportRequirement != null && reportRequirement.getDueDate() != null) {
+                        message += ". Hạn nộp: " + reportRequirement.getDueDate();
+                    }
+
+                    notificationService.sendToUsers(
+                            teamMemberIds,
+                            userId,
+                            title,
+                            message,
+                            NotificationType.TEAM_ASSIGNMENT,
+                            NotificationPriority.HIGH,
+                            actionUrl,
+                            clubId,
+                            null,
+                            teamId,
+                            null
+                    );
                 }
-
-                notificationService.sendToUsers(
-                        teamMemberIds,
-                        userId,
-                        title,
-                        message,
-                        NotificationType.TEAM_ASSIGNMENT,
-                        NotificationPriority.HIGH,
-                        actionUrl,
-                        clubId,
-                        null,
-                        teamId,
-                        null
-                );
+            } catch (Exception e) {
+                log.error("Failed to send team assignment notification: {}", e.getMessage());
             }
-        } catch (Exception e) {
-            log.error("Failed to send team assignment notification: {}", e.getMessage());
-        }
+        }, taskExecutor);
 
         // Build response
         ReportRequirementResponse response = submissionReportRequirementMapper.toDto(
@@ -2074,10 +2129,10 @@ public class ReportServiceImpl implements ReportServiceInterface {
     }
 
     /**
-     * Get list of team member user IDs in current semester
+     * Get list of team officer or treasurer user IDs in current semester
      * @param teamId Team ID
-     * @param clubId Club ID
-     * @return List of user IDs who are team members
+     * @param clubId Club ID (kept for signature compatibility)
+     * @return List of user IDs who are team officers or treasurers
      */
     private List<Long> getTeamOfficersOrTreasurerInCurrentSemester(Long teamId, Long clubId) {
         Semester currentSemester = semesterRepository.findByIsCurrentTrue()
@@ -2087,8 +2142,9 @@ public class ReportServiceImpl implements ReportServiceInterface {
             return Collections.emptyList();
         }
 
-        // Get all role memberships for the team in current semester
-        return roleMemberShipRepository.findTeamOfficerOrTreasurerUserIdsByClubIdAndSemesterId(teamId, currentSemester.getId());
+        // Use existing repository method (keeps original call-style used in this file)
+        return roleMemberShipRepository.findTeamOfficerOrTreasurerUserIdsByClubIdAndSemesterId(
+                teamId, currentSemester.getId());
     }
 
     /**
@@ -2127,6 +2183,30 @@ public class ReportServiceImpl implements ReportServiceInterface {
         normalized = java.text.Normalizer.normalize(normalized, java.text.Normalizer.Form.NFD);
         normalized = normalized.replaceAll("\\p{InCombiningDiacriticalMarks}+", "");
         return normalized.toLowerCase();
+    }
+
+    /**
+     * Helper method to check if any of the keywords match the given texts using Vietnamese normalization
+     * @param keyword The search keyword (can contain multiple words separated by spaces)
+     * @param texts Variable number of texts to search in
+     * @return true if any keyword matches any text
+     */
+    private boolean matchesVietnameseKeyword(String keyword, String... texts) {
+        if (keyword == null || keyword.trim().isEmpty()) {
+            return true;
+        }
+
+        String[] keywords = keyword.trim().split("\\s+");
+        for (String kw : keywords) {
+            String normalizedKw = normalizeVietnamese(kw);
+            for (String text : texts) {
+                String normalizedText = normalizeVietnamese(text != null ? text : "");
+                if (normalizedText.contains(normalizedKw)) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 }
 
