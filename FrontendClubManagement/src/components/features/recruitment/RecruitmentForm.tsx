@@ -19,27 +19,19 @@ import { getAllTeamsForPresident } from "@/api/teams";
 import type { VisibleTeamDTO } from "@/types/team";
 import { toast } from "sonner";
 import { Checkbox } from "@/components/ui/checkbox";
-
-type QuestionType = "TEXT" | "MCQ" | "CHECKBOX" | "FILE";
-
-type EditableFormQuestion = {
-  form_id?: string;
-  question_text: string;
-  question_type: QuestionType;
-  question_order: number;
-  options?: string[];
-  required?: boolean;
-};
+import type {
+  RecruitmentQuestionRequest,
+  TeamOptionData,
+} from "@/services/recruitmentService";
 
 interface RecruitmentFormData {
-  recruitment_id?: string;
+  id?: number;
   title: string;
   description: string;
-  end_date: string;
-  requirements?: string[];
-  benefits?: string[];
-  form_questions: EditableFormQuestion[];
-  teamOptions?: Array<{ id: number; teamName: string; description?: string }>;
+  endDate: string;
+  requirements?: string;
+  questions?: RecruitmentQuestionRequest[];
+  teamOptions?: TeamOptionData[];
 }
 
 interface RecruitmentFormProps {
@@ -63,17 +55,18 @@ export function RecruitmentForm({
   const [newRecruitment, setNewRecruitment] = useState({
     title: "",
     description: "",
-    end_date: "",
-    requirements: [""],
-    benefits: [""],
+    endDate: "",
+    requirements: "",
   });
 
-  const [formQuestions, setFormQuestions] = useState<EditableFormQuestion[]>([
+  const [formQuestions, setFormQuestions] = useState<
+    RecruitmentQuestionRequest[]
+  >([
     {
-      question_text: "Tại sao bạn muốn tham gia câu lạc bộ?",
-      question_type: "TEXT",
-      question_order: 1,
-      required: true,
+      questionText: "Tại sao bạn muốn tham gia câu lạc bộ?",
+      questionType: "TEXT",
+      questionOrder: 1,
+      isRequired: 1,
     },
   ]);
 
@@ -111,25 +104,19 @@ export function RecruitmentForm({
       setNewRecruitment({
         title: editingRecruitment.title,
         description: editingRecruitment.description,
-        end_date: editingRecruitment.end_date.slice(0, 16),
-        requirements: editingRecruitment.requirements?.length
-          ? editingRecruitment.requirements
-          : [""],
-        benefits: editingRecruitment.benefits?.length
-          ? editingRecruitment.benefits
-          : [""],
+        endDate: editingRecruitment.endDate.slice(0, 16),
+        requirements: editingRecruitment.requirements || "",
       });
 
       const questionsToLoad =
-        editingRecruitment.form_questions &&
-        editingRecruitment.form_questions.length > 0
-          ? editingRecruitment.form_questions
+        editingRecruitment.questions && editingRecruitment.questions.length > 0
+          ? editingRecruitment.questions
           : [
               {
-                question_text: "Tại sao bạn muốn tham gia câu lạc bộ?",
-                question_type: "TEXT" as QuestionType,
-                question_order: 1,
-                required: true,
+                questionText: "Tại sao bạn muốn tham gia câu lạc bộ?",
+                questionType: "TEXT",
+                questionOrder: 1,
+                isRequired: 1,
               },
             ];
 
@@ -153,44 +140,29 @@ export function RecruitmentForm({
       setNewRecruitment({
         title: "",
         description: "",
-        end_date: "",
-        requirements: [""],
-        benefits: [""],
+        endDate: "",
+        requirements: "",
       });
       setFormQuestions([
         {
-          question_text: "Tại sao bạn muốn tham gia câu lạc bộ?",
-          question_type: "TEXT",
-          question_order: 1,
-          required: true,
+          questionText: "Tại sao bạn muốn tham gia câu lạc bộ?",
+          questionType: "TEXT",
+          questionOrder: 1,
+          isRequired: 1,
         },
       ]);
       setSelectedTeamIds([]);
     }
   }, [editingRecruitment]);
 
-  const addRequirement = () => {
-    setNewRecruitment((prev) => ({
-      ...prev,
-      requirements: [...prev.requirements, ""],
-    }));
-  };
-
-  // const addBenefit = () => {
-  //   setNewRecruitment((prev) => ({
-  //     ...prev,
-  //     benefits: [...prev.benefits, ""],
-  //   }));
-  // };
-
   const addQuestion = () => {
     setFormQuestions((prev) => [
       ...prev,
       {
-        question_text: "",
-        question_type: "TEXT",
-        question_order: prev.length + 1,
-        required: false,
+        questionText: "",
+        questionType: "TEXT",
+        questionOrder: prev.length + 1,
+        isRequired: 0,
       },
     ]);
   };
@@ -202,7 +174,7 @@ export function RecruitmentForm({
           const updated = { ...q, [field]: value };
           // Initialize options array when changing to MCQ or CHECKBOX
           if (
-            field === "question_type" &&
+            field === "questionType" &&
             (value === "MCQ" || value === "CHECKBOX")
           ) {
             if (!updated.options || updated.options.length === 0) {
@@ -211,7 +183,7 @@ export function RecruitmentForm({
           }
           // Clear options when changing to other types
           if (
-            field === "question_type" &&
+            field === "questionType" &&
             value !== "MCQ" &&
             value !== "CHECKBOX"
           ) {
@@ -259,7 +231,9 @@ export function RecruitmentForm({
         if (i === questionIndex) {
           return {
             ...q,
-            options: (q.options || []).filter((_, oi) => oi !== optionIndex),
+            options: (q.options || []).filter(
+              (_: string, oi: number) => oi !== optionIndex
+            ),
           };
         }
         return q;
@@ -278,13 +252,13 @@ export function RecruitmentForm({
       toast.error("Vui lòng nhập mô tả đợt tuyển dụng");
       return false;
     }
-    if (!newRecruitment.end_date) {
+    if (!newRecruitment.endDate) {
       toast.error("Vui lòng chọn ngày kết thúc");
       return false;
     }
 
     // Validate end date is not in the past
-    const endDate = new Date(newRecruitment.end_date);
+    const endDate = new Date(newRecruitment.endDate);
     const now = new Date();
     if (endDate <= now) {
       toast.error("Ngày kết thúc phải sau thời điểm hiện tại");
@@ -300,16 +274,16 @@ export function RecruitmentForm({
     // Validate questions
     for (let i = 0; i < formQuestions.length; i++) {
       const q = formQuestions[i];
-      if (!q.question_text.trim()) {
+      if (!q.questionText.trim()) {
         toast.error(`Vui lòng nhập nội dung câu hỏi ${i + 1}`);
         return false;
       }
-      if (q.question_type === "MCQ" || q.question_type === "CHECKBOX") {
+      if (q.questionType === "MCQ" || q.questionType === "CHECKBOX") {
         if (!q.options || q.options.length === 0) {
           toast.error(`Câu hỏi ${i + 1}: Vui lòng thêm ít nhất một lựa chọn`);
           return false;
         }
-        const validOptions = q.options.filter((opt) => opt.trim());
+        const validOptions = q.options.filter((opt: string) => opt.trim());
         if (validOptions.length === 0) {
           toast.error(
             `Câu hỏi ${i + 1}: Vui lòng nhập nội dung cho các lựa chọn`
@@ -330,29 +304,26 @@ export function RecruitmentForm({
   const buildRequestData = (
     status: "DRAFT" | "OPEN"
   ): RecruitmentCreateRequest => {
-    // Format end_date to ISO string without timezone (for Java LocalDateTime)
+    // Format endDate to ISO string without timezone (for Java LocalDateTime)
     // Input from datetime-local is "YYYY-MM-DDTHH:mm" (local time)
     // Backend expects ISO format: "YYYY-MM-DDTHH:mm:ss"
-    const endDate = newRecruitment.end_date + ":00";
+    const endDate = newRecruitment.endDate + ":00";
 
     return {
       title: newRecruitment.title,
       description: newRecruitment.description,
       endDate: endDate,
-      requirements: newRecruitment.requirements
-        .filter((r) => r.trim())
-        .join("\n"),
+      requirements: newRecruitment.requirements,
       status: status,
       questions: formQuestions.map((q, index) => ({
-        id: q.form_id ? parseInt(q.form_id) : null,
-        questionText: q.question_text,
-        questionType:
-          q.question_type === "FILE" ? "FILE_UPLOAD" : q.question_type,
+        id: q.id ? q.id : null,
+        questionText: q.questionText,
+        questionType: q.questionType,
         questionOrder: index + 1,
-        isRequired: q.required ? 1 : 0, // Convert boolean to integer
+        isRequired: q.isRequired,
         options:
-          q.question_type === "MCQ" || q.question_type === "CHECKBOX"
-            ? (q.options || []).filter((opt) => opt.trim())
+          q.questionType === "MCQ" || q.questionType === "CHECKBOX"
+            ? (q.options || []).filter((opt: string) => opt.trim())
             : undefined,
       })),
       teamOptionIds: selectedTeamIds,
@@ -527,7 +498,7 @@ export function RecruitmentForm({
           <CardTitle>Thông tin cơ bản</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div>
+          <div className="space-y-2">
             <Label htmlFor="title">Tiêu đề đợt tuyển dụng</Label>
             <Input
               id="title"
@@ -542,7 +513,7 @@ export function RecruitmentForm({
             />
           </div>
 
-          <div>
+          <div className="space-y-2">
             <Label htmlFor="description">Mô tả</Label>
             <Textarea
               id="description"
@@ -558,17 +529,17 @@ export function RecruitmentForm({
             />
           </div>
 
-          <div>
+          <div className="space-y-2">
             <Label htmlFor="end_date">Ngày giờ kết thúc</Label>
             <Input
               id="end_date"
               type="datetime-local"
-              value={newRecruitment.end_date}
+              value={newRecruitment.endDate}
               min={new Date().toISOString().slice(0, 16)}
               onChange={(e) =>
                 setNewRecruitment((prev) => ({
                   ...prev,
-                  end_date: e.target.value,
+                  endDate: e.target.value,
                 }))
               }
             />
@@ -579,52 +550,20 @@ export function RecruitmentForm({
       {/* Requirements */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            Yêu cầu
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={addRequirement}
-              className="bg-transparent"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Thêm yêu cầu
-            </Button>
-          </CardTitle>
+          <CardTitle>Yêu cầu</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3">
-          {newRecruitment.requirements.map((req, index) => (
-            <div key={index} className="flex gap-2">
-              <Input
-                value={req}
-                onChange={(e) => {
-                  const newReqs = [...newRecruitment.requirements];
-                  newReqs[index] = e.target.value;
-                  setNewRecruitment((prev) => ({
-                    ...prev,
-                    requirements: newReqs,
-                  }));
-                }}
-                placeholder="Nhập yêu cầu..."
-              />
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  const newReqs = newRecruitment.requirements.filter(
-                    (_, i) => i !== index
-                  );
-                  setNewRecruitment((prev) => ({
-                    ...prev,
-                    requirements: newReqs,
-                  }));
-                }}
-                className="bg-transparent"
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </div>
-          ))}
+        <CardContent>
+          <Textarea
+            value={newRecruitment.requirements}
+            onChange={(e) =>
+              setNewRecruitment((prev) => ({
+                ...prev,
+                requirements: e.target.value,
+              }))
+            }
+            placeholder="Nhập yêu cầu đối với ứng viên (mỗi yêu cầu một dòng)..."
+            rows={5}
+          />
         </CardContent>
       </Card>
 
@@ -732,7 +671,7 @@ export function RecruitmentForm({
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Label>Câu hỏi {index + 1}</Label>
-                  {editingRecruitment && !question.form_id && (
+                  {editingRecruitment && !question.id && (
                     <Badge
                       variant="outline"
                       className="bg-blue-50 text-blue-700 border-blue-200"
@@ -752,9 +691,9 @@ export function RecruitmentForm({
               </div>
 
               <Input
-                value={question.question_text}
+                value={question.questionText}
                 onChange={(e) =>
-                  updateQuestion(index, "question_text", e.target.value)
+                  updateQuestion(index, "questionText", e.target.value)
                 }
                 placeholder="Nhập câu hỏi..."
               />
@@ -763,9 +702,9 @@ export function RecruitmentForm({
                 <div>
                   <Label>Loại câu hỏi</Label>
                   <Select
-                    value={question.question_type}
+                    value={question.questionType}
                     onValueChange={(value) =>
-                      updateQuestion(index, "question_type", value)
+                      updateQuestion(index, "questionType", value)
                     }
                   >
                     <SelectTrigger>
@@ -777,7 +716,7 @@ export function RecruitmentForm({
                       <SelectItem value="CHECKBOX">
                         Lựa chọn nhiều đáp án
                       </SelectItem>
-                      <SelectItem value="FILE">Tải lên file</SelectItem>
+                      <SelectItem value="FILE_UPLOAD">Tải lên file</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -785,17 +724,21 @@ export function RecruitmentForm({
                   <input
                     type="checkbox"
                     id={`required-${index}`}
-                    checked={question.required}
+                    checked={question.isRequired === 1}
                     onChange={(e) =>
-                      updateQuestion(index, "required", e.target.checked)
+                      updateQuestion(
+                        index,
+                        "isRequired",
+                        e.target.checked ? 1 : 0
+                      )
                     }
                   />
                   <Label htmlFor={`required-${index}`}>Bắt buộc</Label>
                 </div>
               </div>
 
-              {(question.question_type === "MCQ" ||
-                question.question_type === "CHECKBOX") && (
+              {(question.questionType === "MCQ" ||
+                question.questionType === "CHECKBOX") && (
                 <div>
                   <div className="flex items-center justify-between mb-3">
                     <Label>Các lựa chọn</Label>
@@ -811,33 +754,35 @@ export function RecruitmentForm({
                     </Button>
                   </div>
                   <div className="space-y-2">
-                    {(question.options || []).map((option, optionIndex) => (
-                      <div
-                        key={optionIndex}
-                        className="flex gap-2 items-center"
-                      >
-                        <span className="text-sm text-muted-foreground w-6">
-                          {optionIndex + 1}.
-                        </span>
-                        <Input
-                          value={option}
-                          onChange={(e) =>
-                            updateOption(index, optionIndex, e.target.value)
-                          }
-                          placeholder={`Lựa chọn ${optionIndex + 1}`}
-                          className="flex-1"
-                        />
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => removeOption(index, optionIndex)}
-                          className="bg-transparent"
-                          type="button"
+                    {(question.options || []).map(
+                      (option: string, optionIndex: number) => (
+                        <div
+                          key={optionIndex}
+                          className="flex gap-2 items-center"
                         >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    ))}
+                          <span className="text-sm text-muted-foreground w-6">
+                            {optionIndex + 1}.
+                          </span>
+                          <Input
+                            value={option}
+                            onChange={(e) =>
+                              updateOption(index, optionIndex, e.target.value)
+                            }
+                            placeholder={`Lựa chọn ${optionIndex + 1}`}
+                            className="flex-1"
+                          />
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => removeOption(index, optionIndex)}
+                            className="bg-transparent"
+                            type="button"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      )
+                    )}
                     {(!question.options || question.options.length === 0) && (
                       <p className="text-sm text-muted-foreground text-center py-4 border-2 border-dashed rounded-lg">
                         Chưa có lựa chọn nào. Click "Thêm lựa chọn" để bắt đầu.
@@ -847,7 +792,7 @@ export function RecruitmentForm({
                 </div>
               )}
 
-              {question.question_type === "FILE" && (
+              {question.questionType === "FILE_UPLOAD" && (
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
                   <p className="font-medium mb-1">
                     📎 Lưu ý về câu hỏi tải file:

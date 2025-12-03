@@ -3,7 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { Bell, CheckCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import type { NotificationItem } from "@/types/notification";
+
+import type { NotificationItem, NotificationPage } from "@/types/notification";
 
 import {
   getNotifications,
@@ -17,76 +18,115 @@ type TabKey = "all" | "unread";
 
 export const Notifications = () => {
   const navigate = useNavigate();
+
+  // Tab
   const [tab, setTab] = useState<TabKey>("all");
+
+  // Data
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(false);
+
+  // Pagination
+  const [pageIndex, setPageIndex] = useState(0); // 0-based
+  const [totalPages, setTotalPages] = useState(1);
 
   const token = localStorage.getItem("accessToken") || null;
   const { isConnected, subscribeToUserQueue } = useWebSocket(token);
 
-  // LOAD DATA
-  const loadData = useCallback(async (currentTab: TabKey) => {
+  // ---------------------------------------------------------
+  // LOAD DATA (Có phân trang)
+  // ---------------------------------------------------------
+  const loadData = useCallback(async (currentTab: TabKey, page: number) => {
     setLoading(true);
     try {
-      const page = await getNotifications({
-        page: 0,
-        size: 20,
+      const res: NotificationPage = await getNotifications({
+        page,
+        size: 10,
         unreadOnly: currentTab === "unread",
       });
-      setNotifications(page.content ?? []);
+
+      setNotifications(res.content ?? []);
+      setPageIndex(res.number ?? 0);
+      setTotalPages(res.totalPages ?? 1);
     } finally {
       setLoading(false);
     }
   }, []);
 
+  // Load khi đổi tab
   useEffect(() => {
-    loadData(tab);
+    setPageIndex(0);
+    loadData(tab, 0);
   }, [tab, loadData]);
 
-  // REALTIME UPDATE
+  // ---------------------------------------------------------
+  // REALTIME UPDATE (WebSocket)
+  // ---------------------------------------------------------
   useEffect(() => {
     if (!isConnected) return;
 
     const off = subscribeToUserQueue((msg) => {
-      if (msg.type === "NOTIFICATION") loadData(tab);
+      if (msg.type === "NOTIFICATION") {
+        loadData(tab, pageIndex);
+      }
     });
 
     return () => off?.();
-  }, [isConnected, subscribeToUserQueue, loadData, tab]);
+  }, [isConnected, subscribeToUserQueue, tab, pageIndex, loadData]);
 
-  // MARK ALL
+  // ---------------------------------------------------------
+  // MARK ALL READ (UI instant update - MAX PING™)
+  // ---------------------------------------------------------
   const handleMarkAll = async () => {
-    await markAllNotificationsAsRead();
-    await loadData(tab);
+    // ⚡ UI cập nhật ngay lập tức
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+
+    // Gửi API ngầm
+    markAllNotificationsAsRead()
+      .then(() => loadData(tab, pageIndex))
+      .catch(() => loadData(tab, pageIndex));
   };
 
-  // NAVIGATE ITEM
+  // ---------------------------------------------------------
+  // CLICK ITEM
+  // ---------------------------------------------------------
   const handleClickItem = async (n: NotificationItem) => {
     try {
       if (!n.read) {
         await markNotificationAsRead(n.id);
+
+        // Instant UI update
         setNotifications((prev) =>
           prev.map((x) => (x.id === n.id ? { ...x, read: true } : x))
         );
       }
     } catch {}
 
-    if (!n.actionUrl) return;
-
-    /**
-     * RULE:
-     * - actionUrl đã luôn là full path hợp lệ từ backend
-     *   ví dụ:
-     *   /myclub/5/events/10
-     *   /events/100
-     *   /club/20
-     *   /staff/news/10
-     */
-    navigate(n.actionUrl);
+    // Điều hướng nếu có actionUrl
+    if (n.actionUrl) navigate(n.actionUrl);
   };
 
+  // ---------------------------------------------------------
+  // PAGINATION HANDLERS
+  // ---------------------------------------------------------
+  const goPrev = () => {
+    if (pageIndex > 0) {
+      loadData(tab, pageIndex - 1);
+    }
+  };
+
+  const goNext = () => {
+    if (pageIndex + 1 < totalPages) {
+      loadData(tab, pageIndex + 1);
+    }
+  };
+
+  // ---------------------------------------------------------
+  // UI
+  // ---------------------------------------------------------
   return (
     <div className="p-6 space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">Thông báo hệ thống</h1>
@@ -94,29 +134,29 @@ export const Notifications = () => {
             Tất cả thông báo dành cho bạn
           </p>
         </div>
+
         <Button variant="outline" className="gap-2" onClick={handleMarkAll}>
           <CheckCheck className="h-4 w-4" />
           Đánh dấu tất cả đã đọc
         </Button>
       </div>
 
-      <Tabs
-        value={tab}
-        onValueChange={(v) => setTab(v as TabKey)}
-        className="space-y-4"
-      >
+      {/* Tabs */}
+      <Tabs value={tab} onValueChange={(v) => setTab(v as TabKey)}>
         <TabsList>
           <TabsTrigger value="all">Tất cả</TabsTrigger>
           <TabsTrigger value="unread">Chưa đọc</TabsTrigger>
         </TabsList>
 
+        {/* TAB ALL */}
         <TabsContent value="all" className="space-y-4">
           {loading && <p>Đang tải…</p>}
           {!loading && notifications.length === 0 && (
             <p>Không có thông báo nào.</p>
           )}
-          {!loading &&
-            notifications.map((n) => (
+
+          <div className="space-y-4">
+            {notifications.map((n) => (
               <button
                 key={n.id}
                 onClick={() => handleClickItem(n)}
@@ -144,9 +184,11 @@ export const Notifications = () => {
                         <span className="h-2 w-2 rounded-full bg-primary mt-2" />
                       )}
                     </div>
+
                     <p className="text-sm text-muted-foreground mt-1">
                       {n.message}
                     </p>
+
                     <p className="text-xs text-muted-foreground mt-2">
                       {new Date(n.createdAt).toLocaleString()}
                     </p>
@@ -154,35 +196,34 @@ export const Notifications = () => {
                 </div>
               </button>
             ))}
+          </div>
+
+          {/* Pagination */}
+          <div className="flex items-center justify-center gap-4 mt-6">
+            <Button
+              variant="outline"
+              disabled={pageIndex === 0}
+              onClick={goPrev}
+            >
+              ← Trước
+            </Button>
+
+            <span className="text-sm text-muted-foreground">
+              Trang {pageIndex + 1} / {totalPages}
+            </span>
+
+            <Button
+              variant="outline"
+              disabled={pageIndex + 1 >= totalPages}
+              onClick={goNext}
+            >
+              Sau →
+            </Button>
+          </div>
         </TabsContent>
 
-        <TabsContent value="unread" className="space-y-4">
-          {!loading &&
-            notifications
-              .filter((n) => !n.read)
-              .map((n) => (
-                <button
-                  key={n.id}
-                  onClick={() => handleClickItem(n)}
-                  className="w-full text-left p-4 rounded-lg border shadow-sm bg-primary/5 border-primary/20"
-                >
-                  <div className="flex items-start gap-4">
-                    <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                      <Bell className="h-5 w-5 text-primary" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold">{n.title}</h3>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        {n.message}
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-2">
-                        {new Date(n.createdAt).toLocaleString()}
-                      </p>
-                    </div>
-                  </div>
-                </button>
-              ))}
-        </TabsContent>
+        {/* TAB UNREAD — dùng chung list đã lọc từ backend */}
+        <TabsContent value="unread" />
       </Tabs>
     </div>
   );

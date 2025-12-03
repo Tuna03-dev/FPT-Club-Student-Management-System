@@ -89,22 +89,6 @@ public class CloudinaryService {
     }
 
     /**
-     * Upload file (PDF, DOC, DOCX, etc.) to Cloudinary with specified folder - ASYNC
-     * @param file MultipartFile to upload
-     * @param folder Folder path in Cloudinary (e.g., "club/reports", "club/recruitment")
-     * @return CompletableFuture with UploadResult
-     */
-    @Async("uploadExecutor")
-    public CompletableFuture<UploadResult> uploadFileAsync(MultipartFile file, String folder) {
-        try {
-            UploadResult result = uploadFile(file, folder);
-            return CompletableFuture.completedFuture(result);
-        } catch (Exception e) {
-            return CompletableFuture.failedFuture(e);
-        }
-    }
-
-    /**
      * Upload file (PDF, DOC, DOCX, etc.) to Cloudinary with specified folder
      * @param file MultipartFile to upload
      * @param folder Folder path in Cloudinary (e.g., "club/reports", "club/recruitment")

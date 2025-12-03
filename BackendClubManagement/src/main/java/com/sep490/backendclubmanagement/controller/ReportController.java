@@ -48,12 +48,12 @@ public class ReportController {
             @RequestParam(required = false) Long semesterId,
             @RequestParam(required = false) ReportType reportType,
             @RequestParam(required = false) String keyword,
-            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(defaultValue = "submittedDate,desc") String sort
     ) {
         Long userId = SecurityUtils.getCurrentUserId();
-        Pageable pageable = PageRequest.of(page, size, parseSort(sort));
+        Pageable pageable = PageRequest.of(page - 1, size, parseSort(sort));
         PageResponse<ReportListItemResponse> data = reportService.getAllReports(
                 status, clubId, semesterId, reportType, keyword, pageable, userId);
         return ApiResponse.success(data);
@@ -90,14 +90,27 @@ public class ReportController {
             @RequestParam(required = false) ReportType reportType,
             @RequestParam(required = false) Long clubId,
             @RequestParam(required = false) String keyword,
-            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(defaultValue = "createdAt,desc") String sort
     ) {
         Long userId = SecurityUtils.getCurrentUserId();
-        Pageable pageable = PageRequest.of(page, size, parseSort(sort));
+        Pageable pageable = PageRequest.of(page - 1, size, parseSort(sort));
         PageResponse<ReportRequirementResponse> data = reportService.getAllReportRequirements(
                 reportType, clubId, keyword, pageable, userId);
+        return ApiResponse.success(data);
+    }
+
+    /**
+     * Get a single report requirement by ID (for staff only)
+     */
+    @PreAuthorize("@clubSecurity.isStaff()")
+    @GetMapping("/staff/requirements/{requirementId}")
+    public ApiResponse<ReportRequirementResponse> getReportRequirementById(
+            @PathVariable Long requirementId
+    ) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        ReportRequirementResponse data = reportService.getReportRequirementById(requirementId, userId);
         return ApiResponse.success(data);
     }
 
@@ -195,12 +208,12 @@ public class ReportController {
             @RequestParam(required = false) Long semesterId,
             @RequestParam(required = false) ReportType reportType,
             @RequestParam(required = false) String keyword,
-            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(defaultValue = "submittedDate,desc") String sort
     ) {
         Long userId = SecurityUtils.getCurrentUserId();
-        Pageable pageable = PageRequest.of(page, size, parseSort(sort));
+        Pageable pageable = PageRequest.of(page - 1, size, parseSort(sort));
         PageResponse<ReportListItemResponse> data = reportService.getClubReports(
                 clubId, status, semesterId, reportType, keyword, pageable, userId);
         return ApiResponse.success(data);
@@ -217,12 +230,12 @@ public class ReportController {
             @RequestParam(required = false) Long semesterId,
             @RequestParam(required = false) ReportType reportType,
             @RequestParam(required = false) String keyword,
-            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(defaultValue = "submittedDate,desc") String sort
     ) {
         Long userId = SecurityUtils.getCurrentUserId();
-        Pageable pageable = PageRequest.of(page, size, parseSort(sort));
+        Pageable pageable = PageRequest.of(page - 1, size, parseSort(sort));
         PageResponse<ReportListItemResponse> data = reportService.getMyReports(
                 clubId, status, semesterId, reportType, keyword, pageable, userId);
         return ApiResponse.success(data);
@@ -239,12 +252,12 @@ public class ReportController {
             @RequestParam(required = false) Long semesterId,
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) Long teamId,
-            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(defaultValue = "deadline,desc") String sort
     ) {
         Long userId = SecurityUtils.getCurrentUserId();
-        Pageable pageable = PageRequest.of(page, size, parseSort(sort));
+        Pageable pageable = PageRequest.of(page - 1, size, parseSort(sort));
         PageResponse<OfficerReportRequirementResponse> data = reportService.getClubReportRequirementsForOfficerWithFilters(
                 clubId, status, semesterId, keyword, teamId, pageable, userId);
         return ApiResponse.success(data);
@@ -288,9 +301,12 @@ public class ReportController {
     public ApiResponse<PageResponse<ReportRequirementResponse.ClubRequirementInfo>> getClubsByReportRequirement(
             @PathVariable Long requirementId,
             @RequestParam(required = false) String keyword,
-            @PageableDefault(size = 10, sort = "id") Pageable pageable
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "id,asc") String sort
     ) {
         Long userId = SecurityUtils.getCurrentUserId();
+        Pageable pageable = PageRequest.of(page - 1, size, parseSort(sort));
         PageResponse<ReportRequirementResponse.ClubRequirementInfo> data = reportService.getClubsByReportRequirement(
                 requirementId, keyword, pageable, userId);
         return ApiResponse.success(data);

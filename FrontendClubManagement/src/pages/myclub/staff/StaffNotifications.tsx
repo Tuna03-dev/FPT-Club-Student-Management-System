@@ -1,8 +1,8 @@
 // src/pages/staff/StaffNotifications.tsx
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Bell, CheckCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import type { NotificationItem } from "@/types/notification";
+import type { NotificationItem, NotificationPage } from "@/types/notification";
 import {
   getNotifications,
   markAllNotificationsAsRead,
@@ -14,59 +14,90 @@ type TabKey = "all" | "unread";
 
 export default function StaffNotifications() {
   const navigate = useNavigate();
+
   const [tab, setTab] = useState<TabKey>("all");
+
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const loadData = async (currentTab: TabKey) => {
+  // Pagination state
+  const [pageIndex, setPageIndex] = useState(0); // 0-based
+  const [totalPages, setTotalPages] = useState(1);
+
+  // ============================================================
+  // LOAD DATA — CÓ PHÂN TRANG
+  // ============================================================
+  const loadData = useCallback(async (currentTab: TabKey, page: number) => {
     setLoading(true);
     try {
-      const page = await getNotifications({
-        page: 0,
-        size: 20,
+      const res: NotificationPage = await getNotifications({
+        page,
+        size: 10,
         unreadOnly: currentTab === "unread",
       });
-      setNotifications(page.content ?? []);
-    } catch {
-      // ignore
+
+      setNotifications(res.content ?? []);
+      setTotalPages(res.totalPages ?? 1);
+      setPageIndex(res.number ?? 0);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
+  // Load khi đổi tab
   useEffect(() => {
-    loadData(tab);
-  }, [tab]);
+    setPageIndex(0);
+    loadData(tab, 0);
+  }, [tab, loadData]);
 
+  // ============================================================
+  // ĐÁNH DẤU TẤT CẢ ĐÃ ĐỌC — INSTANT UI UPDATE
+  // ============================================================
   const handleMarkAll = async () => {
-    try {
-      await markAllNotificationsAsRead();
-      await loadData(tab);
-    } catch {
-      // ignore
-    }
+    // UI update ngay lập tức
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+
+    // API chạy ngầm
+    markAllNotificationsAsRead()
+      .then(() => loadData(tab, pageIndex))
+      .catch(() => loadData(tab, pageIndex));
   };
 
+  // ============================================================
+  // CLICK ITEM
+  // ============================================================
   const handleClickItem = async (n: NotificationItem) => {
     try {
       if (!n.read) {
         await markNotificationAsRead(n.id);
+
+        // Instant UI update
         setNotifications((prev) =>
           prev.map((x) => (x.id === n.id ? { ...x, read: true } : x))
         );
       }
-    } catch {
-      /* ignore */
-    }
+    } catch {}
 
-    if (n.actionUrl) {
-      navigate(n.actionUrl);
-    }
+    if (n.actionUrl) navigate(n.actionUrl);
   };
 
+  // ============================================================
+  // PAGINATION HANDLERS
+  // ============================================================
+  const goPrev = () => {
+    if (pageIndex > 0) loadData(tab, pageIndex - 1);
+  };
+
+  const goNext = () => {
+    if (pageIndex + 1 < totalPages) loadData(tab, pageIndex + 1);
+  };
+
+  // ============================================================
+  // UI
+  // ============================================================
   return (
     <div className="p-6 space-y-6">
-      {/* Page Header */}
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-foreground">
@@ -76,6 +107,7 @@ export default function StaffNotifications() {
             Các thông báo hệ thống gửi cho tài khoản Staff
           </p>
         </div>
+
         <Button variant="outline" className="gap-2" onClick={handleMarkAll}>
           <CheckCheck className="h-4 w-4" />
           Đánh dấu tất cả đã đọc
@@ -109,11 +141,13 @@ export default function StaffNotifications() {
       {/* List */}
       <div className="space-y-4">
         {loading && <p className="text-sm text-muted-foreground">Đang tải…</p>}
+
         {!loading && notifications.length === 0 && (
           <p className="text-sm text-muted-foreground">
             Không có thông báo nào.
           </p>
         )}
+
         {!loading &&
           notifications.map((n) => (
             <button
@@ -143,9 +177,11 @@ export default function StaffNotifications() {
                       <div className="h-2 w-2 rounded-full bg-primary flex-shrink-0 mt-2" />
                     )}
                   </div>
+
                   <p className="text-sm text-muted-foreground mt-1">
                     {n.message}
                   </p>
+
                   <p className="text-xs text-muted-foreground mt-2">
                     {new Date(n.createdAt).toLocaleString("vi-VN")}
                   </p>
@@ -153,6 +189,25 @@ export default function StaffNotifications() {
               </div>
             </button>
           ))}
+      </div>
+
+      {/* Pagination */}
+      <div className="flex items-center justify-center gap-4 mt-6">
+        <Button variant="outline" disabled={pageIndex === 0} onClick={goPrev}>
+          ← Trước
+        </Button>
+
+        <span className="text-sm text-muted-foreground">
+          Trang {pageIndex + 1} / {totalPages}
+        </span>
+
+        <Button
+          variant="outline"
+          disabled={pageIndex + 1 >= totalPages}
+          onClick={goNext}
+        >
+          Sau →
+        </Button>
       </div>
     </div>
   );

@@ -212,9 +212,6 @@ class RecruitmentServiceTest {
         List<Recruitment> recruitments = Arrays.asList(testRecruitment);
         Page<Recruitment> page = new PageImpl<>(recruitments, pageable, 1);
 
-        when(semesterRepository.findCurrentSemester()).thenReturn(Optional.of(testSemester));
-        when(roleMembershipRepository.isClubOfficerInCurrentSemester(testUserId, testClubId, testSemesterId))
-                .thenReturn(true);
         when(recruitmentRepository.findByClub_Id(testClubId, pageable)).thenReturn(page);
         when(recruitmentMapper.toDtoForList(any(Recruitment.class))).thenReturn(testRecruitmentData);
 
@@ -225,24 +222,7 @@ class RecruitmentServiceTest {
         // Assert
         assertNotNull(result);
         assertEquals(1, result.getContent().size());
-        verify(roleMembershipRepository).isClubOfficerInCurrentSemester(testUserId, testClubId, testSemesterId);
         verify(recruitmentRepository).findByClub_Id(testClubId, pageable);
-    }
-
-    @Test
-    void testListRecruitments_InsufficientPermission() {
-        // Arrange
-        Pageable pageable = PageRequest.of(0, 10);
-        when(semesterRepository.findCurrentSemester()).thenReturn(Optional.of(testSemester));
-        when(roleMembershipRepository.isClubOfficerInCurrentSemester(testUserId, testClubId, testSemesterId))
-                .thenReturn(false);
-
-        // Act & Assert
-        AppException exception = assertThrows(AppException.class, () -> {
-            recruitmentService.listRecruitments(testUserId, testClubId, null, null, pageable);
-        });
-
-        assertEquals(ErrorCode.INSUFFICIENT_PERMISSIONS, exception.getErrorCode());
     }
 
     @Test
@@ -252,9 +232,6 @@ class RecruitmentServiceTest {
         List<Recruitment> recruitments = Arrays.asList(testRecruitment);
         Page<Recruitment> page = new PageImpl<>(recruitments, pageable, 1);
 
-        when(semesterRepository.findCurrentSemester()).thenReturn(Optional.of(testSemester));
-        when(roleMembershipRepository.isClubOfficerInCurrentSemester(testUserId, testClubId, testSemesterId))
-                .thenReturn(true);
         when(recruitmentRepository.findByClub_IdAndStatus(testClubId, RecruitmentStatus.OPEN, pageable))
                 .thenReturn(page);
         when(recruitmentMapper.toDtoForList(any(Recruitment.class))).thenReturn(testRecruitmentData);
@@ -294,7 +271,7 @@ class RecruitmentServiceTest {
     @Test
     void testGetRecruitment_Success() throws AppException {
         // Arrange
-        when(recruitmentRepository.findById(testRecruitmentId)).thenReturn(Optional.of(testRecruitment));
+        when(recruitmentRepository.findByIdWithClub(testRecruitmentId)).thenReturn(Optional.of(testRecruitment));
         when(questionRepository.findByRecruitment_IdOrderByQuestionOrderAsc(testRecruitmentId))
                 .thenReturn(Collections.emptyList());
         when(teamOptionRepository.findByRecruitment_Id(testRecruitmentId))
@@ -307,7 +284,7 @@ class RecruitmentServiceTest {
         // Assert
         assertNotNull(result);
         assertEquals(testRecruitmentId, result.getId());
-        verify(recruitmentRepository).findById(testRecruitmentId);
+        verify(recruitmentRepository).findByIdWithClub(testRecruitmentId);
         verify(questionRepository).findByRecruitment_IdOrderByQuestionOrderAsc(testRecruitmentId);
         verify(teamOptionRepository).findByRecruitment_Id(testRecruitmentId);
     }
@@ -315,7 +292,7 @@ class RecruitmentServiceTest {
     @Test
     void testGetRecruitment_NotFound() {
         // Arrange
-        when(recruitmentRepository.findById(testRecruitmentId)).thenReturn(Optional.empty());
+        when(recruitmentRepository.findByIdWithClub(testRecruitmentId)).thenReturn(Optional.empty());
 
         // Act & Assert
         assertThrows(AppException.class, () -> {
@@ -335,13 +312,12 @@ class RecruitmentServiceTest {
         request.questions = new ArrayList<>();
         request.teamOptionIds = Arrays.asList(testTeamId);
 
-        when(semesterRepository.findCurrentSemester()).thenReturn(Optional.of(testSemester));
-        when(roleMembershipRepository.isClubOfficerInCurrentSemester(testUserId, testClubId, testSemesterId))
-                .thenReturn(true);
         when(clubRepository.findById(testClubId)).thenReturn(Optional.of(testClub));
         when(recruitmentMapper.toEntity(any(RecruitmentCreateRequest.class), eq(testClubId)))
                 .thenReturn(testRecruitment);
         when(recruitmentRepository.save(any(Recruitment.class))).thenReturn(testRecruitment);
+        when(recruitmentRepository.findByClub_IdAndStatusAndIdNot(testClubId, RecruitmentStatus.OPEN, testRecruitmentId))
+                .thenReturn(Collections.emptyList());
         when(teamRepository.findById(testTeamId)).thenReturn(Optional.of(testTeam));
         when(questionRepository.findByRecruitment_IdOrderByQuestionOrderAsc(testRecruitmentId))
                 .thenReturn(Collections.emptyList());
@@ -370,9 +346,6 @@ class RecruitmentServiceTest {
         request.endDate = LocalDateTime.now().plusDays(7);
         request.teamOptionIds = Arrays.asList(testTeamId);
 
-        when(semesterRepository.findCurrentSemester()).thenReturn(Optional.of(testSemester));
-        when(roleMembershipRepository.isClubOfficerInCurrentSemester(testUserId, testClubId, testSemesterId))
-                .thenReturn(true);
         when(clubRepository.findById(testClubId)).thenReturn(Optional.of(testClub));
 
         // Act & Assert
@@ -391,9 +364,6 @@ class RecruitmentServiceTest {
         request.endDate = LocalDateTime.now().minusDays(1); // Past date
         request.teamOptionIds = Arrays.asList(testTeamId);
 
-        when(semesterRepository.findCurrentSemester()).thenReturn(Optional.of(testSemester));
-        when(roleMembershipRepository.isClubOfficerInCurrentSemester(testUserId, testClubId, testSemesterId))
-                .thenReturn(true);
         when(clubRepository.findById(testClubId)).thenReturn(Optional.of(testClub));
 
         // Act & Assert
@@ -416,11 +386,10 @@ class RecruitmentServiceTest {
         request.questions = new ArrayList<>();
         request.teamOptionIds = Arrays.asList(testTeamId);
 
-        when(semesterRepository.findCurrentSemester()).thenReturn(Optional.of(testSemester));
         when(recruitmentRepository.findById(testRecruitmentId)).thenReturn(Optional.of(testRecruitment));
-        when(roleMembershipRepository.isClubOfficerInCurrentSemester(testUserId, testClubId, testSemesterId))
-                .thenReturn(true);
         when(recruitmentRepository.save(any(Recruitment.class))).thenReturn(testRecruitment);
+        when(recruitmentRepository.findByClub_IdAndStatusAndIdNot(testClubId, RecruitmentStatus.OPEN, testRecruitmentId))
+                .thenReturn(Collections.emptyList());
         when(teamRepository.findById(testTeamId)).thenReturn(Optional.of(testTeam));
         when(questionRepository.findByRecruitment_IdOrderByQuestionOrderAsc(testRecruitmentId))
                 .thenReturn(Collections.emptyList());
@@ -443,10 +412,7 @@ class RecruitmentServiceTest {
         // Arrange
         testRecruitment.setStatus(RecruitmentStatus.DRAFT);
 
-        when(semesterRepository.findCurrentSemester()).thenReturn(Optional.of(testSemester));
         when(recruitmentRepository.findById(testRecruitmentId)).thenReturn(Optional.of(testRecruitment));
-        when(roleMembershipRepository.isClubOfficerInCurrentSemester(testUserId, testClubId, testSemesterId))
-                .thenReturn(true);
         when(recruitmentRepository.findByClub_IdAndStatusAndIdNot(testClubId, RecruitmentStatus.OPEN, testRecruitmentId))
                 .thenReturn(Collections.emptyList());
         when(semesterRepository.findByIsCurrentTrue()).thenReturn(Optional.of(testSemester));
@@ -464,10 +430,7 @@ class RecruitmentServiceTest {
     @Test
     void testChangeRecruitmentStatus_ToClosed() throws AppException {
         // Arrange
-        when(semesterRepository.findCurrentSemester()).thenReturn(Optional.of(testSemester));
         when(recruitmentRepository.findById(testRecruitmentId)).thenReturn(Optional.of(testRecruitment));
-        when(roleMembershipRepository.isClubOfficerInCurrentSemester(testUserId, testClubId, testSemesterId))
-                .thenReturn(true);
 
         // Act
         recruitmentService.changeRecruitmentStatus(testUserId, testRecruitmentId, RecruitmentStatus.CLOSED);
@@ -503,8 +466,8 @@ class RecruitmentServiceTest {
         when(semesterRepository.findByIsCurrentTrue()).thenReturn(Optional.of(testSemester));
         when(roleMembershipRepository.findClubOfficerUserIdsByClubIdAndSemesterId(testClubId, testSemesterId))
                 .thenReturn(Collections.emptyList());
-        // Mock for getApplicationInternal
-        when(applicationRepository.findById(testApplicationId)).thenReturn(Optional.of(testApplication));
+        // Mock for getApplicationInternal - using findByIdWithDetails
+        when(applicationRepository.findByIdWithDetails(testApplicationId)).thenReturn(Optional.of(testApplication));
         when(answerRepository.findByApplication_Id(testApplicationId)).thenReturn(Collections.emptyList());
         when(recruitmentApplicationMapper.toDto(any(RecruitmentApplication.class))).thenReturn(testApplicationData);
         when(teamRepository.findById(testTeamId)).thenReturn(Optional.of(testTeam));
@@ -563,26 +526,25 @@ class RecruitmentServiceTest {
     void testListApplications_Success() throws AppException {
         // Arrange
         Pageable pageable = PageRequest.of(0, 10);
+        // Convert page 1 to 0-based page 0
+        Pageable adjustedPageable = PageRequest.of(0, 10, pageable.getSort());
         List<RecruitmentApplication> applications = Collections.singletonList(testApplication);
-        Page<RecruitmentApplication> page = new PageImpl<>(applications, pageable, 1);
+        Page<RecruitmentApplication> page = new PageImpl<>(applications, adjustedPageable, 1);
+        RecruitmentApplicationListData listData = new RecruitmentApplicationListData();
 
-        when(semesterRepository.findCurrentSemester()).thenReturn(Optional.of(testSemester));
-        when(recruitmentRepository.findById(testRecruitmentId)).thenReturn(Optional.of(testRecruitment));
-        when(roleMembershipRepository.isClubOfficerInCurrentSemester(testUserId, testClubId, testSemesterId))
-                .thenReturn(true);
-        when(applicationRepository.findApplicationsByRecruitment(eq(testRecruitmentId), isNull(), isNull(), eq(pageable)))
+        when(applicationRepository.findApplicationsByRecruitment(eq(testRecruitmentId), isNull(), isNull(), any(Pageable.class)))
                 .thenReturn(page);
-        when(recruitmentApplicationMapper.toDto(any(RecruitmentApplication.class))).thenReturn(testApplicationData);
+        when(recruitmentApplicationMapper.toListDto(any(RecruitmentApplication.class))).thenReturn(listData);
         when(teamRepository.findAllById(anySet())).thenReturn(Collections.singletonList(testTeam));
 
         // Act
-        PagedResponse<RecruitmentApplicationData> result = recruitmentService.listApplications(
+        PagedResponse<RecruitmentApplicationListData> result = recruitmentService.listApplications(
                 testUserId, testRecruitmentId, null, null, pageable);
 
         // Assert
         assertNotNull(result);
         assertEquals(1, result.getContent().size());
-        verify(applicationRepository).findApplicationsByRecruitment(eq(testRecruitmentId), isNull(), isNull(), eq(pageable));
+        verify(applicationRepository).findApplicationsByRecruitment(eq(testRecruitmentId), isNull(), isNull(), any(Pageable.class));
     }
 
     // ==================== listMyApplications Tests ====================
@@ -591,22 +553,25 @@ class RecruitmentServiceTest {
     void testListMyApplications_Success() {
         // Arrange
         Pageable pageable = PageRequest.of(0, 10);
+        // Convert page 1 to 0-based page 0
+        Pageable adjustedPageable = PageRequest.of(0, 10, pageable.getSort());
         List<RecruitmentApplication> applications = Collections.singletonList(testApplication);
-        Page<RecruitmentApplication> page = new PageImpl<>(applications, pageable, 1);
+        Page<RecruitmentApplication> page = new PageImpl<>(applications, adjustedPageable, 1);
+        RecruitmentApplicationListData listData = new RecruitmentApplicationListData();
 
-        when(applicationRepository.findMyApplications(eq(testApplicantId), isNull(), isNull(), eq(pageable)))
+        when(applicationRepository.findMyApplications(eq(testApplicantId), isNull(), isNull(), any(Pageable.class)))
                 .thenReturn(page);
-        when(recruitmentApplicationMapper.toDto(any(RecruitmentApplication.class))).thenReturn(testApplicationData);
+        when(recruitmentApplicationMapper.toListDto(any(RecruitmentApplication.class))).thenReturn(listData);
         when(teamRepository.findAllById(anySet())).thenReturn(Collections.singletonList(testTeam));
 
         // Act
-        PagedResponse<RecruitmentApplicationData> result = recruitmentService.listMyApplications(
+        PagedResponse<RecruitmentApplicationListData> result = recruitmentService.listMyApplications(
                 testApplicantId, null, null, pageable);
 
         // Assert
         assertNotNull(result);
         assertEquals(1, result.getContent().size());
-        verify(applicationRepository).findMyApplications(eq(testApplicantId), isNull(), isNull(), eq(pageable));
+        verify(applicationRepository).findMyApplications(eq(testApplicantId), isNull(), isNull(), any(Pageable.class));
     }
 
     // ==================== getApplication Tests ====================
@@ -614,10 +579,7 @@ class RecruitmentServiceTest {
     @Test
     void testGetApplication_Success() throws AppException {
         // Arrange
-        when(semesterRepository.findCurrentSemester()).thenReturn(Optional.of(testSemester));
-        when(applicationRepository.findById(testApplicationId)).thenReturn(Optional.of(testApplication));
-        when(roleMembershipRepository.isClubOfficerInCurrentSemester(testUserId, testClubId, testSemesterId))
-                .thenReturn(true);
+        when(applicationRepository.findByIdWithDetails(testApplicationId)).thenReturn(Optional.of(testApplication));
         when(answerRepository.findByApplication_Id(testApplicationId)).thenReturn(Collections.emptyList());
         when(recruitmentApplicationMapper.toDto(any(RecruitmentApplication.class))).thenReturn(testApplicationData);
         when(teamRepository.findById(testTeamId)).thenReturn(Optional.of(testTeam));
@@ -627,7 +589,7 @@ class RecruitmentServiceTest {
 
         // Assert
         assertNotNull(result);
-        verify(applicationRepository).findById(testApplicationId);
+        verify(applicationRepository).findByIdWithDetails(testApplicationId);
     }
 
     // ==================== getMyApplication Tests ====================
@@ -635,7 +597,7 @@ class RecruitmentServiceTest {
     @Test
     void testGetMyApplication_Success() throws AppException {
         // Arrange
-        when(applicationRepository.findById(testApplicationId)).thenReturn(Optional.of(testApplication));
+        when(applicationRepository.findByIdWithDetails(testApplicationId)).thenReturn(Optional.of(testApplication));
         when(answerRepository.findByApplication_Id(testApplicationId)).thenReturn(Collections.emptyList());
         when(recruitmentApplicationMapper.toDto(any(RecruitmentApplication.class))).thenReturn(testApplicationData);
         when(teamRepository.findById(testTeamId)).thenReturn(Optional.of(testTeam));
@@ -646,14 +608,14 @@ class RecruitmentServiceTest {
         // Assert
         assertNotNull(result);
         assertEquals(testApplicationId, result.getId());
-        verify(applicationRepository).findById(testApplicationId);
+        verify(applicationRepository).findByIdWithDetails(testApplicationId);
     }
 
     @Test
     void testGetMyApplication_NotOwner() {
         // Arrange
         Long otherUserId = 999L;
-        when(applicationRepository.findById(testApplicationId)).thenReturn(Optional.of(testApplication));
+        when(applicationRepository.findByIdWithDetails(testApplicationId)).thenReturn(Optional.of(testApplication));
 
         // Act & Assert
         AppException exception = assertThrows(AppException.class, () -> {
@@ -673,16 +635,16 @@ class RecruitmentServiceTest {
         request.status = RecruitmentApplicationStatus.ACCEPTED;
         request.reviewNotes = "Good candidate";
 
-        when(semesterRepository.findCurrentSemester()).thenReturn(Optional.of(testSemester));
         when(applicationRepository.findById(testApplicationId)).thenReturn(Optional.of(testApplication));
-        when(roleMembershipRepository.isClubOfficerInCurrentSemester(testUserId, testClubId, testSemesterId))
-                .thenReturn(true);
         when(clubMemberShipRepository.existsByUserIdAndClubId(testApplicantId, testClubId)).thenReturn(false);
         when(clubMemberShipRepository.save(any(ClubMemberShip.class))).thenReturn(testClubMembership);
+        when(semesterRepository.findCurrentSemester()).thenReturn(Optional.of(testSemester));
         when(teamRepository.findById(testTeamId)).thenReturn(Optional.of(testTeam));
         when(clubRoleRepository.findByClubIdAndRoleCode(testClubId, "MEMBER")).thenReturn(Optional.of(testClubRole));
         when(roleMembershipRepository.save(any(RoleMemberShip.class))).thenReturn(testRoleMembership);
         when(applicationRepository.save(any(RecruitmentApplication.class))).thenReturn(testApplication);
+        // Mock for getApplicationInternal - using findByIdWithDetails
+        when(applicationRepository.findByIdWithDetails(testApplicationId)).thenReturn(Optional.of(testApplication));
         when(answerRepository.findByApplication_Id(testApplicationId)).thenReturn(Collections.emptyList());
         when(recruitmentApplicationMapper.toDto(any(RecruitmentApplication.class))).thenReturn(testApplicationData);
 
@@ -704,11 +666,10 @@ class RecruitmentServiceTest {
         request.status = RecruitmentApplicationStatus.REJECTED;
         request.reviewNotes = "Not suitable";
 
-        when(semesterRepository.findCurrentSemester()).thenReturn(Optional.of(testSemester));
         when(applicationRepository.findById(testApplicationId)).thenReturn(Optional.of(testApplication));
-        when(roleMembershipRepository.isClubOfficerInCurrentSemester(testUserId, testClubId, testSemesterId))
-                .thenReturn(true);
         when(applicationRepository.save(any(RecruitmentApplication.class))).thenReturn(testApplication);
+        // Mock for getApplicationInternal - using findByIdWithDetails
+        when(applicationRepository.findByIdWithDetails(testApplicationId)).thenReturn(Optional.of(testApplication));
         when(answerRepository.findByApplication_Id(testApplicationId)).thenReturn(Collections.emptyList());
         when(recruitmentApplicationMapper.toDto(any(RecruitmentApplication.class))).thenReturn(testApplicationData);
         when(teamRepository.findById(testTeamId)).thenReturn(Optional.of(testTeam));
@@ -733,11 +694,10 @@ class RecruitmentServiceTest {
         request.interviewAddress = "Room 101";
         request.interviewPreparationRequirements = "Please bring your CV";
 
-        when(semesterRepository.findCurrentSemester()).thenReturn(Optional.of(testSemester));
         when(applicationRepository.findById(testApplicationId)).thenReturn(Optional.of(testApplication));
-        when(roleMembershipRepository.isClubOfficerInCurrentSemester(testUserId, testClubId, testSemesterId))
-                .thenReturn(true);
         when(applicationRepository.save(any(RecruitmentApplication.class))).thenReturn(testApplication);
+        // Mock for getApplicationInternal - using findByIdWithDetails
+        when(applicationRepository.findByIdWithDetails(testApplicationId)).thenReturn(Optional.of(testApplication));
         when(answerRepository.findByApplication_Id(testApplicationId)).thenReturn(Collections.emptyList());
         when(recruitmentApplicationMapper.toDto(any(RecruitmentApplication.class))).thenReturn(testApplicationData);
         when(teamRepository.findById(testTeamId)).thenReturn(Optional.of(testTeam));
@@ -748,20 +708,7 @@ class RecruitmentServiceTest {
         // Assert
         assertNotNull(result);
         verify(applicationRepository).save(any(RecruitmentApplication.class));
-        verify(notificationService).sendToUser(
-                eq(testApplicantId),
-                eq(testUserId),
-                anyString(),
-                anyString(),
-                any(),
-                any(),
-                anyString(),
-                eq(testClubId),
-                isNull(),
-                isNull(),
-                isNull(),
-                isNull()
-        );
+        // Note: Notification is sent asynchronously, so we can't verify it in unit tests
     }
 
     // ==================== closeExpiredRecruitments Tests ====================

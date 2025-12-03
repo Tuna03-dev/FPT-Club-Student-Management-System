@@ -147,23 +147,21 @@ public interface RoleMemberShipRepository extends JpaRepository<RoleMemberShip, 
 
     // == Phó chủ nhiệm EXACT (approve & submit) ==
     @Query("""
-    SELECT CASE WHEN EXISTS (
-      SELECT 1 FROM RoleMemberShip rm
-      JOIN rm.clubMemberShip cm
-      LEFT JOIN rm.clubRole cr
-      WHERE cm.user.id = :userId
-        AND cm.club.id = :clubId
-        AND (:semesterId IS NULL OR rm.semester.id = :semesterId)
-        AND COALESCE(rm.isActive, TRUE) = TRUE
-        AND rm.team IS NULL
-        AND UPPER(TRIM(COALESCE(cr.roleName, ''))) IN (
-          'VICE_PRESIDENT','CLUB_VP','PHO CHU NHIEM','PHÓ CHỦ NHIỆM'
-        )
-    ) THEN TRUE ELSE FALSE END
-    """)
+SELECT CASE WHEN COUNT(rm) > 0 THEN TRUE ELSE FALSE END
+FROM RoleMemberShip rm
+JOIN rm.clubMemberShip cm
+JOIN rm.clubRole cr
+JOIN rm.semester s
+WHERE cm.user.id = :userId
+  AND cm.club.id = :clubId
+  AND s.isCurrent = TRUE
+  AND rm.isActive = TRUE
+  AND UPPER(cr.roleCode) = 'CLUB_VICE_PRESIDENT'
+""")
     boolean isClubViceExact(@Param("userId") Long userId,
                             @Param("clubId") Long clubId,
                             @Param("semesterId") Long semesterId);
+
 
     // == Trưởng ban (lead) thuộc một team bất kỳ trong CLB ==
     @Query("""
@@ -815,6 +813,38 @@ WHERE cm.club.id = :clubId
             @Param("clubId") Long clubId,
             @Param("semesterId") Long semesterId
     );
+    @Query("""
+SELECT CASE WHEN COUNT(rm) > 0 THEN TRUE ELSE FALSE END
+FROM RoleMemberShip rm
+JOIN rm.clubMemberShip cm
+JOIN rm.clubRole cr
+JOIN rm.semester s
+WHERE cm.user.id = :userId
+  AND cm.club.id = :clubId
+  AND s.isCurrent = TRUE
+  AND rm.isActive = TRUE
+  AND UPPER(cr.roleCode) = 'CLUB_PRESIDENT'
+""")
+    boolean isPresidentSimple(@Param("userId") Long userId,
+                              @Param("clubId") Long clubId);
+
+
+    @Query("""
+SELECT CASE WHEN COUNT(rm) > 0 THEN TRUE ELSE FALSE END
+FROM RoleMemberShip rm
+JOIN rm.clubMemberShip cm
+JOIN rm.clubRole cr
+JOIN rm.semester s
+WHERE cm.user.id = :userId
+  AND cm.club.id = :clubId
+  AND s.isCurrent = TRUE
+  AND rm.isActive = TRUE
+  AND rm.team IS NULL
+  AND UPPER(cr.roleCode) IN ('CLUB_PRESIDENT', 'CLUB_VICE_PRESIDENT')
+""")
+    boolean isManagerSimple(@Param("userId") Long userId,
+                            @Param("clubId") Long clubId);
+
 
 }
 
