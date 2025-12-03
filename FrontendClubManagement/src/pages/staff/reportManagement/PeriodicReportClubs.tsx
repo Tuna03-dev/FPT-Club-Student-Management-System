@@ -128,7 +128,7 @@ export function PeriodicReportClubs() {
   const location = useLocation();
   const [searchQuery, setSearchQuery] = useState("");
   const debouncedSearchQuery = useDebounce(searchQuery, 500);
-  const [currentPage, setCurrentPage] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
   const [pageSize] = useState(10);
   const [totalPages, setTotalPages] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
@@ -280,7 +280,7 @@ export function PeriodicReportClubs() {
 
   // Reset to first page when search query changes
   useEffect(() => {
-    setCurrentPage(0);
+    setCurrentPage(1);
   }, [debouncedSearchQuery]);
 
   const handleApproveReport = () => {
@@ -792,10 +792,10 @@ export function PeriodicReportClubs() {
                   <PaginationItem>
                     <PaginationPrevious
                       onClick={() =>
-                        setCurrentPage((prev) => Math.max(0, prev - 1))
+                        setCurrentPage((prev) => Math.max(1, prev - 1))
                       }
                       className={
-                        currentPage === 0
+                        currentPage === 1
                           ? "pointer-events-none opacity-50 cursor-not-allowed"
                           : "cursor-pointer"
                       }
@@ -803,12 +803,12 @@ export function PeriodicReportClubs() {
                   </PaginationItem>
 
                   {/* Page numbers */}
-                  {Array.from({ length: totalPages }, (_, i) => i)
+                  {Array.from({ length: totalPages }, (_, i) => i + 1)
                     .filter((pageNum) => {
                       // Show first page, last page, current page, and pages around current
                       if (
-                        pageNum === 0 ||
-                        pageNum === totalPages - 1 ||
+                        pageNum === 1 ||
+                        pageNum === totalPages ||
                         Math.abs(pageNum - currentPage) <= 1
                       ) {
                         return true;
@@ -833,7 +833,7 @@ export function PeriodicReportClubs() {
                               isActive={currentPage === pageNum}
                               className="cursor-pointer"
                             >
-                              {pageNum + 1}
+                              {pageNum}
                             </PaginationLink>
                           </PaginationItem>
                         </React.Fragment>
@@ -843,12 +843,10 @@ export function PeriodicReportClubs() {
                   <PaginationItem>
                     <PaginationNext
                       onClick={() =>
-                        setCurrentPage((prev) =>
-                          Math.min(totalPages - 1, prev + 1)
-                        )
+                        setCurrentPage((prev) => Math.min(totalPages, prev + 1))
                       }
                       className={
-                        currentPage === totalPages - 1
+                        currentPage === totalPages
                           ? "pointer-events-none opacity-50 cursor-not-allowed"
                           : "cursor-pointer"
                       }

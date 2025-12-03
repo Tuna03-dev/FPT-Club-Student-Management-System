@@ -180,6 +180,11 @@ class ReportServiceImplTest {
         assertEquals(1, result.getTotalElements());
         assertEquals(1, result.getContent().size());
         assertEquals("University Report", result.getContent().get(0).getReportTitle());
+        // Verify 1-based pagination
+        assertEquals(1, result.getPageNumber());
+        assertEquals(10, result.getPageSize());
+        assertFalse(result.isHasNext());
+        assertFalse(result.isHasPrevious());
         verify(reportRepository).findAllWithFilters(
             any(), any(), any(), any(), any(), any(Pageable.class)
         );
@@ -247,6 +252,9 @@ class ReportServiceImplTest {
         assertEquals("Report 1", result.getContent().get(0).getReportTitle());
         assertEquals("Report 2", result.getContent().get(1).getReportTitle());
         assertEquals("Report 3", result.getContent().get(2).getReportTitle());
+        // Verify 1-based pagination
+        assertEquals(1, result.getPageNumber());
+        assertEquals(10, result.getPageSize());
     }
 
     @Test
@@ -297,6 +305,8 @@ class ReportServiceImplTest {
         assertEquals(1, result.getTotalElements());
         assertEquals(1, result.getContent().size());
         assertEquals("University Report", result.getContent().get(0).getReportTitle());
+        // Verify 1-based pagination
+        assertEquals(1, result.getPageNumber());
         verify(reportMapper, times(1)).toListItem(any(Report.class));
         verify(reportMapper).toListItem(universityReport);
     }
@@ -334,6 +344,8 @@ class ReportServiceImplTest {
         assertNotNull(result);
         assertEquals(1, result.getTotalElements());
         assertEquals("Resubmitted Report", result.getContent().get(0).getReportTitle());
+        // Verify 1-based pagination
+        assertEquals(1, result.getPageNumber());
     }
 
     @Test
@@ -1086,6 +1098,9 @@ class ReportServiceImplTest {
         assertNotNull(result);
         assertEquals(1, result.getTotalElements());
         assertEquals("Test Report", result.getContent().get(0).getReportTitle());
+        // Verify 1-based pagination
+        assertEquals(1, result.getPageNumber());
+        assertEquals(10, result.getPageSize());
     }
 
 
@@ -1129,6 +1144,9 @@ class ReportServiceImplTest {
         // Verify clubCount is set and clubRequirements is null
         assertEquals(1, result.getContent().get(0).getClubCount());
         assertNull(result.getContent().get(0).getClubRequirements());
+        // Verify 1-based pagination
+        assertEquals(1, result.getPageNumber());
+        assertEquals(10, result.getPageSize());
         verify(clubReportRequirementRepository).findBySubmissionReportRequirementIdIn(anyList());
     }
 
@@ -1381,6 +1399,155 @@ class ReportServiceImplTest {
         // Assert
         assertNotNull(result);
         verify(reportRepository).save(argThat(r -> r.getStatus() == ReportStatus.DRAFT));
+    }
+
+    // ========== Pagination Tests (1-based) ==========
+
+    @Test
+    void getAllReports_ReturnsPageNumber1_WhenRequestingPage0() {
+        // Arrange
+        Long staffId = staffUser.getId();
+        Pageable pageable = PageRequest.of(0, 10); // Request page 0 (first page in Spring Data)
+
+        Report universityReport = new Report();
+        universityReport.setId(1L);
+        universityReport.setReportTitle("Report 1");
+        universityReport.setStatus(ReportStatus.PENDING_UNIVERSITY);
+        universityReport.setClubReportRequirement(clubRequirement);
+        universityReport.setSemester(currentSemester);
+
+        Page<Report> reportPage = new PageImpl<>(List.of(universityReport), pageable, 1);
+
+        when(reportRepository.findAllWithFilters(
+            isNull(), isNull(), isNull(), isNull(), isNull(), any(Pageable.class)
+        )).thenReturn(reportPage);
+
+        ReportListItemResponse responseItem = new ReportListItemResponse();
+        responseItem.setId(1L);
+        responseItem.setReportTitle("Report 1");
+        when(reportMapper.toListItem(universityReport)).thenReturn(responseItem);
+
+        // Act
+        PageResponse<ReportListItemResponse> result = reportService.getAllReports(
+            null, null, null, null, null, pageable, staffId
+        );
+
+        // Assert
+        assertNotNull(result);
+        assertEquals(1, result.getPageNumber(), "Page number should be 1-based, so page 0 becomes page 1");
+        assertEquals(10, result.getPageSize());
+        assertEquals(1, result.getTotalElements());
+        assertFalse(result.isHasPrevious(), "First page should not have previous");
+        assertFalse(result.isHasNext(), "Single page should not have next");
+    }
+
+    @Test
+    void getAllReports_ReturnsPageNumber2_WhenRequestingPage1() {
+        // Arrange
+        Long staffId = staffUser.getId();
+        Pageable pageable = PageRequest.of(1, 10); // Request page 1 (second page in Spring Data)
+
+        Report universityReport = new Report();
+        universityReport.setId(1L);
+        universityReport.setReportTitle("Report 1");
+        universityReport.setStatus(ReportStatus.PENDING_UNIVERSITY);
+        universityReport.setClubReportRequirement(clubRequirement);
+        universityReport.setSemester(currentSemester);
+
+        // Total 15 items, so page 1 (index) would have items 11-15
+        Page<Report> reportPage = new PageImpl<>(List.of(universityReport), pageable, 15);
+
+        when(reportRepository.findAllWithFilters(
+            isNull(), isNull(), isNull(), isNull(), isNull(), any(Pageable.class)
+        )).thenReturn(reportPage);
+
+        ReportListItemResponse responseItem = new ReportListItemResponse();
+        responseItem.setId(1L);
+        responseItem.setReportTitle("Report 1");
+        when(reportMapper.toListItem(universityReport)).thenReturn(responseItem);
+
+        // Act
+        PageResponse<ReportListItemResponse> result = reportService.getAllReports(
+            null, null, null, null, null, pageable, staffId
+        );
+
+        // Assert
+        assertNotNull(result);
+        assertEquals(2, result.getPageNumber(), "Page number should be 1-based, so page 1 becomes page 2");
+        assertEquals(10, result.getPageSize());
+        assertTrue(result.isHasPrevious(), "Second page should have previous");
+        assertFalse(result.isHasNext(), "Last page should not have next");
+    }
+
+    @Test
+    void getClubReports_ReturnsCorrect1BasedPageNumber() {
+        // Arrange
+        Long userId = user.getId();
+        Pageable pageable = PageRequest.of(2, 5); // Request page 2 with size 5
+        report.setStatus(ReportStatus.PENDING_CLUB);
+
+        Page<Report> reportPage = new PageImpl<>(List.of(report), pageable, 20); // Total 20 items
+
+        when(clubRepository.existsById(club.getId())).thenReturn(true);
+        when(semesterRepository.findCurrentSemester()).thenReturn(Optional.of(currentSemester));
+        when(roleMemberShipRepository.isClubOfficerInCurrentSemester(
+            userId, club.getId(), currentSemester.getId()
+        )).thenReturn(true);
+        when(reportRepository.findByClubIdWithFilter(
+            any(), eq(club.getId()), any(), any(), any(), eq(pageable)
+        )).thenReturn(reportPage);
+
+        ReportListItemResponse responseItem = new ReportListItemResponse();
+        responseItem.setId(report.getId());
+        responseItem.setReportTitle("Test Report");
+        when(reportMapper.toListItem(report)).thenReturn(responseItem);
+
+        // Act
+        PageResponse<ReportListItemResponse> result = reportService.getClubReports(
+            club.getId(), null, null, null, null, pageable, userId
+        );
+
+        // Assert
+        assertNotNull(result);
+        assertEquals(3, result.getPageNumber(), "Page 2 (0-indexed) should become page 3 (1-based)");
+        assertEquals(5, result.getPageSize());
+        assertTrue(result.isHasPrevious(), "Page 3 should have previous");
+        assertTrue(result.isHasNext(), "Page 3 of 4 should have next");
+    }
+
+    @Test
+    void getAllReportRequirements_ReturnsCorrect1BasedPageNumber() {
+        // Arrange
+        Long staffId = staffUser.getId();
+        Pageable pageable = PageRequest.of(0, 20);
+
+        Page<SubmissionReportRequirement> requirementPage =
+            new PageImpl<>(List.of(submissionRequirement), pageable, 1);
+
+        clubRequirement.setSubmissionReportRequirement(submissionRequirement);
+
+        when(roleService.isStaff(staffId)).thenReturn(true);
+        when(submissionReportRequirementRepository.findAllWithFilters(
+            any(), any(), any(), eq(pageable)
+        )).thenReturn(requirementPage);
+        when(clubReportRequirementRepository.findBySubmissionReportRequirementIdIn(anyList()))
+            .thenReturn(List.of(clubRequirement));
+
+        ReportRequirementResponse response = new ReportRequirementResponse();
+        response.setId(1L);
+        response.setTitle("Monthly Report");
+        when(submissionReportRequirementMapper.toDto(submissionRequirement)).thenReturn(response);
+
+        // Act
+        PageResponse<ReportRequirementResponse> result = reportService.getAllReportRequirements(
+            null, null, null, pageable, staffId
+        );
+
+        // Assert
+        assertNotNull(result);
+        assertEquals(1, result.getPageNumber(), "First page should have page number 1");
+        assertEquals(20, result.getPageSize());
+        assertEquals(1, result.getTotalElements());
     }
 }
 

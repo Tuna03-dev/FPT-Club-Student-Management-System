@@ -432,7 +432,7 @@ export function ClubReportManagement() {
 
         // Build filter request (requests tab uses its own filters)
         const filterRequest: ClubReportRequirementFilterRequest = {
-          page: currentPage - 1,
+          page: currentPage,
           size: pageSize,
           sort: "createdAt,desc",
           keyword: debouncedSearchQuery || undefined,
@@ -498,7 +498,7 @@ export function ClubReportManagement() {
         // Build filter request
         const filterRequest: ReportFilterRequest = {
           clubId: clubId,
-          page: currentPageMyReports - 1,
+          page: currentPageMyReports,
           size: pageSize,
           sort: "createdAt,desc",
           keyword: debouncedSearchQuery || undefined,
@@ -554,7 +554,7 @@ export function ClubReportManagement() {
         // Build filter request
         const filterRequest: ReportFilterRequest = {
           clubId: clubId,
-          page: currentPageClubReports - 1,
+          page: currentPageClubReports,
           size: pageSize,
           sort: "createdAt,desc",
           keyword: debouncedSearchQuery || undefined,
@@ -614,7 +614,7 @@ export function ClubReportManagement() {
       // Always refresh requests tab (use paginated API to match backend)
       // Note: Backend already filters by teamId for team officers
       const requestsFilter: ClubReportRequirementFilterRequest = {
-        page: currentPage - 1,
+        page: currentPage,
         size: pageSize,
         sort: "createdAt,desc",
         keyword: debouncedSearchQuery || undefined,
@@ -646,7 +646,7 @@ export function ClubReportManagement() {
       // Always refresh submissions tab (my reports)
       const myReportsFilter: ReportFilterRequest = {
         clubId: clubId,
-        page: currentPageMyReports - 1,
+        page: currentPageMyReports,
         size: pageSize,
         sort: "createdAt,desc",
       };
@@ -659,7 +659,7 @@ export function ClubReportManagement() {
       if (isClubOfficer) {
         const clubReportsFilter: ReportFilterRequest = {
           clubId: clubId,
-          page: currentPageClubReports - 1,
+          page: currentPageClubReports,
           size: pageSize,
           sort: "createdAt,desc",
         };
