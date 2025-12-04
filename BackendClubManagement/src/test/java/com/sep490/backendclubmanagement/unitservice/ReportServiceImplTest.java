@@ -615,6 +615,8 @@ class ReportServiceImplTest {
         ReportReviewRequest request = new ReportReviewRequest();
         request.setReportId(report.getId());
         request.setStatus(ReportStatus.APPROVED_UNIVERSITY);
+        request.setReviewerFeedback("Approved feedback");
+        request.setMustResubmit(false);
 
         when(reportRepository.findByIdWithRelations(report.getId())).thenReturn(Optional.of(report));
 
@@ -875,6 +877,7 @@ class ReportServiceImplTest {
         request.setClubId(club.getId());
         request.setReportTitle("New Report");
         request.setContent("Report content");
+        request.setFileUrl("https://example.com/reports/test-report.pdf");
         request.setReportRequirementId(clubRequirement.getId());
         request.setAutoSubmit(true);
 
@@ -944,6 +947,7 @@ class ReportServiceImplTest {
         UpdateReportRequest request = new UpdateReportRequest();
         request.setReportTitle("Updated Report");
         request.setContent("Updated content");
+        request.setFileUrl("https://example.com/reports/updated-report.pdf");
 
         when(reportRepository.findByIdWithRelations(report.getId())).thenReturn(Optional.of(report));
         when(reportRepository.save(any(Report.class))).thenReturn(report);
@@ -970,6 +974,8 @@ class ReportServiceImplTest {
 
         UpdateReportRequest request = new UpdateReportRequest();
         request.setReportTitle("Updated Report");
+        request.setContent("Updated content");
+        request.setFileUrl("https://example.com/reports/updated-report.pdf");
 
         when(reportRepository.findByIdWithRelations(report.getId())).thenReturn(Optional.of(report));
 
@@ -1162,6 +1168,8 @@ class ReportServiceImplTest {
         ReportReviewRequest request = new ReportReviewRequest();
         request.setReportId(report.getId());
         request.setStatus(ReportStatus.PENDING_UNIVERSITY);
+        request.setReviewerFeedback("Club review feedback");
+        request.setMustResubmit(false);
 
         when(reportRepository.findByIdWithRelations(report.getId())).thenReturn(Optional.of(report));
         when(semesterRepository.findCurrentSemester()).thenReturn(Optional.of(currentSemester));
@@ -1190,7 +1198,10 @@ class ReportServiceImplTest {
         CreateReportRequest request = new CreateReportRequest();
         request.setClubId(inactiveClub.getId());
         request.setReportTitle("New Report");
+        request.setContent("Report content");
+        request.setFileUrl("https://example.com/reports/test-report.pdf");
         request.setReportRequirementId(clubRequirement.getId());
+        request.setAutoSubmit(true);
 
         ClubReportRequirement emptyClubRequirement = new ClubReportRequirement();
         emptyClubRequirement.setId(1L);
@@ -1218,6 +1229,8 @@ class ReportServiceImplTest {
 
         UpdateReportRequest request = new UpdateReportRequest();
         request.setReportTitle("Updated Report");
+        request.setContent("Updated content");
+        request.setFileUrl("https://example.com/reports/updated-report.pdf");
 
         when(reportRepository.findByIdWithRelations(report.getId())).thenReturn(Optional.of(report));
 
@@ -1236,6 +1249,7 @@ class ReportServiceImplTest {
         UpdateReportRequest request = new UpdateReportRequest();
         request.setReportTitle("Updated After Rejection");
         request.setContent("Revised content");
+        request.setFileUrl("https://example.com/reports/revised-report.pdf");
 
         when(reportRepository.findByIdWithRelations(report.getId())).thenReturn(Optional.of(report));
         when(reportRepository.save(any(Report.class))).thenReturn(report);
@@ -1357,6 +1371,7 @@ class ReportServiceImplTest {
         request.setClubId(club.getId());
         request.setReportTitle("Team Report");
         request.setContent("Report from team officer");
+        request.setFileUrl("https://example.com/reports/team-report.pdf");
         request.setReportRequirementId(clubRequirement.getId());
         request.setAutoSubmit(false);
 
@@ -1549,5 +1564,73 @@ class ReportServiceImplTest {
         assertEquals(20, result.getPageSize());
         assertEquals(1, result.getTotalElements());
     }
+
+    // ========== getClubsByReportRequirement ==========
+
+    @Test
+    void getClubsByReportRequirement_Success_WhenStaffAccess() {
+        // Arrange
+        Long staffId = staffUser.getId();
+        Pageable pageable = PageRequest.of(0, 10);
+
+        ClubReportRequirement clubReq1 = new ClubReportRequirement();
+        clubReq1.setId(1L);
+        clubReq1.setClub(club);
+        clubReq1.setSubmissionReportRequirement(submissionRequirement);
+        clubReq1.setReport(report);
+
+        when(submissionReportRequirementRepository.existsById(submissionRequirement.getId()))
+            .thenReturn(true);
+        when(clubReportRequirementRepository.findBySubmissionReportRequirementId(
+            submissionRequirement.getId()
+        )).thenReturn(List.of(clubReq1));
+
+        // Act
+        PageResponse<ReportRequirementResponse.ClubRequirementInfo> result =
+            reportService.getClubsByReportRequirement(
+                submissionRequirement.getId(), "Test Club", pageable, staffId
+            );
+
+        // Assert
+        assertNotNull(result);
+        assertTrue(result.getTotalElements() >= 0);
+    }
+
+
+    // ========== getReportRequirementById ==========
+
+    @Test
+    void getReportRequirementById_Success_WhenStaffAccess() {
+        // Arrange
+        Long staffId = staffUser.getId();
+
+        when(submissionReportRequirementRepository.findById(submissionRequirement.getId()))
+            .thenReturn(Optional.of(submissionRequirement));
+        when(clubReportRequirementRepository.findBySubmissionReportRequirementId(
+            submissionRequirement.getId()
+        )).thenReturn(List.of(clubRequirement));
+
+        ReportRequirementResponse response = new ReportRequirementResponse();
+        response.setId(submissionRequirement.getId());
+        response.setTitle("Semester Report");
+        when(submissionReportRequirementMapper.toDto(submissionRequirement))
+            .thenReturn(response);
+
+        // Act
+        ReportRequirementResponse result = reportService.getReportRequirementById(
+            submissionRequirement.getId(), staffId
+        );
+
+        // Assert
+        assertNotNull(result);
+        assertEquals("Semester Report", result.getTitle());
+        verify(submissionReportRequirementRepository).findById(submissionRequirement.getId());
+    }
+
+    // ========== getClubReportByRequirementForOfficer ==========
+
+
+
+
 }
 

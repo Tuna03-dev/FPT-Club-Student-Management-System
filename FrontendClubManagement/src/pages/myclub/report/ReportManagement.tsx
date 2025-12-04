@@ -3419,6 +3419,13 @@ export function ClubReportManagement() {
                           return;
                         }
 
+                        if (!draftTitle.trim() || !draftContent.trim()) {
+                          toast.error(
+                            "Vui lòng điền đầy đủ tiêu đề và nội dung"
+                          );
+                          return;
+                        }
+
                         try {
                           setSubmittingReport(true);
 

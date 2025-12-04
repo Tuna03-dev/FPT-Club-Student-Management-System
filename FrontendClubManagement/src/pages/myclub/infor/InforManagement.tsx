@@ -247,7 +247,8 @@ export function ClubInforManagement() {
     setFieldErrors({});
     const errors: Record<string, string> = {};
     const emailRegex = /^\S+@\S+\.\S+$/;
-    const phoneRegex = /^[0-9]{10,11}$/;
+    // Phone must start with 0 and be 10 or 11 digits long
+    const phoneRegex = /^0[0-9]{9,10}$/;
 
     // Required fields: clubName and clubCode must not be null/empty
     if (!formData.clubName || !formData.clubName.trim()) {
@@ -261,7 +262,7 @@ export function ClubInforManagement() {
       errors.email = "Email không hợp lệ";
     }
     if (formData.phone && !phoneRegex.test(formData.phone)) {
-      errors.phone = "Số điện thoại phải có 10-11 chữ số";
+      errors.phone = "Số điện thoại phải có 10-11 chữ số và bắt đầu bằng số 0";
     }
 
     if (Object.keys(errors).length > 0) {
