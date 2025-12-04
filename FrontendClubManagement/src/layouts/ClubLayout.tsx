@@ -403,6 +403,9 @@ export const ClubLayout = () => {
         if (item.key === "manage_finance") {
           return isClubTreasurer || isClubOfficer;
         }
+        if (item.key === "team_news") {
+          return isTeamOfficer;
+        }
 
         if (item.requiredRole === "TEAM_OFFICER") {
           return (
