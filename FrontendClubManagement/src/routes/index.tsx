@@ -67,6 +67,8 @@ import StaffNotifications from "@/pages/myclub/staff/StaffNotifications";
 import CreateClubPage from "@/pages/CreateClubPage";
 import ClubCreationManagement from "@/pages/staff/ClubCreationManagement";
 import { StaffClubsManagement } from "@/pages/staff/ClubManagement";
+import AboutPage from "@/pages/AboutPage";
+
 export const router = createBrowserRouter([
   {
     path: "/",
@@ -110,6 +112,10 @@ export const router = createBrowserRouter([
       // B vẫn giữ các biến thể cũ để không phá link đang dùng
       { path: "club/:clubId", element: <ClubDetail /> },
 
+      {
+        path: "about",
+        element: <AboutPage />,
+      },
       {
         path: "achievements",
         element: (
