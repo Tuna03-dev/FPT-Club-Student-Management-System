@@ -1,6 +1,4 @@
-// src/services/adminDepartmentService.ts
-import axiosClient from "@/api/axiosClient";
-import { type ApiResponse } from "@/types";
+import { axiosClient, type ApiResponse } from "@/api/axiosClient";
 
 export interface CampusSimpleResponse {
   id: number;
@@ -37,17 +35,15 @@ export interface AdminDepartmentUpdateRequest {
   sortDescription?: string;
 }
 
-class AdminDepartmentService {
-  // Lấy thông tin phòng ban theo id
+export const adminDepartmentService = {
   async getDepartmentById(
     id: number
   ): Promise<ApiResponse<AdminDepartmentResponse>> {
     return axiosClient.get<AdminDepartmentResponse>(
       `/admin-departments/${id}`
     );
-  }
+  },
 
-  // Cập nhật thông tin phòng ban
   async updateDepartment(
     id: number,
     data: AdminDepartmentUpdateRequest
@@ -56,8 +52,7 @@ class AdminDepartmentService {
       `/admin-departments/${id}`,
       data
     );
-  }
-}
+  },
+};
 
-export const adminDepartmentService = new AdminDepartmentService();
 export default adminDepartmentService;
