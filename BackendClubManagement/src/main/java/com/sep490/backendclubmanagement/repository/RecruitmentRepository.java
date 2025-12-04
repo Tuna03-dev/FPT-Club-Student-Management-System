@@ -11,12 +11,21 @@ import org.springframework.data.jpa.repository.Modifying;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 public interface RecruitmentRepository extends JpaRepository<Recruitment, Long> {
     Page<Recruitment> findByClub_Id(Long clubId, Pageable pageable);
     Page<Recruitment> findByClub_IdAndStatus(Long clubId, RecruitmentStatus status, Pageable pageable);
     List<Recruitment> findByClub_IdAndStatusAndIdNot(Long clubId, RecruitmentStatus status, Long excludeId);
     
+    /**
+     * Find recruitment by ID with club eagerly loaded to avoid N+1 query
+     * @param id Recruitment ID
+     * @return Optional recruitment with club
+     */
+    @Query("SELECT r FROM Recruitment r JOIN FETCH r.club WHERE r.id = :id")
+    Optional<Recruitment> findByIdWithClub(@Param("id") Long id);
+
     // Search by keyword in title or description
     @Query("SELECT r FROM Recruitment r WHERE r.club.id = :clubId " +
            "AND (LOWER(r.title) LIKE LOWER(CONCAT('%', :keyword, '%')) " +

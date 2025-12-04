@@ -7,13 +7,16 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
-import java.util.List;
 
+/**
+ * Simplified response for officer report requirements
+ * Contains only essential information for better performance
+ */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class ReportRequirementResponse {
+public class OfficerReportRequirementResponse {
     private Long id;
     private String title;
     private String description;
@@ -22,49 +25,30 @@ public class ReportRequirementResponse {
     private String templateUrl;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
-    private UserInfo createdBy;
+    private String createdByName;  // Just the name, not full user object
 
-    private List<ClubRequirementInfo> clubRequirements;
-    private Integer clubCount;
+    private SimplifiedClubRequirement clubRequirement;  // Single requirement for the specific club
 
     @Data
     @NoArgsConstructor
     @AllArgsConstructor
     @Builder
-    public static class ClubRequirementInfo {
+    public static class SimplifiedClubRequirement {
         private Long id;
         private Long clubId;
-        private String clubName;
-        private String clubCode;
-        private String status;
         private Long teamId;
-        private ReportInfo report;
+        private SimplifiedReport report;
     }
 
     @Data
     @NoArgsConstructor
     @AllArgsConstructor
     @Builder
-    public static class UserInfo {
+    public static class SimplifiedReport {
         private Long id;
-        private String fullName;
-        private String email;
-        private String studentCode;
-    }
-
-    @Data
-    @NoArgsConstructor
-    @AllArgsConstructor
-    @Builder
-    public static class ReportInfo {
-        private Long id;
-        private String reportTitle;
         private String status;
-        private LocalDateTime submittedDate;
-        private LocalDateTime createdAt;
-        private LocalDateTime updatedAt;
         private Boolean mustResubmit;
-        private UserInfo createdBy;
+        private Long createdBy;
+        private String createdByUserName;
     }
 }
-

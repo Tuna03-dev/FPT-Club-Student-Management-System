@@ -30,7 +30,8 @@ export interface ReportRequirementResponse {
   createdAt: string;
   updatedAt: string;
   createdBy?: UserInfo;
-  clubRequirements?: ClubRequirementInfo[];
+  clubRequirements?: ClubRequirementInfo[]; // Only populated in specific endpoints
+  clubCount?: number; // Count of clubs - returned by getAllReportRequirements
 }
 
 export interface UserInfo {
@@ -157,6 +158,31 @@ export function mapBackendToFrontendReportType(
     default:
       return "periodic";
   }
+}
+
+// Optimized Report Requirement Response for Officers (club officer/team officer)
+export interface OfficerReportRequirementResponse {
+  id: number; // submissionReportRequirementId
+  title: string;
+  description?: string;
+  dueDate: string;
+  reportType?: ReportType;
+  templateUrl?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  createdByName?: string;
+  clubRequirement: {
+    id: number; // clubReportRequirementId
+    clubId: number;
+    teamId?: number | null;
+    report?: {
+      id: number;
+      status?: string; // ReportStatus enum
+      mustResubmit?: boolean;
+      createdBy?: number;
+      createdByUserName: string;
+    };
+  };
 }
 
 // Report Status enum

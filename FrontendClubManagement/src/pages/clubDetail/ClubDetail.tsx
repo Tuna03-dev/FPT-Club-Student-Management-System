@@ -96,16 +96,6 @@ interface News {
   likes: number;
 }
 
-// interface RecruitmentInfo {
-//   id: string;
-//   position: string;
-//   department: string;
-//   requirements: string[];
-//   deadline: string;
-//   spots: number;
-//   applicants: number;
-// }
-
 export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
   const params = useParams();
   const clubId = propClubId || params.clubId;
@@ -155,7 +145,7 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
       setLoadingRecruitments(true);
       const recruitmentsResponse = await getOpenRecruitmentsByClubId(
         Number(clubId),
-        { status: "OPEN", page: 0, size: 10 }
+        { status: "OPEN", page: 1, size: 10 }
       );
       setRecruitments(recruitmentsResponse.content);
       setRecruitmentsLoaded(true);

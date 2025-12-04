@@ -165,7 +165,7 @@ public class EventManagementService {
                             user.getFullName(),
                             club != null ? club.getClubName() : "N/A",
                             savedEvent.getTitle());
-                    String actionUrl = "/events/pending-requests";
+                    String actionUrl = "/staff/events";
                     
                     List<Long> staffIds = staffUsers.stream().map(User::getId).toList();
                     notificationService.sendToUsers(
@@ -245,7 +245,7 @@ public class EventManagementService {
                                 user.getFullName(),
                                 savedEvent.getTitle(),
                                 club.getClubName());
-                        String actionUrl = "/events/pending-requests";
+                        String actionUrl = "/myclub/" + club.getId() + "/events";
                         
                         for (Long managerId : managerIds) {
                             try {
@@ -313,7 +313,7 @@ public class EventManagementService {
                         event.getTitle(),
                         formattedStart,
                         location);
-                String actionUrl = String.format("/clubs/%d/events/%d", club.getId(), event.getId());
+                String actionUrl = String.format("/events/%d", event.getId());
                 for (Long recipientId : recipientIds) {
                     try {
                         notificationService.sendToUser(
@@ -505,7 +505,9 @@ public class EventManagementService {
                             event != null ? event.getTitle() : "N/A",
                             approver.getFullName(),
                             club != null ? club.getClubName() : "N/A");
-                    String actionUrl = "/events/my-draft-events?clubId=" + (club != null ? club.getId() : "");
+                    String actionUrl = club != null
+                            ? "/myclub/" + club.getId() + "/events"
+                            : "/myclub/select";
                     
                     notificationService.sendToUser(
                             creator.getId(),
@@ -561,7 +563,7 @@ public class EventManagementService {
                             event != null ? event.getTitle() : "N/A",
                             club != null ? club.getClubName() : "N/A",
                             approver.getFullName());
-                    String actionUrl = "/events/pending-requests";
+                    String actionUrl = "/staff/events";
                     
                     List<Long> staffIds = staffUsers.stream().map(User::getId).toList();
                     notificationService.sendToUsers(
@@ -624,7 +626,9 @@ public class EventManagementService {
                             approver.getFullName(),
                             club != null ? club.getClubName() : "N/A",
                             requestEvent.getResponseMessage() != null ? requestEvent.getResponseMessage() : "Không có lý do");
-                    String actionUrl = "/events/my-draft-events?clubId=" + (club != null ? club.getId() : "");
+                    String actionUrl = club != null
+                            ? "/myclub/" + club.getId() + "/events"
+                            : "/myclub/select";
                     
                     notificationService.sendToUser(
                             creator.getId(),
@@ -795,7 +799,9 @@ public class EventManagementService {
                             event != null ? event.getTitle() : "N/A",
                             approver.getFullName(),
                             requestEvent.getResponseMessage() != null ? requestEvent.getResponseMessage() : "Không có lý do");
-                    String actionUrl = "/events/my-draft-events?clubId=" + (club != null ? club.getId() : "");
+                    String actionUrl = club != null
+                            ? "/myclub/" + club.getId() + "/events"
+                            : "/myclub/select";
                     
                     notificationService.sendToUser(
                             creator.getId(),

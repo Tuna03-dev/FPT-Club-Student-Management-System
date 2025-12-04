@@ -170,9 +170,8 @@ export const useWebSocket = (
       },
 
       onStompError: (frame) => {
-        const errorMsg = `WebSocket error: ${
-          frame.headers?.message || "Unknown error"
-        }`;
+        const errorMsg = `WebSocket error: ${frame.headers?.message || "Unknown error"
+          }`;
         console.error("[WebSocket]", errorMsg, frame.body);
         setError(errorMsg);
         setIsConnected(false);
@@ -210,13 +209,13 @@ export const useWebSocket = (
     ) => {
       if (!clientRef.current?.connected) {
         console.warn("[WebSocket] Cannot subscribe, not connected");
-        return () => {};
+        return () => { };
       }
 
       if (subscriptionsRef.current.has(destination)) {
         if (DEBUG)
           console.log("[WebSocket] Already subscribed to:", destination);
-        return () => {};
+        return () => { };
       }
 
       const subscription = clientRef.current.subscribe(

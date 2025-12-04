@@ -51,6 +51,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.regex.Pattern;
 
 @Service
 @RequiredArgsConstructor
@@ -97,10 +98,18 @@ public class RequestEstablishmentService {
         validateClubNameUniqueness(clubName, null);
 
         if (clubCode != null) {
-            if (clubRepository.existsByClubCodeIgnoreCase(clubCode)
-                    || requestEstablishmentRepository.existsByClubCodeIgnoreCase(clubCode)) {
+            // Chỉ check trong bảng Club (các CLB đã được tạo), không check trong RequestEstablishment
+            if (clubRepository.existsByClubCodeIgnoreCase(clubCode)) {
                 throw new AppException(ErrorCode.INVALID_INPUT, "Mã CLB này đã tồn tại trong hệ thống");
             }
+        }
+
+        // Validate email and phone if provided
+        if (request.getEmail() != null && !request.getEmail().trim().isEmpty()) {
+            validateEmail(request.getEmail());
+        }
+        if (request.getPhone() != null && !request.getPhone().trim().isEmpty()) {
+            validatePhone(request.getPhone());
         }
 
         User creator = userRepository.findById(userId)
@@ -169,19 +178,69 @@ public class RequestEstablishmentService {
             throw new AppException(ErrorCode.INVALID_INPUT, "Chỉ có thể cập nhật yêu cầu ở trạng thái DRAFT");
         }
 
-       // Update fields if provided
-        if (request.getClubName() != null && !request.getClubName().trim().isEmpty()) {
-            requestEstablishment.setClubName(request.getClubName().trim());
+        // Prepare values for validation and update
+        String clubName = request.getClubName() != null ? request.getClubName().trim() : null;
+        String clubCategory = request.getClubCategory() != null ? request.getClubCategory().trim() : null;
+        String clubCode = request.getClubCode() != null && !request.getClubCode().trim().isEmpty()
+                ? request.getClubCode().trim()
+                : null;
+
+        // Validate clubName if provided
+        if (request.getClubName() != null) {
+            if (clubName == null || clubName.isEmpty()) {
+                throw new AppException(ErrorCode.INVALID_INPUT, "Tên CLB không được để trống");
+            }
+            // Validate uniqueness (exclude current request)
+            validateClubNameUniqueness(clubName, requestId);
+        } else {
+            // If not provided, keep existing value (trim if not null)
+            clubName = requestEstablishment.getClubName() != null 
+                    ? requestEstablishment.getClubName().trim() 
+                    : null;
         }
-        if (request.getClubCategory() != null && !request.getClubCategory().trim().isEmpty()) {
-            requestEstablishment.setClubCategory(request.getClubCategory().trim());
+
+        // Validate clubCategory if provided
+        if (request.getClubCategory() != null) {
+            if (clubCategory == null || clubCategory.isEmpty()) {
+                throw new AppException(ErrorCode.INVALID_INPUT, "Danh mục CLB không được để trống");
+            }
+        } else {
+            // If not provided, keep existing value (trim if not null)
+            clubCategory = requestEstablishment.getClubCategory() != null 
+                    ? requestEstablishment.getClubCategory().trim() 
+                    : null;
         }
-        if (request.getClubCode() != null) {
-            requestEstablishment.setClubCode(request.getClubCode().trim());
+
+        // Validate expectedMemberCount if provided
+        Integer expectedMemberCount = request.getExpectedMemberCount();
+        if (expectedMemberCount != null) {
+            if (expectedMemberCount <= 0) {
+                throw new AppException(ErrorCode.INVALID_INPUT, "Số lượng thành viên dự kiến phải lớn hơn 0");
+            }
+        } else {
+            // If not provided, keep existing value
+            expectedMemberCount = requestEstablishment.getExpectedMemberCount();
         }
-        if (request.getExpectedMemberCount() != null && request.getExpectedMemberCount() > 0) {
-            requestEstablishment.setExpectedMemberCount(request.getExpectedMemberCount());
+
+        // Validate clubCode uniqueness if provided
+        if (clubCode != null) {
+            // Chỉ check trong bảng Club (các CLB đã được tạo), không check trong RequestEstablishment
+            if (clubRepository.existsByClubCodeIgnoreCase(clubCode)) {
+                throw new AppException(ErrorCode.INVALID_INPUT, "Mã CLB này đã tồn tại trong hệ thống");
+            }
         }
+
+        // Update fields
+        requestEstablishment.setClubName(clubName);
+        requestEstablishment.setClubCategory(clubCategory);
+        if (clubCode != null) {
+            requestEstablishment.setClubCode(clubCode);
+        } else if (request.getClubCode() != null && request.getClubCode().trim().isEmpty()) {
+            // If empty string is provided, set to null
+            requestEstablishment.setClubCode(null);
+        }
+        requestEstablishment.setExpectedMemberCount(expectedMemberCount);
+        
         if (request.getActivityObjectives() != null) {
             requestEstablishment.setActivityObjectives(request.getActivityObjectives());
         }
@@ -191,11 +250,27 @@ public class RequestEstablishmentService {
         if (request.getDescription() != null) {
             requestEstablishment.setDescription(request.getDescription());
         }
+        
+        // Validate and update email if provided
         if (request.getEmail() != null) {
-            requestEstablishment.setEmail(request.getEmail().trim());
+            if (request.getEmail().trim().isEmpty()) {
+                // Allow setting email to null/empty
+                requestEstablishment.setEmail(null);
+            } else {
+                validateEmail(request.getEmail());
+                requestEstablishment.setEmail(request.getEmail().trim());
+            }
         }
+        
+        // Validate and update phone if provided
         if (request.getPhone() != null) {
-            requestEstablishment.setPhone(request.getPhone().trim());
+            if (request.getPhone().trim().isEmpty()) {
+                // Allow setting phone to null/empty
+                requestEstablishment.setPhone(null);
+            } else {
+                validatePhone(request.getPhone());
+                requestEstablishment.setPhone(request.getPhone().trim());
+            }
         }
         if (request.getFacebookLink() != null) {
             requestEstablishment.setFacebookLink(request.getFacebookLink().trim());
@@ -292,7 +367,8 @@ public class RequestEstablishmentService {
                 String message = String.format("Sinh viên %s đã gửi yêu cầu thành lập CLB: %s",
                         requestEstablishment.getCreatedBy().getFullName(),
                         requestEstablishment.getClubName());
-                String actionUrl = "/staff/club-creation/requests/" + requestEstablishment.getId();
+                // FE route: /staff/club-creation (danh sách yêu cầu cho staff)
+                String actionUrl = "/staff/club-creation";
 
                 List<Long> staffIds = staffUsers.stream().map(User::getId).toList();
                 notificationService.sendToUsers(
@@ -439,7 +515,8 @@ public class RequestEstablishmentService {
                     requestEstablishment.getAssignedStaff() != null ? requestEstablishment.getAssignedStaff().getFullName() : "Nhân viên phòng IC-PDP",
                     requestEstablishment.getClubName(),
                     requestEstablishment.getConfirmationDeadline() != null ? requestEstablishment.getConfirmationDeadline().toString() : "N/A");
-            String actionUrl = "/club-creation/requests/" + requestEstablishment.getId();
+            // FE route: /create-club (trang theo dõi yêu cầu của student)
+            String actionUrl = "/create-club";
 
             notificationService.sendToUser(
                     requestEstablishment.getCreatedBy().getId(),
@@ -522,7 +599,8 @@ public class RequestEstablishmentService {
         try {
             String title = "Liên hệ đã được xác nhận";
             String message = String.format("Nhân viên phòng IC-PDP đã xác nhận liên hệ cho yêu cầu thành lập CLB \"%s\"", requestEstablishment.getClubName());
-            String actionUrl = "/club-creation/requests/" + requestEstablishment.getId();
+            // FE route: /create-club (trang theo dõi yêu cầu của student)
+            String actionUrl = "/create-club";
 
             notificationService.sendToUser(
                     requestEstablishment.getCreatedBy().getId(),
@@ -600,7 +678,8 @@ public class RequestEstablishmentService {
             String message = String.format("Yêu cầu thành lập CLB \"%s\" đã bị từ chối. Lý do: %s",
                     requestEstablishment.getClubName(),
                     request.getReason() != null ? request.getReason() : "Không có lý do");
-            String actionUrl = "/club-creation/requests/" + requestEstablishment.getId();
+            // FE route: /create-club (trang theo dõi yêu cầu của student)
+            String actionUrl = "/create-club";
 
             notificationService.sendToUser(
                     requestEstablishment.getCreatedBy().getId(),
@@ -684,7 +763,8 @@ public class RequestEstablishmentService {
             String title = "Yêu cầu nộp đề án";
             String message = String.format("Nhân viên phòng IC-PDP yêu cầu bạn nộp đề án chi tiết cho yêu cầu thành lập CLB \"%s\". %s",
                     requestEstablishment.getClubName(), commentText);
-            String actionUrl = "/club-creation/requests/" + requestEstablishment.getId() + "/proposal";
+            // FE route: /create-club (student vào tab tạo CLB, xem/nộp đề án từ dialog)
+            String actionUrl = "/create-club";
 
             notificationService.sendToUser(
                     requestEstablishment.getCreatedBy().getId(),
@@ -737,6 +817,14 @@ public class RequestEstablishmentService {
         // Upload file nếu có
         if (file != null && !file.isEmpty()) {
             try {
+                // Validate file size (max 20MB)
+                long maxFileSize = 20 * 1024 * 1024; // 20MB in bytes
+                if (file.getSize() > maxFileSize) {
+                    throw new AppException(ErrorCode.INVALID_INPUT, 
+                        String.format("Dung lượng file quá lớn. Kích thước tối đa cho phép là 20MB. File của bạn: %.2f MB", 
+                            file.getSize() / (1024.0 * 1024.0)));
+                }
+
                 // Validate file type (Word, Excel, PDF, ZIP)
                 String originalFilename = file.getOriginalFilename();
                 if (originalFilename != null) {
@@ -833,7 +921,8 @@ public class RequestEstablishmentService {
                         requestEstablishment.getCreatedBy().getFullName(),
                         proposal.getTitle(),
                         requestEstablishment.getClubName());
-                String actionUrl = "/staff/club-creation/requests/" + requestEstablishment.getId() + "/proposals";
+                // FE route: /staff/club-creation (staff xem danh sách và chi tiết đề án trong trang này)
+                String actionUrl = "/staff/club-creation";
 
                 notificationService.sendToUser(
                         staff.getId(),
@@ -1051,7 +1140,8 @@ public class RequestEstablishmentService {
             String message = String.format("Đề án \"%s\" cho yêu cầu thành lập CLB \"%s\" đã được Nhân viên phòng IC-PDP duyệt",
                     proposal.getTitle(),
                     requestEstablishment.getClubName());
-            String actionUrl = "/club-creation/requests/" + requestEstablishment.getId();
+            // FE route: /create-club (trang theo dõi yêu cầu của student)
+            String actionUrl = "/create-club";
 
             notificationService.sendToUser(
                     requestEstablishment.getCreatedBy().getId(),
@@ -1149,7 +1239,8 @@ public class RequestEstablishmentService {
                     proposal.getTitle(),
                     requestEstablishment.getClubName(),
                     request.getReason() != null ? request.getReason() : "Không có lý do");
-            String actionUrl = "/club-creation/requests/" + requestEstablishment.getId() + "/proposal";
+            // FE route: /create-club (student mở trang tạo CLB để nộp lại / xem lý do từ chối đề án)
+            String actionUrl = "/create-club";
 
             notificationService.sendToUser(
                     requestEstablishment.getCreatedBy().getId(),
@@ -1283,7 +1374,8 @@ public class RequestEstablishmentService {
                         requestEstablishment.getCreatedBy().getFullName(),
                         requestEstablishment.getClubName(),
                         schedule.getDefenseDate());
-                String actionUrl = "/staff/club-creation/requests/" + requestEstablishment.getId() + "/defense-schedule";
+                // FE route: /staff/club-creation (staff xem và duyệt lịch bảo vệ trong trang này)
+                String actionUrl = "/staff/club-creation";
 
                 notificationService.sendToUser(
                         staff.getId(),
@@ -1523,7 +1615,8 @@ public class RequestEstablishmentService {
                     requestEstablishment.getClubName(),
                     schedule.getDefenseDate(),
                     schedule.getLocation() != null ? schedule.getLocation() : "Chưa có");
-            String actionUrl = "/club-creation/requests/" + requestEstablishment.getId() + "/defense-schedule";
+            // FE route: /create-club (student xem lịch bảo vệ trong trang tạo CLB)
+            String actionUrl = "/create-club";
 
             notificationService.sendToUser(
                     requestEstablishment.getCreatedBy().getId(),
@@ -1617,7 +1710,8 @@ public class RequestEstablishmentService {
             String message = String.format("Lịch bảo vệ cho yêu cầu thành lập CLB \"%s\" đã bị từ chối. Lý do: %s",
                     requestEstablishment.getClubName(),
                     request.getReason() != null ? request.getReason() : "Không có lý do");
-            String actionUrl = "/club-creation/requests/" + requestEstablishment.getId() + "/defense-schedule";
+            // FE route: /create-club (student xem / cập nhật lịch bảo vệ trong trang tạo CLB)
+            String actionUrl = "/create-club";
 
             notificationService.sendToUser(
                     requestEstablishment.getCreatedBy().getId(),
@@ -1743,7 +1837,8 @@ public class RequestEstablishmentService {
             if (request.getFeedback() != null && !request.getFeedback().trim().isEmpty()) {
                 message += ". Feedback: " + request.getFeedback();
             }
-            String actionUrl = "/club-creation/requests/" + requestEstablishment.getId();
+            // FE route: /create-club (student xem yêu cầu sau khi nhập kết quả bảo vệ)
+            String actionUrl = "/create-club";
 
             notificationService.sendToUser(
                     requestEstablishment.getCreatedBy().getId(),
@@ -1795,6 +1890,14 @@ public class RequestEstablishmentService {
         // Upload file nếu có
         if (file != null && !file.isEmpty()) {
             try {
+                // Validate file size (max 20MB)
+                long maxFileSize = 20 * 1024 * 1024; // 20MB in bytes
+                if (file.getSize() > maxFileSize) {
+                    throw new AppException(ErrorCode.INVALID_INPUT, 
+                        String.format("Dung lượng file quá lớn. Kích thước tối đa cho phép là 20MB. File của bạn: %.2f MB", 
+                            file.getSize() / (1024.0 * 1024.0)));
+                }
+
                 // Validate file type (Word, Excel, PDF, ZIP)
                 String originalFilename = file.getOriginalFilename();
                 if (originalFilename != null) {
@@ -1903,7 +2006,8 @@ public class RequestEstablishmentService {
                         requestEstablishment.getCreatedBy().getFullName(),
                         request.getTitle(),
                         requestEstablishment.getClubName());
-                String actionUrl = "/staff/club-creation/requests/" + requestEstablishment.getId() + "/final-forms";
+                // FE route: /staff/club-creation (staff xem lịch sử Hồ sơ hoàn thiện trong trang này)
+                String actionUrl = "/staff/club-creation";
 
                 notificationService.sendToUser(
                         staff.getId(),
@@ -2314,7 +2418,8 @@ public class RequestEstablishmentService {
 
         try {
             String title = "Yêu cầu cập nhật tên CLB";
-            String actionUrl = "/club-creation/requests/" + requestEstablishment.getId();
+            // FE route: /create-club (student xem lại yêu cầu sau khi staff yêu cầu đổi tên)
+            String actionUrl = "/create-club";
             notificationService.sendToUser(
                     requestEstablishment.getCreatedBy().getId(),
                     staffId,
@@ -2398,7 +2503,8 @@ public class RequestEstablishmentService {
                 String title = "Sinh viên đã cập nhật tên CLB";
                 String message = String.format("Yêu cầu #%d đã được cập nhật tên thành \"%s\"",
                         requestEstablishment.getId(), newClubName);
-                String actionUrl = "/staff/club-creation/requests/" + requestEstablishment.getId();
+                // FE route: /staff/club-creation (staff xem yêu cầu sau khi student cập nhật tên)
+                String actionUrl = "/staff/club-creation";
                 notificationService.sendToUser(
                         staff.getId(),
                         userId,
@@ -2420,16 +2526,40 @@ public class RequestEstablishmentService {
     }
 
     private void validateClubNameUniqueness(String clubName, Long currentRequestId) throws AppException {
+        // Chỉ check trong bảng Club (các CLB đã được tạo), không check trong RequestEstablishment
         if (clubRepository.existsByClubNameIgnoreCase(clubName)) {
             throw new AppException(ErrorCode.INVALID_INPUT, "Tên CLB này đã tồn tại trong hệ thống");
         }
+    }
 
-        boolean existsInRequests = currentRequestId == null
-                ? requestEstablishmentRepository.existsByClubNameIgnoreCase(clubName)
-                : requestEstablishmentRepository.existsByClubNameIgnoreCaseAndIdNot(clubName, currentRequestId);
+    private void validateEmail(String email) throws AppException {
+        if (email == null || email.trim().isEmpty()) {
+            return; // Email is optional, so null or empty is allowed
+        }
+        
+        // Email regex pattern
+        String emailPattern = "^[A-Za-z0-9+_.-]+@([A-Za-z0-9.-]+\\.[A-Za-z]{2,})$";
+        if (!Pattern.matches(emailPattern, email.trim())) {
+            throw new AppException(ErrorCode.INVALID_INPUT, "Email không hợp lệ");
+        }
+    }
 
-        if (existsInRequests) {
-            throw new AppException(ErrorCode.INVALID_INPUT, "Tên CLB này đã tồn tại trong hệ thống");
+    private void validatePhone(String phone) throws AppException {
+        if (phone == null || phone.trim().isEmpty()) {
+            return; // Phone is optional, so null or empty is allowed
+        }
+        
+        // Vietnamese phone number pattern:
+        // - 10 digits starting with 0 (e.g., 0987654321)
+        // - 11 digits starting with 84 (e.g., 84987654321)
+        // - 12 characters starting with +84 (e.g., +84987654321)
+        String trimmedPhone = phone.trim().replaceAll("[\\s-]", ""); // Remove spaces and dashes
+        
+        // Pattern: starts with 0 (10 digits) or 84/+84 (11-12 digits)
+        String phonePattern = "^(0[0-9]{9}|84[0-9]{9}|\\+84[0-9]{9})$";
+        
+        if (!Pattern.matches(phonePattern, trimmedPhone)) {
+            throw new AppException(ErrorCode.INVALID_INPUT, "Số điện thoại không hợp lệ. Vui lòng nhập số điện thoại Việt Nam (bắt đầu bằng 0, 84 hoặc +84)");
         }
     }
 

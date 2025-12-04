@@ -25,7 +25,7 @@ public class RequestEstablishment extends BaseEntity {
     @Column(name = "club_category", nullable = false, length = 100)
     private String clubCategory;
 
-    @Column(name = "club_code", unique = true, length = 50)
+    @Column(name = "club_code", length = 50)
     private String clubCode;
 
     @Enumerated(EnumType.STRING)

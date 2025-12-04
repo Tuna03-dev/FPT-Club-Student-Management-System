@@ -24,7 +24,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.time.LocalDate;
 import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -229,12 +228,11 @@ class ClubServiceTest {
     // ================= getClubsByFilter Tests =================
 
     @Test
-    void getClubsByFilter_asStaff_noKeyword_returnsPageResponse() throws AppException {
+    void getClubsByFilter_noKeyword_returnsPageResponseWith1BasedPagination() throws AppException {
         // Arrange
-        Pageable pageable = PageRequest.of(0, 10);
-        Page<Club> clubPage = new PageImpl<>(List.of(testClub));
+        Pageable pageable = PageRequest.of(0, 10); // Request page 0
+        Page<Club> clubPage = new PageImpl<>(List.of(testClub), pageable, 1);
 
-        when(roleService.isStaff(testStaffId)).thenReturn(true);
         when(clubRepository.getAllClubsByFilter(null, null, null, null, pageable))
                 .thenReturn(clubPage);
         when(clubMapper.toClubManagementResponse(testClub)).thenReturn(testClubManagementResponse);
@@ -247,34 +245,81 @@ class ClubServiceTest {
         // Assert
         assertNotNull(result);
         assertEquals(1, result.getContent().size());
-        assertEquals(10L, result.getContent().getFirst().getTotalMembers());
+        assertEquals(10, result.getContent().get(0).getTotalMembers());
 
-        verify(roleService, times(1)).isStaff(testStaffId);
+        // Verify 1-based pagination
+        assertEquals(1, result.getPageNumber(), "Page number should be 1-based (page 0 becomes page 1)");
+        assertEquals(10, result.getPageSize());
+        assertEquals(1, result.getTotalElements());
+        assertFalse(result.isHasNext());
+        assertFalse(result.isHasPrevious());
+
+        verify(clubRepository, times(1)).countMembersByClubId(testClubId);
         verify(clubRepository, times(1)).getAllClubsByFilter(null, null, null, null, pageable);
     }
 
     @Test
-    void getClubsByFilter_asNonStaff_throwsAppException() {
+    void getClubsByFilter_page1_returnsPageNumber2() throws AppException {
         // Arrange
-        Pageable pageable = PageRequest.of(0, 10);
-        when(roleService.isStaff(testStaffId)).thenReturn(false);
+        Pageable pageable = PageRequest.of(1, 10); // Request page 1 (second page)
+        Page<Club> clubPage = new PageImpl<>(List.of(testClub), pageable, 15);
 
-        // Act & Assert
-        AppException exception = assertThrows(AppException.class, () ->
-                clubService.getClubsByFilter(null, null, null, null, pageable, testStaffId));
-        assertEquals(ErrorCode.FORBIDDEN, exception.getErrorCode());
+        when(clubRepository.getAllClubsByFilter(null, null, null, null, pageable))
+                .thenReturn(clubPage);
+        when(clubMapper.toClubManagementResponse(testClub)).thenReturn(testClubManagementResponse);
+        when(clubRepository.countMembersByClubId(testClubId)).thenReturn(5L);
 
-        verify(roleService, times(1)).isStaff(testStaffId);
-        verify(clubRepository, never()).getAllClubsByFilter(any(), any(), any(), any(), any());
+        // Act
+        PageResponse<ClubManagementResponse> result = clubService.getClubsByFilter(
+                null, null, null, null, pageable, testStaffId);
+
+        // Assert
+        assertNotNull(result);
+        assertEquals(2, result.getPageNumber(), "Page 1 (0-indexed) should become page 2 (1-based)");
+        assertEquals(5, result.getContent().get(0).getTotalMembers());
+        assertTrue(result.isHasPrevious(), "Page 2 should have previous");
+        assertFalse(result.isHasNext(), "Last page should not have next");
+
+        verify(clubRepository, times(1)).countMembersByClubId(testClubId);
     }
 
     @Test
-    void getClubsByFilter_asStaff_withKeyword_returnsFilteredPage() throws AppException {
+    void getClubsByFilter_multipleClubs_countsEachClubSeparately() throws AppException {
+        // Arrange
+        Pageable pageable = PageRequest.of(0, 10);
+        Club club2 = Club.builder().id(2L).clubCode("CLUB002").clubName("Club 2").build();
+        Club club3 = Club.builder().id(3L).clubCode("CLUB003").clubName("Club 3").build();
+
+        Page<Club> clubPage = new PageImpl<>(List.of(testClub, club2, club3), pageable, 3);
+
+        when(clubRepository.getAllClubsByFilter(null, null, null, null, pageable))
+                .thenReturn(clubPage);
+        when(clubMapper.toClubManagementResponse(any(Club.class))).thenReturn(testClubManagementResponse);
+        when(clubRepository.countMembersByClubId(1L)).thenReturn(10L);
+        when(clubRepository.countMembersByClubId(2L)).thenReturn(5L);
+        when(clubRepository.countMembersByClubId(3L)).thenReturn(8L);
+
+        // Act
+        PageResponse<ClubManagementResponse> result = clubService.getClubsByFilter(
+                null, null, null, null, pageable, testStaffId);
+
+        // Assert
+        assertNotNull(result);
+        assertEquals(3, result.getContent().size());
+        assertEquals(1, result.getPageNumber(), "Should return 1-based page number");
+
+        // Verify countMembersByClubId is called for each club
+        verify(clubRepository, times(1)).countMembersByClubId(1L);
+        verify(clubRepository, times(1)).countMembersByClubId(2L);
+        verify(clubRepository, times(1)).countMembersByClubId(3L);
+    }
+
+    @Test
+    void getClubsByFilter_withKeyword_returnsFilteredPage() throws AppException {
         // Arrange
         Pageable pageable = PageRequest.of(0, 10);
         Page<Club> allClubs = new PageImpl<>(List.of(testClub), PageRequest.of(0, Integer.MAX_VALUE), 1);
 
-        when(roleService.isStaff(testStaffId)).thenReturn(true);
         when(clubRepository.getAllClubsByFilter(isNull(), isNull(), isNull(), isNull(), any(PageRequest.class)))
                 .thenReturn(allClubs);
         when(clubMapper.toClubManagementResponse(testClub)).thenReturn(testClubManagementResponse);
@@ -287,8 +332,33 @@ class ClubServiceTest {
         // Assert
         assertNotNull(result);
         assertTrue(result.getContent().size() <= 1);
+        assertEquals(1, result.getPageNumber(), "Should return 1-based page number");
 
-        verify(roleService, times(1)).isStaff(testStaffId);
+        verify(clubRepository, times(1)).countMembersByClubId(testClubId);
+    }
+
+    @Test
+    void getClubsByFilter_withFilters_appliesAllFilters() throws AppException {
+        // Arrange
+        Pageable pageable = PageRequest.of(0, 10);
+        Page<Club> clubPage = new PageImpl<>(List.of(testClub), pageable, 1);
+
+        when(clubRepository.getAllClubsByFilter(null, testCampusId, testCategoryId, "ACTIVE", pageable))
+                .thenReturn(clubPage);
+        when(clubMapper.toClubManagementResponse(testClub)).thenReturn(testClubManagementResponse);
+        when(clubRepository.countMembersByClubId(testClubId)).thenReturn(10L);
+
+        // Act
+        PageResponse<ClubManagementResponse> result = clubService.getClubsByFilter(
+                null, testCampusId, testCategoryId, "ACTIVE", pageable, testStaffId);
+
+        // Assert
+        assertNotNull(result);
+        assertEquals(1, result.getContent().size());
+        assertEquals(1, result.getPageNumber());
+
+        verify(clubRepository, times(1)).getAllClubsByFilter(null, testCampusId, testCategoryId, "ACTIVE", pageable);
+        verify(clubRepository, times(1)).countMembersByClubId(testClubId);
     }
 
     // ================= createClub Tests =================
@@ -312,7 +382,6 @@ class ClubServiceTest {
         SystemRole clubOfficerRole = new SystemRole();
         clubOfficerRole.setRoleName("CLUB_OFFICER");
 
-        when(roleService.isStaff(testStaffId)).thenReturn(true);
         when(clubRepository.findByClubCode("CLUB002")).thenReturn(Optional.empty());
         when(clubRepository.findByClubName("New Club")).thenReturn(Optional.empty());
         when(campusRepository.findById(testCampusId)).thenReturn(Optional.of(testCampus));
@@ -332,6 +401,13 @@ class ClubServiceTest {
         when(clubRepository.countEventsByClubId(testClubId)).thenReturn(0L);
         when(clubRepository.countNewsByClubId(testClubId)).thenReturn(0L);
 
+        // Mock async notification - không throw exception
+        doNothing().when(notificationService).sendToUsersAsync(
+                anyList(), anyLong(), anyString(), anyString(),
+                any(NotificationType.class), any(NotificationPriority.class),
+                anyString(), anyLong(), any(), any(), any()
+        );
+
         // Act
         ClubManagementResponse result = clubService.createClub(request, testStaffId);
 
@@ -339,25 +415,25 @@ class ClubServiceTest {
         assertNotNull(result);
         assertEquals(testClubId, result.getId());
 
-        verify(roleService, times(1)).isStaff(testStaffId);
         verify(clubRepository, times(1)).save(any(Club.class));
         verify(clubRoleRepository, times(1)).saveAll(anyList());
+
+        // Verify async notification was sent
+        verify(notificationService, times(1)).sendToUsersAsync(
+                eq(List.of(testUser.getId())),
+                eq(testStaffId),
+                contains("Chủ nhiệm CLB"),
+                contains(testClubName),
+                eq(NotificationType.CLUB_ROLE_ASSIGNED),
+                eq(NotificationPriority.HIGH),
+                anyString(),
+                eq(testClubId),
+                isNull(),
+                isNull(),
+                isNull()
+        );
     }
 
-    @Test
-    void createClub_asNonStaff_throwsAppException() {
-        // Arrange
-        CreateClubRequest request = new CreateClubRequest();
-        when(roleService.isStaff(testStaffId)).thenReturn(false);
-
-        // Act & Assert
-        AppException exception = assertThrows(AppException.class, () ->
-                clubService.createClub(request, testStaffId));
-        assertEquals(ErrorCode.FORBIDDEN, exception.getErrorCode());
-
-        verify(roleService, times(1)).isStaff(testStaffId);
-        verify(clubRepository, never()).save(any());
-    }
 
     @Test
     void createClub_duplicateClubCode_throwsAppException() {
@@ -365,7 +441,6 @@ class ClubServiceTest {
         CreateClubRequest request = new CreateClubRequest();
         request.setClubCode(testClubCode);
 
-        when(roleService.isStaff(testStaffId)).thenReturn(true);
         when(clubRepository.findByClubCode(testClubCode)).thenReturn(Optional.of(testClub));
 
         // Act & Assert
@@ -383,7 +458,6 @@ class ClubServiceTest {
         request.setClubCode("CLUB002");
         request.setClubName(testClubName);
 
-        when(roleService.isStaff(testStaffId)).thenReturn(true);
         when(clubRepository.findByClubCode("CLUB002")).thenReturn(Optional.empty());
         when(clubRepository.findByClubName(testClubName)).thenReturn(Optional.of(testClub));
 
@@ -405,7 +479,6 @@ class ClubServiceTest {
         request.setCategoryId(testCategoryId);
         request.setPresidentEmail("invalid@email.com");
 
-        when(roleService.isStaff(testStaffId)).thenReturn(true);
         when(clubRepository.findByClubCode("CLUB002")).thenReturn(Optional.empty());
         when(clubRepository.findByClubName("New Club")).thenReturn(Optional.empty());
         when(campusRepository.findById(testCampusId)).thenReturn(Optional.of(testCampus));
@@ -423,13 +496,12 @@ class ClubServiceTest {
     // ================= updateClub Tests =================
 
     @Test
-    void updateClub_asStaff_validRequest_returnsUpdatedClub() throws AppException {
+    void updateClub_validRequest_returnsUpdatedClub() throws AppException {
         // Arrange
         UpdateClubRequest request = new UpdateClubRequest();
         request.setClubName("Updated Club Name");
         request.setDescription("Updated Description");
 
-        when(roleService.isStaff(testStaffId)).thenReturn(true);
         when(clubRepository.findById(testClubId)).thenReturn(Optional.of(testClub));
         when(clubRepository.findByClubName("Updated Club Name")).thenReturn(Optional.empty());
         when(clubRepository.save(testClub)).thenReturn(testClub);
@@ -441,29 +513,14 @@ class ClubServiceTest {
 
         // Assert
         assertNotNull(result);
-        verify(roleService, times(1)).isStaff(testStaffId);
         verify(clubRepository, times(1)).save(testClub);
     }
 
-    @Test
-    void updateClub_asNonStaff_throwsAppException() {
-        // Arrange
-        UpdateClubRequest request = new UpdateClubRequest();
-        when(roleService.isStaff(testStaffId)).thenReturn(false);
-
-        // Act & Assert
-        AppException exception = assertThrows(AppException.class, () ->
-                clubService.updateClub(testClubId, request, testStaffId));
-        assertEquals(ErrorCode.FORBIDDEN, exception.getErrorCode());
-
-        verify(clubRepository, never()).save(any());
-    }
 
     @Test
     void updateClub_nonExistingClub_throwsAppException() {
         // Arrange
         UpdateClubRequest request = new UpdateClubRequest();
-        when(roleService.isStaff(testStaffId)).thenReturn(true);
         when(clubRepository.findById(testClubId)).thenReturn(Optional.empty());
 
         // Act & Assert
@@ -477,9 +534,53 @@ class ClubServiceTest {
     // ================= deactivateClub Tests =================
 
     @Test
-    void deactivateClub_asStaff_validClub_deactivatesSuccessfully() throws AppException {
+    void deactivateClub_validClub_deactivatesSuccessfully() throws AppException {
         // Arrange
-        when(roleService.isStaff(testStaffId)).thenReturn(true);
+        ClubMemberShip membership1 = new ClubMemberShip();
+        membership1.setUser(testUser);
+
+        User user2 = User.builder().id(3L).email("user2@test.com").build();
+        ClubMemberShip membership2 = new ClubMemberShip();
+        membership2.setUser(user2);
+
+        when(clubRepository.findById(testClubId)).thenReturn(Optional.of(testClub));
+        when(clubRepository.save(testClub)).thenReturn(testClub);
+        when(clubMemberShipRepository.findByClubIdAndStatus(testClubId, ClubMemberShipStatus.ACTIVE))
+                .thenReturn(List.of(membership1, membership2));
+
+        // Mock async notification
+        doNothing().when(notificationService).sendToUsersAsync(
+                anyList(), anyLong(), anyString(), anyString(),
+                any(NotificationType.class), any(NotificationPriority.class),
+                anyString(), anyLong(), any(), any(), any()
+        );
+
+        // Act
+        assertDoesNotThrow(() -> clubService.deactivateClub(testClubId, testStaffId));
+
+        // Assert
+        assertEquals("UNACTIVE", testClub.getStatus());
+        verify(clubRepository, times(1)).save(testClub);
+
+        // Verify notification sent to all members
+        verify(notificationService, times(1)).sendToUsersAsync(
+                eq(List.of(testUser.getId(), user2.getId())),
+                eq(testStaffId),
+                contains("vô hiệu hóa"),
+                contains(testClubName),
+                eq(NotificationType.SYSTEM_WARNING),
+                eq(NotificationPriority.HIGH),
+                anyString(),
+                eq(testClubId),
+                isNull(),
+                isNull(),
+                isNull()
+        );
+    }
+
+    @Test
+    void deactivateClub_noActiveMembers_sendsNoNotification() throws AppException {
+        // Arrange
         when(clubRepository.findById(testClubId)).thenReturn(Optional.of(testClub));
         when(clubRepository.save(testClub)).thenReturn(testClub);
         when(clubMemberShipRepository.findByClubIdAndStatus(testClubId, ClubMemberShipStatus.ACTIVE))
@@ -490,30 +591,69 @@ class ClubServiceTest {
 
         // Assert
         assertEquals("UNACTIVE", testClub.getStatus());
-        verify(roleService, times(1)).isStaff(testStaffId);
         verify(clubRepository, times(1)).save(testClub);
+
+        // Verify no notification sent when no active members
+        verify(notificationService, never()).sendToUsersAsync(
+                anyList(), anyLong(), anyString(), anyString(),
+                any(), any(), anyString(), anyLong(), any(), any(), any()
+        );
     }
 
-    @Test
-    void deactivateClub_asNonStaff_throwsAppException() {
-        // Arrange
-        when(roleService.isStaff(testStaffId)).thenReturn(false);
-
-        // Act & Assert
-        AppException exception = assertThrows(AppException.class, () ->
-                clubService.deactivateClub(testClubId, testStaffId));
-        assertEquals(ErrorCode.FORBIDDEN, exception.getErrorCode());
-
-        verify(clubRepository, never()).save(any());
-    }
 
     // ================= activateClub Tests =================
 
     @Test
-    void activateClub_asStaff_validClub_activatesSuccessfully() throws AppException {
+    void activateClub_validClub_activatesSuccessfully() throws AppException {
         // Arrange
         testClub.setStatus("UNACTIVE");
-        when(roleService.isStaff(testStaffId)).thenReturn(true);
+
+        ClubMemberShip membership1 = new ClubMemberShip();
+        membership1.setUser(testUser);
+
+        User user2 = User.builder().id(3L).email("user2@test.com").build();
+        ClubMemberShip membership2 = new ClubMemberShip();
+        membership2.setUser(user2);
+
+        when(clubRepository.findById(testClubId)).thenReturn(Optional.of(testClub));
+        when(clubRepository.save(testClub)).thenReturn(testClub);
+        when(clubMemberShipRepository.findByClubIdAndStatus(testClubId, ClubMemberShipStatus.ACTIVE))
+                .thenReturn(List.of(membership1, membership2));
+
+        // Mock async notification
+        doNothing().when(notificationService).sendToUsersAsync(
+                anyList(), anyLong(), anyString(), anyString(),
+                any(NotificationType.class), any(NotificationPriority.class),
+                anyString(), anyLong(), any(), any(), any()
+        );
+
+        // Act
+        assertDoesNotThrow(() -> clubService.activateClub(testClubId, testStaffId));
+
+        // Assert
+        assertEquals("ACTIVE", testClub.getStatus());
+        verify(clubRepository, times(1)).save(testClub);
+
+        // Verify notification sent to all members
+        verify(notificationService, times(1)).sendToUsersAsync(
+                eq(List.of(testUser.getId(), user2.getId())),
+                eq(testStaffId),
+                contains("kích hoạt"),
+                contains(testClubName),
+                eq(NotificationType.SYSTEM_ANNOUNCEMENT),
+                eq(NotificationPriority.HIGH),
+                anyString(),
+                eq(testClubId),
+                isNull(),
+                isNull(),
+                isNull()
+        );
+    }
+
+    @Test
+    void activateClub_noActiveMembers_sendsNoNotification() throws AppException {
+        // Arrange
+        testClub.setStatus("UNACTIVE");
         when(clubRepository.findById(testClubId)).thenReturn(Optional.of(testClub));
         when(clubRepository.save(testClub)).thenReturn(testClub);
         when(clubMemberShipRepository.findByClubIdAndStatus(testClubId, ClubMemberShipStatus.ACTIVE))
@@ -524,29 +664,21 @@ class ClubServiceTest {
 
         // Assert
         assertEquals("ACTIVE", testClub.getStatus());
-        verify(roleService, times(1)).isStaff(testStaffId);
         verify(clubRepository, times(1)).save(testClub);
+
+        // Verify no notification sent when no active members
+        verify(notificationService, never()).sendToUsersAsync(
+                anyList(), anyLong(), anyString(), anyString(),
+                any(), any(), anyString(), anyLong(), any(), any(), any()
+        );
     }
 
-    @Test
-    void activateClub_asNonStaff_throwsAppException() {
-        // Arrange
-        when(roleService.isStaff(testStaffId)).thenReturn(false);
-
-        // Act & Assert
-        AppException exception = assertThrows(AppException.class, () ->
-                clubService.activateClub(testClubId, testStaffId));
-        assertEquals(ErrorCode.FORBIDDEN, exception.getErrorCode());
-
-        verify(clubRepository, never()).save(any());
-    }
 
     // ================= getClubForManagement Tests =================
 
     @Test
-    void getClubForManagement_asStaff_existingClub_returnsClubManagementResponse() throws AppException {
+    void getClubForManagement_existingClub_returnsClubManagementResponse() throws AppException {
         // Arrange
-        when(roleService.isStaff(testStaffId)).thenReturn(true);
         when(clubRepository.findById(testClubId)).thenReturn(Optional.of(testClub));
         when(clubMapper.toClubManagementResponse(testClub)).thenReturn(testClubManagementResponse);
         when(clubRepository.countMembersByClubId(testClubId)).thenReturn(15L);
@@ -562,21 +694,18 @@ class ClubServiceTest {
         assertEquals(15L, result.getTotalMembers());
         assertEquals(8L, result.getTotalEvents());
         assertEquals(4L, result.getTotalPosts());
-
-        verify(roleService, times(1)).isStaff(testStaffId);
     }
 
     @Test
-    void getClubForManagement_asNonStaff_throwsAppException() {
+    void getClubForManagement_nonExistingClub_throwsAppException() {
         // Arrange
-        when(roleService.isStaff(testStaffId)).thenReturn(false);
+        when(clubRepository.findById(testClubId)).thenReturn(Optional.empty());
 
         // Act & Assert
-        AppException exception = assertThrows(AppException.class, () ->
+        assertThrows(AppException.class, () ->
                 clubService.getClubForManagement(testClubId, testStaffId));
-        assertEquals(ErrorCode.FORBIDDEN, exception.getErrorCode());
 
-        verify(clubRepository, never()).findById(any());
+        verify(clubRepository, times(1)).findById(testClubId);
     }
 
     // ================= getClubInfo Tests =================
@@ -621,13 +750,12 @@ class ClubServiceTest {
     // ================= updateClubInfo Tests =================
 
     @Test
-    void updateClubInfo_asClubOfficer_validRequest_returnsUpdatedClubInfo() throws AppException {
+    void updateClubInfo_validRequest_returnsUpdatedClubInfo() throws AppException {
         // Arrange
         UpdateClubInfoRequest request = new UpdateClubInfoRequest();
         request.setDescription("Updated description");
         request.setEmail("newemail@fpt.edu.vn");
 
-        when(roleMemberShipRepository.existsClubAdmin(testUserId, testClubId)).thenReturn(true);
         when(clubRepository.findById(testClubId)).thenReturn(Optional.of(testClub));
         when(clubRepository.save(testClub)).thenReturn(testClub);
         when(clubRepository.findByIdWithDetails(testClubId)).thenReturn(Optional.of(testClub));
@@ -642,32 +770,27 @@ class ClubServiceTest {
 
         // Assert
         assertNotNull(result);
-        verify(roleMemberShipRepository, times(1)).existsClubAdmin(testUserId, testClubId);
         verify(clubRepository, times(1)).save(testClub);
     }
 
-    @Test
-    void updateClubInfo_asNonOfficer_throwsAppException() {
-        // Arrange
-        UpdateClubInfoRequest request = new UpdateClubInfoRequest();
-        when(roleMemberShipRepository.existsClubAdmin(testUserId, testClubId)).thenReturn(false);
 
-        // Act & Assert
-        AppException exception = assertThrows(AppException.class, () ->
-                clubService.updateClubInfo(testClubId, request, testUserId, null, null));
-        assertEquals(ErrorCode.FORBIDDEN, exception.getErrorCode());
-
-        verify(clubRepository, never()).save(any());
-    }
 
     @Test
     void updateClubInfo_inactiveClub_throwsAppException() {
         // Arrange
         UpdateClubInfoRequest request = new UpdateClubInfoRequest();
-        testClub.setStatus("UNACTIVE");
 
-        when(roleMemberShipRepository.existsClubAdmin(testUserId, testClubId)).thenReturn(true);
-        when(clubRepository.findById(testClubId)).thenReturn(Optional.of(testClub));
+        // Create inactive club
+        Club inactiveClub = Club.builder()
+                .id(testClubId)
+                .clubCode(testClubCode)
+                .clubName(testClubName)
+                .status("UNACTIVE")  // Set inactive
+                .campus(testCampus)
+                .clubCategory(testCategory)
+                .build();
+
+        when(clubRepository.findById(testClubId)).thenReturn(Optional.of(inactiveClub));
 
         // Act & Assert
         AppException exception = assertThrows(AppException.class, () ->
@@ -678,7 +801,7 @@ class ClubServiceTest {
     }
 
     @Test
-    void updateClubInfo_duplicateClubCode_throwsAppException() {
+    void updateClubInfo_duplicateClubCode_throwsRuntimeException() {
         // Arrange
         UpdateClubInfoRequest request = new UpdateClubInfoRequest();
         request.setClubCode("EXISTING_CODE");
@@ -688,17 +811,17 @@ class ClubServiceTest {
                 .clubCode("EXISTING_CODE")
                 .build();
 
-        when(roleMemberShipRepository.existsClubAdmin(testUserId, testClubId)).thenReturn(true);
         when(clubRepository.findById(testClubId)).thenReturn(Optional.of(testClub));
         when(clubRepository.findByClubCode("EXISTING_CODE")).thenReturn(Optional.of(existingClub));
 
-        // Act & Assert
-        assertThrows(RuntimeException.class, () ->
+        // Act & Assert - ifPresent lambda throws RuntimeException directly
+        RuntimeException exception = assertThrows(RuntimeException.class, () ->
                 clubService.updateClubInfo(testClubId, request, testUserId, null, null));
+        assertEquals("CLUB_CODE_EXISTED", exception.getMessage());
     }
 
     @Test
-    void updateClubInfo_duplicateClubName_throwsAppException() {
+    void updateClubInfo_duplicateClubName_throwsRuntimeException() {
         // Arrange
         UpdateClubInfoRequest request = new UpdateClubInfoRequest();
         request.setClubName("Existing Name");
@@ -708,13 +831,13 @@ class ClubServiceTest {
                 .clubName("Existing Name")
                 .build();
 
-        when(roleMemberShipRepository.existsClubAdmin(testUserId, testClubId)).thenReturn(true);
         when(clubRepository.findById(testClubId)).thenReturn(Optional.of(testClub));
         when(clubRepository.findByClubName("Existing Name")).thenReturn(Optional.of(existingClub));
 
-        // Act & Assert
-        assertThrows(RuntimeException.class, () ->
+        // Act & Assert - ifPresent lambda throws RuntimeException directly
+        RuntimeException exception = assertThrows(RuntimeException.class, () ->
                 clubService.updateClubInfo(testClubId, request, testUserId, null, null));
+        assertEquals("CLUB_NAME_EXISTED", exception.getMessage());
     }
 
     @Test
@@ -739,7 +862,6 @@ class ClubServiceTest {
                 5L * 1024L * 1024L
         );
 
-        when(roleMemberShipRepository.existsClubAdmin(testUserId, testClubId)).thenReturn(true);
         when(clubRepository.findById(testClubId)).thenReturn(Optional.of(testClub));
         when(cloudinaryService.uploadImage(any(MultipartFile.class), eq("club/logos")))
                 .thenReturn(uploadResult);
@@ -776,7 +898,6 @@ class ClubServiceTest {
                 content
         );
 
-        when(roleMemberShipRepository.existsClubAdmin(testUserId, testClubId)).thenReturn(true);
         when(clubRepository.findById(testClubId)).thenReturn(Optional.of(testClub));
 
         // Act & Assert
@@ -811,7 +932,6 @@ class ClubServiceTest {
                 8L * 1024L * 1024L
         );
 
-        when(roleMemberShipRepository.existsClubAdmin(testUserId, testClubId)).thenReturn(true);
         when(clubRepository.findById(testClubId)).thenReturn(Optional.of(testClub));
         when(cloudinaryService.uploadImage(any(MultipartFile.class), eq("club/banners")))
                 .thenReturn(uploadResult);
@@ -848,7 +968,6 @@ class ClubServiceTest {
                 content
         );
 
-        when(roleMemberShipRepository.existsClubAdmin(testUserId, testClubId)).thenReturn(true);
         when(clubRepository.findById(testClubId)).thenReturn(Optional.of(testClub));
 
         // Act & Assert
@@ -868,7 +987,6 @@ class ClubServiceTest {
         request.setRemoveLogo(true);
         testClub.setLogoUrl("https://cloudinary.com/old-logo.png");
 
-        when(roleMemberShipRepository.existsClubAdmin(testUserId, testClubId)).thenReturn(true);
         when(clubRepository.findById(testClubId)).thenReturn(Optional.of(testClub));
         when(clubRepository.save(testClub)).thenReturn(testClub);
         when(clubRepository.findByIdWithDetails(testClubId)).thenReturn(Optional.of(testClub));
@@ -894,7 +1012,6 @@ class ClubServiceTest {
         request.setRemoveBanner(true);
         testClub.setBannerUrl("https://cloudinary.com/old-banner.png");
 
-        when(roleMemberShipRepository.existsClubAdmin(testUserId, testClubId)).thenReturn(true);
         when(clubRepository.findById(testClubId)).thenReturn(Optional.of(testClub));
         when(clubRepository.save(testClub)).thenReturn(testClub);
         when(clubRepository.findByIdWithDetails(testClubId)).thenReturn(Optional.of(testClub));
@@ -930,7 +1047,6 @@ class ClubServiceTest {
         CloudinaryService.UploadResult bannerUploadResult = new CloudinaryService.UploadResult(
                 "https://cloudinary.com/banner.png", "public_id_banner", "png", 8L * 1024L * 1024L);
 
-        when(roleMemberShipRepository.existsClubAdmin(testUserId, testClubId)).thenReturn(true);
         when(clubRepository.findById(testClubId)).thenReturn(Optional.of(testClub));
         when(cloudinaryService.uploadImage(eq(logoFile), eq("club/logos"))).thenReturn(logoUploadResult);
         when(cloudinaryService.uploadImage(eq(bannerFile), eq("club/banners"))).thenReturn(bannerUploadResult);

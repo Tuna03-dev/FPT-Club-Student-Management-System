@@ -7,6 +7,7 @@ import com.sep490.backendclubmanagement.dto.request.ReportReviewRequest;
 import com.sep490.backendclubmanagement.dto.request.SubmitReportRequest;
 import com.sep490.backendclubmanagement.dto.request.UpdateReportRequest;
 import com.sep490.backendclubmanagement.dto.request.UpdateReportRequirementRequest;
+import com.sep490.backendclubmanagement.dto.response.OfficerReportRequirementResponse;
 import com.sep490.backendclubmanagement.dto.response.PageResponse;
 import com.sep490.backendclubmanagement.dto.response.ReportDetailResponse;
 import com.sep490.backendclubmanagement.dto.response.ReportListItemResponse;
@@ -150,6 +151,14 @@ public interface ReportServiceInterface {
             ReportType reportType, Long clubId, String keyword, Pageable pageable, Long userId);
 
     /**
+     * Get a single report requirement by ID (for staff only)
+     * @param requirementId Submission report requirement ID
+     * @param userId Current user ID
+     * @return Report requirement response
+     */
+    ReportRequirementResponse getReportRequirementById(Long requirementId, Long userId);
+
+    /**
      * Get list of clubs that need to submit reports for a specific report requirement (for staff only)
      * @param requirementId Submission report requirement ID
      * @param keyword Keyword for searching club name or code
@@ -181,7 +190,7 @@ public interface ReportServiceInterface {
      * @param userId Current user ID
      * @return Page response containing list of report requirement responses assigned to the club
      */
-    PageResponse<ReportRequirementResponse> getClubReportRequirementsForOfficerWithFilters(
+    PageResponse<OfficerReportRequirementResponse> getClubReportRequirementsForOfficerWithFilters(
             Long clubId, String status, Long semesterId, String keyword, Long teamId,
             Pageable pageable, Long userId);
 

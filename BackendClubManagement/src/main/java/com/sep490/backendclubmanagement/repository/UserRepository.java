@@ -41,6 +41,10 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     Optional<User> findByStudentCode(String studentCode);
 
+    @Query("SELECT u.id FROM User u WHERE UPPER(u.systemRole.roleName) = UPPER(:roleName)")
+    List<Long> findIdsBySystemRoleName(@Param("roleName") String roleName);
+
+
     @Query(value = """
             SELECT u.*
             FROM users u

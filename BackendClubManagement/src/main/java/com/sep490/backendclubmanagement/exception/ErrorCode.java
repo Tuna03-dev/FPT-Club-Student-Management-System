@@ -51,7 +51,10 @@ public enum ErrorCode {
     // Club management errors
     CLUB_CODE_EXISTED(HttpStatus.BAD_REQUEST, 8000, "Mã câu lạc bộ đã tồn tại"),
     CLUB_NAME_EXISTED(HttpStatus.BAD_REQUEST, 8001, "Tên câu lạc bộ đã tồn tại"),
-    USER_NOT_VALID(HttpStatus.BAD_REQUEST, 8002, "Email người dùng không hợp lệ hoặc không thuộc tổ chức");
+    USER_NOT_VALID(HttpStatus.BAD_REQUEST, 8002, "Email người dùng không hợp lệ hoặc không thuộc tổ chức"),
+    TEAM_NAME_EXISTED(HttpStatus.BAD_REQUEST, 8003, "Tên ban đã tồn tại trong câu lạc bộ"),
+    TEAM_HAS_HISTORY(HttpStatus.BAD_REQUEST, 8101, "Không thể xoá phòng ban đã từng có thành viên");
+
 
     private final HttpStatus httpStatus;
     private final int code;

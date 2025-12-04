@@ -171,7 +171,7 @@ export function StaffClubsManagement() {
         campusId: selectedCampus,
         categoryId: selectedCategory,
         status: selectedStatus,
-        page: page - 1,
+        page: page,
         size: pageSize,
       });
 
@@ -242,7 +242,7 @@ export function StaffClubsManagement() {
       );
       const result = await resp.getAllForStaff({
         q: search || categorySearchTerm,
-        page: page !== undefined ? page - 1 : categoryPage - 1,
+        page: page !== undefined ? page : categoryPage,
         size: categoryPageSize,
       });
       if (result && result.code === 200 && result.data) {

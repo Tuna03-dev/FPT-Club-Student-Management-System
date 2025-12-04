@@ -43,8 +43,6 @@ interface Club {
   id: string;
   name: string;
   code: string;
-  avatar: string;
-  description: string;
 }
 
 interface Report {
@@ -53,15 +51,12 @@ interface Report {
   type: "periodic" | "post-event" | "other";
   status: ReportStatus;
   submittedBy: string;
-  submittedByAvatar: string;
   department: string;
   createdAt: string;
   dueDate: string;
   content: string;
-  score?: number;
   reviewer?: string;
   reviewDate?: string;
-  notes?: string;
   approvalNotes?: string;
   rejectionReason?: string;
   clubId?: string;
@@ -466,29 +461,11 @@ export function ClubReportModal({
                   <div className="grid grid-cols-2 gap-4 text-sm">
                     <div>
                       <p className="text-muted-foreground mb-1">
-                        Người đánh giá
-                      </p>
-                      <p className="font-medium">{report.reviewer}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground mb-1">
                         Ngày đánh giá
                       </p>
                       <p className="font-medium">{report.reviewDate}</p>
                     </div>
                   </div>
-
-                  {report.score !== undefined && (
-                    <div>
-                      <p className="text-muted-foreground mb-2">Điểm số</p>
-                      <div className="flex items-end gap-2">
-                        <div className="text-3xl font-bold text-primary">
-                          {report.score}
-                        </div>
-                        <div className="text-muted-foreground">/100</div>
-                      </div>
-                    </div>
-                  )}
 
                   {report.approvalNotes && (
                     <div>

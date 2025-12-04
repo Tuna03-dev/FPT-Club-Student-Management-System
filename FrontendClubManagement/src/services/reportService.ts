@@ -8,6 +8,7 @@ import type {
   ClubRequirementInfo,
   ReportFilterRequest,
   ReportListItemResponse,
+  OfficerReportRequirementResponse,
 } from "@/types/dto/reportRequirement.dto";
 import type { ClubDto } from "@/service/EventService";
 import type { ReportDetailResponse } from "@/types/dto/reportRequirement.dto";
@@ -160,6 +161,21 @@ export async function getAllReportRequirements(
 }
 
 /**
+ * Get a single report requirement by ID (for staff only)
+ */
+export async function getReportRequirementById(
+  requirementId: number
+): Promise<ReportRequirementResponse> {
+  const response = await axiosClient.get<ReportRequirementResponse>(
+    `/reports/staff/requirements/${requirementId}`
+  );
+  if (!response.data) {
+    throw new Error("Failed to get report requirement");
+  }
+  return response.data;
+}
+
+/**
  * Get list of clubs that need to submit reports for a specific report requirement
  * Supports pagination and search by club name or code
  */
@@ -177,7 +193,8 @@ export async function getClubsByReportRequirement(
   }
 
   const response = await axiosClient.get<PageResponse<ClubRequirementInfo>>(
-    `/reports/staff/requirements/${requirementId}/clubs?${params.toString()}`
+    `/reports/staff/requirements/${requirementId}/clubs?${params.toString()}`,
+    { timeout: 30000 }
   );
   if (!response.data) {
     throw new Error("Failed to get clubs by report requirement");
@@ -214,11 +231,12 @@ export interface ClubReportRequirementFilterRequest {
 
 /**
  * Get all report requirements for a club with filters and pagination (for CLUB_OFFICER or TEAM_OFFICER)
+ * Returns optimized response with only essential fields
  */
 export async function getClubReportRequirementsForOfficerWithFilters(
   clubId: number,
   request: ClubReportRequirementFilterRequest
-): Promise<PageResponse<ReportRequirementResponse>> {
+): Promise<PageResponse<OfficerReportRequirementResponse>> {
   const params = new URLSearchParams();
 
   if (request.status) params.append("status", request.status);
@@ -234,7 +252,7 @@ export async function getClubReportRequirementsForOfficerWithFilters(
   if (request.sort) params.append("sort", request.sort);
 
   const response = await axiosClient.get<
-    PageResponse<ReportRequirementResponse>
+    PageResponse<OfficerReportRequirementResponse>
   >(
     `/reports/club/${clubId}/requirements/officer/filter?${params.toString()}`,
     {
