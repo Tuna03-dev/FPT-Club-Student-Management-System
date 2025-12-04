@@ -266,7 +266,7 @@ public class ClubService implements ClubServiceInterface {
             String message = "Bạn đã được chỉ định làm Chủ nhiệm của CLB " + savedClub.getClubName() +
                     " (" + savedClub.getClubCode() + "). Chúc mừng bạn!";
 
-            notificationService.sendToUsersAsync(
+            notificationService.sendToUsers(
                     List.of(president.getId()),
                     staffId,
                     title,
@@ -486,7 +486,7 @@ public class ClubService implements ClubServiceInterface {
                 String message = "CLB " + club.getClubName() + " đã bị vô hiệu hóa bởi nhà trường. " +
                         "Mọi hoạt động của CLB sẽ tạm ngưng cho đến khi được kích hoạt lại.";
 
-                notificationService.sendToUsersAsync(
+                notificationService.sendToUsers(
                         memberIds,
                         staffId,
                         title,
@@ -526,7 +526,7 @@ public class ClubService implements ClubServiceInterface {
                 String message = "CLB " + club.getClubName() + " đã được kích hoạt lại bởi nhà trường. " +
                         "Các hoạt động của CLB có thể tiếp tục.";
 
-                notificationService.sendToUsersAsync(
+                notificationService.sendToUsers(
                         memberIds,
                         staffId,
                         title,
