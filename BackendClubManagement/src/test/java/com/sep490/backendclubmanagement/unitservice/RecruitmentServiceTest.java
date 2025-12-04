@@ -305,12 +305,27 @@ class RecruitmentServiceTest {
     @Test
     void testCreateRecruitment_Success() throws AppException {
         // Arrange
+        RecruitmentQuestionRequest questionRequest = new RecruitmentQuestionRequest();
+        questionRequest.questionText = "Why do you want to join?";
+        questionRequest.questionType = "TEXT";
+        questionRequest.questionOrder = 1;
+        questionRequest.isRequired = 1;
+
         RecruitmentCreateRequest request = new RecruitmentCreateRequest();
         request.title = "New Recruitment";
         request.description = "Description";
         request.endDate = LocalDateTime.now().plusDays(7);
-        request.questions = new ArrayList<>();
+        request.questions = Arrays.asList(questionRequest);
         request.teamOptionIds = Arrays.asList(testTeamId);
+
+        RecruitmentFormQuestion savedQuestion = RecruitmentFormQuestion.builder()
+                .id(1L)
+                .questionText("Why do you want to join?")
+                .questionType("TEXT")
+                .questionOrder(1)
+                .isRequired(1)
+                .recruitment(testRecruitment)
+                .build();
 
         when(clubRepository.findById(testClubId)).thenReturn(Optional.of(testClub));
         when(recruitmentMapper.toEntity(any(RecruitmentCreateRequest.class), eq(testClubId)))
@@ -319,8 +334,15 @@ class RecruitmentServiceTest {
         when(recruitmentRepository.findByClub_IdAndStatusAndIdNot(testClubId, RecruitmentStatus.OPEN, testRecruitmentId))
                 .thenReturn(Collections.emptyList());
         when(teamRepository.findById(testTeamId)).thenReturn(Optional.of(testTeam));
+
+        // Mock question handling
         when(questionRepository.findByRecruitment_IdOrderByQuestionOrderAsc(testRecruitmentId))
+                .thenReturn(Collections.emptyList()) // First call for existing questions
+                .thenReturn(Arrays.asList(savedQuestion)); // Second call after save
+        when(questionRepository.save(any(RecruitmentFormQuestion.class))).thenReturn(savedQuestion);
+        when(questionOptionRepository.findByQuestionIdInOrderByQuestionIdAscOptionOrderAsc(anyList()))
                 .thenReturn(Collections.emptyList());
+
         when(teamOptionRepository.findByRecruitment_Id(testRecruitmentId))
                 .thenReturn(Collections.emptyList());
         when(recruitmentMapper.toDto(any(Recruitment.class))).thenReturn(testRecruitmentData);
@@ -335,6 +357,7 @@ class RecruitmentServiceTest {
         assertNotNull(result);
         verify(clubRepository).findById(testClubId);
         verify(recruitmentRepository).save(any(Recruitment.class));
+        verify(questionRepository, atLeastOnce()).save(any(RecruitmentFormQuestion.class));
     }
 
     @Test
@@ -374,25 +397,127 @@ class RecruitmentServiceTest {
         assertEquals(ErrorCode.INVALID_INPUT, exception.getErrorCode());
     }
 
+    @Test
+    void testCreateRecruitment_WithQuestionOptions() throws AppException {
+        // Arrange
+        RecruitmentQuestionRequest questionRequest = new RecruitmentQuestionRequest();
+        questionRequest.questionText = "Which team are you interested in?";
+        questionRequest.questionType = "SINGLE_CHOICE";
+        questionRequest.questionOrder = 1;
+        questionRequest.isRequired = 1;
+        questionRequest.options = Arrays.asList("Technical Team", "Marketing Team", "HR Team");
+
+        RecruitmentCreateRequest request = new RecruitmentCreateRequest();
+        request.title = "New Recruitment";
+        request.description = "Description";
+        request.endDate = LocalDateTime.now().plusDays(7);
+        request.questions = Arrays.asList(questionRequest);
+        request.teamOptionIds = Arrays.asList(testTeamId);
+
+        RecruitmentFormQuestion savedQuestion = RecruitmentFormQuestion.builder()
+                .id(1L)
+                .questionText("Which team are you interested in?")
+                .questionType("SINGLE_CHOICE")
+                .questionOrder(1)
+                .isRequired(1)
+                .recruitment(testRecruitment)
+                .build();
+
+        List<QuestionOption> questionOptions = Arrays.asList(
+                QuestionOption.builder().id(1L).optionText("Technical Team").optionOrder(1).question(savedQuestion).build(),
+                QuestionOption.builder().id(2L).optionText("Marketing Team").optionOrder(2).question(savedQuestion).build(),
+                QuestionOption.builder().id(3L).optionText("HR Team").optionOrder(3).question(savedQuestion).build()
+        );
+
+        when(clubRepository.findById(testClubId)).thenReturn(Optional.of(testClub));
+        when(recruitmentMapper.toEntity(any(RecruitmentCreateRequest.class), eq(testClubId)))
+                .thenReturn(testRecruitment);
+        when(recruitmentRepository.save(any(Recruitment.class))).thenReturn(testRecruitment);
+        when(recruitmentRepository.findByClub_IdAndStatusAndIdNot(testClubId, RecruitmentStatus.OPEN, testRecruitmentId))
+                .thenReturn(Collections.emptyList());
+        when(teamRepository.findById(testTeamId)).thenReturn(Optional.of(testTeam));
+
+        // Mock question handling
+        when(questionRepository.findByRecruitment_IdOrderByQuestionOrderAsc(testRecruitmentId))
+                .thenReturn(Collections.emptyList()) // First call for existing questions
+                .thenReturn(Arrays.asList(savedQuestion)); // Second call after save
+        when(questionRepository.save(any(RecruitmentFormQuestion.class))).thenReturn(savedQuestion);
+        when(questionOptionRepository.saveAll(anyList())).thenReturn(questionOptions);
+        when(questionOptionRepository.findByQuestionIdInOrderByQuestionIdAscOptionOrderAsc(anyList()))
+                .thenReturn(questionOptions);
+
+        when(teamOptionRepository.findByRecruitment_Id(testRecruitmentId))
+                .thenReturn(Collections.emptyList());
+        when(recruitmentMapper.toDto(any(Recruitment.class))).thenReturn(testRecruitmentData);
+        when(semesterRepository.findByIsCurrentTrue()).thenReturn(Optional.of(testSemester));
+        when(roleMembershipRepository.findClubOfficerUserIdsByClubIdAndSemesterId(testClubId, testSemesterId))
+                .thenReturn(Arrays.asList(testUserId));
+
+        // Act
+        RecruitmentData result = recruitmentService.createRecruitment(testUserId, testClubId, request);
+
+        // Assert
+        assertNotNull(result);
+        verify(clubRepository).findById(testClubId);
+        verify(recruitmentRepository).save(any(Recruitment.class));
+        verify(questionRepository, atLeastOnce()).save(any(RecruitmentFormQuestion.class));
+        verify(questionOptionRepository).saveAll(anyList());
+    }
+
     // ==================== updateRecruitment Tests ====================
 
     @Test
     void testUpdateRecruitment_Success() throws AppException {
         // Arrange
+        RecruitmentQuestionRequest questionRequest = new RecruitmentQuestionRequest();
+        questionRequest.id = 1L; // Update existing question
+        questionRequest.questionText = "Updated question text";
+        questionRequest.questionType = "TEXT";
+        questionRequest.questionOrder = 1;
+        questionRequest.isRequired = 1;
+
         RecruitmentUpdateRequest request = new RecruitmentUpdateRequest();
         request.title = "Updated Title";
         request.description = "Updated Description";
         request.endDate = LocalDateTime.now().plusDays(10);
-        request.questions = new ArrayList<>();
+        request.questions = Arrays.asList(questionRequest);
         request.teamOptionIds = Arrays.asList(testTeamId);
+
+        RecruitmentFormQuestion existingQuestion = RecruitmentFormQuestion.builder()
+                .id(1L)
+                .questionText("Old question text")
+                .questionType("TEXT")
+                .questionOrder(1)
+                .isRequired(1)
+                .recruitment(testRecruitment)
+                .build();
+
+        RecruitmentFormQuestion updatedQuestion = RecruitmentFormQuestion.builder()
+                .id(1L)
+                .questionText("Updated question text")
+                .questionType("TEXT")
+                .questionOrder(1)
+                .isRequired(1)
+                .recruitment(testRecruitment)
+                .build();
 
         when(recruitmentRepository.findById(testRecruitmentId)).thenReturn(Optional.of(testRecruitment));
         when(recruitmentRepository.save(any(Recruitment.class))).thenReturn(testRecruitment);
         when(recruitmentRepository.findByClub_IdAndStatusAndIdNot(testClubId, RecruitmentStatus.OPEN, testRecruitmentId))
                 .thenReturn(Collections.emptyList());
         when(teamRepository.findById(testTeamId)).thenReturn(Optional.of(testTeam));
+
+        // Mock question handling
         when(questionRepository.findByRecruitment_IdOrderByQuestionOrderAsc(testRecruitmentId))
+                .thenReturn(Arrays.asList(existingQuestion)) // First call for existing questions
+                .thenReturn(Arrays.asList(updatedQuestion)); // Second call after save
+        when(questionRepository.findById(1L)).thenReturn(Optional.of(existingQuestion));
+        when(questionRepository.save(any(RecruitmentFormQuestion.class))).thenReturn(updatedQuestion);
+        when(questionOptionRepository.findByQuestion_IdOrderByOptionOrderAsc(1L))
                 .thenReturn(Collections.emptyList());
+        when(questionOptionRepository.findByQuestionIdInOrderByQuestionIdAscOptionOrderAsc(anyList()))
+                .thenReturn(Collections.emptyList());
+
         when(teamOptionRepository.findByRecruitment_Id(testRecruitmentId))
                 .thenReturn(Collections.emptyList());
         when(recruitmentMapper.toDto(any(Recruitment.class))).thenReturn(testRecruitmentData);
@@ -403,6 +528,158 @@ class RecruitmentServiceTest {
         // Assert
         assertNotNull(result);
         verify(recruitmentRepository).save(any(Recruitment.class));
+        verify(questionRepository, atLeastOnce()).save(any(RecruitmentFormQuestion.class));
+    }
+
+    @Test
+    void testUpdateRecruitment_DeleteOldQuestionAndAddNew() throws AppException {
+        // Arrange
+        RecruitmentQuestionRequest newQuestionRequest = new RecruitmentQuestionRequest();
+        newQuestionRequest.id = null; // New question (no ID)
+        newQuestionRequest.questionText = "New question";
+        newQuestionRequest.questionType = "TEXT";
+        newQuestionRequest.questionOrder = 1;
+        newQuestionRequest.isRequired = 1;
+
+        RecruitmentUpdateRequest request = new RecruitmentUpdateRequest();
+        request.title = "Updated Title";
+        request.description = "Updated Description";
+        request.endDate = LocalDateTime.now().plusDays(10);
+        request.questions = Arrays.asList(newQuestionRequest); // Only new question, old one should be deleted
+        request.teamOptionIds = Arrays.asList(testTeamId);
+
+        RecruitmentFormQuestion oldQuestion = RecruitmentFormQuestion.builder()
+                .id(1L)
+                .questionText("Old question to be deleted")
+                .questionType("TEXT")
+                .questionOrder(1)
+                .isRequired(1)
+                .recruitment(testRecruitment)
+                .build();
+
+        RecruitmentFormQuestion newQuestion = RecruitmentFormQuestion.builder()
+                .id(2L)
+                .questionText("New question")
+                .questionType("TEXT")
+                .questionOrder(1)
+                .isRequired(1)
+                .recruitment(testRecruitment)
+                .build();
+
+        when(recruitmentRepository.findById(testRecruitmentId)).thenReturn(Optional.of(testRecruitment));
+        when(recruitmentRepository.save(any(Recruitment.class))).thenReturn(testRecruitment);
+        when(recruitmentRepository.findByClub_IdAndStatusAndIdNot(testClubId, RecruitmentStatus.OPEN, testRecruitmentId))
+                .thenReturn(Collections.emptyList());
+        when(teamRepository.findById(testTeamId)).thenReturn(Optional.of(testTeam));
+
+        // Mock question handling
+        when(questionRepository.findByRecruitment_IdOrderByQuestionOrderAsc(testRecruitmentId))
+                .thenReturn(Arrays.asList(oldQuestion)) // First call shows old question exists
+                .thenReturn(Arrays.asList(newQuestion)); // Second call after save shows new question
+        when(questionOptionRepository.findByQuestion_IdOrderByOptionOrderAsc(1L))
+                .thenReturn(Collections.emptyList()); // Old question has no options
+        when(questionRepository.save(any(RecruitmentFormQuestion.class))).thenReturn(newQuestion);
+        when(questionOptionRepository.findByQuestionIdInOrderByQuestionIdAscOptionOrderAsc(anyList()))
+                .thenReturn(Collections.emptyList());
+
+        when(teamOptionRepository.findByRecruitment_Id(testRecruitmentId))
+                .thenReturn(Collections.emptyList());
+        when(recruitmentMapper.toDto(any(Recruitment.class))).thenReturn(testRecruitmentData);
+
+        // Act
+        RecruitmentData result = recruitmentService.updateRecruitment(testUserId, testRecruitmentId, request);
+
+        // Assert
+        assertNotNull(result);
+        verify(recruitmentRepository).save(any(Recruitment.class));
+        // Since old question has no options, deleteAllById for options is NOT called
+        verify(questionOptionRepository, never()).deleteAllById(anyList());
+        // Old question should be deleted
+        verify(questionRepository).deleteAllById(anyList());
+        // New question should be saved
+        verify(questionRepository).save(any(RecruitmentFormQuestion.class));
+    }
+
+    @Test
+    void testUpdateRecruitment_DeleteQuestionWithOptions() throws AppException {
+        // Arrange
+        RecruitmentQuestionRequest newQuestionRequest = new RecruitmentQuestionRequest();
+        newQuestionRequest.id = null; // New question (no ID)
+        newQuestionRequest.questionText = "New text question";
+        newQuestionRequest.questionType = "TEXT";
+        newQuestionRequest.questionOrder = 1;
+        newQuestionRequest.isRequired = 1;
+
+        RecruitmentUpdateRequest request = new RecruitmentUpdateRequest();
+        request.title = "Updated Title";
+        request.description = "Updated Description";
+        request.endDate = LocalDateTime.now().plusDays(10);
+        request.questions = Arrays.asList(newQuestionRequest); // Only new question, old one with options should be deleted
+        request.teamOptionIds = Arrays.asList(testTeamId);
+
+        RecruitmentFormQuestion oldQuestionWithOptions = RecruitmentFormQuestion.builder()
+                .id(1L)
+                .questionText("Old multiple choice question")
+                .questionType("SINGLE_CHOICE")
+                .questionOrder(1)
+                .isRequired(1)
+                .recruitment(testRecruitment)
+                .build();
+
+        QuestionOption option1 = QuestionOption.builder()
+                .id(10L)
+                .optionText("Option 1")
+                .optionOrder(1)
+                .question(oldQuestionWithOptions)
+                .build();
+
+        QuestionOption option2 = QuestionOption.builder()
+                .id(11L)
+                .optionText("Option 2")
+                .optionOrder(2)
+                .question(oldQuestionWithOptions)
+                .build();
+
+        RecruitmentFormQuestion newQuestion = RecruitmentFormQuestion.builder()
+                .id(2L)
+                .questionText("New text question")
+                .questionType("TEXT")
+                .questionOrder(1)
+                .isRequired(1)
+                .recruitment(testRecruitment)
+                .build();
+
+        when(recruitmentRepository.findById(testRecruitmentId)).thenReturn(Optional.of(testRecruitment));
+        when(recruitmentRepository.save(any(Recruitment.class))).thenReturn(testRecruitment);
+        when(recruitmentRepository.findByClub_IdAndStatusAndIdNot(testClubId, RecruitmentStatus.OPEN, testRecruitmentId))
+                .thenReturn(Collections.emptyList());
+        when(teamRepository.findById(testTeamId)).thenReturn(Optional.of(testTeam));
+
+        // Mock question handling
+        when(questionRepository.findByRecruitment_IdOrderByQuestionOrderAsc(testRecruitmentId))
+                .thenReturn(Arrays.asList(oldQuestionWithOptions)) // First call shows old question with options exists
+                .thenReturn(Arrays.asList(newQuestion)); // Second call after save shows new question
+        when(questionOptionRepository.findByQuestion_IdOrderByOptionOrderAsc(1L))
+                .thenReturn(Arrays.asList(option1, option2)); // Old question HAS options
+        when(questionRepository.save(any(RecruitmentFormQuestion.class))).thenReturn(newQuestion);
+        when(questionOptionRepository.findByQuestionIdInOrderByQuestionIdAscOptionOrderAsc(anyList()))
+                .thenReturn(Collections.emptyList());
+
+        when(teamOptionRepository.findByRecruitment_Id(testRecruitmentId))
+                .thenReturn(Collections.emptyList());
+        when(recruitmentMapper.toDto(any(Recruitment.class))).thenReturn(testRecruitmentData);
+
+        // Act
+        RecruitmentData result = recruitmentService.updateRecruitment(testUserId, testRecruitmentId, request);
+
+        // Assert
+        assertNotNull(result);
+        verify(recruitmentRepository).save(any(Recruitment.class));
+        // Old question has options, so both deleteAllById should be called
+        verify(questionOptionRepository).deleteAllById(anyList()); // Old question options should be deleted
+        verify(questionRepository).deleteAllById(anyList()); // Old question should be deleted
+        // New question should be saved
+        verify(questionRepository).save(any(RecruitmentFormQuestion.class));
     }
 
     // ==================== changeRecruitmentStatus Tests ====================
@@ -445,10 +722,24 @@ class RecruitmentServiceTest {
     @Test
     void testSubmitApplication_Success() throws AppException {
         // Arrange
+        RecruitmentFormQuestion requiredQuestion = RecruitmentFormQuestion.builder()
+                .id(1L)
+                .questionText("Why do you want to join?")
+                .questionType("TEXT")
+                .questionOrder(1)
+                .isRequired(1)
+                .recruitment(testRecruitment)
+                .build();
+
+        ApplicationSubmitRequest.FormAnswerRequest answerRequest = new ApplicationSubmitRequest.FormAnswerRequest();
+        answerRequest.questionId = 1L;
+        answerRequest.answerText = "I am passionate about this club";
+        answerRequest.hasFile = false;
+
         ApplicationSubmitRequest request = new ApplicationSubmitRequest();
         request.recruitmentId = testRecruitmentId;
         request.teamId = testTeamId;
-        request.answers = new ArrayList<>();
+        request.answers = Arrays.asList(answerRequest);
 
         MockMultipartFile file = new MockMultipartFile(
                 "file", "cv.pdf", "application/pdf", "test content".getBytes());
@@ -459,10 +750,11 @@ class RecruitmentServiceTest {
         when(applicationRepository.findByApplicant_IdAndRecruitment_Id(testApplicantId, testRecruitmentId))
                 .thenReturn(Optional.empty());
         when(questionRepository.findByRecruitment_IdOrderByQuestionOrderAsc(testRecruitmentId))
-                .thenReturn(Collections.emptyList());
+                .thenReturn(Arrays.asList(requiredQuestion));
         when(cloudinaryService.uploadFile(any(MultipartFile.class)))
                 .thenReturn(new CloudinaryService.UploadResult("http://cloudinary.com/cv.pdf", "public-id", "pdf", 1024L));
         when(applicationRepository.save(any(RecruitmentApplication.class))).thenReturn(testApplication);
+        when(answerRepository.saveAll(anyList())).thenReturn(Collections.emptyList());
         when(semesterRepository.findByIsCurrentTrue()).thenReturn(Optional.of(testSemester));
         when(roleMembershipRepository.findClubOfficerUserIdsByClubIdAndSemesterId(testClubId, testSemesterId))
                 .thenReturn(Collections.emptyList());
@@ -479,6 +771,7 @@ class RecruitmentServiceTest {
         assertNotNull(result);
         verify(applicationRepository).save(any(RecruitmentApplication.class));
         verify(cloudinaryService).uploadFile(file);
+        verify(answerRepository).saveAll(anyList());
     }
 
     @Test
@@ -518,6 +811,100 @@ class RecruitmentServiceTest {
         );
 
         assertEquals(ErrorCode.ALREADY_APPLIED, exception.getErrorCode());
+    }
+
+    @Test
+    void testSubmitApplication_RequiredQuestionNotAnswered() {
+        // Arrange
+        RecruitmentFormQuestion requiredQuestion = RecruitmentFormQuestion.builder()
+                .id(1L)
+                .questionText("Why do you want to join?")
+                .questionType("TEXT")
+                .questionOrder(1)
+                .isRequired(1)
+                .recruitment(testRecruitment)
+                .build();
+
+        ApplicationSubmitRequest.FormAnswerRequest answerRequest = new ApplicationSubmitRequest.FormAnswerRequest();
+        answerRequest.questionId = 1L;
+        answerRequest.answerText = ""; // Empty answer for required question
+        answerRequest.hasFile = false;
+
+        ApplicationSubmitRequest request = new ApplicationSubmitRequest();
+        request.recruitmentId = testRecruitmentId;
+        request.teamId = testTeamId;
+        request.answers = Arrays.asList(answerRequest);
+
+        when(recruitmentRepository.findById(testRecruitmentId)).thenReturn(Optional.of(testRecruitment));
+        when(userRepository.findById(testApplicantId)).thenReturn(Optional.of(testApplicant));
+        when(clubMemberShipRepository.existsByUserIdAndClubId(testApplicantId, testClubId)).thenReturn(false);
+        when(applicationRepository.findByApplicant_IdAndRecruitment_Id(testApplicantId, testRecruitmentId))
+                .thenReturn(Optional.empty());
+        when(questionRepository.findByRecruitment_IdOrderByQuestionOrderAsc(testRecruitmentId))
+                .thenReturn(Arrays.asList(requiredQuestion));
+
+        // Act & Assert
+        AppException exception = assertThrows(AppException.class, () ->
+            recruitmentService.submitApplication(testApplicantId, request, null)
+        );
+
+        assertEquals(ErrorCode.INTERNAL_SERVER_ERROR, exception.getErrorCode());
+    }
+
+    @Test
+    void testSubmitApplication_RequiredQuestionAnsweredWithFile() throws AppException {
+        // Arrange
+        RecruitmentFormQuestion requiredQuestion = RecruitmentFormQuestion.builder()
+                .id(1L)
+                .questionText("Upload your CV")
+                .questionType("FILE"
+                )
+                .questionOrder(1)
+                .isRequired(1)
+                .recruitment(testRecruitment)
+                .build();
+
+        ApplicationSubmitRequest.FormAnswerRequest answerRequest = new ApplicationSubmitRequest.FormAnswerRequest();
+        answerRequest.questionId = 1L;
+        answerRequest.answerText = null; // No text, but file will be uploaded
+        answerRequest.hasFile = true;
+
+        ApplicationSubmitRequest request = new ApplicationSubmitRequest();
+        request.recruitmentId = testRecruitmentId;
+        request.teamId = testTeamId;
+        request.answers = Arrays.asList(answerRequest);
+
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "cv.pdf", "application/pdf", "test content".getBytes());
+
+        when(recruitmentRepository.findById(testRecruitmentId)).thenReturn(Optional.of(testRecruitment));
+        when(userRepository.findById(testApplicantId)).thenReturn(Optional.of(testApplicant));
+        when(clubMemberShipRepository.existsByUserIdAndClubId(testApplicantId, testClubId)).thenReturn(false);
+        when(applicationRepository.findByApplicant_IdAndRecruitment_Id(testApplicantId, testRecruitmentId))
+                .thenReturn(Optional.empty());
+        when(questionRepository.findByRecruitment_IdOrderByQuestionOrderAsc(testRecruitmentId))
+                .thenReturn(Arrays.asList(requiredQuestion));
+        when(cloudinaryService.uploadFile(any(MultipartFile.class)))
+                .thenReturn(new CloudinaryService.UploadResult("http://cloudinary.com/cv.pdf", "public-id", "pdf", 1024L));
+        when(applicationRepository.save(any(RecruitmentApplication.class))).thenReturn(testApplication);
+        when(answerRepository.saveAll(anyList())).thenReturn(Collections.emptyList());
+        when(semesterRepository.findByIsCurrentTrue()).thenReturn(Optional.of(testSemester));
+        when(roleMembershipRepository.findClubOfficerUserIdsByClubIdAndSemesterId(testClubId, testSemesterId))
+                .thenReturn(Collections.emptyList());
+        // Mock for getApplicationInternal
+        when(applicationRepository.findByIdWithDetails(testApplicationId)).thenReturn(Optional.of(testApplication));
+        when(answerRepository.findByApplication_Id(testApplicationId)).thenReturn(Collections.emptyList());
+        when(recruitmentApplicationMapper.toDto(any(RecruitmentApplication.class))).thenReturn(testApplicationData);
+        when(teamRepository.findById(testTeamId)).thenReturn(Optional.of(testTeam));
+
+        // Act
+        RecruitmentApplicationData result = recruitmentService.submitApplication(testApplicantId, request, file);
+
+        // Assert
+        assertNotNull(result);
+        verify(applicationRepository).save(any(RecruitmentApplication.class));
+        verify(cloudinaryService).uploadFile(file);
+        verify(answerRepository).saveAll(anyList());
     }
 
     // ==================== listApplications Tests ====================

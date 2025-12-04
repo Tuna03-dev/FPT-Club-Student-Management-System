@@ -23,23 +23,16 @@ public class UpdateClubInfoRequest {
     private String bannerUrl;
     private long categoryId;
 
-    @Email(message = "Email không hợp lệ")
-    @Size(max = 100, message = "Email không được quá 100 ký tự")
     private String email;
 
-    @Pattern(regexp = "^[0-9]{10,11}$", message = "Số điện thoại phải có 10-11 chữ số")
     private String phone;
 
-    @Size(max = 500, message = "Facebook URL không được quá 500 ký tự")
     private String fbUrl;
 
-    @Size(max = 500, message = "Instagram URL không được quá 500 ký tự")
     private String igUrl;
 
-    @Size(max = 500, message = "TikTok URL không được quá 500 ký tự")
     private String ttUrl;
 
-    @Size(max = 500, message = "YouTube URL không được quá 500 ký tự")
     private String ytUrl;
 
     private Boolean removeLogo;
