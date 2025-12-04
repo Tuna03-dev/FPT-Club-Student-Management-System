@@ -16,12 +16,13 @@ public class BannerController {
     private final BannerService service;
 
     @GetMapping
+    @PreAuthorize("@clubSecurity.isAdmin()")
     public ApiResponse<BannerResponse> get() {
         return ApiResponse.success(service.get());
     }
 
     @PutMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("@clubSecurity.isAdmin()")
     public ApiResponse<BannerResponse> update(@RequestBody BannerUpdateRequest req) {
         return ApiResponse.success(service.update(req));
     }
