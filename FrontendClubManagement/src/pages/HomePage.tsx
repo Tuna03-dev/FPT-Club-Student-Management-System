@@ -13,7 +13,7 @@ import {
 
 import { getHomepageData } from "../api/homepageApi";
 import type { HomepageData } from "../types/homepage";
-import { bannerApi } from "@/api/banner";
+import { publicBannerApi } from "@/api/publicBannerApi";
 
 import { getAllNewsByFilter } from "../service/NewsService";
 import { getAllEventsByFilter } from "../service/EventService";
@@ -175,7 +175,7 @@ const HomePage: React.FC = () => {
 
   useEffect(() => {
     fetchData();
-    bannerApi.get().then((r) => setBanner(r.data)); // <<-- LOAD BANNER
+    publicBannerApi.get().then((r) => setBanner(r.data)); // <<-- LOAD BANNER
   }, [fetchData]);
 
   const fallbackImage = "/default-banner.jpg"; // <<-- Ảnh fallback
