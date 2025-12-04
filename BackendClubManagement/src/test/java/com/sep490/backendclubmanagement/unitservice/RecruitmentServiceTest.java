@@ -347,8 +347,10 @@ class RecruitmentServiceTest {
                 .thenReturn(Collections.emptyList());
         when(recruitmentMapper.toDto(any(Recruitment.class))).thenReturn(testRecruitmentData);
         when(semesterRepository.findByIsCurrentTrue()).thenReturn(Optional.of(testSemester));
+        // Mock club officers: include testUserId (creator) and another officer
+        Long anotherOfficerId = 99L;
         when(roleMembershipRepository.findClubOfficerUserIdsByClubIdAndSemesterId(testClubId, testSemesterId))
-                .thenReturn(Arrays.asList(testUserId));
+                .thenReturn(Arrays.asList(testUserId, anotherOfficerId));
 
         // Act
         RecruitmentData result = recruitmentService.createRecruitment(testUserId, testClubId, request);
@@ -358,6 +360,21 @@ class RecruitmentServiceTest {
         verify(clubRepository).findById(testClubId);
         verify(recruitmentRepository).save(any(Recruitment.class));
         verify(questionRepository, atLeastOnce()).save(any(RecruitmentFormQuestion.class));
+
+        // Verify notification was sent to club officers (excluding creator)
+        verify(notificationService).sendToUsers(
+                argThat(list -> list.size() == 1 && list.contains(anotherOfficerId)), // recipientIds (only anotherOfficerId, not testUserId)
+                eq(testUserId), // actorId
+                eq("Đợt tuyển thành viên mới đã mở"), // title
+                contains("đã mở đợt tuyển thành viên"), // message
+                eq(NotificationType.RECRUITMENT_OPENED),
+                eq(NotificationPriority.NORMAL),
+                contains("/myclub/"), // actionUrl
+                eq(testClubId), // relatedClubId
+                isNull(), // relatedNewsId
+                isNull(), // relatedTeamId
+                isNull() // relatedRequestId
+        );
     }
 
     @Test
@@ -693,8 +710,10 @@ class RecruitmentServiceTest {
         when(recruitmentRepository.findByClub_IdAndStatusAndIdNot(testClubId, RecruitmentStatus.OPEN, testRecruitmentId))
                 .thenReturn(Collections.emptyList());
         when(semesterRepository.findByIsCurrentTrue()).thenReturn(Optional.of(testSemester));
+        // Mock club officers: include testUserId (creator) and another officer
+        Long anotherOfficerId = 99L;
         when(roleMembershipRepository.findClubOfficerUserIdsByClubIdAndSemesterId(testClubId, testSemesterId))
-                .thenReturn(Arrays.asList(testUserId));
+                .thenReturn(Arrays.asList(testUserId, anotherOfficerId));
 
         // Act
         recruitmentService.changeRecruitmentStatus(testUserId, testRecruitmentId, RecruitmentStatus.OPEN);
@@ -702,6 +721,21 @@ class RecruitmentServiceTest {
         // Assert
         verify(recruitmentRepository).save(testRecruitment);
         assertEquals(RecruitmentStatus.OPEN, testRecruitment.getStatus());
+
+        // Verify notification was sent to club officers (excluding creator)
+        verify(notificationService).sendToUsers(
+                argThat(list -> list.size() == 1 && list.contains(anotherOfficerId)), // recipientIds (only anotherOfficerId, not testUserId)
+                eq(testUserId), // actorId
+                eq("Đợt tuyển thành viên mới đã mở"), // title
+                contains("đã mở đợt tuyển thành viên"), // message
+                eq(NotificationType.RECRUITMENT_OPENED),
+                eq(NotificationPriority.NORMAL),
+                contains("/myclub/"), // actionUrl
+                eq(testClubId), // relatedClubId
+                isNull(), // relatedNewsId
+                isNull(), // relatedTeamId
+                isNull() // relatedRequestId
+        );
     }
 
     @Test
@@ -1095,7 +1129,7 @@ class RecruitmentServiceTest {
         // Assert
         assertNotNull(result);
         verify(applicationRepository).save(any(RecruitmentApplication.class));
-        // Note: Notification is sent asynchronously, so we can't verify it in unit tests
+        // Note: NotificationService is mocked, so we don't verify the actual notification call
     }
 
     // ==================== closeExpiredRecruitments Tests ====================

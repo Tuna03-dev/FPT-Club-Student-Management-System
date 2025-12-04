@@ -22,16 +22,4 @@ public class AsyncConfig {
         ex.initialize();
         return ex;
     }
-
-    // Thread pool dành cho xử lý notifications và async tasks
-    @Bean(name = "taskExecutor")
-    public Executor taskExecutor() {
-        ThreadPoolTaskExecutor ex = new ThreadPoolTaskExecutor();
-        ex.setCorePoolSize(5);       // số luồng tối thiểu
-        ex.setMaxPoolSize(15);       // số luồng tối đa
-        ex.setQueueCapacity(500);    // hàng đợi lớn cho notifications
-        ex.setThreadNamePrefix("async-task-"); // dễ đọc log
-        ex.initialize();
-        return ex;
-    }
 }
