@@ -3419,6 +3419,13 @@ export function ClubReportManagement() {
                           return;
                         }
 
+                        if (!draftTitle.trim() || !draftContent.trim()) {
+                          toast.error(
+                            "Vui lòng điền đầy đủ tiêu đề và nội dung"
+                          );
+                          return;
+                        }
+
                         try {
                           setSubmittingReport(true);
 
@@ -3618,7 +3625,9 @@ export function ClubReportManagement() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="mt-4">
-                <Label>Tiêu đề báo cáo</Label>
+                <Label>
+                  Tiêu đề báo cáo<span className="text-red-500">*</span>
+                </Label>
                 <Input
                   placeholder="Nhập tiêu đề báo cáo"
                   value={draftTitle}
@@ -3627,7 +3636,9 @@ export function ClubReportManagement() {
                 />
               </div>
               <div>
-                <Label>Nội dung </Label>
+                <Label>
+                  Nội dung <span className="text-red-500">*</span>
+                </Label>
                 <Textarea
                   placeholder="Nhập nội dung có trong báo cáo..."
                   rows={8}
