@@ -914,7 +914,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
             // Resubmission after university rejection:
             // - If club president: RESUBMITTED_UNIVERSITY (nộp lại lên trường)
             // - If team officer: UPDATED_PENDING_CLUB (nộp lại lên câu lạc bộ)
-            if (isClubOfficer) {
+            if (isClubOfficer || currentStatus == ReportStatus.UPDATED_PENDING_CLUB) {
                 newStatus = ReportStatus.RESUBMITTED_UNIVERSITY;
             } else {
                 // Team officer resubmits to club level

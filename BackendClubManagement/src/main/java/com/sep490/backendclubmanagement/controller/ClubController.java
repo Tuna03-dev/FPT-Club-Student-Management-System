@@ -35,9 +35,9 @@ public class ClubController {
      * @return Club detail data
      */
     @GetMapping("/{id}")
-    public ResponseEntity<ApiResponse<ClubDetailData>> getClubDetail(@PathVariable Long id) throws AppException {
+    public ApiResponse<ClubDetailData> getClubDetail(@PathVariable Long id) throws AppException {
         ClubDetailData data = clubService.getClubDetail(id);
-        return ResponseEntity.ok(ApiResponse.success(data));
+        return ApiResponse.success(data);
     }
 
     /**
@@ -46,9 +46,9 @@ public class ClubController {
      * @return Club detail data
      */
     @GetMapping("/code/{clubCode}")
-    public ResponseEntity<ApiResponse<ClubDetailData>> getClubDetailByCode(@PathVariable String clubCode) throws AppException {
+    public ApiResponse<ClubDetailData> getClubDetailByCode(@PathVariable String clubCode) throws AppException {
         ClubDetailData data = clubService.getClubDetailByCode(clubCode);
-        return ResponseEntity.ok(ApiResponse.success(data));
+        return ApiResponse.success(data);
     }
 
     /**
@@ -56,9 +56,9 @@ public class ClubController {
      * @return List of clubs with id and clubName
      */
     @GetMapping
-    public ResponseEntity<ApiResponse<List<ClubDto>>> getAllClubs() {
+    public ApiResponse<List<ClubDto>> getAllClubs() {
         List<ClubDto> clubs = clubService.getAllClubs();
-        return ResponseEntity.ok(ApiResponse.success(clubs));
+        return ApiResponse.success(clubs);
     }
 
     /**
@@ -69,11 +69,11 @@ public class ClubController {
      */
     @PreAuthorize("@clubSecurity.isMemberOfClub(#id)")
     @GetMapping("/{id}/club-info")
-    public ResponseEntity<ApiResponse<ClubDetailData>> getClubInfo(
+    public ApiResponse<ClubDetailData> getClubInfo(
             @PathVariable Long id) throws AppException {
         Long userId = SecurityUtils.getCurrentUserId();
         ClubDetailData data = clubService.getClubInfo(id, userId);
-        return ResponseEntity.ok(ApiResponse.success(data));
+        return ApiResponse.success(data);
     }
 
     /**
@@ -86,14 +86,14 @@ public class ClubController {
      */
     @PreAuthorize("@clubSecurity.isClubOfficerInClub(#id)")
     @PutMapping(value = "/{id}/officer-update", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<ApiResponse<ClubDetailData>> updateClubInfo(
+    public ApiResponse<ClubDetailData> updateClubInfo(
             @PathVariable Long id,
             @Valid @RequestPart("request") UpdateClubInfoRequest request,
             @RequestPart(value = "logoFile", required = false) MultipartFile logoFile,
             @RequestPart(value = "bannerFile", required = false) MultipartFile bannerFile) throws AppException {
         Long userId = SecurityUtils.getCurrentUserId();
         ClubDetailData data = clubService.updateClubInfo(id, request, userId, logoFile, bannerFile);
-        return ResponseEntity.ok(ApiResponse.success(data));
+        return ApiResponse.success(data);
     }
 
     /**
@@ -101,7 +101,7 @@ public class ClubController {
      * Returns teamId, teamName, description, clubId and clubName.
      */
     @GetMapping("/{id}/teams/dto")
-    public ResponseEntity<ApiResponse<List<TeamDTO>>> getClubTeamsAsDto(@PathVariable Long id) throws AppException {
+    public ApiResponse<List<TeamDTO>> getClubTeamsAsDto(@PathVariable Long id) throws AppException {
         // Fetch teams via TeamService
         List<TeamResponse> teams = teamService.getTeamsByClubId(id);
 
@@ -119,6 +119,6 @@ public class ClubController {
                 ))
                 .collect(Collectors.toList());
 
-        return ResponseEntity.ok(ApiResponse.success(result));
+        return ApiResponse.success(result);
     }
 }
