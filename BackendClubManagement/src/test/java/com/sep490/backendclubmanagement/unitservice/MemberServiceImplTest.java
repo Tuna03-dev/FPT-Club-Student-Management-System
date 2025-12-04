@@ -101,8 +101,43 @@ class MemberServiceImplTest {
         PageResponse<MemberResponse> resp = memberService.getMembersWithFilters(club.getId(), null, null, null, null, null, pageable);
 
         // Assert
+
         assertNotNull(resp);
         assertEquals(1, resp.getTotalElements());
+        assertEquals("Nguyễn Văn A", resp.getContent().get(0).getFullName());
+    }
+
+    @Test
+    void getMembersWithFilters_withSearch_filtersResult() {
+        // Arrange
+        Pageable pageable = PageRequest.of(0, 10);
+
+        User otherUser = new User();
+        otherUser.setId(11L);
+        otherUser.setFullName("Trần Văn B");
+        otherUser.setStudentCode("S002");
+        otherUser.setEmail("b@example.com");
+
+        ClubMemberShip otherCms = new ClubMemberShip();
+        otherCms.setId(101L);
+        otherCms.setUser(otherUser);
+        otherCms.setClub(club);
+        otherCms.setJoinDate(LocalDate.of(2024, 1, 1));
+        otherCms.setStatus(ClubMemberShipStatus.ACTIVE);
+
+        // page có 2 member, nhưng search chỉ match 1
+        Page<ClubMemberShip> page = new PageImpl<>(List.of(cms, otherCms), pageable, 2);
+
+        when(semesterRepository.findAll()).thenReturn(List.of(currentSemester));
+        when(clubMemberShipRepository.findMembersWithFiltersOptimized(eq(club.getId()), any(), any(), any(), any(), eq(pageable)))
+                .thenReturn(page);
+
+        // Act - search theo tên "Nguyễn", kỳ vọng chỉ còn lại cms của user "Nguyễn Văn A"
+        PageResponse<MemberResponse> resp = memberService.getMembersWithFilters(club.getId(), null, null, null, null, "Nguyễn", pageable);
+
+        // Assert
+        assertNotNull(resp);
+        assertEquals(1, resp.getContent().size());
         assertEquals("Nguyễn Văn A", resp.getContent().get(0).getFullName());
     }
 
@@ -218,6 +253,60 @@ class MemberServiceImplTest {
         assertEquals(1, list.size());
         assertEquals(user.getId(), list.get(0).getUserId());
         assertEquals(user.getFullName(), list.get(0).getFullName());
+    }
+
+    @Test
+    void getLeftMembers_noSearch_returnsPage() {
+        // Arrange
+        Pageable pageable = PageRequest.of(0, 10);
+
+        cms.setStatus(ClubMemberShipStatus.LEFT);
+        Page<ClubMemberShip> page = new PageImpl<>(List.of(cms), pageable, 1);
+
+        when(clubMemberShipRepository.findLeftMembersOptimized(eq(club.getId()), eq(pageable)))
+                .thenReturn(page);
+
+        // Act
+        PageResponse<MemberResponse> resp = memberService.getLeftMembers(club.getId(), null, pageable);
+
+        // Assert
+        assertNotNull(resp);
+        assertEquals(1, resp.getTotalElements());
+        assertEquals("Nguyễn Văn A", resp.getContent().get(0).getFullName());
+    }
+
+    @Test
+    void getLeftMembers_withSearch_filtersResult() {
+        // Arrange
+        Pageable pageable = PageRequest.of(0, 10);
+
+        cms.setStatus(ClubMemberShipStatus.LEFT);
+
+        User otherUser = new User();
+        otherUser.setId(11L);
+        otherUser.setFullName("Trần Văn B");
+        otherUser.setStudentCode("S002");
+        otherUser.setEmail("b@example.com");
+
+        ClubMemberShip otherCms = new ClubMemberShip();
+        otherCms.setId(101L);
+        otherCms.setUser(otherUser);
+        otherCms.setClub(club);
+        otherCms.setJoinDate(LocalDate.of(2024, 1, 1));
+        otherCms.setStatus(ClubMemberShipStatus.LEFT);
+
+        Page<ClubMemberShip> page = new PageImpl<>(List.of(cms, otherCms), pageable, 2);
+
+        when(clubMemberShipRepository.findLeftMembersOptimized(eq(club.getId()), eq(pageable)))
+                .thenReturn(page);
+
+        // Act - search theo "Nguyễn" để chỉ match member đầu tiên
+        PageResponse<MemberResponse> resp = memberService.getLeftMembers(club.getId(), "Nguyễn", pageable);
+
+        // Assert
+        assertNotNull(resp);
+        assertEquals(1, resp.getContent().size());
+        assertEquals("Nguyễn Văn A", resp.getContent().get(0).getFullName());
     }
 
     @Test

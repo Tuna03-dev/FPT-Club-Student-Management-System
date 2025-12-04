@@ -302,6 +302,7 @@ class FeeServiceImplTest {
         request.setIsMandatory(true);
         request.setIsDraft(true);
 
+
         Fee savedFee = buildFee(1L, clubId, "New Fee", new BigDecimal("100000"), FeeType.MEMBERSHIP, true);
         FeeDetailResponse response = buildFeeDetailResponse(1L, "New Fee", new BigDecimal("100000"));
         response.setIsDraft(true);
