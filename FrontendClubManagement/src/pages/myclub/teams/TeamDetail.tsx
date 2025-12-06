@@ -21,8 +21,8 @@ import { toast } from "sonner";
 
 import TeamNewsDrafts from "@/pages/news/TeamNewsDrafts";
 import TeamNewsRequests from "@/pages/news/TeamNewsRequests";
-import { CreatePost } from "@/components/features/post/CreatePost";
-import { PostCard } from "@/components/features/post/PostCard";
+import { CreatePost } from "@/components/post/CreatePost";
+import { PostCard } from "@/components/post/PostCard";
 import {
   postService,
   type PostWithRelationsData,

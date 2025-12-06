@@ -50,7 +50,7 @@ import {
   PaginationPrevious,
 } from "@/components/ui/pagination";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import MemberDetailDialog from "@/components/features/member/MemberDetailDialog";
+import MemberDetailDialog from "@/components/member/MemberDetailDialog";
 import {
   memberService,
   type MemberResponseDTO,

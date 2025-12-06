@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useLocation } from "react-router-dom";
-import { CreatePost } from "@/components/features/post/CreatePost";
-import { PostCard } from "@/components/features/post/PostCard";
+import { CreatePost } from "@/components/post/CreatePost";
+import { PostCard } from "@/components/post/PostCard";
 import {
   postService,
   type PostWithRelationsData,

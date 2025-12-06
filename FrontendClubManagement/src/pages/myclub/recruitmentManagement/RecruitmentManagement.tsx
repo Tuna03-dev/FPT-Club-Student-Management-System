@@ -47,8 +47,8 @@ import {
   type RecruitmentData,
 } from "@/services/recruitmentService";
 import { toast } from "sonner";
-import { RecruitmentForm } from "@/components/features/recruitment/RecruitmentForm";
-import { ApplicationsList } from "@/components/features/recruitment/ApplicationsList";
+import { RecruitmentForm } from "@/components/recruitment/RecruitmentForm";
+import { ApplicationsList } from "@/components/recruitment/ApplicationsList";
 import {
   Dialog,
   DialogContent,
