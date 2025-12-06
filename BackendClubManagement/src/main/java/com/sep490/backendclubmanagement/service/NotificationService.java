@@ -35,19 +35,6 @@ public interface NotificationService {
                      Long relatedTeamId,
                      Long relatedRequestId);
 
-    /** Async version of sendToUsers for better performance */
-    void sendToUsersAsync(List<Long> recipientIds,
-                          Long actorId,
-                          String title,
-                          String message,
-                          NotificationType type,
-                          NotificationPriority priority,
-                          String actionUrl,
-                          Long relatedClubId,
-                          Long relatedNewsId,
-                          Long relatedTeamId,
-                          Long relatedRequestId);
-
     List<Long> getClubManagers(Long clubId) throws AppException; // dùng như mình đã code trong News*
 
     // ==== các hàm ĐỌC / ĐÁNH DẤU ĐÃ ĐỌC ====

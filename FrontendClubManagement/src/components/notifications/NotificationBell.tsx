@@ -177,12 +177,7 @@ export const NotificationBell: React.FC = () => {
           <h3 className="font-semibold text-sm">Thông báo</h3>
           <button
             onClick={() => {
-              if (clubId) {
-                navigate(`/myclub/${clubId}/notifications`);
-              } else {
-                // Nếu không có clubId, có thể navigate đến trang notifications chung hoặc trang đầu tiên
-                navigate("/notifications");
-              }
+              navigate("/notifications");
               setOpen(false);
             }}
             className="text-xs text-primary hover:underline"

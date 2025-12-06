@@ -96,7 +96,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(request -> request
                         .requestMatchers(SWAGGER_URL).permitAll()
                         .requestMatchers(PUBLIC_URL).permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/admin/banner").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/public/banner").permitAll()
                         .anyRequest().authenticated())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .exceptionHandling(exception -> exception

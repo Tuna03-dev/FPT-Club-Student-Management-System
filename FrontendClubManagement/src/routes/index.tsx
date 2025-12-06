@@ -17,6 +17,7 @@ import EventAttendancePage from "@/pages/myclub/events/attendance/AttendancePage
 import { Notifications } from "@/pages/myclub/Notifications";
 import { Settings } from "@/pages/myclub/Settings";
 import { ClubInforManagement } from "@/pages/myclub/infor/InforManagement";
+import RequireAdmin from "@/components/guards/RequireAdmin";
 
 import { EventsPage } from "@/pages/events/EventPageList";
 import NewsPageList from "@/pages/news/NewsPageList";
@@ -192,8 +193,12 @@ export const router = createBrowserRouter([
         element: <div className="p-6">Cấu hình hệ thống</div>,
       },
       {
-        path: "banner",
-        element: <BannerAdminPage />,
+        path: "/admin/banner",
+        element: (
+          <RequireAdmin>
+            <BannerAdminPage />
+          </RequireAdmin>
+        ),
       },
     ],
   },

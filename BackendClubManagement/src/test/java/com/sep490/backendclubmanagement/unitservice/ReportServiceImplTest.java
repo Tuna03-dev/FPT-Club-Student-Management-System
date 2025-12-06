@@ -17,14 +17,11 @@ import org.mockito.*;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.data.domain.*;
-import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executor;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -65,9 +62,6 @@ class ReportServiceImplTest {
     @Mock
     private NotificationService notificationService;
 
-    // Create a real synchronous executor for testing instead of mocking
-    private final Executor taskExecutor = Runnable::run;
-
     @InjectMocks
     private ReportServiceImpl reportService;
 
@@ -82,8 +76,6 @@ class ReportServiceImplTest {
 
     @BeforeEach
     void setup() {
-        // Inject taskExecutor into reportService using reflection
-        ReflectionTestUtils.setField(reportService, "taskExecutor", taskExecutor);
 
         club = new Club();
         club.setId(1L);
@@ -553,7 +545,7 @@ class ReportServiceImplTest {
         when(semesterRepository.findByIsCurrentTrue()).thenReturn(Optional.of(currentSemester));
         when(roleMemberShipRepository.findClubOfficerUserIdsByClubIdAndSemesterId(anyLong(), anyLong()))
             .thenReturn(List.of(user.getId()));
-        doNothing().when(notificationService).sendToUsersAsync(
+        doNothing().when(notificationService).sendToUsers(
             anyList(), anyLong(), anyString(), anyString(), any(), any(), anyString(),
             anyLong(), anyLong(), anyLong(), anyLong());
 
@@ -590,7 +582,7 @@ class ReportServiceImplTest {
         when(semesterRepository.findByIsCurrentTrue()).thenReturn(Optional.of(currentSemester));
         when(roleMemberShipRepository.findClubOfficerUserIdsByClubIdAndSemesterId(anyLong(), anyLong()))
             .thenReturn(List.of(user.getId()));
-        doNothing().when(notificationService).sendToUsersAsync(
+        doNothing().when(notificationService).sendToUsers(
             anyList(), anyLong(), anyString(), anyString(), any(), any(), anyString(),
             anyLong(), anyLong(), anyLong(), anyLong());
 
@@ -662,7 +654,7 @@ class ReportServiceImplTest {
         when(semesterRepository.findByIsCurrentTrue()).thenReturn(Optional.of(currentSemester));
         when(roleMemberShipRepository.findClubOfficerUserIdsByClubIdsAndSemesterId(anyList(), anyLong()))
             .thenReturn(List.of());
-        doNothing().when(notificationService).sendToUsersAsync(
+        doNothing().when(notificationService).sendToUsers(
             anyList(), anyLong(), anyString(), anyString(), any(), any(), anyString(),
             anyLong(), anyLong(), anyLong(), anyLong());
 
@@ -707,7 +699,7 @@ class ReportServiceImplTest {
         when(semesterRepository.findByIsCurrentTrue()).thenReturn(Optional.of(currentSemester));
         when(roleMemberShipRepository.findClubOfficerUserIdsByClubIdsAndSemesterId(anyList(), anyLong()))
             .thenReturn(List.of());
-        doNothing().when(notificationService).sendToUsersAsync(
+        doNothing().when(notificationService).sendToUsers(
             anyList(), anyLong(), anyString(), anyString(), any(), any(), anyString(),
             anyLong(), anyLong(), anyLong(), anyLong());
 
@@ -787,7 +779,7 @@ class ReportServiceImplTest {
         when(semesterRepository.findByIsCurrentTrue()).thenReturn(Optional.of(currentSemester));
         when(roleMemberShipRepository.findClubOfficerUserIdsByClubIdsAndSemesterId(anyList(), anyLong()))
             .thenReturn(List.of());
-        doNothing().when(notificationService).sendToUsersAsync(
+        doNothing().when(notificationService).sendToUsers(
             anyList(), anyLong(), anyString(), anyString(), any(), any(), anyString(),
             anyLong(), anyLong(), anyLong(), anyLong());
 
@@ -853,7 +845,7 @@ class ReportServiceImplTest {
         when(semesterRepository.findByIsCurrentTrue()).thenReturn(Optional.of(currentSemester));
         when(roleMemberShipRepository.findClubOfficerUserIdsByClubIdsAndSemesterId(anyList(), anyLong()))
             .thenReturn(List.of());
-        doNothing().when(notificationService).sendToUsersAsync(
+        doNothing().when(notificationService).sendToUsers(
             anyList(), anyLong(), anyString(), anyString(), any(), any(), anyString(),
             anyLong(), anyLong(), anyLong(), anyLong());
 
@@ -917,7 +909,7 @@ class ReportServiceImplTest {
         // Mock for async notification (sendReportSubmittedNotificationAsync)
         when(roleMemberShipRepository.findClubOfficerUserIdsByClubIdAndSemesterId(anyLong(), anyLong()))
             .thenReturn(List.of(user.getId()));
-        doNothing().when(notificationService).sendToUsersAsync(
+        doNothing().when(notificationService).sendToUsers(
             anyList(), anyLong(), anyString(), anyString(), any(), any(), anyString(),
             anyLong(), anyLong(), anyLong(), anyLong());
 
@@ -1008,7 +1000,7 @@ class ReportServiceImplTest {
         // Mock for async notification (sendSubmitReportNotificationAsync)
         when(roleMemberShipRepository.findClubOfficerUserIdsByClubIdAndSemesterId(anyLong(), anyLong()))
             .thenReturn(List.of(user.getId()));
-        doNothing().when(notificationService).sendToUsersAsync(
+        doNothing().when(notificationService).sendToUsers(
             anyList(), anyLong(), anyString(), anyString(), any(), any(), anyString(),
             anyLong(), anyLong(), anyLong(), anyLong());
 
@@ -1050,7 +1042,7 @@ class ReportServiceImplTest {
         // Mock for async notification
         when(roleMemberShipRepository.findClubOfficerUserIdsByClubIdAndSemesterId(anyLong(), anyLong()))
             .thenReturn(List.of(user.getId()));
-        doNothing().when(notificationService).sendToUsersAsync(
+        doNothing().when(notificationService).sendToUsers(
             anyList(), anyLong(), anyString(), anyString(), any(), any(), anyString(),
             anyLong(), anyLong(), anyLong(), anyLong());
 

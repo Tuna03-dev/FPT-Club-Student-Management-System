@@ -41,7 +41,7 @@ public class ClubManagementStaffController {
      */
     @PreAuthorize("@clubSecurity.isStaff()")
     @GetMapping
-    public ResponseEntity<ApiResponse<PageResponse<ClubManagementResponse>>> getClubs(
+    public ApiResponse<PageResponse<ClubManagementResponse>> getClubs(
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) Long campusId,
             @RequestParam(required = false) Long categoryId,
@@ -54,7 +54,7 @@ public class ClubManagementStaffController {
         Pageable pageable = PageRequest.of(page - 1, size, parseSort(sort));
         PageResponse<ClubManagementResponse> response = clubService.getClubsByFilter(
                 keyword, campusId, categoryId, status, pageable, userId);
-        return ResponseEntity.ok(ApiResponse.success(response));
+        return ApiResponse.success(response);
     }
 
     /**
@@ -65,12 +65,12 @@ public class ClubManagementStaffController {
      */
     @PreAuthorize("@clubSecurity.isStaff()")
     @GetMapping("/{clubId}")
-    public ResponseEntity<ApiResponse<ClubManagementResponse>> getClubDetail(
+    public ApiResponse<ClubManagementResponse> getClubDetail(
             @PathVariable Long clubId
     ) throws AppException {
         Long userId = SecurityUtils.getCurrentUserId();
         ClubManagementResponse clubDetail = clubService.getClubForManagement(clubId, userId);
-        return ResponseEntity.ok(ApiResponse.success(clubDetail));
+        return ApiResponse.success(clubDetail);
     }
 
     /**
@@ -81,12 +81,12 @@ public class ClubManagementStaffController {
      */
     @PreAuthorize("@clubSecurity.isStaff()")
     @PostMapping
-    public ResponseEntity<ApiResponse<ClubManagementResponse>> createClub(
+    public ApiResponse<ClubManagementResponse> createClub(
             @Valid @RequestBody CreateClubRequest request
     ) throws AppException {
         Long userId = SecurityUtils.getCurrentUserId();
         ClubManagementResponse response = clubService.createClub(request, userId);
-        return ResponseEntity.ok(ApiResponse.success(response));
+        return ApiResponse.success(response);
     }
 
     /**
@@ -98,13 +98,13 @@ public class ClubManagementStaffController {
      */
     @PreAuthorize("@clubSecurity.isStaff()")
     @PutMapping("/{clubId}")
-    public ResponseEntity<ApiResponse<ClubManagementResponse>> updateClub(
+    public ApiResponse<ClubManagementResponse> updateClub(
             @PathVariable Long clubId,
             @Valid @RequestBody UpdateClubRequest request
     ) throws AppException {
         Long userId = SecurityUtils.getCurrentUserId();
         ClubManagementResponse response = clubService.updateClub(clubId, request, userId);
-        return ResponseEntity.ok(ApiResponse.success(response));
+        return ApiResponse.success(response);
     }
 
     /**
@@ -115,12 +115,12 @@ public class ClubManagementStaffController {
      */
     @PreAuthorize("@clubSecurity.isStaff()")
     @PatchMapping("/{clubId}/deactivate")
-    public ResponseEntity<ApiResponse<Void>> deactivateClub(
+    public ApiResponse<Void> deactivateClub(
             @PathVariable Long clubId
     ) throws AppException {
         Long userId = SecurityUtils.getCurrentUserId();
         clubService.deactivateClub(clubId, userId);
-        return ResponseEntity.ok(ApiResponse.success());
+        return ApiResponse.success();
     }
 
     /**
@@ -131,12 +131,12 @@ public class ClubManagementStaffController {
      */
     @PreAuthorize("@clubSecurity.isStaff()")
     @PatchMapping("/{clubId}/activate")
-    public ResponseEntity<ApiResponse<Void>> activateClub(
+    public ApiResponse<Void> activateClub(
             @PathVariable Long clubId
     ) throws AppException {
         Long userId = SecurityUtils.getCurrentUserId();
         clubService.activateClub(clubId, userId);
-        return ResponseEntity.ok(ApiResponse.success());
+        return ApiResponse.success();
     }
 
     private Sort parseSort(String sort) {
