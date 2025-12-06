@@ -31,7 +31,7 @@ import { Users, Sparkles, Search, AlertCircle } from "lucide-react";
 import { authService } from "@/services/authService";
 import { getMyApplications } from "@/services/recruitmentService";
 import { useMyClubs } from "@/hooks/useMyClubs";
-import { ClubCardSkeleton } from "@/components/features/club/ClubCardSkeleton";
+import { ClubCardSkeleton } from "@/components/club/ClubCardSkeleton";
 
 export default function ClubsPage() {
   const [page, setPage] = useState(0);

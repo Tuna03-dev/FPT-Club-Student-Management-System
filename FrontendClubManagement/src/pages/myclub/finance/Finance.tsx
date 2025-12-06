@@ -5,15 +5,15 @@ import { useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { useDebounce } from "@/hooks/useDebounce";
 import { payosService } from "@/services/payosService";
-import { SummaryCards } from "@/components/features/finance/SummaryCards";
+import { SummaryCards } from "@/components/finance/SummaryCards";
 import {
   TransactionsTable,
   type Transaction,
-} from "@/components/features/finance/TransactionsTable";
-import { TransactionFiltersComponent, type TransactionFilters } from "@/components/features/finance/TransactionFilters";
-import { FeesTable } from "@/components/features/finance/FeesTable";
-import { PayOSIntegration } from "@/components/features/finance/PayOsIntegration";
-import { EditTransactionDialog } from "@/components/features/finance/EditTransactionDialog";
+} from "@/components/finance/TransactionsTable";
+import { TransactionFiltersComponent, type TransactionFilters } from "@/components/finance/TransactionFilters";
+import { FeesTable } from "@/components/finance/FeesTable";
+import { PayOSIntegration } from "@/components/finance/PayOsIntegration";
+import { EditTransactionDialog } from "@/components/finance/EditTransactionDialog";
 import type { Fee } from "@/types/fee";
 import type { PageResponse } from "@/types";
 import feeService from "@/services/feeService";

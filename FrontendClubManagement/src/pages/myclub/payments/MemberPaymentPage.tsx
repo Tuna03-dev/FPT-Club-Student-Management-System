@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { toast } from "sonner";
-import FeeCard from "@/components/features/finance/FeeCard";
-import PaymentQRDialog from "@/components/features/finance/PaymentQRDialog";
-import FeeCardSkeleton from "@/components/features/finance/FeeCardSkeleton";
-import EmptyState from "@/components/features/finance/EmptyState";
+import FeeCard from "@/components/finance/FeeCard";
+import PaymentQRDialog from "@/components/finance/PaymentQRDialog";
+import FeeCardSkeleton from "@/components/finance/FeeCardSkeleton";
+import EmptyState from "@/components/finance/EmptyState";
 import type { MemberFee } from "@/types/memberFee";
 import { Clock, CheckCircle, AlertCircle } from "lucide-react";
 import feeService from "@/services/feeService";
@@ -12,7 +12,7 @@ import { authService } from "@/services/authService";
 import type { Fee, FeeType } from "@/types/fee";
 import { calculatePaymentStatus } from "@/utils/feeUtils";
 import { useWebSocket } from "@/hooks/useWebSocket";
-import PaymentSuccessDialog from "@/components/features/finance/PaymentSuccessDialog";
+import PaymentSuccessDialog from "@/components/finance/PaymentSuccessDialog";
 import {
   Table,
   TableBody,

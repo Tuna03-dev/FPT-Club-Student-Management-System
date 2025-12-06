@@ -24,8 +24,8 @@ import {
   Edit,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { ClubReportModal } from "@/components/features/report/ClubReportModal";
-import { UpdateReportRequirementDialog } from "@/components/features/report/UpdateReportRequirementDialog";
+import { ClubReportModal } from "@/components/report/ClubReportModal";
+import { UpdateReportRequirementDialog } from "@/components/report/UpdateReportRequirementDialog";
 import {
   getClubsByReportRequirement,
   getClubReportByRequirement,
