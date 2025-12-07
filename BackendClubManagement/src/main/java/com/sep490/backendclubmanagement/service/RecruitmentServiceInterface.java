@@ -29,4 +29,5 @@ public interface RecruitmentServiceInterface {
     RecruitmentApplicationData getMyApplication(Long applicantId, Long applicationId) throws AppException;
     RecruitmentApplicationData reviewApplication(Long userId, ApplicationReviewRequest request) throws AppException;
     RecruitmentApplicationData updateInterviewSchedule(Long userId, InterviewUpdateRequest request) throws AppException;
+    com.sep490.backendclubmanagement.dto.response.ApplicationStatusCheckData checkApplicationStatus(Long userId, Long recruitmentId) throws AppException;
 }

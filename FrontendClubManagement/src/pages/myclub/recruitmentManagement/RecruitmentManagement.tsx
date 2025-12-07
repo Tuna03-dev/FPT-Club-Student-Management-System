@@ -366,7 +366,8 @@ export function RecruitmentManagement() {
     notes?: string,
     interviewTime?: string,
     interviewAddress?: string,
-    interviewPreparationRequirements?: string
+    interviewPreparationRequirements?: string,
+    suppressToast?: boolean
   ) => {
     try {
       // Convert status to API format
@@ -407,15 +408,17 @@ export function RecruitmentManagement() {
         )
       );
 
-      // Show success message
-      const statusText = {
-        UNDER_REVIEW: "đang xem xét",
-        ACCEPTED: "đã chấp nhận",
-        REJECTED: "đã từ chối",
-        INTERVIEW: "đã mời phỏng vấn",
-      }[mappedStatus];
+      // Show success message (unless suppressed)
+      if (!suppressToast) {
+        const statusText = {
+          UNDER_REVIEW: "đang xem xét",
+          ACCEPTED: "đã chấp nhận",
+          REJECTED: "đã từ chối",
+          INTERVIEW: "đã mời phỏng vấn",
+        }[mappedStatus];
 
-      toast.success(`Đã cập nhật trạng thái đơn thành ${statusText}!`);
+        toast.success(`Đã cập nhật trạng thái đơn thành ${statusText}!`);
+      }
 
       // Trigger refresh to get latest data from server
       setApplicationsRefreshTrigger((prev) => prev + 1);

@@ -121,16 +121,13 @@ export function ClubApplicationForm({
         if (isMember) return; // No need to check application if already a member
 
         // Check if user has already applied for this recruitment
-        const { getMyApplications } = await import(
+        const { checkApplicationStatus } = await import(
           "@/services/recruitmentService"
         );
-        const myApps = await getMyApplications({ page: 0, size: 20 });
-        const hasApplied = myApps.content.some(
-          (app) => app.recruitmentId === recruitment.id
-        );
-        setHasAlreadyApplied(hasApplied);
+        const appStatus = await checkApplicationStatus(recruitment.id);
+        setHasAlreadyApplied(appStatus.hasApplied);
 
-        if (hasApplied) {
+        if (appStatus.hasApplied) {
           setAlreadyAppliedMessage(
             "Bạn đã nộp đơn ứng tuyển cho đợt này. Không thể nộp lại."
           );
