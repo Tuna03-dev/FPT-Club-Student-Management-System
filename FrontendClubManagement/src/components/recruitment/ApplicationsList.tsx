@@ -68,7 +68,7 @@ interface ApplicationsListProps {
     suppressToast?: boolean
   ) => void;
   onUpdateInterview: (
-    applicationId: string | number,
+    applicationId: number,
     interviewTime?: string,
     interviewAddress?: string,
     interviewPreparationRequirements?: string

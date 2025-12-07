@@ -433,14 +433,14 @@ export function RecruitmentManagement() {
   };
 
   const handleUpdateInterview = async (
-    applicationId: string,
+    applicationId: number,
     interviewTime?: string,
     interviewAddress?: string,
     interviewPreparationRequirements?: string
   ) => {
     try {
       const updatedApplication = await updateInterviewSchedule(
-        parseInt(applicationId),
+        applicationId,
         interviewTime,
         interviewAddress,
         interviewPreparationRequirements
@@ -449,7 +449,7 @@ export function RecruitmentManagement() {
       // Update local state
       setApplications((prevApplications) =>
         prevApplications.map((app) =>
-          app.id === parseInt(applicationId)
+          app.id === applicationId
             ? {
                 ...app,
                 interviewTime: updatedApplication.interviewTime,
