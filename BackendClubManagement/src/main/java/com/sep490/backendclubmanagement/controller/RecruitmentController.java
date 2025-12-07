@@ -113,7 +113,7 @@ public class RecruitmentController {
 
         Long userId = SecurityUtils.getCurrentUserId();
         recruitmentService.changeRecruitmentStatus(userId, id, status);
-        return ApiResponse.success(null);
+        return ApiResponse.success();
     }
 
 
@@ -231,6 +231,21 @@ public class RecruitmentController {
         Long userId = SecurityUtils.getCurrentUserId();
         
         RecruitmentApplicationData data = recruitmentService.getMyApplication(userId, applicationId);
+        return ApiResponse.success(data);
+    }
+
+    /**
+     * Check if current user has already applied for a recruitment
+     * Returns application status if exists
+     * Any authenticated user can check their own application status
+     */
+    @GetMapping("/{recruitmentId}/check-application")
+    public ApiResponse<ApplicationStatusCheckData> checkApplicationStatus(
+            @PathVariable Long recruitmentId
+    ) throws AppException {
+        Long userId = SecurityUtils.getCurrentUserId();
+        
+        ApplicationStatusCheckData data = recruitmentService.checkApplicationStatus(userId, recruitmentId);
         return ApiResponse.success(data);
     }
 

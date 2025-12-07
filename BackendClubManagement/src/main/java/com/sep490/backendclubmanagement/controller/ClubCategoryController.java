@@ -89,7 +89,7 @@ public class ClubCategoryController {
     @DeleteMapping("/staff/{id}")
     public ApiResponse<Void> deleteClubCategory(@PathVariable Long id) throws AppException {
         clubCategoryService.deleteClubCategory(id);
-        return ApiResponse.success(null);
+        return ApiResponse.success();
     }
 
     private Sort parseSort(String sort) {

@@ -477,6 +477,11 @@ public class RecruitmentService implements RecruitmentServiceInterface {
             if (app.getTeamId() != null) {
                 data.setTeamName(teamNameMap.get(app.getTeamId()));
             }
+            // Only show reviewNotes when status is ACCEPTED or REJECTED
+            if (app.getStatus() != RecruitmentApplicationStatus.ACCEPTED &&
+                app.getStatus() != RecruitmentApplicationStatus.REJECTED) {
+                data.setReviewNotes(null);
+            }
             return data;
         });
         return PagedResponse.of(dataPage);
@@ -663,6 +668,12 @@ public class RecruitmentService implements RecruitmentServiceInterface {
         
         RecruitmentApplicationData data = recruitmentApplicationMapper.toDto(app);
         setTeamName(data, app.getTeamId());
+
+        // Only show reviewNotes when status is ACCEPTED or REJECTED
+        if (app.getStatus() != RecruitmentApplicationStatus.ACCEPTED &&
+            app.getStatus() != RecruitmentApplicationStatus.REJECTED) {
+            data.setReviewNotes(null);
+        }
 
         return data;
     }
@@ -1117,6 +1128,20 @@ public class RecruitmentService implements RecruitmentServiceInterface {
             }
         }
         return false;
+    }
+
+    @Override
+    public ApplicationStatusCheckData checkApplicationStatus(Long userId, Long recruitmentId) throws AppException {
+        // Verify recruitment exists
+        Recruitment recruitment = recruitmentRepository.findById(recruitmentId)
+                .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND));
+
+        // Check if user has already applied for this recruitment
+        Optional<RecruitmentApplication> existingApp = applicationRepository.findByApplicant_IdAndRecruitment_Id(userId, recruitmentId);
+
+        return ApplicationStatusCheckData.builder()
+                .hasApplied(existingApp.isPresent())
+                .build();
     }
 
 }
