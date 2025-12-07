@@ -29,7 +29,7 @@ import {
 } from "@/components/ui/dialog";
 import { Users, Sparkles, Search, AlertCircle } from "lucide-react";
 import { authService } from "@/services/authService";
-import { getMyApplications } from "@/services/recruitmentService";
+import { checkApplicationStatus } from "@/services/recruitmentService";
 import { useMyClubs } from "@/hooks/useMyClubs";
 import { ClubCardSkeleton } from "@/components/club/ClubCardSkeleton";
 
@@ -123,11 +123,8 @@ export default function ClubsPage() {
 
     // Kiểm tra đã nộp đơn chưa
     try {
-      const myApps = await getMyApplications({ page: 0, size: 20 });
-      const existed = myApps.content.find(
-        (app) => app.recruitmentId === recruitmentId
-      );
-      if (existed) {
+      const appStatus = await checkApplicationStatus(recruitmentId);
+      if (appStatus.hasApplied) {
         setAlreadyAppliedMessage(
           "Bạn đã nộp đơn ứng tuyển cho đợt này. Không thể nộp lại."
         );

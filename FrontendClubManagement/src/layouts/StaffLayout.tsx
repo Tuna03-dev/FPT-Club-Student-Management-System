@@ -72,7 +72,7 @@ const managementItems = [
     key: "pending_posts",
     url: "/news",
     icon: FileText,
-    label: "Quản lý bài viết",
+    label: "Quản lý tin tức",
   },
   // {
   //   key: "manage_members",

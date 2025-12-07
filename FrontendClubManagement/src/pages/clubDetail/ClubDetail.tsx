@@ -45,8 +45,8 @@ import clubService, {
 } from "@/services/clubService";
 import {
   type RecruitmentData,
-  getMyApplications,
   getOpenRecruitmentsByClubId,
+  checkApplicationStatus,
 } from "@/services/recruitmentService";
 import {
   getPublishedEventsByClubId,
@@ -413,6 +413,25 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
     return num.toLocaleString("vi-VN");
   };
 
+  // Ensure URL is absolute (add https:// when missing) so anchors open external links
+  const ensureAbsoluteUrl = (url?: string) => {
+    if (!url) return undefined;
+    const trimmed = url.trim();
+    // Allow mailto and tel to pass through
+    if (
+      trimmed.startsWith("http://") ||
+      trimmed.startsWith("https://") ||
+      trimmed.startsWith("mailto:") ||
+      trimmed.startsWith("tel:")
+    ) {
+      return trimmed;
+    }
+    // Protocol-relative (//example.com)
+    if (trimmed.startsWith("//")) return `https:${trimmed}`;
+    // Otherwise assume it's a host or path from DB, prepend https://
+    return `https://${trimmed}`;
+  };
+
   // Check if user is already a member of this club. Accept clubs array so
   // we can load clubs lazily instead of calling a hook on mount.
   const isAlreadyMember = (clubs?: MyClubDTO[] | null) => {
@@ -441,13 +460,11 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
       setShowMembershipWarning(true);
       return;
     }
-    // Kiểm tra đã nộp đơn chưa
+
+    // Kiểm tra đã nộp đơn chưa bằng API mới
     try {
-      const myApps = await getMyApplications({ page: 0, size: 20 });
-      const existed = myApps.content.find(
-        (app) => app.recruitmentId === recruitmentId
-      );
-      if (existed) {
+      const appStatus = await checkApplicationStatus(recruitmentId);
+      if (appStatus.hasApplied) {
         setAlreadyAppliedMessage(
           "Bạn đã nộp đơn ứng tuyển cho đợt này. Không thể nộp lại."
         );
@@ -455,9 +472,10 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
         return;
       }
     } catch (e) {
-      // Có thể show lỗi hoặc cho phép tiếp tục
-      // alert('Không kiểm tra được trạng thái ứng tuyển');
+      console.error("Error checking application status:", e);
+      // Nếu API lỗi, cho phép tiếp tục (hoặc có thể hiển thị cảnh báo)
     }
+
     // Chưa ứng tuyển, mở form
     setSelectedRecruitmentId(recruitmentId);
   };
@@ -604,19 +622,22 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
           className="w-full h-full object-cover opacity-80"
         />
         <div className="absolute inset-0 bg-black/30" />
+        {/* avatar will be positioned relative to the content container below (so it's not clipped) */}
       </div>
 
       {/* Club Header */}
-      <div className="relative -mt-20 px-4 md:px-8 pb-8">
-        <div className="max-w-6xl mx-auto">
-          <div className="flex flex-col md:flex-row gap-6 items-start md:items-end">
-            {/* Logo */}
-            <div className="relative z-10">
-              <Avatar className="h-32 w-32 border-4 border-background shadow-lg">
-                <AvatarImage src={club.logoUrl || "/placeholder.svg"} />
-                <AvatarFallback>{club.clubName[0]}</AvatarFallback>
-              </Avatar>
-            </div>
+      <div className="relative mt-6 px-4 md:px-8 pb-8">
+        <div className="max-w-6xl mx-auto relative">
+          {/* Avatar positioned to overlap banner: centered on mobile, left-aligned on md+ */}
+          <div className="absolute -top-20 md:-top-20 left-1/2 md:left-0 transform -translate-x-1/2 md:translate-x-0 z-20">
+            <Avatar className="h-32 w-32 md:h-40 md:w-40 border-4 border-background shadow-lg">
+              <AvatarImage src={club.logoUrl || "/placeholder.svg"} />
+              <AvatarFallback>{club.clubName[0]}</AvatarFallback>
+            </Avatar>
+          </div>
+          <div className="flex flex-col md:flex-row gap-6 items-start md:items-end md:pl-48 pt-20 md:pt-0">
+            {/* Logo (moved into banner for overlap) */}
+            <div className="hidden" />
 
             {/* Club Info */}
             <div className="flex-1">
@@ -628,9 +649,6 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
                     </h1>
                     <Badge variant="secondary">{club.categoryName}</Badge>
                   </div>
-                  <p className="text-muted-foreground mt-1">
-                    {club.description}
-                  </p>
                 </div>
               </div>
 
@@ -759,32 +777,53 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
                     {club.description}
                   </p>
 
-                  {/* President Info */}
-                  {club.president && (
-                    <div className="mt-6 p-4 bg-accent/5 rounded-lg border border-accent/20">
-                      <p className="text-sm text-muted-foreground mb-3">
-                        Chủ tịch câu lạc bộ
-                      </p>
-                      <div className="flex items-center gap-3">
-                        <Avatar>
-                          <AvatarImage
-                            src={club.president.avatarUrl || "/placeholder.svg"}
-                          />
-                          <AvatarFallback>
-                            {club.president.fullName[0]}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <p className="font-semibold">
-                            {club.president.fullName}
-                          </p>
-                          <p className="text-sm text-muted-foreground">
-                            {club.president.email}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
+                  {/* President / Club leaders Info: support single object or array from backend */}
+                  {(club as any).presidents || club.president
+                    ? (() => {
+                        const raw = (club as any).presidents ?? club.president;
+                        const leaders = Array.isArray(raw) ? raw : [raw];
+
+                        return (
+                          <div className="mt-6 p-4 bg-accent/5 rounded-lg border border-accent/20">
+                            <p className="text-sm text-muted-foreground mb-3">
+                              {leaders.length > 1
+                                ? "Ban chủ nhiệm"
+                                : "Chủ tịch câu lạc bộ"}
+                            </p>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                              {leaders.map((leader, idx) => (
+                                <div
+                                  key={idx}
+                                  className="flex items-center gap-3 p-3 rounded-md border border-border bg-white/50"
+                                >
+                                  <Avatar>
+                                    <AvatarImage
+                                      src={
+                                        leader?.avatarUrl || "/placeholder.svg"
+                                      }
+                                    />
+                                    <AvatarFallback>
+                                      {leader?.fullName
+                                        ? leader.fullName[0]
+                                        : "?"}
+                                    </AvatarFallback>
+                                  </Avatar>
+                                  <div className="truncate">
+                                    <p className="font-semibold truncate">
+                                      {leader?.fullName || "Không rõ tên"}
+                                    </p>
+                                    <p className="text-sm text-muted-foreground truncate">
+                                      {leader?.email || "Không có email"}
+                                    </p>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })()
+                    : null}
                 </CardContent>
               </Card>
 
@@ -800,7 +839,7 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {club.fbUrl && (
                       <a
-                        href={club.fbUrl}
+                        href={ensureAbsoluteUrl(club.fbUrl)}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-accent/5 transition-colors"
@@ -819,7 +858,7 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
 
                     {club.igUrl && (
                       <a
-                        href={club.igUrl}
+                        href={ensureAbsoluteUrl(club.igUrl)}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-accent/5 transition-colors"
@@ -831,6 +870,44 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
                           <p className="text-sm font-medium">Instagram</p>
                           <p className="text-xs text-muted-foreground">
                             Theo dõi trên Instagram
+                          </p>
+                        </div>
+                      </a>
+                    )}
+
+                    {club.ttUrl && (
+                      <a
+                        href={ensureAbsoluteUrl(club.ttUrl)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-accent/5 transition-colors"
+                      >
+                        <div className="h-10 w-10 bg-black/5 rounded-lg flex items-center justify-center">
+                          <Globe className="h-5 w-5 text-black" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium">TikTok</p>
+                          <p className="text-xs text-muted-foreground">
+                            Xem trên TikTok
+                          </p>
+                        </div>
+                      </a>
+                    )}
+
+                    {club.ytUrl && (
+                      <a
+                        href={ensureAbsoluteUrl(club.ytUrl)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-accent/5 transition-colors"
+                      >
+                        <div className="h-10 w-10 bg-red-100 rounded-lg flex items-center justify-center">
+                          <MessageSquare className="h-5 w-5 text-red-600" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium">YouTube</p>
+                          <p className="text-xs text-muted-foreground">
+                            Xem trên YouTube
                           </p>
                         </div>
                       </a>

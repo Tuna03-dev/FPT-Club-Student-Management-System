@@ -34,6 +34,7 @@ import {
   MessageSquare,
   Calendar,
   Edit,
+  NotepadText,
 } from "lucide-react";
 import {
   Pagination,
@@ -63,10 +64,11 @@ interface ApplicationsListProps {
     notes?: string,
     interviewTime?: string,
     interviewAddress?: string,
-    interviewPreparationRequirements?: string
+    interviewPreparationRequirements?: string,
+    suppressToast?: boolean
   ) => void;
   onUpdateInterview: (
-    applicationId: string,
+    applicationId: number,
     interviewTime?: string,
     interviewAddress?: string,
     interviewPreparationRequirements?: string
@@ -132,12 +134,19 @@ export function ApplicationsList({
 
   // Interview dialog state (for editing existing interview info)
   const [interviewDialog, setInterviewDialog] = useState<{
-    applicationId: string;
+    applicationId: number;
     applicationName: string;
     currentInterviewTime?: string;
     currentInterviewAddress?: string;
     currentInterviewPreparationRequirements?: string;
   } | null>(null);
+
+  // Review note dialog state (for writing review after interview)
+  const [reviewNoteDialog, setReviewNoteDialog] = useState<{
+    applicationId: number;
+    applicationName: string;
+  } | null>(null);
+  const [reviewNote, setReviewNote] = useState("");
 
   // Interview fields for status change
   const [interviewTime, setInterviewTime] = useState("");
@@ -234,7 +243,7 @@ export function ApplicationsList({
   };
 
   const handleOpenInterviewDialog = (
-    applicationId: string,
+    applicationId: number,
     applicationName: string,
     currentInterviewTime?: string,
     currentInterviewAddress?: string,
@@ -493,34 +502,33 @@ export function ApplicationsList({
                         </div>
                       )}
 
-                    {application.reviewNotes &&
-                      application.status !== "INTERVIEW" && (
+                    {application.reviewNotes && (
+                      <div
+                        className={`text-sm border-l-2 pl-3 py-2 ${
+                          application.status === "REJECTED"
+                            ? "border-red-400"
+                            : application.status === "ACCEPTED"
+                              ? "border-green-400"
+                              : "border-blue-400"
+                        }`}
+                      >
+                        <div className="text-muted-foreground font-medium flex items-center gap-1 mb-1">
+                          <MessageSquare className="h-3 w-3" />
+                          Đánh giá:
+                        </div>
                         <div
-                          className={`text-sm border-l-2 pl-3 py-2 ${
+                          className={`text-xs rounded p-2 line-clamp-2 ${
                             application.status === "REJECTED"
-                              ? "border-red-400"
+                              ? "bg-red-50 text-red-700"
                               : application.status === "ACCEPTED"
-                                ? "border-green-400"
-                                : "border-blue-400"
+                                ? "bg-green-50 text-green-700"
+                                : "bg-blue-50 text-blue-700"
                           }`}
                         >
-                          <div className="text-muted-foreground font-medium flex items-center gap-1 mb-1">
-                            <MessageSquare className="h-3 w-3" />
-                            Phản hồi:
-                          </div>
-                          <div
-                            className={`text-xs rounded p-2 line-clamp-2 ${
-                              application.status === "REJECTED"
-                                ? "bg-red-50 text-red-700"
-                                : application.status === "ACCEPTED"
-                                  ? "bg-green-50 text-green-700"
-                                  : "bg-blue-50 text-blue-700"
-                            }`}
-                          >
-                            {application.reviewNotes}
-                          </div>
+                          {application.reviewNotes}
                         </div>
-                      )}
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex gap-2 pt-4 mt-auto">
@@ -879,38 +887,36 @@ export function ApplicationsList({
                     </div>
                   )}
 
-                  {/* Notes Section - only show for accepted/rejected */}
-                  {selectedApplicationDetail.reviewNotes &&
-                    selectedApplicationDetail.status !== "INTERVIEW" && (
-                      <div className="border-t pt-4">
-                        <h4 className="font-medium mb-3 flex items-center gap-2">
-                          <MessageSquare className="h-4 w-4" />
-                          Phản hồi đánh giá
-                        </h4>
-                        <div
-                          className={`rounded-lg p-4 ${
+                  {/* Notes Section */}
+                  {selectedApplicationDetail.reviewNotes && (
+                    <div className="border-t pt-4">
+                      <h4 className="font-medium mb-3 flex items-center gap-2">
+                        <MessageSquare className="h-4 w-4" />
+                        Ghi chú đánh giá
+                      </h4>
+                      <div
+                        className={`rounded-lg p-4 ${
+                          selectedApplicationDetail.status === "REJECTED"
+                            ? "bg-red-50 border border-red-200"
+                            : selectedApplicationDetail.status === "ACCEPTED"
+                              ? "bg-green-50 border border-green-200"
+                              : "bg-blue-50 border border-blue-200"
+                        }`}
+                      >
+                        <p
+                          className={`text-sm whitespace-pre-wrap ${
                             selectedApplicationDetail.status === "REJECTED"
-                              ? "bg-red-50 border border-red-200"
+                              ? "text-red-700"
                               : selectedApplicationDetail.status === "ACCEPTED"
-                                ? "bg-green-50 border border-green-200"
-                                : "bg-blue-50 border border-blue-200"
+                                ? "text-green-700"
+                                : "text-gray-700"
                           }`}
                         >
-                          <p
-                            className={`text-sm whitespace-pre-wrap ${
-                              selectedApplicationDetail.status === "REJECTED"
-                                ? "text-red-700"
-                                : selectedApplicationDetail.status ===
-                                    "ACCEPTED"
-                                  ? "text-green-700"
-                                  : "text-gray-700"
-                            }`}
-                          >
-                            {selectedApplicationDetail.reviewNotes}
-                          </p>
-                        </div>
+                          {selectedApplicationDetail.reviewNotes}
+                        </p>
                       </div>
-                    )}
+                    </div>
+                  )}
 
                   {/* Answers */}
                   <div>
@@ -986,6 +992,23 @@ export function ApplicationsList({
                             new Date() && (
                             <>
                               <Button
+                                variant="outline"
+                                className="bg-blue-50 border-blue-300 text-blue-700 hover:bg-blue-100"
+                                onClick={() => {
+                                  setReviewNoteDialog({
+                                    applicationId: selectedApplicationDetail.id,
+                                    applicationName:
+                                      selectedApplicationDetail.userName,
+                                  });
+                                  setReviewNote(
+                                    selectedApplicationDetail.reviewNotes || ""
+                                  );
+                                }}
+                              >
+                                <NotepadText className="h-4 w-4 mr-2" />
+                                Ghi chú đánh giá
+                              </Button>
+                              <Button
                                 onClick={() =>
                                   handleStatusChange(
                                     selectedApplicationDetail.id.toString(),
@@ -1028,7 +1051,7 @@ export function ApplicationsList({
                             className="bg-transparent"
                             onClick={() =>
                               handleOpenInterviewDialog(
-                                selectedApplicationDetail.id.toString(),
+                                selectedApplicationDetail.id,
                                 selectedApplicationDetail.userName,
                                 selectedApplicationDetail.interviewTime,
                                 selectedApplicationDetail.interviewAddress,
@@ -1137,7 +1160,7 @@ export function ApplicationsList({
               </div>
             ) : (
               <div className="space-y-2">
-                <Label htmlFor="notes">Phản hồi (tùy chọn)</Label>
+                <Label htmlFor="notes">Đánh giá (tùy chọn)</Label>
                 <Textarea
                   id="notes"
                   value={notes}
@@ -1274,6 +1297,93 @@ export function ApplicationsList({
               className="bg-purple-600 hover:bg-purple-700"
             >
               Cập nhật
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Review Note Dialog - for writing review after interview */}
+      <Dialog
+        open={!!reviewNoteDialog}
+        onOpenChange={(open) => {
+          if (!open) {
+            setReviewNoteDialog(null);
+            setReviewNote("");
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <NotepadText className="h-5 w-5" />
+              Ghi chú đánh giá phỏng vấn
+            </DialogTitle>
+            <DialogDescription>
+              Viết ghi chú đánh giá cho ứng viên{" "}
+              <strong>{reviewNoteDialog?.applicationName}</strong>
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="reviewNote">Nội dung đánh giá</Label>
+              <Textarea
+                id="reviewNote"
+                placeholder="Nhập ghi chú đánh giá về ứng viên sau buổi phỏng vấn..."
+                value={reviewNote}
+                onChange={(e) => setReviewNote(e.target.value)}
+                rows={6}
+              />
+              <p className="text-xs text-muted-foreground">
+                Ghi chú này sẽ được lưu lại để bạn tham khảo khi quyết định chấp
+                nhận hoặc từ chối ứng viên.
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setReviewNoteDialog(null);
+                setReviewNote("");
+              }}
+            >
+              Hủy
+            </Button>
+            <Button
+              onClick={() => {
+                if (!reviewNoteDialog) return;
+
+                // Save review note by updating the application
+                // We'll use the existing update interview function to preserve interview data and add notes
+                const currentApp = applications.find(
+                  (app) => app.id === reviewNoteDialog.applicationId
+                );
+
+                if (currentApp) {
+                  // Call the review API to save review notes while keeping status INTERVIEW
+                  onUpdateApplicationStatus(
+                    reviewNoteDialog.applicationId.toString(),
+                    "INTERVIEW",
+                    reviewNote.trim(),
+                    currentApp.interviewTime,
+                    currentApp.interviewAddress,
+                    currentApp.interviewPreparationRequirements,
+                    true // suppress parent's status toast because we show a specific note-saved toast
+                  );
+                }
+
+                toast.success("Đã lưu ghi chú đánh giá");
+                setReviewNoteDialog(null);
+                setReviewNote("");
+                setSelectedApplicationListItem(null);
+                setSelectedApplicationDetail(null);
+              }}
+              disabled={!reviewNote.trim()}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              Lưu ghi chú
             </Button>
           </DialogFooter>
         </DialogContent>
