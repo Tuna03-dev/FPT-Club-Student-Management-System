@@ -166,7 +166,7 @@ export const PostCard = ({
       if (response.code === 200 && response.data) {
         // Group flat comments by root parent (no tree building)
         const flatComments = response.data;
-        console.log("📥 Loaded comments:", flatComments);
+        
 
         // Separate root comments and group replies
         const rootComments: CommentDTO[] = [];
@@ -180,9 +180,7 @@ export const PostCard = ({
           } else {
             // This is a reply - group by root parent
             const rootId = comment.rootParentId || comment.parentId;
-            console.log(
-              `📍 Reply ${comment.id}: parentId=${comment.parentId}, rootParentId=${comment.rootParentId}, grouping under=${rootId}`
-            );
+            
 
             if (!replyGroups.has(rootId)) {
               replyGroups.set(rootId, []);
