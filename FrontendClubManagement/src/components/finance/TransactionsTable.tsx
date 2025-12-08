@@ -1,4 +1,5 @@
 // src/components/finance/TransactionsTable.tsx
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -10,6 +11,13 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { CheckCircle, Clock, Edit, Plus, Trash2, XCircle } from "lucide-react";
 import Skeleton from "@/components/common/Skeleton";
 import {
@@ -132,6 +140,26 @@ export function TransactionsTable({
   totalElements = 0,
   onPageChange,
 }: TransactionsTableProps) {
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [transactionToDelete, setTransactionToDelete] = useState<Transaction | null>(null);
+
+  const handleDeleteClick = (transaction: Transaction) => {
+    setTransactionToDelete(transaction);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleConfirmDelete = () => {
+    if (transactionToDelete) {
+      onDeleteTransaction(transactionToDelete.id.toString());
+      setDeleteDialogOpen(false);
+      setTransactionToDelete(null);
+    }
+  };
+
+  const handleCancelDelete = () => {
+    setDeleteDialogOpen(false);
+    setTransactionToDelete(null);
+  };
 
   const getStatusBadge = (status: TransactionStatus) => {
     const variants = {
@@ -464,9 +492,7 @@ export function TransactionsTable({
                         <Button
                           size="sm"
                           variant="ghost"
-                          onClick={() =>
-                            onDeleteTransaction(transaction.id.toString())
-                          }
+                          onClick={() => handleDeleteClick(transaction)}
                           title="Xóa"
                         >
                           <Trash2 className="w-4 h-4 text-destructive" />
@@ -563,6 +589,75 @@ export function TransactionsTable({
           )}
         </CardContent>
       </Card>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-destructive flex items-center gap-2">
+              <Trash2 className="w-5 h-5" /> Xác nhận xóa giao dịch
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            {transactionToDelete && (
+              <>
+                <p className="text-sm mb-4">
+                  Bạn có chắc chắn muốn xóa giao dịch{" "}
+                  <span className="font-semibold">{transactionToDelete.description}</span>?
+                </p>
+                <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-3 mb-4">
+                  <p className="text-sm text-yellow-700 dark:text-yellow-400">
+                    ⚠️ Hành động này không thể hoàn tác. Vui lòng xác nhận cẩn thận.
+                  </p>
+                </div>
+                <div className="text-sm space-y-2">
+                  <p>
+                    <span className="font-medium">Mã GD:</span>{" "}
+                    <span className="font-mono text-xs">{transactionToDelete.code}</span>
+                  </p>
+                  <p>
+                    <span className="font-medium">Loại:</span>{" "}
+                    <Badge variant={transactionToDelete.type === "INCOME" ? "default" : "secondary"}>
+                      {transactionToDelete.type === "INCOME" ? "Thu" : "Chi"}
+                    </Badge>
+                  </p>
+                  <p>
+                    <span className="font-medium">Số tiền:</span>{" "}
+                    <span className={`font-semibold ${
+                      transactionToDelete.type === "INCOME" ? "text-green-600" : "text-red-600"
+                    }`}>
+                      {transactionToDelete.type === "INCOME" ? "+" : "-"}
+                      {transactionToDelete.amount.toLocaleString("vi-VN")} ₫
+                    </span>
+                  </p>
+                  <p>
+                    <span className="font-medium">Ngày GD:</span>{" "}
+                    {new Date(transactionToDelete.transactionDate).toLocaleString("vi-VN", {
+                      day: "2-digit",
+                      month: "2-digit",
+                      year: "numeric",
+                    })}
+                  </p>
+                </div>
+              </>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={handleCancelDelete}
+            >
+              Hủy
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleConfirmDelete}
+            >
+              Xóa
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Zod Form Dialog for Creating Transactions */}
       <CreateTransactionFormDialog

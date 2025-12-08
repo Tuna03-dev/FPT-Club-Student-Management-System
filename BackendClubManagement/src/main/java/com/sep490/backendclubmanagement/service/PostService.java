@@ -581,6 +581,7 @@ public class PostService {
                 .clubName(p.getClub() != null ? p.getClub().getClubName() : null)
                 .authorId(p.getCreatedBy() != null ? p.getCreatedBy().getId() : null)
                 .authorName(p.getCreatedBy() != null ? p.getCreatedBy().getFullName() : null)
+                .authorAvatarUrl(p.getCreatedBy() != null ? p.getCreatedBy().getAvatarUrl() : null)
                 .media(medias)
                 .comments(comments)
                 .likes(likes)

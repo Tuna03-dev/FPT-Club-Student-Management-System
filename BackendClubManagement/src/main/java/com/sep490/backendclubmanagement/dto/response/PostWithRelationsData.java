@@ -18,6 +18,7 @@ public class PostWithRelationsData {
     private String clubName;
     private Long authorId;
     private String authorName;
+    private String authorAvatarUrl;
 
     private Long approvedById;
     private String approvedByName;
