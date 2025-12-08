@@ -22,7 +22,13 @@ import {
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { useTranslation } from "react-i18next";
 import { useState, useEffect, useCallback, useRef } from "react";
@@ -105,6 +111,7 @@ export const PostCard = ({
   const [editingCommentId, setEditingCommentId] = useState<number | null>(null);
   const [editText, setEditText] = useState("");
   const [isDeletingPost, setIsDeletingPost] = useState(false);
+  const [isDeletePostDialogOpen, setIsDeletePostDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   // --- THÊM STATE CHO DIALOG XÓA COMMENT ---
   const [deleteCommentId, setDeleteCommentId] = useState<number | null>(null);
@@ -617,15 +624,19 @@ export const PostCard = ({
     }
   }, [isLiking, isLiked, likeCount, postId]);
 
-  // Handle delete post
-  const handleDeletePost = useCallback(async () => {
-    if (!confirm("Bạn có chắc muốn xóa bài viết này?")) return;
+  // Handle delete post click - open dialog
+  const handleDeletePostClick = useCallback(() => {
+    setIsDeletePostDialogOpen(true);
+  }, []);
 
+  // Handle confirm delete post
+  const handleConfirmDeletePost = useCallback(async () => {
     setIsDeletingPost(true);
     try {
       const response = await postService.deletePost(postId);
       if (response.code === 200) {
         toast.success("Đã xóa bài viết");
+        setIsDeletePostDialogOpen(false);
         onPostDeleted?.();
       } else {
         toast.error("Không thể xóa bài viết");
@@ -785,7 +796,7 @@ export const PostCard = ({
               </DropdownMenuItem>
               <DropdownMenuItem
                 variant="destructive"
-                onClick={handleDeletePost}
+                onClick={handleDeletePostClick}
                 disabled={isDeletingPost}
               >
                 <Trash2 className="h-4 w-4 mr-2" />
@@ -1409,6 +1420,59 @@ export const PostCard = ({
               )}
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Post Confirmation Dialog */}
+      <Dialog open={isDeletePostDialogOpen} onOpenChange={setIsDeletePostDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-destructive flex items-center gap-2">
+              <Trash2 className="w-5 h-5" /> Xác nhận xóa bài viết
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-sm mb-4">
+              Bạn có chắc chắn muốn xóa bài viết này?
+            </p>
+            <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-3 mb-4">
+              <p className="text-sm text-yellow-700 dark:text-yellow-400">
+                ⚠️ Hành động này không thể hoàn tác. Bài viết, tất cả bình luận và lượt thích sẽ bị xóa vĩnh viễn.
+              </p>
+            </div>
+            <div className="text-sm space-y-2 text-muted-foreground">
+              <p>
+                <span className="font-medium">Nội dung:</span>{" "}
+                <span className="line-clamp-2">{content}</span>
+              </p>
+              <p>
+                <span className="font-medium">Thời gian:</span>{" "}
+                {formatTimestamp(timestamp)}
+              </p>
+              {images.length > 0 && (
+                <p>
+                  <span className="font-medium">Hình ảnh:</span>{" "}
+                  {images.length} ảnh
+                </p>
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsDeletePostDialogOpen(false)}
+              disabled={isDeletingPost}
+            >
+              Hủy
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleConfirmDeletePost}
+              disabled={isDeletingPost}
+            >
+              {isDeletingPost ? "Đang xóa..." : "Xóa bài viết"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
