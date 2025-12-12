@@ -162,7 +162,7 @@ export default function TeamNewsEditor() {
         if (res.code !== 200 || !res.data)
           throw new Error(res.message || "Không thể cập nhật bản nháp");
 
-        toast.success(`Đã cập nhật bản nháp #${res.data.id}`);
+        toast.success(`Đã cập nhật bản nháp thành công`);
       } else {
         const res = await draftsApi.create({
           title,
@@ -175,10 +175,10 @@ export default function TeamNewsEditor() {
         if (res.code !== 200 || !res.data)
           throw new Error(res.message || "Không thể tạo bản nháp");
 
-        toast.success(`Đã lưu bản nháp #${res.data.id}`);
+        toast.success(`Đã lưu bản nháp thành công`);
       }
 
-      nav(`/myclub/${clubId}/teams/${teamId}?tab=drafts`, { replace: true });
+      nav(`/myclub/${clubId}/teams/${teamId}/team-news`, { replace: true });
     } catch (e: any) {
       toast.error(e?.message || "Lưu bản nháp thất bại");
     } finally {
@@ -201,9 +201,8 @@ export default function TeamNewsEditor() {
           requestId: number;
           status: RequestStatus;
         };
-        toast.success(
-          `Đã gửi bản nháp #${draftId} → yêu cầu xét duyệt #${payload?.requestId}`
-        );
+        toast.success(`Đã gửi bản nháp → yêu cầu xét duyệt `);
+        void payload;
       } else {
         let finalThumb = thumbnailUrl || undefined;
 
@@ -230,10 +229,10 @@ export default function TeamNewsEditor() {
         if (res.code !== 200 || !res.data)
           throw new Error(res.message || "Không thể tạo yêu cầu");
 
-        toast.success(`Đã tạo yêu cầu xét duyệt #${res.data.id}`);
+        toast.success(`Đã tạo yêu cầu xét duyệt`);
       }
 
-      nav(`/myclub/${clubId}/teams/${teamId}?tab=requests`, { replace: true });
+      nav(`/myclub/${clubId}/teams/${teamId}/team-news`, { replace: true });
     } catch (e: any) {
       toast.error(e?.message || "Gửi yêu cầu thất bại");
     } finally {

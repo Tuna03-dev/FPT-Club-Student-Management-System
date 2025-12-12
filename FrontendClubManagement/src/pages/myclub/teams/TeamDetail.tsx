@@ -12,7 +12,6 @@ import {
   FileText,
   Users,
   Edit2,
-  Plus,
   Search,
   Trash2,
   ExternalLink,
@@ -611,19 +610,6 @@ export default function TeamDetailPage() {
                 </div>
 
                 <div className="flex items-center gap-3">
-                  {/* Tạo news: trưởng ban */}
-                  {isLead && (
-                    <Button
-                      className="bg-white text-primary hover:bg-white/90"
-                      onClick={() =>
-                        nav(`/myclub/${cId}/teams/${tId}/news-editor`)
-                      }
-                    >
-                      <Plus className="w-4 h-4 mr-2" />
-                      Tạo news
-                    </Button>
-                  )}
-                  {/* Sửa / Xóa: quyền chủ nhiệm/phó chủ nhiệm CLB */}
                   {isClubOfficer && (
                     <>
                       <Button
