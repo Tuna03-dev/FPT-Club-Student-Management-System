@@ -259,5 +259,12 @@ public class ClubRoleServiceImpl implements ClubRoleService {
         clubRoleRepository.delete(role);
     }
 
+    @Override
+    public boolean isMemberOfTeam(Long userId, Long teamId) {
+        // ✅ Member = chỉ cần tồn tại record membership ở team đó, trong semester hiện tại
+        return roleMemberShipRepo
+                .existsByClubMemberShip_User_IdAndTeam_IdAndSemester_IsCurrentTrue(userId, teamId);
+    }
+
 
 }

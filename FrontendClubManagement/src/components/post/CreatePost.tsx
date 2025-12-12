@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/dialog";
 import { postService, type CreatePostRequest } from "@/services/postService";
 import { toast } from "sonner";
+import { authService } from "@/services/authService";
 
 interface CreatePostProps {
   onPostCreated?: () => void;
@@ -44,6 +45,9 @@ export const CreatePost = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const clubId = clubIdProp ?? 1;
+
+  // Get current user for avatar
+  const currentUser = authService.getCurrentUser();
 
   // Post target: "club" or teamId
   const [postTarget, setPostTarget] = useState<string>(
@@ -183,9 +187,9 @@ export const CreatePost = ({
       <Card className="p-4">
         <div className="flex gap-3">
           <Avatar>
-            <AvatarImage src="https://github.com/shadcn.png" />
+            <AvatarImage src={currentUser?.avatarUrl} />
             <AvatarFallback className="bg-primary text-primary-foreground">
-              CP
+              {currentUser?.fullName?.charAt(0)?.toUpperCase() || "U"}
             </AvatarFallback>
           </Avatar>
           <button
@@ -204,9 +208,9 @@ export const CreatePost = ({
       <form onSubmit={handleSubmit}>
         <div className="flex gap-3">
           <Avatar>
-            <AvatarImage src="https://github.com/shadcn.png" />
+            <AvatarImage src={currentUser?.avatarUrl} />
             <AvatarFallback className="bg-primary text-primary-foreground">
-              CP
+              {currentUser?.fullName?.charAt(0)?.toUpperCase() || "U"}
             </AvatarFallback>
           </Avatar>
           <div className="flex-1 space-y-3">

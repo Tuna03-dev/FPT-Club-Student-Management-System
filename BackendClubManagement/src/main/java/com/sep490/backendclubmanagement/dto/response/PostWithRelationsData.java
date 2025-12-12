@@ -18,6 +18,7 @@ public class PostWithRelationsData {
     private String clubName;
     private Long authorId;
     private String authorName;
+    private String authorAvatarUrl;
 
     private Long approvedById;
     private String approvedByName;
@@ -32,4 +33,6 @@ public class PostWithRelationsData {
     private List<CommentData> comments;
     private List<LikeData> likes;
     private List<PostMediaData> media;
+
+
 }

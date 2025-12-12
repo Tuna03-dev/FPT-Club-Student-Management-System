@@ -173,7 +173,7 @@ export default function PresidentNewsEditor() {
         });
         if (res.code !== 200 || !res.data)
           throw new Error(res.message || "Không thể cập nhật nháp");
-        toast.success(`Đã cập nhật bản nháp #${res.data.id}`);
+        toast.success(`Đã cập nhật bản nháp thành công`);
       } else {
         const res = await draftsApi.create({
           title,
@@ -184,7 +184,7 @@ export default function PresidentNewsEditor() {
         } as any);
         if (res.code !== 200 || !res.data)
           throw new Error(res.message || "Không thể tạo nháp");
-        toast.success(`Đã lưu bản nháp #${res.data.id}`);
+        toast.success(`Đã lưu bản nháp thành công`);
       }
 
       nav(`/myclub/${clubId}/news?tab=drafts`);
@@ -222,9 +222,8 @@ export default function PresidentNewsEditor() {
           requestId: number;
           status: RequestStatus;
         };
-        toast.success(
-          `Đã gửi nháp #${draftId} → yêu cầu #${payload?.requestId}`
-        );
+        toast.success(`Đã gửi nháp  → yêu cầu `);
+        void payload;
       } else {
         const res = await requestsApi.create({
           title,
@@ -235,7 +234,7 @@ export default function PresidentNewsEditor() {
         });
         if (res.code !== 200 || !res.data)
           throw new Error(res.message || "Không thể tạo yêu cầu");
-        toast.success(`Đã tạo yêu cầu xét duyệt #${res.data.id}`);
+        toast.success(`Đã tạo yêu cầu xét duyệt thành công`);
       }
 
       nav(`/myclub/${clubId}/news?tab=requests`);

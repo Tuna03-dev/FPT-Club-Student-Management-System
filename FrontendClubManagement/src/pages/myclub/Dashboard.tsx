@@ -183,7 +183,7 @@ export const Dashboard = () => {
       author: {
         id: post.authorId,
         name: post.authorName || "Người dùng",
-        avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=default",
+        avatar: post.authorAvatarUrl,
         role: "Thành viên",
       },
       content: post.content || "",
