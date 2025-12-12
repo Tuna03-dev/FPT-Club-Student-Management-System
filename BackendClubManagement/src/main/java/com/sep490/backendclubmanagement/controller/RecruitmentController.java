@@ -33,7 +33,7 @@ public class RecruitmentController {
 
     @GetMapping("/clubs/{clubId}")
     @PreAuthorize("@clubSecurity.isClubOfficerInClub(#clubId)")
-    public ResponseEntity<ApiResponse<PagedResponse<RecruitmentData>>> listRecruitments(
+    public ApiResponse<PagedResponse<RecruitmentData>> listRecruitments(
             @PathVariable Long clubId,
             @RequestParam(required = false) RecruitmentStatus status,
             @RequestParam(required = false) String keyword,
@@ -45,11 +45,11 @@ public class RecruitmentController {
         // Convert from 1-based to 0-based pagination for Spring Data
         Pageable pageable = PageRequest.of(page - 1, size, parseSort(sort));
         PagedResponse<RecruitmentData> data = recruitmentService.listRecruitments(userId,clubId, status, keyword, pageable);
-        return ResponseEntity.ok(ApiResponse.success(data));
+        return ApiResponse.success(data);
     }
 
     @GetMapping("/clubs/{clubId}/open")
-    public ResponseEntity<ApiResponse<PagedResponse<RecruitmentData>>> listOpenRecruitments (
+    public ApiResponse<PagedResponse<RecruitmentData>> listOpenRecruitments (
             @PathVariable Long clubId,
             @RequestParam(required = false) String keyword,
             @RequestParam(defaultValue = "1") int page,
@@ -59,7 +59,7 @@ public class RecruitmentController {
         // Convert from 1-based to 0-based pagination for Spring Data
         Pageable pageable = PageRequest.of(page - 1, size, parseSort(sort));
         PagedResponse<RecruitmentData> data = recruitmentService.listRecruitmentsForGuest(clubId, RecruitmentStatus.OPEN, pageable);
-        return ResponseEntity.ok(ApiResponse.success(data));
+        return ApiResponse.success(data);
     }
 
     /**
@@ -67,21 +67,21 @@ public class RecruitmentController {
      * Public endpoint - accessible by anyone to view recruitment form
      */
     @GetMapping("/{id}")
-    public ResponseEntity<ApiResponse<RecruitmentData>> getRecruitment(@PathVariable Long id) throws AppException {
+    public ApiResponse<RecruitmentData> getRecruitment(@PathVariable Long id) throws AppException {
         RecruitmentData data = recruitmentService.getRecruitment(id);
-        return ResponseEntity.ok(ApiResponse.success(data));
+        return ApiResponse.success(data);
     }
 
     @PostMapping("/clubs/{clubId}")
     @PreAuthorize("@clubSecurity.isClubOfficerInClub(#clubId)")
-    public ResponseEntity<ApiResponse<RecruitmentData>> createRecruitment(
+    public ApiResponse<RecruitmentData> createRecruitment(
             @PathVariable Long clubId,
             @RequestBody RecruitmentCreateRequest request
     ) throws AppException {
         Long userId = SecurityUtils.getCurrentUserId();
         
         RecruitmentData data = recruitmentService.createRecruitment(userId, clubId, request);
-        return ResponseEntity.ok(ApiResponse.success(data));
+        return ApiResponse.success(data);
     }
 
     /**
@@ -90,14 +90,14 @@ public class RecruitmentController {
      */
     @PutMapping("/{id}")
     @PreAuthorize("@clubSecurity.isClubOfficerForRecruitment(#id)")
-    public ResponseEntity<ApiResponse<RecruitmentData>> updateRecruitment(
+    public ApiResponse<RecruitmentData> updateRecruitment(
             @PathVariable Long id,
             @RequestBody RecruitmentUpdateRequest request
     ) throws AppException {
         Long userId = SecurityUtils.getCurrentUserId();
 
         RecruitmentData data = recruitmentService.updateRecruitment(userId, id, request);
-        return ResponseEntity.ok(ApiResponse.success(data));
+        return ApiResponse.success(data);
     }
 
     /**
@@ -106,14 +106,14 @@ public class RecruitmentController {
      */
     @PatchMapping("/{id}/status")
     @PreAuthorize("@clubSecurity.isClubOfficerForRecruitment(#id)")
-    public ResponseEntity<ApiResponse<Void>> changeStatus(
+    public ApiResponse<Void> changeStatus(
             @PathVariable Long id,
             @RequestParam RecruitmentStatus status
     ) throws AppException {
 
         Long userId = SecurityUtils.getCurrentUserId();
         recruitmentService.changeRecruitmentStatus(userId, id, status);
-        return ResponseEntity.ok(ApiResponse.success(null));
+        return ApiResponse.success();
     }
 
 
@@ -122,14 +122,14 @@ public class RecruitmentController {
      * Any authenticated user can submit application
      */
     @PostMapping(path = "/applications/submit", consumes = "multipart/form-data")
-    public ResponseEntity<ApiResponse<RecruitmentApplicationData>> submit(
+    public ApiResponse<RecruitmentApplicationData> submit(
             @RequestPart("request") ApplicationSubmitRequest request,
             @RequestPart(value = "file", required = false) MultipartFile file
     ) throws AppException {
         Long userId = SecurityUtils.getCurrentUserId();
         
         RecruitmentApplicationData data = recruitmentService.submitApplication(userId, request, file);
-        return ResponseEntity.ok(ApiResponse.success(data));
+        return ApiResponse.success(data);
     }
 
     /**
@@ -139,13 +139,13 @@ public class RecruitmentController {
      */
     @PostMapping("/applications/review")
     @PreAuthorize("@clubSecurity.isClubOfficerForApplication(#request.applicationId)")
-    public ResponseEntity<ApiResponse<RecruitmentApplicationData>> review(
+    public ApiResponse<RecruitmentApplicationData> review(
             @RequestBody ApplicationReviewRequest request
     ) throws AppException {
         Long userId = SecurityUtils.getCurrentUserId();
         
         RecruitmentApplicationData data = recruitmentService.reviewApplication(userId, request);
-        return ResponseEntity.ok(ApiResponse.success(data));
+        return ApiResponse.success(data);
     }
 
     /**
@@ -155,13 +155,13 @@ public class RecruitmentController {
      */
     @PutMapping("/applications/interview")
     @PreAuthorize("@clubSecurity.isClubOfficerForApplication(#request.applicationId)")
-    public ResponseEntity<ApiResponse<RecruitmentApplicationData>> updateInterviewSchedule(
+    public ApiResponse<RecruitmentApplicationData> updateInterviewSchedule(
             @RequestBody InterviewUpdateRequest request
     ) throws AppException {
         Long userId = SecurityUtils.getCurrentUserId();
 
         RecruitmentApplicationData data = recruitmentService.updateInterviewSchedule(userId, request);
-        return ResponseEntity.ok(ApiResponse.success(data));
+        return ApiResponse.success(data);
     }
 
     /**
@@ -170,7 +170,7 @@ public class RecruitmentController {
      */
     @GetMapping("/{recruitmentId}/applications")
     @PreAuthorize("@clubSecurity.isClubOfficerForRecruitment(#recruitmentId)")
-    public ResponseEntity<ApiResponse<PagedResponse<RecruitmentApplicationListData>>> listApplications(
+    public ApiResponse<PagedResponse<RecruitmentApplicationListData>> listApplications(
             @PathVariable Long recruitmentId,
             @RequestParam(required = false) RecruitmentApplicationStatus status,
             @RequestParam(required = false) String keyword,
@@ -183,7 +183,7 @@ public class RecruitmentController {
         // Convert from 1-based to 0-based pagination for Spring Data
         Pageable pageable = PageRequest.of(page - 1, size, parseSort(sort));
         PagedResponse<RecruitmentApplicationListData> data = recruitmentService.listApplications(userId, recruitmentId, status, keyword, pageable);
-        return ResponseEntity.ok(ApiResponse.success(data));
+        return ApiResponse.success(data);
     }
 
     /**
@@ -192,12 +192,12 @@ public class RecruitmentController {
      */
     @GetMapping("/applications/{applicationId}")
     @PreAuthorize("@clubSecurity.isClubOfficerForApplication(#applicationId)")
-    public ResponseEntity<ApiResponse<RecruitmentApplicationData>> getApplication(
+    public ApiResponse<RecruitmentApplicationData> getApplication(
             @PathVariable Long applicationId
     ) throws AppException {
         Long userId = SecurityUtils.getCurrentUserId();
         RecruitmentApplicationData data = recruitmentService.getApplication(userId, applicationId);
-        return ResponseEntity.ok(ApiResponse.success(data));
+        return ApiResponse.success(data);
     }
 
     /**
@@ -205,7 +205,7 @@ public class RecruitmentController {
      * Any authenticated user can view their own applications
      */
     @GetMapping("/myApplications")
-    public ResponseEntity<ApiResponse<PagedResponse<RecruitmentApplicationListData>>> getMyApplications(
+    public ApiResponse<PagedResponse<RecruitmentApplicationListData>> getMyApplications(
             @RequestParam(required = false) RecruitmentApplicationStatus status,
             @RequestParam(required = false) String keyword,
             @RequestParam(defaultValue = "1") int page,
@@ -217,7 +217,7 @@ public class RecruitmentController {
         // Convert from 1-based to 0-based pagination for Spring Data
         Pageable pageable = PageRequest.of(page - 1, size, parseSort(sort));
         PagedResponse<RecruitmentApplicationListData> data = recruitmentService.listMyApplications(userId, status, keyword, pageable);
-        return ResponseEntity.ok(ApiResponse.success(data));
+        return ApiResponse.success(data);
     }
 
     /**
@@ -225,13 +225,28 @@ public class RecruitmentController {
      * Any authenticated user can view their own application detail
      */
     @GetMapping("/myApplications/{applicationId}")
-    public ResponseEntity<ApiResponse<RecruitmentApplicationData>> getMyApplication(
+    public ApiResponse<RecruitmentApplicationData> getMyApplication(
             @PathVariable Long applicationId
     ) throws AppException {
         Long userId = SecurityUtils.getCurrentUserId();
         
         RecruitmentApplicationData data = recruitmentService.getMyApplication(userId, applicationId);
-        return ResponseEntity.ok(ApiResponse.success(data));
+        return ApiResponse.success(data);
+    }
+
+    /**
+     * Check if current user has already applied for a recruitment
+     * Returns application status if exists
+     * Any authenticated user can check their own application status
+     */
+    @GetMapping("/{recruitmentId}/check-application")
+    public ApiResponse<ApplicationStatusCheckData> checkApplicationStatus(
+            @PathVariable Long recruitmentId
+    ) throws AppException {
+        Long userId = SecurityUtils.getCurrentUserId();
+        
+        ApplicationStatusCheckData data = recruitmentService.checkApplicationStatus(userId, recruitmentId);
+        return ApiResponse.success(data);
     }
 
     private Sort parseSort(String sort) {

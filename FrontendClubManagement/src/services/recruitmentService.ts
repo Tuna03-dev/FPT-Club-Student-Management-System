@@ -444,3 +444,22 @@ export async function updateInterviewSchedule(
   if (!res.data) throw new Error("Failed to update interview schedule");
   return res.data;
 }
+
+// Check application status
+export interface ApplicationStatusCheckData {
+  hasApplied: boolean;
+}
+
+export async function checkApplicationStatus(
+  recruitmentId: number
+): Promise<ApplicationStatusCheckData> {
+  const res = await axiosClient.get<ApplicationStatusCheckData>(
+    `/recruitments/${recruitmentId}/check-application`,
+    {
+      timeout: 30000, // 30 seconds
+    }
+  );
+
+  if (!res.data) throw new Error("Failed to check application status");
+  return res.data;
+}

@@ -1,5 +1,5 @@
 import { useParams } from "react-router-dom"
-import { NewsDetail } from "@/components/features/news/NewsDetail"
+import { NewsDetail } from "@/components/news/NewsDetail"
 
 export default function NewsPageDetail() {
   const { id } = useParams<{ id: string }>()

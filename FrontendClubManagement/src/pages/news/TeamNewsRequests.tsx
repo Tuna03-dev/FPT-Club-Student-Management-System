@@ -164,7 +164,7 @@ export default function TeamNewsRequests() {
 
     try {
       await requestsApi.cancel(cancelId);
-      toast.success(`Đã hủy request #${cancelId}.`);
+      toast.success(`Đã hủy request`);
       await load(currentPage);
     } catch (e: any) {
       console.error("cancel request error:", e);

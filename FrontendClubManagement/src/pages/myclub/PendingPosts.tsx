@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useParams } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -402,6 +402,7 @@ export default function PendingPosts() {
                       <div className="flex items-start justify-between">
                         <div className="flex items-center gap-3">
                           <Avatar className="h-12 w-12 ring-2 ring-primary/20">
+                            <AvatarImage src={post.authorAvatarUrl} />
                             <AvatarFallback>
                               {post.authorName?.[0]?.toUpperCase() ?? "U"}
                             </AvatarFallback>
@@ -544,6 +545,7 @@ export default function PendingPosts() {
                 <div className="rounded-lg bg-muted p-4 space-y-2">
                   <div className="flex items-center gap-2">
                     <Avatar className="h-8 w-8">
+                      <AvatarImage src={selectedPost.authorAvatarUrl} />
                       <AvatarFallback className="text-xs">
                         {selectedPost.authorName?.[0]?.toUpperCase() ?? "U"}
                       </AvatarFallback>

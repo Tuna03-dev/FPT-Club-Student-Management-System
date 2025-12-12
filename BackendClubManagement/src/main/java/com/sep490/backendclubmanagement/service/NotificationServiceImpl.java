@@ -104,15 +104,6 @@ public class NotificationServiceImpl implements NotificationService {
     }
 
     @Override
-    @Async("uploadExecutor")
-    public void sendToUsersAsync(List<Long> recipientIds, Long actorId, String title, String message,
-                                 NotificationType type, NotificationPriority priority, String actionUrl,
-                                 Long relatedClubId, Long relatedNewsId, Long relatedTeamId, Long relatedRequestId) {
-        sendToUsers(recipientIds, actorId, title, message, type, priority, actionUrl,
-                relatedClubId, relatedNewsId, relatedTeamId, relatedRequestId);
-    }
-
-    @Override
     public List<Long> getClubManagers(Long clubId) throws AppException {
         Long semesterId = semesterService.getCurrentSemesterId();
         return clubMemberShipRepository.findManagerUserIdsByClubAndSemester(clubId, semesterId);

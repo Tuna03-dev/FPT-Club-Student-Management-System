@@ -21,7 +21,7 @@ import { Plus, Eye, Search, AlertCircle, Calendar } from "lucide-react";
 import {
   ReportSubmissionModal,
   type SubmissionFormData,
-} from "@/components/features/report/ReportSubmissionModal";
+} from "@/components/report/ReportSubmissionModal";
 import { Input } from "@/components/ui/input";
 import { formatDateTimeVN } from "@/lib/dateUtils";
 import { Badge } from "@/components/ui/badge";
@@ -45,7 +45,7 @@ import {
   mapBackendToFrontendReportType,
   mapFrontendToBackendReportType,
 } from "@/types/dto/reportRequirement.dto";
-import { ClubReportModal } from "@/components/features/report/ClubReportModal";
+import { ClubReportModal } from "@/components/report/ClubReportModal";
 import {
   Select,
   SelectContent,

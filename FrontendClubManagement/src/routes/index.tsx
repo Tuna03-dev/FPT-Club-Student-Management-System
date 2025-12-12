@@ -17,6 +17,7 @@ import EventAttendancePage from "@/pages/myclub/events/attendance/AttendancePage
 import { Notifications } from "@/pages/myclub/Notifications";
 import { Settings } from "@/pages/myclub/Settings";
 import { ClubInforManagement } from "@/pages/myclub/infor/InforManagement";
+import RequireAdmin from "@/components/guards/RequireAdmin";
 
 import { EventsPage } from "@/pages/events/EventPageList";
 import NewsPageList from "@/pages/news/NewsPageList";
@@ -67,6 +68,8 @@ import StaffNotifications from "@/pages/myclub/staff/StaffNotifications";
 import CreateClubPage from "@/pages/CreateClubPage";
 import ClubCreationManagement from "@/pages/staff/ClubCreationManagement";
 import { StaffClubsManagement } from "@/pages/staff/ClubManagement";
+import AboutPage from "@/pages/AboutPage";
+
 export const router = createBrowserRouter([
   {
     path: "/",
@@ -110,6 +113,10 @@ export const router = createBrowserRouter([
       // B vẫn giữ các biến thể cũ để không phá link đang dùng
       { path: "club/:clubId", element: <ClubDetail /> },
 
+      {
+        path: "about",
+        element: <AboutPage />,
+      },
       {
         path: "achievements",
         element: (
@@ -186,8 +193,12 @@ export const router = createBrowserRouter([
         element: <div className="p-6">Cấu hình hệ thống</div>,
       },
       {
-        path: "banner",
-        element: <BannerAdminPage />,
+        path: "/admin/banner",
+        element: (
+          <RequireAdmin>
+            <BannerAdminPage />
+          </RequireAdmin>
+        ),
       },
     ],
   },

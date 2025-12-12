@@ -116,7 +116,7 @@ export default function StaffNewsEditor() {
           newsType: newsType || undefined,
         });
         if (res.code !== 200 || !res.data) throw new Error(res.message);
-        toast.success(`Đã cập nhật bản nháp #${res.data.id}`);
+        toast.success(`Đã cập nhật bản nháp thành công`);
       } else {
         const res = await draftsApi.create({
           title,
@@ -125,7 +125,7 @@ export default function StaffNewsEditor() {
           newsType: newsType || undefined,
         } as any);
         if (res.code !== 200 || !res.data) throw new Error(res.message);
-        toast.success(`Đã lưu bản nháp #${res.data.id}`);
+        toast.success(`Đã lưu bản nháp thành công`);
       }
 
       nav("/staff/news");
@@ -150,7 +150,7 @@ export default function StaffNewsEditor() {
       if (draftId) {
         const res = await draftsApi.publish(draftId);
         if (res.code !== 200 || !res.data) throw new Error(res.message);
-        toast.success(`Đã đăng tin từ bản nháp #${res.data.id}`);
+        toast.success(`Đã đăng tin từ bản nháp thành công`);
       } else {
         const res = await staffDirectPublish({
           title,
@@ -159,7 +159,7 @@ export default function StaffNewsEditor() {
           newsType: newsType || undefined,
         });
         if (res.code !== 200 || !res.data) throw new Error(res.message);
-        toast.success(`Đã đăng tin thành công #${res.data.newsId}`);
+        toast.success(`Đã đăng tin thành công`);
       }
 
       nav("/staff/news");

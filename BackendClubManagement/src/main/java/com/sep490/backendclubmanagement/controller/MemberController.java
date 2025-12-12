@@ -1,4 +1,4 @@
-package com.sep490.backendclubmanagement.controller.Club;
+package com.sep490.backendclubmanagement.controller;
 
 import com.sep490.backendclubmanagement.dto.ApiResponse;
 import com.sep490.backendclubmanagement.dto.request.RemoveMemberRequest;

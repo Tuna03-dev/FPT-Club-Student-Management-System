@@ -401,8 +401,8 @@ class ClubServiceTest {
         when(clubRepository.countEventsByClubId(testClubId)).thenReturn(0L);
         when(clubRepository.countNewsByClubId(testClubId)).thenReturn(0L);
 
-        // Mock async notification - không throw exception
-        doNothing().when(notificationService).sendToUsersAsync(
+        // Mock  notification - không throw exception
+        doNothing().when(notificationService).sendToUsers(
                 anyList(), anyLong(), anyString(), anyString(),
                 any(NotificationType.class), any(NotificationPriority.class),
                 anyString(), anyLong(), any(), any(), any()
@@ -419,7 +419,7 @@ class ClubServiceTest {
         verify(clubRoleRepository, times(1)).saveAll(anyList());
 
         // Verify async notification was sent
-        verify(notificationService, times(1)).sendToUsersAsync(
+        verify(notificationService, times(1)).sendToUsers(
                 eq(List.of(testUser.getId())),
                 eq(testStaffId),
                 contains("Chủ nhiệm CLB"),
@@ -548,8 +548,8 @@ class ClubServiceTest {
         when(clubMemberShipRepository.findByClubIdAndStatus(testClubId, ClubMemberShipStatus.ACTIVE))
                 .thenReturn(List.of(membership1, membership2));
 
-        // Mock async notification
-        doNothing().when(notificationService).sendToUsersAsync(
+        // Mock  notification
+        doNothing().when(notificationService).sendToUsers(
                 anyList(), anyLong(), anyString(), anyString(),
                 any(NotificationType.class), any(NotificationPriority.class),
                 anyString(), anyLong(), any(), any(), any()
@@ -563,7 +563,7 @@ class ClubServiceTest {
         verify(clubRepository, times(1)).save(testClub);
 
         // Verify notification sent to all members
-        verify(notificationService, times(1)).sendToUsersAsync(
+        verify(notificationService, times(1)).sendToUsers(
                 eq(List.of(testUser.getId(), user2.getId())),
                 eq(testStaffId),
                 contains("vô hiệu hóa"),
@@ -594,7 +594,7 @@ class ClubServiceTest {
         verify(clubRepository, times(1)).save(testClub);
 
         // Verify no notification sent when no active members
-        verify(notificationService, never()).sendToUsersAsync(
+        verify(notificationService, never()).sendToUsers(
                 anyList(), anyLong(), anyString(), anyString(),
                 any(), any(), anyString(), anyLong(), any(), any(), any()
         );
@@ -620,8 +620,8 @@ class ClubServiceTest {
         when(clubMemberShipRepository.findByClubIdAndStatus(testClubId, ClubMemberShipStatus.ACTIVE))
                 .thenReturn(List.of(membership1, membership2));
 
-        // Mock async notification
-        doNothing().when(notificationService).sendToUsersAsync(
+        // Mock  notification
+        doNothing().when(notificationService).sendToUsers(
                 anyList(), anyLong(), anyString(), anyString(),
                 any(NotificationType.class), any(NotificationPriority.class),
                 anyString(), anyLong(), any(), any(), any()
@@ -635,7 +635,7 @@ class ClubServiceTest {
         verify(clubRepository, times(1)).save(testClub);
 
         // Verify notification sent to all members
-        verify(notificationService, times(1)).sendToUsersAsync(
+        verify(notificationService, times(1)).sendToUsers(
                 eq(List.of(testUser.getId(), user2.getId())),
                 eq(testStaffId),
                 contains("kích hoạt"),
@@ -667,7 +667,7 @@ class ClubServiceTest {
         verify(clubRepository, times(1)).save(testClub);
 
         // Verify no notification sent when no active members
-        verify(notificationService, never()).sendToUsersAsync(
+        verify(notificationService, never()).sendToUsers(
                 anyList(), anyLong(), anyString(), anyString(),
                 any(), any(), anyString(), anyLong(), any(), any(), any()
         );

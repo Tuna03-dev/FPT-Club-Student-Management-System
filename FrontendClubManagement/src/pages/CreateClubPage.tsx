@@ -5,12 +5,12 @@ import { useWebSocket, type ClubCreationWebSocketPayload } from "@/hooks/useWebS
 import {
   ClubRequestForm,
   type ClubRequestFormData,
-} from "@/components/features/club/ClubRequestForm";
+} from "@/components/club/ClubRequestForm";
 import {
   ClubRequestCard,
   type ClubRequest,
-} from "@/components/features/club/ClubRequestCard";
-import { ClubRequestDialog } from "@/components/features/club/ClubRequestDialog";
+} from "@/components/club/ClubRequestCard";
+import { ClubRequestDialog } from "@/components/club/ClubRequestDialog";
 import {
   clubCreationApi,
   type RequestEstablishmentResponse,
