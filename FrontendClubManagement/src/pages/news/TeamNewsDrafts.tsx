@@ -98,7 +98,7 @@ export default function TeamNewsDrafts() {
     setDoing(submitId);
     try {
       await draftsApi.submit(submitId);
-      toast.success(`Đã submit bản nháp #${submitId} lên Chủ nhiệm CLB.`);
+      toast.success(`Đã submit bản nháp lên Chủ nhiệm CLB.`);
       await load();
     } catch (e: any) {
       toast.error(e?.message || "Không submit được nháp.");
@@ -116,7 +116,7 @@ export default function TeamNewsDrafts() {
     setDoing(deleteId);
     try {
       await draftsApi.remove(deleteId);
-      toast.success(`Đã xóa bản nháp #${deleteId}.`);
+      toast.success(`Đã xóa bản nháp thành công`);
       await load();
     } catch (e: any) {
       toast.error(e?.message || "Không xóa được nháp.");
