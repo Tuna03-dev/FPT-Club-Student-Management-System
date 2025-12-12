@@ -20,5 +20,7 @@ public interface ClubRoleService {
                                     UpdateClubRoleRequest request) throws AppException;
     void deleteClubRole(Long clubId, Long roleId) throws AppException;
 
+    boolean isMemberOfTeam(Long userId, Long teamId) throws AppException;
+
 }
 

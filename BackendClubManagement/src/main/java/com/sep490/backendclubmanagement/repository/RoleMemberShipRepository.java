@@ -765,6 +765,7 @@ WHERE cm.club.id = :clubId
     """)
     boolean isUserClubOfficer(@Param("userId") Long userId, @Param("clubId") Long clubId);
     List<RoleMemberShip> findByTeamIdAndIsActiveTrue(Long teamId);
+    boolean existsByClubMemberShip_User_IdAndTeam_IdAndSemester_IsCurrentTrue(Long userId, Long teamId);
     @Query("""
     SELECT rm.clubMemberShip.user.id
     FROM RoleMemberShip rm
@@ -797,9 +798,7 @@ WHERE cm.club.id = :clubId
       AND rm.team IS NOT NULL
       AND COALESCE(rm.isActive, TRUE) = TRUE
 """)
-    void deactivateActiveTeamRoles(@Param("clubMembershipId") Long clubMembershipId,
-                                   @Param("semesterId") Long semesterId);
-
+    void deactivateActiveTeamRoles(@Param("clubMembershipId") Long clubMembershipId, @Param("semesterId") Long semesterId);
     @Modifying
     @Query("""
     UPDATE RoleMemberShip rm
@@ -848,3 +847,5 @@ WHERE cm.user.id = :userId
 
 
 }
+
+
