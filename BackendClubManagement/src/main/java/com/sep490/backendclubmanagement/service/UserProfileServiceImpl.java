@@ -14,6 +14,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.LocalDate;
+import java.util.Comparator;
 import java.util.List;
 
 @Service
@@ -41,7 +43,7 @@ public class UserProfileServiceImpl implements UserProfileService {
                 );
 
         List<ClubMembershipProfileResponse> clubDtos = memberships.stream()
-                .map(this::mapToClubMembershipProfile)   // không cần currentSemester nữa
+                .map(this::mapToClubMembershipProfile)
                 .toList();
         SystemRole systemRole = user.getSystemRole();
 
@@ -71,15 +73,33 @@ public class UserProfileServiceImpl implements UserProfileService {
 
         // Chỉ set khi client truyền lên (tránh override thành null)
         if (request.getFullName() != null) {
-            user.setFullName(request.getFullName());
+            String fullName = request.getFullName().trim();
+            if (fullName.isEmpty()) {
+                // nhớ khai báo thêm mã lỗi tương ứng trong ErrorCode
+                throw new AppException(ErrorCode.INVALID_FULL_NAME);
+            }
+            user.setFullName(fullName);
         }
         if (request.getPhoneNumber() != null) {
-            user.setPhoneNumber(request.getPhoneNumber());
+            String phone = request.getPhoneNumber().trim();
+
+            // ví dụ: số Việt Nam 10 chữ số, bắt đầu bằng 0
+            // bạn có thể chỉnh regex này cho đúng rule hệ thống của bạn
+            if (!phone.matches("^0\\d{9}$")) {
+                throw new AppException(ErrorCode.INVALID_PHONE_NUMBER);
+            }
+
+            user.setPhoneNumber(phone);
         }
         if (request.getStudentCode() != null) {
             user.setStudentCode(request.getStudentCode());
         }
+
         if (request.getDateOfBirth() != null) {
+            // Không cho phép ngày sinh trong tương lai
+            if (request.getDateOfBirth().isAfter(LocalDate.now())) {
+                throw new AppException(ErrorCode.INVALID_DATE_OF_BIRTH);
+            }
             user.setDateOfBirth(request.getDateOfBirth());
         }
         if (request.getGender() != null) {
