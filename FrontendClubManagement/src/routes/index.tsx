@@ -448,7 +448,7 @@ export const router = createBrowserRouter([
         element: <StaffClubsManagement />,
       },
       {
-        path: "report/:reportId/clubs",
+        path: "reports/:reportId/clubs",
         element: <PeriodicReportClubs />,
       },
       { path: "news", element: <StaffNewsList /> },

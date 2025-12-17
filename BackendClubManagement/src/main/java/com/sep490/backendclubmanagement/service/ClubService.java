@@ -609,7 +609,7 @@ public class ClubService implements ClubServiceInterface {
                 log.info("Uploaded logo for club {}: {}", clubId, uploadResult.url());
             } catch (Exception e) {
                 log.error("Failed to upload logo for club {}: {}", clubId, e.getMessage());
-                throw new RuntimeException("Failed to upload file: " + e.getMessage(), e);
+                throw new RuntimeException("Tải tệp thất bại: " + e.getMessage(), e);
             }
         }
 
@@ -633,7 +633,7 @@ public class ClubService implements ClubServiceInterface {
                 log.info("Uploaded banner for club {}: {}", clubId, uploadResult.url());
             } catch (Exception e) {
                 log.error("Failed to upload banner for club {}: {}", clubId, e.getMessage());
-                throw new RuntimeException("Failed to upload template file: " + e.getMessage(), e);
+                throw new RuntimeException("Tải tệp thất bại: " + e.getMessage(), e);
             }
         }
 

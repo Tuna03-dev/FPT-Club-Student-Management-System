@@ -305,7 +305,7 @@ export function StaffReportManagement() {
   };
 
   const handlePeriodicReportView = (report: ReportRequirementDisplay) => {
-    navigate(`/staff/report/${report.id}/clubs`, {
+    navigate(`/staff/reports/${report.id}/clubs`, {
       state: { fromTab: activeTab },
     });
   };
