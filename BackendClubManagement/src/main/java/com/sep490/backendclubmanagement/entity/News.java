@@ -21,6 +21,9 @@ public class News extends BaseEntity {
     @Column(name = "title", nullable = false, length = 500)
     private String title;
 
+    @Column(name="is_spotlight")
+    private Boolean isSpotlight = false;
+
     @Column(name = "content", nullable = false, columnDefinition = "TEXT")
     private String content;
 
@@ -30,6 +33,7 @@ public class News extends BaseEntity {
     @Column(name = "news_type", length = 100)
     private String newsType;
 
+
     @Column(name = "is_draft")
     private Boolean isDraft = true;
 
@@ -38,10 +42,23 @@ public class News extends BaseEntity {
     private User createdBy;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "club_id", nullable = false)
+    @JoinColumn(name = "club_id", nullable = true)
     private Club club;
 
     @OneToOne(mappedBy = "news", cascade = CascadeType.ALL)
     private RequestNews requestNews;
+
+    //update delete xóa mềm news
+    @Column(nullable = false)
+    private boolean hidden = false;
+
+    @Column(nullable = false)
+    private boolean deleted = false;
+
+    @Column(name = "deleted_by_id")
+    private Long deletedById;
+
+    @Column(name = "updated_by_id")
+    private Long updatedById;
 }
 

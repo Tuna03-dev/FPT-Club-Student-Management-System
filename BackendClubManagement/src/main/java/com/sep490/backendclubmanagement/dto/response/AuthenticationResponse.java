@@ -5,6 +5,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
+
 @Data
 @Builder
 @NoArgsConstructor
@@ -12,9 +14,6 @@ import lombok.NoArgsConstructor;
 public class AuthenticationResponse {
     
     private String accessToken;
-    private String refreshToken;
-    private String tokenType = "Bearer";
-    private Long expiresIn;
     private UserInfo user;
     
     @Data
@@ -27,6 +26,7 @@ public class AuthenticationResponse {
         private String fullName;
         private String avatarUrl;
         private String systemRole;
+        private List<ClubRoleInfo> clubRoleList; // Danh sách club roles của user
     }
 }
 

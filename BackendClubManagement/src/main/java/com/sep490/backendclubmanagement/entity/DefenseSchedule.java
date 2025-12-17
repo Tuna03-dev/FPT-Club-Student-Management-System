@@ -21,6 +21,9 @@ public class DefenseSchedule extends BaseEntity {
     @Column(name = "defense_date", nullable = false)
     private LocalDateTime defenseDate;
 
+    @Column(name = "defense_end_date")
+    private LocalDateTime defenseEndDate;
+
     @Column(name = "location", length = 500)
     private String location;
 
@@ -39,6 +42,18 @@ public class DefenseSchedule extends BaseEntity {
 
     @Column(name = "feedback", columnDefinition = "TEXT")
     private String feedback;
+
+    @Column(name = "fap_booking_id")
+    private String fapBookingId;
+
+    @Column(name = "is_auto_booked")
+    private Boolean isAutoBooked;
+
+    @Column(name = "fap_booking_status", length = 50)
+    private String fapBookingStatus;
+
+    @Column(name = "fap_booking_link", length = 500)
+    private String fapBookingLink;
 
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "request_establishment_id", nullable = false, unique = true)

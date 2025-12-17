@@ -5,14 +5,19 @@ on:
     branches:
       - develop
       - main
+    paths:
+      - "BackendClubManagement/**"
+      - "FapAPI/**"
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
 
     env:
-      IMAGE_NAME: minhtuan2811/fcm-backend
-      BUILD_CONTEXT: BackendClubManagement
+      BACKEND_IMAGE_NAME: minhtuan2811/fcm-backend
+      FAP_IMAGE_NAME: minhtuan2811/fap-api
+      BACKEND_CONTEXT: BackendClubManagement
+      FAP_CONTEXT: FapAPI
       DOCKERFILE_PATH: Dockerfile
 
     steps:
@@ -37,30 +42,42 @@ jobs:
         id: vars
         run: echo "SHORT_SHA=${GITHUB_SHA::7}" >> $GITHUB_ENV
 
-      # 4. Build & push Docker image
-      - name: Build and push Docker image
+      # 4. Build & push Docker image (Backend)
+      - name: Build & Push Backend image
         uses: docker/build-push-action@v4
         with:
-          context: ${{ env.BUILD_CONTEXT }}
-          file: ${{ env.BUILD_CONTEXT }}/${{ env.DOCKERFILE_PATH }}
+          context: ${{ env.BACKEND_CONTEXT }}
+          file: ${{ env.BACKEND_CONTEXT }}/${{ env.DOCKERFILE_PATH }}
           push: true
           tags: |
-            ${{ env.IMAGE_NAME }}
-            ${{ env.IMAGE_NAME }}:${{ env.SHORT_SHA }}
+            ${{ env.BACKEND_IMAGE_NAME }}:latest
+            ${{ env.BACKEND_IMAGE_NAME }}:${{ env.SHORT_SHA }}
           platforms: linux/amd64
 
-      # 5. Copy docker-compose.yml to Server (tự động sync file config)
+      # 5. Build & push Docker image (FapAPI)
+      - name: Build & Push FapAPI image
+        uses: docker/build-push-action@v4
+        with:
+          context: ${{ env.FAP_CONTEXT }}
+          file: ${{ env.FAP_CONTEXT }}/${{ env.DOCKERFILE_PATH }}
+          push: true
+          tags: |
+            ${{ env.FAP_IMAGE_NAME }}:latest
+            ${{ env.FAP_IMAGE_NAME }}:${{ env.SHORT_SHA }}
+          platforms: linux/amd64
+
+      # 6. Copy docker-compose.yml to Server
       - name: Copy docker-compose.yml to Server
         uses: appleboy/scp-action@v0.1.4
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: "${{ env.BUILD_CONTEXT }}/docker-compose.yml"
+          source: "${{ env.BACKEND_CONTEXT }}/docker-compose.yml"
           target: "~/"
           overwrite: true
 
-      # 6. Deploy on server via SSH
+      # 7. Deploy on server via SSH
       - name: Deploy to Server
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -73,27 +90,27 @@ jobs:
             mkdir -p $APP_DIR
             cd $APP_DIR
 
-            # Tạo .env từ GitHub Secrets (thêm Redis host/port cho an toàn)
+            # Tạo .env dùng tag 'latest'
             cat > .env <<EOL
             SPRING_DATASOURCE_URL=${{ secrets.SPRING_DATASOURCE_URL }}
             SPRING_DATASOURCE_USERNAME=${{ secrets.SPRING_DATASOURCE_USERNAME }}
             SPRING_DATASOURCE_PASSWORD=${{ secrets.SPRING_DATASOURCE_PASSWORD }}
             HOST_FRONT_END=${{ secrets.HOST_FRONT_END }}
-            IMAGE_NAME=${{ env.IMAGE_NAME }}:${{ env.SHORT_SHA }}
-            SPRING_REDIS_HOST=redis-app
-            SPRING_REDIS_PORT=6379
+            IMAGE_NAME=${{ env.BACKEND_IMAGE_NAME }}:latest
+            FAP_IMAGE_NAME=${{ env.FAP_IMAGE_NAME }}:latest
+            REDIS_HOST=${{ secrets.REDIS_HOST }}
+            REDIS_PORT=${{ secrets.REDIS_PORT }}
+            REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD }}
+            PAYOS_WEBHOOK_URL=${{ secrets.PAYOS_WEBHOOK_URL }}
+            REDIS_DATABASE=0
             EOL
 
-            # Stop cũ (nếu đang chạy), pull image mới, start
-            docker-compose down || true  # Ignore nếu chưa có container
+            echo "🚀 Pulling latest images..."
+            docker-compose down || true
             docker-compose pull
             docker-compose up -d
 
-            # Wait và check status (optional, để log)
-            sleep 10
-            docker-compose ps
+            echo "🧹 Cleaning unused images..."
+            docker image prune -af
 
-            # Cleanup dangling images
-            docker image prune -f
-
-            echo "Deployment completed successfully!"
+            echo "✅ Deployment completed successfully with 'latest' images!"

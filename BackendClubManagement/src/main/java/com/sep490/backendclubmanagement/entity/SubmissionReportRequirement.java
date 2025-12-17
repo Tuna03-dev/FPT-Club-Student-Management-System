@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Set;
 
 @Entity
@@ -26,17 +27,18 @@ public class SubmissionReportRequirement extends BaseEntity {
     private String description;
 
     @Column(name = "due_date", nullable = false)
-    private LocalDate dueDate;
+    private LocalDateTime dueDate;
 
     @Column(name = "report_type", length = 100)
     @Enumerated(EnumType.STRING)
-    private ReportType reportType; // MONTHLY, QUARTERLY, SEMESTER, ANNUAL, AD_HOC
+    private ReportType reportType;
 
     @Column(name = "template_url", length = 500)
     private String templateUrl;
 
-    @OneToMany(mappedBy = "reportRequirement", cascade = CascadeType.ALL)
-    private Set<Report> reports;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "createdBy")
+    private User createdBy;
 
     @OneToOne
     @JoinColumn(name = "event_id", unique = true)

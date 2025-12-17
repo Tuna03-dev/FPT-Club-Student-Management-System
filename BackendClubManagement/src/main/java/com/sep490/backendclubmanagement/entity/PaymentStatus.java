@@ -6,6 +6,7 @@ public enum PaymentStatus {
     SUCCESS,    // Thanh toán thành công
     FAILED,     // Thanh toán thất bại
     CANCELLED,  // Đã hủy
-    EXPIRED     // Hết hạn
+    EXPIRED,
+    PAID// Hết hạn
 }
 

@@ -6,7 +6,9 @@
     "members": "Members",
     "events": "Events",
     "notifications": "Notifications",
-    "settings": "Settings"
+    "settings": "Settings",
+    "management": "Management",
+    "payments": "Payments"
   },
   "teams": {
     "title": "Teams",
@@ -16,5 +18,28 @@
     "noi-vu": "Internal Affairs Team",
     "doi-ngoai": "External Affairs Team"
   },
-  "search": "Search..."
+  "management": {
+    "permissions": "Permissions",
+    "pending_posts": "Pending Posts",
+    "manage_members": "Manage Members",
+    "manage_events": "Manage Events",
+    "pending_requests": "Pending Requests"
+  },
+  "search": "Search...",
+  "post": {
+    "likes": "likes",
+    "comments": "comments",
+    "like": "Like",
+    "comment": "Comment",
+    "seeMore": "See more",
+    "seeLess": "See less"
+  },
+  "login": {
+    "title": "Club Management System",
+    "subtitle": "FPT University",
+    "description": "Connect students, manage activities and develop club community",
+    "instruction": "Use your Google account <b>@fpt.edu.vn</b> to access the system",
+    "loginFailed": "Login failed:",
+    "loginError": "An error occurred during login"
+  }
 }

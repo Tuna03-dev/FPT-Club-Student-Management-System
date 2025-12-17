@@ -51,6 +51,11 @@ public class Club extends BaseEntity {
     @Column(name = "status", length = 50)
     private String status;
 
+    // ----- BẠN CHỈ CẦN THÊM 2 DÒNG NÀY VÀO -----
+    @Column(name = "is_featured")
+    private boolean isFeatured = false;
+    // ---------------------------------------------
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "campus_id")
     private Campus campus;
@@ -59,8 +64,7 @@ public class Club extends BaseEntity {
     @JoinColumn(name = "club_category_id")
     private ClubCategory clubCategory;
 
-
-
+    // ... các trường còn lại giữ nguyên ...
     @OneToMany(mappedBy = "club", cascade = CascadeType.ALL)
     private Set<ClubMemberShip> clubMemberships;
 
@@ -74,6 +78,9 @@ public class Club extends BaseEntity {
     private Set<Event> events;
 
     @OneToMany(mappedBy = "club", cascade = CascadeType.ALL)
+    private Set<News> news;
+
+    @OneToMany(mappedBy = "club", cascade = CascadeType.ALL)
     private Set<ClubRole> clubRoles;
 
     @OneToOne(mappedBy = "club", cascade = CascadeType.ALL)
@@ -81,9 +88,6 @@ public class Club extends BaseEntity {
 
     @OneToMany(mappedBy = "club", cascade = CascadeType.ALL)
     private Set<Recruitment> recruitments;
-
-    @OneToMany(mappedBy = "club", cascade = CascadeType.ALL)
-    private Set<Report> reports;
 
     @OneToMany(mappedBy = "club", cascade = CascadeType.ALL)
     private Set<ClubProposal> clubProposals;
@@ -94,4 +98,3 @@ public class Club extends BaseEntity {
     @OneToMany(mappedBy = "club", cascade = CascadeType.ALL)
     private Set<ClubReportRequirement> clubReportRequirements;
 }
-

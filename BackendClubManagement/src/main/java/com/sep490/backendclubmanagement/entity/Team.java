@@ -3,6 +3,7 @@ package com.sep490.backendclubmanagement.entity;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.time.LocalDateTime;
 import java.util.Set;
 
 @Entity
@@ -24,7 +25,7 @@ public class Team extends BaseEntity {
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
 
-    @Column(name = "link_group_chat", nullable = false, length = 200)
+    @Column(name = "link_group_chat", nullable = true, length = 200)
     private String linkGroupChat;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -33,5 +34,10 @@ public class Team extends BaseEntity {
 
     @OneToMany(mappedBy = "team", cascade = CascadeType.ALL)
     private Set<RoleMemberShip> roleMemberships;
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
+
+    @OneToMany(mappedBy = "team", cascade = CascadeType.ALL)
+    private Set<Post> posts;
 }
 

@@ -54,11 +54,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
                 UserDetails userDetails = this.userDetailsService.loadUserByUsername(username);
 
+                // Check if token is valid and not revoked
                 if (jwtUtil.validateToken(jwt, userDetails)) {
                     UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
                             userDetails, null, userDetails.getAuthorities()
                     );
                     authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+
 
                     SecurityContextHolder.getContext().setAuthentication(authToken);
                     log.info("Successfully authenticated user: {} for request: {}", username, request.getRequestURI());
@@ -75,4 +77,3 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 }
-

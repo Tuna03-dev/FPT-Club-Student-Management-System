@@ -49,7 +49,7 @@ public class User extends BaseEntity {
     @Column(name = "provider_id", length = 100)
     private String providerId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "system_role_id")
     private SystemRole systemRole;
 
@@ -80,6 +80,8 @@ public class User extends BaseEntity {
     @OneToMany(mappedBy = "createdBy", cascade = CascadeType.ALL)
     private Set<RequestNews> createdRequestNews;
 
+    @OneToMany(mappedBy = "createdBy", cascade = CascadeType.ALL)
+    private Set<SubmissionReportRequirement> submissionReportRequirements;
 
     @OneToMany(mappedBy = "createdBy", cascade = CascadeType.ALL)
     private Set<RequestEvent> createdRequestEvents;
@@ -89,5 +91,8 @@ public class User extends BaseEntity {
 
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL)
     private Set<IncomeTransaction> incomeTransactions;
+
+    @OneToMany(mappedBy = "recipient", cascade = CascadeType.ALL)
+    private Set<Notification> receivedNotifications;
 }
 

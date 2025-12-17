@@ -37,6 +37,14 @@ public class ApiResponse<T> {
                 .data(data)
                 .build();
     }
+    
+    public static ApiResponse<Void> success() {
+        return ApiResponse.<Void>builder()
+                .code(200)
+                .message("Success")
+                .timestamp(Instant.now())
+                .build();
+    }
 
     public static <T> ApiResponse<T> error(ErrorCode errorCode, List<FieldError> errors) {
         return ApiResponse.<T>builder()
@@ -46,4 +54,21 @@ public class ApiResponse<T> {
                 .errors(errors)
                 .build();
     }
+    public static <T> ApiResponse<T> error(ErrorCode errorCode, String customMessage, List<FieldError> errors) {
+        return ApiResponse.<T>builder()
+                .code(errorCode.getCode())
+                .message(customMessage != null ? customMessage : errorCode.getMessage())
+                .timestamp(Instant.now())
+                .errors(errors)
+                .build();
+    }
+
+    public static <T> ApiResponse<T> error(int code, String message) {
+        return ApiResponse.<T>builder()
+                .code(code)
+                .message(message)
+                .timestamp(Instant.now())
+                .build();
+    }
+
 }

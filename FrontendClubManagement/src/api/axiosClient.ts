@@ -5,6 +5,14 @@ import axios, {
   AxiosError,
 } from "axios";
 
+// Import AuthenticationResponse type
+import type { UserInfo } from "@/services/authService";
+
+interface AuthenticationResponse {
+  accessToken: string;
+  user: UserInfo;
+}
+
 // ===== Token Helpers =====
 const getAccessToken = (): string | null => localStorage.getItem("accessToken");
 
@@ -13,6 +21,7 @@ const setAccessToken = (token: string): void =>
 
 const removeTokens = (): void => {
   localStorage.removeItem("accessToken");
+  localStorage.removeItem("user");
 };
 
 // ===== API Response wrapper (match backend ApiResponse<T>) =====
@@ -26,7 +35,7 @@ export interface ApiResponse<T> {
 
 // ===== Axios instance =====
 const axiosInstance: AxiosInstance = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || "http://localhost:8080/api",
+  baseURL: import.meta.env.VITE_API_URL || "/api",
   timeout: import.meta.env.VITE_TIMEOUT || 10000,
   headers: { "Content-Type": "application/json" },
   withCredentials: true,
@@ -39,6 +48,12 @@ axiosInstance.interceptors.request.use(
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    
+    // If data is FormData, let axios set Content-Type automatically with boundary
+    if (config.data instanceof FormData) {
+      delete config.headers['Content-Type'];
+    }
+    
     return config;
   },
   (error: AxiosError) => Promise.reject(error)
@@ -56,22 +71,38 @@ axiosInstance.interceptors.response.use(
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
       try {
+        // Use server-side refresh token API (refresh token is sent via HttpOnly cookie)
         const refreshResponse = await axios.post<
-          ApiResponse<{ accessToken: string }>
+          ApiResponse<AuthenticationResponse>
         >(
-          `${import.meta.env.VITE_API_URL}/auth/refresh-token`,
+          `${import.meta.env.VITE_API_URL || "/api"}/auth/refreshToken`,
           {},
-          { withCredentials: true }
+          {
+            withCredentials: true,
+          }
         );
 
-        const newAccessToken = refreshResponse.data.data?.accessToken;
-        if (newAccessToken) {
-          setAccessToken(newAccessToken);
+        if (refreshResponse.data.code === 200 && refreshResponse.data.data) {
+          const authData = refreshResponse.data.data;
+          setAccessToken(authData.accessToken);
+
+          // ✅ Cập nhật user info với roles mới khi refresh token
+          if (authData.user) {
+            // Import authService dynamically để tránh circular dependency
+            const { authService } = await import("../services/authService");
+            authService.setUser(authData.user);
+            
+            // Dispatch event để notify các components về sự thay đổi
+            window.dispatchEvent(new Event("auth-state-changed"));
+          }
+
           originalRequest.headers = {
             ...originalRequest.headers,
-            Authorization: `Bearer ${newAccessToken}`,
+            Authorization: `Bearer ${authData.accessToken}`,
           };
           return axiosInstance(originalRequest);
+        } else {
+          throw new Error("Invalid refresh response");
         }
       } catch (refreshError) {
         removeTokens();
@@ -138,5 +169,8 @@ export const axiosClient = {
     return res.data;
   },
 };
+
+// Export axiosInstance để dùng cho blob response
+export { axiosInstance };
 
 export default axiosClient;

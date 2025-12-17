@@ -1,25 +1,14 @@
 version: '3.9'
 
 services:
-  redis:
-    image: redis:7.4.0
-    container_name: redis-app
+  fap-api:
+    image: ${FAP_IMAGE_NAME:-fap-api:latest}
+    container_name: fap-api-container
     restart: always
-    volumes:
-      - redis-app-data:/data
     ports:
-      - "6379:6379"
+      - "8081:8081"
     networks:
       - fcm-network
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-    deploy:
-      resources:
-        limits:
-          memory: 128MB
 
   app:
     image: ${IMAGE_NAME:-fcm-backend:latest}
@@ -31,14 +20,18 @@ services:
       SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL}
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
-      SPRING_REDIS_HOST: redis-app
-      SPRING_REDIS_PORT: 6379
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_DATABASE: ${REDIS_DATABASE}
       HOST_FRONT_END: ${HOST_FRONT_END:-http://localhost:5173}
+      PAYOS_WEBHOOK_URL: ${PAYOS_WEBHOOK_URL}
+      FAP_API_URL: http://fap-api:8081/api/allowed-users
     depends_on:
-      redis:
-        condition: service_healthy
+      - fap-api
     networks:
       - fcm-network
+
 
 volumes:
   redis-app-data:

@@ -25,14 +25,8 @@ public class Recruitment extends BaseEntity {
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
 
-    @Column(name = "start_date", nullable = false)
-    private LocalDateTime startDate;
-
     @Column(name = "end_date", nullable = false)
     private LocalDateTime endDate;
-
-    @Column(name = "max_applicants")
-    private Integer maxApplicants;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 50)
@@ -50,5 +44,8 @@ public class Recruitment extends BaseEntity {
 
     @OneToMany(mappedBy = "recruitment", cascade = CascadeType.ALL)
     private Set<RecruitmentApplication> applications;
+
+    @OneToMany(mappedBy = "recruitment", cascade = CascadeType.ALL)
+    private Set<TeamOption> teamOptions;
 }
 
