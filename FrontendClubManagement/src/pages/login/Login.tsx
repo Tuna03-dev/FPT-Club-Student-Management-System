@@ -84,19 +84,22 @@ const LoginPage: React.FC = () => {
         } else {
           navigate("/"); // Redirect to homepage after successful login
         }
-      } else if (result.code === 403) {
-        toast.error("Tài khoản của bạn không thuộc tổ chức của chúng tôi");
       } else {
         console.error("Login failed:", result.message);
-        toast.error("Đăng nhập không thành công");
+        toast.error(result.message || "Đăng nhập không thành công");
       }
     } catch (error) {
       console.error("Login error:", error);
       // Check if it's a Google authentication error or login API error
+      const err: any = error;
+      const apiMessage = err?.response?.data?.message;
+
       if (error instanceof Error && error.message.includes("credential")) {
         toast.error("Lỗi xác thực Google");
+      } else if (apiMessage) {
+        toast.error(apiMessage);
       } else {
-        toast.error("Đăng nhập không thành công");
+        toast.error(err?.message || "Đăng nhập không thành công");
       }
     } finally {
       setIsLoading(false);

@@ -90,7 +90,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
         if (file == null || file.isEmpty()) return;
         long size = file.getSize();
         if (size <= 0) {
-            throw new IllegalArgumentException("Uploaded file is empty or invalid");
+            throw new IllegalArgumentException("Tập tin tải lên trống hoặc không hợp lệ");
         }
         if (size > MAX_FILE_SIZE_BYTES) {
             throw new AppException(ErrorCode.FILE_TOO_LARGE, "Kích thước tập tin vượt quá giới hạn 20MB");
@@ -111,7 +111,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
         // If status is provided, validate it's a university-level status
         if (status != null && !UNIVERSITY_LEVEL_STATUSES.contains(status)) {
             throw new ForbiddenException(
-                    "Staff can only view reports with status: PENDING_UNIVERSITY, APPROVED_UNIVERSITY, REJECTED_UNIVERSITY, or RESUBMITTED_UNIVERSITY"
+                    "Nhân viên chỉ có thể xem báo cáo với trạng thái: PENDING_UNIVERSITY, APPROVED_UNIVERSITY, REJECTED_UNIVERSITY hoặc RESUBMITTED_UNIVERSITY"
             );
         }
 
@@ -186,13 +186,13 @@ public class ReportServiceImpl implements ReportServiceInterface {
     public ReportDetailResponse getReportDetail(Long reportId, Long userId) {
 
         Report report = reportRepository.findByIdWithRelations(reportId)
-                .orElseThrow(() -> new NotFoundException("Report not found with ID: " + reportId));
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy báo cáo với ID: " + reportId));
 
         // Staff can only view university-level reports - optimized with EnumSet
         if (!UNIVERSITY_LEVEL_STATUSES.contains(report.getStatus())) {
             throw new ForbiddenException(
-                    "Staff can only view reports with status: PENDING_UNIVERSITY, APPROVED_UNIVERSITY, REJECTED_UNIVERSITY, or RESUBMITTED_UNIVERSITY. " +
-                    "Current status: " + report.getStatus()
+                    "Nhân viên chỉ có thể xem báo cáo với trạng thái: PENDING_UNIVERSITY, APPROVED_UNIVERSITY, REJECTED_UNIVERSITY hoặc RESUBMITTED_UNIVERSITY. " +
+                    "Trạng thái hiện tại: " + report.getStatus()
             );
         }
 
@@ -208,14 +208,14 @@ public class ReportServiceImpl implements ReportServiceInterface {
     public void reviewReport(ReportReviewRequest request, Long userId) {
 
         Report report = reportRepository.findByIdWithRelations(request.getReportId())
-                .orElseThrow(() -> new NotFoundException("Report not found with ID: " + request.getReportId()));
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy báo cáo với ID: " + request.getReportId()));
 
         // Only allow reviewing reports with status PENDING_UNIVERSITY, or RESUBMITTED_UNIVERSITY
         if (report.getStatus() != ReportStatus.PENDING_UNIVERSITY
                 && report.getStatus() != ReportStatus.RESUBMITTED_UNIVERSITY) {
             throw new ForbiddenException(
-                    "Only reports with status PENDING_UNIVERSITY, or RESUBMITTED_UNIVERSITY can be reviewed. " +
-                    "Current status: " + report.getStatus()
+                    "Chỉ các báo cáo có trạng thái PENDING_UNIVERSITY hoặc RESUBMITTED_UNIVERSITY được phép xét duyệt. " +
+                    "Trạng thái hiện tại: " + report.getStatus()
             );
         }
 
@@ -229,8 +229,8 @@ public class ReportServiceImpl implements ReportServiceInterface {
             newReportStatus = ReportStatus.REJECTED_UNIVERSITY;
         } else {
             throw new ForbiddenException(
-                    "Staff can only approve or reject reports. Status must be APPROVED_UNIVERSITY or REJECTED_UNIVERSITY. " +
-                    "Current report status: " + report.getStatus()
+                    "Nhân viên chỉ có thể chấp thuận hoặc từ chối báo cáo. Trạng thái phải là APPROVED_UNIVERSITY hoặc REJECTED_UNIVERSITY. " +
+                    "Trạng thái hiện tại: " + report.getStatus()
             );
         }
         
@@ -340,7 +340,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
 
         // Validate due date is not in the past
         if (request.getDueDate() != null && request.getDueDate().isBefore(LocalDateTime.now())) {
-            throw new IllegalArgumentException("Due date must not be in the past");
+            throw new IllegalArgumentException("Thời hạn không được chọn trong quá khứ");
         }
 
         // Validate file size before uploading
@@ -351,19 +351,19 @@ public class ReportServiceImpl implements ReportServiceInterface {
         // Validate and get all clubs (batch load) - moved before event check for fail-fast
         List<Club> clubs = clubRepository.findAllById(request.getClubIds());
         if (clubs.size() != request.getClubIds().size()) {
-            throw new NotFoundException("One or more clubs not found");
+            throw new NotFoundException("Không tìm thấy một hoặc nhiều câu lạc bộ");
         }
 
         // Validate and get event if provided
         Event event = null;
         if (request.getEventId() != null) {
             event = eventRepository.findById(request.getEventId())
-                    .orElseThrow(() -> new NotFoundException("Event not found"));
+                    .orElseThrow(() -> new NotFoundException("Không tìm thấy sự kiện"));
         }
 
         // Get current user
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new NotFoundException("User not found with ID: " + userId));
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy người dùng với ID: " + userId));
 
         // Upload file if provided
         String templateUrl = request.getTemplateUrl();
@@ -374,7 +374,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
                 log.info("Uploaded template file for report requirement: {}", templateUrl);
             } catch (Exception e) {
                 log.error("Failed to upload template file: {}", e.getMessage(), e);
-                throw new RuntimeException("Failed to upload template file: " + e.getMessage(), e);
+                throw new RuntimeException("Tải tệp mẫu thất bại: " + e.getMessage(), e);
             }
         }
 
@@ -497,7 +497,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
 
         // Validate due date is not in the past
         if (request.getDueDate() != null && request.getDueDate().isBefore(LocalDateTime.now())) {
-            throw new IllegalArgumentException("Due date must not be in the past");
+            throw new IllegalArgumentException("Thời hạn không được chọn trong quá khứ");
         }
 
         // Validate file size before uploading
@@ -507,7 +507,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
 
         // Get existing submission report requirement
         SubmissionReportRequirement submissionRequirement = submissionReportRequirementRepository.findById(requirementId)
-                .orElseThrow(() -> new NotFoundException("Report requirement not found with ID: " + requirementId));
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy yêu cầu báo cáo với ID: " + requirementId));
 
         // Upload file if provided and get URL
         String templateUrl = request.getTemplateUrl();
@@ -518,7 +518,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
                 log.info("Uploaded new template file for report requirement: {}", templateUrl);
             } catch (Exception e) {
                 log.error("Failed to upload template file: {}", e.getMessage(), e);
-                throw new RuntimeException("Failed to upload template file: " + e.getMessage(), e);
+                throw new RuntimeException("Tải tệp mẫu thất bại: " + e.getMessage(), e);
             }
         }
 
@@ -637,7 +637,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
 
         // Validate club exists and is active
         Club club = clubRepository.findById(request.getClubId())
-                .orElseThrow(() -> new NotFoundException("Club not found with ID: " + request.getClubId()));
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy câu lạc bộ với ID: " + request.getClubId()));
 
         if (!"ACTIVE".equalsIgnoreCase(club.getStatus())) {
             throw new AppException(ErrorCode.CLUB_NOT_ACTIVE);
@@ -645,7 +645,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
 
         // Validate report requirement exists
         SubmissionReportRequirement reportRequirement = submissionReportRequirementRepository.findById(request.getReportRequirementId())
-                .orElseThrow(() -> new NotFoundException("Report requirement not found with ID: " + request.getReportRequirementId()));
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy yêu cầu báo cáo với ID: " + request.getReportRequirementId()));
 
         // Find ClubReportRequirement for this club and submission requirement
         ClubReportRequirement clubReportRequirement = clubReportRequirementRepository
@@ -670,7 +670,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
 
         // Get user (moved after validations for fail-fast)
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new NotFoundException("User not found with ID: " + userId));
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy người dùng với ID: " + userId));
 
         // Upload file if provided
         String fileUrl = request.getFileUrl(); // Use provided fileUrl if any
@@ -682,7 +682,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
                 log.info("Uploaded file for report: {}", fileUrl);
             } catch (Exception e) {
                 log.error("Failed to upload file for report: {}", e.getMessage(), e);
-                throw new RuntimeException("Failed to upload file: " + e.getMessage(), e);
+                throw new RuntimeException("Tải tệp thất bại: " + e.getMessage(), e);
             }
         }
 
@@ -791,7 +791,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
 
         // Get report with relations (already optimized with JOIN FETCH)
         Report report = reportRepository.findByIdWithRelations(reportId)
-                .orElseThrow(() -> new NotFoundException("Report not found with ID: " + reportId));
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy báo cáo với ID: " + reportId));
 
         // Only allow updating draft reports, rejected reports (for resubmission), or pending club reports
         if (report.getStatus() != ReportStatus.DRAFT
@@ -833,7 +833,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
                 log.info("Uploaded file for report update: {}", fileUrl);
             } catch (Exception e) {
                 log.error("Failed to upload file for report update: {}", e.getMessage(), e);
-                throw new RuntimeException("Failed to upload file: " + e.getMessage(), e);
+                throw new RuntimeException("Tải tệp thất bại: " + e.getMessage(), e);
             }
         }
 
@@ -858,7 +858,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
     public ReportDetailResponse submitReport(SubmitReportRequest request, Long userId) throws AppException{
         // Get report with relations (already optimized with JOIN FETCH)
         Report report = reportRepository.findByIdWithRelations(request.getReportId())
-                .orElseThrow(() -> new NotFoundException("Report not found with ID: " + request.getReportId()));
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy báo cáo với ID: " + request.getReportId()));
 
         // Only allow submitting draft reports or resubmitting rejected reports (early validation)
         if (report.getStatus() != ReportStatus.DRAFT
@@ -1014,7 +1014,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
             String keyword, Pageable pageable, Long userId) {
         // Validate club exists - optimized: only check existence
         if (!clubRepository.existsById(clubId)) {
-            throw new NotFoundException("Club not found with ID: " + clubId);
+            throw new NotFoundException("Không tìm thấy câu lạc bộ với ID: " + clubId);
         }
 
         Page<Report> reportPage;
@@ -1082,7 +1082,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
             String keyword, Pageable pageable, Long userId) {
         // Validate club exists - optimized: only check existence
         if (!clubRepository.existsById(clubId)) {
-            throw new NotFoundException("Club not found with ID: " + clubId);
+            throw new NotFoundException("Không tìm thấy câu lạc bộ với ID: " + clubId);
         }
 
         Page<Report> reportPage;
@@ -1242,7 +1242,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
 
         // Get submission report requirement
         SubmissionReportRequirement requirement = submissionReportRequirementRepository.findById(requirementId)
-                .orElseThrow(() -> new NotFoundException("Report requirement not found with ID: " + requirementId));
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy yêu cầu báo cáo với ID: " + requirementId));
 
         // Map to response using mapper
         ReportRequirementResponse response = submissionReportRequirementMapper.toDto(requirement);
@@ -1269,7 +1269,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
 
         // Validate submission report requirement exists
         if (!submissionReportRequirementRepository.existsById(requirementId)) {
-            throw new NotFoundException("Report requirement not found with ID: " + requirementId);
+            throw new NotFoundException("Không tìm thấy yêu cầu báo cáo với ID: " + requirementId);
         }
 
         // Get all club requirements for this submission requirement
@@ -1345,12 +1345,12 @@ public class ReportServiceImpl implements ReportServiceInterface {
 
         // Validate submission report requirement exists - optimized: only check existence
         if (!submissionReportRequirementRepository.existsById(requirementId)) {
-            throw new NotFoundException("Report requirement not found with ID: " + requirementId);
+            throw new NotFoundException("Không tìm thấy yêu cầu báo cáo với ID: " + requirementId);
         }
 
         // Validate club exists - optimized: only check existence
         if (!clubRepository.existsById(clubId)) {
-            throw new NotFoundException("Club not found with ID: " + clubId);
+            throw new NotFoundException("Không tìm thấy câu lạc bộ với ID: " + clubId);
         }
 
         // Find report by clubId and requirementId
@@ -1383,7 +1383,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
             Pageable pageable, Long userId) {
         // Validate club exists - optimized: only check existence
         if (!clubRepository.existsById(clubId)) {
-            throw new NotFoundException("Club not found with ID: " + clubId);
+            throw new NotFoundException("Không tìm thấy câu lạc bộ với ID: " + clubId);
         }
 
         // Get current semester
@@ -1545,12 +1545,12 @@ public class ReportServiceImpl implements ReportServiceInterface {
     public ReportDetailResponse getClubReportByRequirementForOfficer(Long requirementId, Long clubId, Long userId) {
         // Validate club exists - optimized: only check existence
         if (!clubRepository.existsById(clubId)) {
-            throw new NotFoundException("Club not found with ID: " + clubId);
+            throw new NotFoundException("Không tìm thấy câu lạc bộ với ID: " + clubId);
         }
 
         // Validate submission report requirement exists - optimized: only check existence
         if (!submissionReportRequirementRepository.existsById(requirementId)) {
-            throw new NotFoundException("Report requirement not found with ID: " + requirementId);
+            throw new NotFoundException("Không tìm thấy yêu cầu báo cáo với ID: " + requirementId);
         }
 
         // Get current semester
@@ -1592,7 +1592,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
     public void deleteReport(Long reportId, Long userId) throws AppException {
         // Get report with relations
         Report report = reportRepository.findByIdWithRelations(reportId)
-                .orElseThrow(() -> new NotFoundException("Report not found with ID: " + reportId));
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy báo cáo với ID: " + reportId));
 
         // Check if club is active
         if (report.getClubReportRequirement() != null && report.getClubReportRequirement().getClub() != null) {
@@ -1642,12 +1642,12 @@ public class ReportServiceImpl implements ReportServiceInterface {
     public ReportDetailResponse getClubReportDetail(Long reportId, Long clubId, Long userId) {
         // Validate club exists - optimized: only check existence
         if (!clubRepository.existsById(clubId)) {
-            throw new NotFoundException("Club not found with ID: " + clubId);
+            throw new NotFoundException("Không tìm thấy câu lạc bộ với ID: " + clubId);
         }
 
         // Get report with relations
         Report report = reportRepository.findByIdWithRelations(reportId)
-                .orElseThrow(() -> new NotFoundException("Report not found with ID: " + reportId));
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy báo cáo với ID: " + reportId));
 
         // Verify report belongs to the club
         if (report.getClubReportRequirement() == null || 
@@ -1686,7 +1686,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
     public ReportDetailResponse reviewReportByClub(ReportReviewRequest request, Long userId) throws AppException {
         // Get report with relations
         Report report = reportRepository.findByIdWithRelations(request.getReportId())
-                .orElseThrow(() -> new NotFoundException("Report not found with ID: " + request.getReportId()));
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy báo cáo với ID: " + request.getReportId()));
 
         // Check if club is active
         if (report.getClubReportRequirement() == null || report.getClubReportRequirement().getClub() == null) {
@@ -1710,7 +1710,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
 
         // Get current semester
         Semester currentSemester = semesterRepository.findCurrentSemester()
-                .orElseThrow(() -> new NotFoundException("Current semester not found"));
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy kỳ học hiện tại"));
 
         // Check if user is club president in current semester and active
         Long clubId = club.getId();
@@ -1865,7 +1865,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
     ) throws AppException {
         // Validate club exists
         Club club = clubRepository.findById(clubId)
-                .orElseThrow(() -> new NotFoundException("Club not found with ID: " + clubId));
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy câu lạc bộ với ID: " + clubId));
 
         // Check if club is active (only active clubs can assign teams)
         if (!"ACTIVE".equalsIgnoreCase(club.getStatus())) {
