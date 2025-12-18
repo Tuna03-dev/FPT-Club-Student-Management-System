@@ -505,47 +505,7 @@ SELECT CASE WHEN EXISTS (
 
 //tao phong ban
 
-    @Query(value = """
-        SELECT DISTINCT cm.user_id
-        FROM role_memberships rm
-        JOIN club_memberships cm ON rm.club_membership_id = cm.id
-        WHERE cm.club_id = :clubId
-          AND rm.semester_id = :semesterId
-          AND rm.is_active = TRUE
-          AND rm.team_id IS NOT NULL
-          AND cm.user_id IN (:userIds)
-        """, nativeQuery = true)
-    List<Long> findExistingTeamMembersInSemester(
-            @Param("clubId") Long clubId,
-            @Param("semesterId") Long semesterId,
-            @Param("userIds") List<Long> userIds
-    );
-    @Query("""
-SELECT cm.user.id
-FROM ClubMemberShip cm
-WHERE cm.club.id = :clubId
-  AND cm.status = com.sep490.backendclubmanagement.entity.ClubMemberShipStatus.ACTIVE
-  AND NOT EXISTS (
-       SELECT 1
-       FROM RoleMemberShip rmTeam
-       WHERE rmTeam.clubMemberShip = cm
-         AND rmTeam.semester.id = :semesterId
-         AND COALESCE(rmTeam.isActive, TRUE) = TRUE
-         AND rmTeam.team IS NOT NULL
-  )
-  AND NOT EXISTS (
-       SELECT 1
-       FROM RoleMemberShip rmClub
-       JOIN rmClub.clubRole cr
-       WHERE rmClub.clubMemberShip = cm
-         AND rmClub.semester.id = :semesterId
-         AND COALESCE(rmClub.isActive, TRUE) = TRUE
-         AND rmClub.team IS NULL
-         AND UPPER(cr.roleCode) IN ('CLUB_PRESIDENT','CLUB_VICE_PRESIDENT')
-  )
-""")
-    List<Long> findAvailableMemberUserIds(@Param("clubId") Long clubId,
-                                          @Param("semesterId") Long semesterId);
+
 
 
     @Query("""
@@ -794,11 +754,10 @@ WHERE cm.club.id = :clubId
     SET rm.isActive = false
     WHERE rm.clubMemberShip.id = :clubMembershipId
       AND rm.semester.id = :semesterId
-      AND rm.team IS NOT NULL
-      AND COALESCE(rm.isActive, TRUE) = TRUE
+      AND rm.isActive = true
 """)
-    void deactivateActiveTeamRoles(@Param("clubMembershipId") Long clubMembershipId,
-                                   @Param("semesterId") Long semesterId);
+    void deactivateActiveTeamRoles(Long clubMembershipId, Long semesterId);
+
 
     @Modifying
     @Query("""
