@@ -5,6 +5,7 @@ import com.sep490.backendclubmanagement.dto.response.AuthenticationResponse;
 import com.sep490.backendclubmanagement.dto.response.ClubRoleInfo;
 import com.sep490.backendclubmanagement.entity.SystemRole;
 import com.sep490.backendclubmanagement.entity.User;
+import com.sep490.backendclubmanagement.exception.AppException;
 import com.sep490.backendclubmanagement.exception.ErrorCode;
 import com.sep490.backendclubmanagement.service.*;
 import com.sep490.backendclubmanagement.util.JwtUtil;
@@ -95,7 +96,7 @@ class AuthServiceImplTest {
     }
 
     @Test
-    void loginWithGoogle_newUser_createsUserAndReturnsToken() throws Exception {
+    void loginWithGoogle_newUser_createsUserAndReturnsToken() throws AppException {
         // Arrange
         GoogleIdToken.Payload payload = new GoogleIdToken.Payload();
         payload.setEmail(testEmail);
@@ -136,7 +137,7 @@ class AuthServiceImplTest {
     }
 
     @Test
-    void loginWithGoogle_existingActiveUser_returnsToken() throws Exception {
+    void loginWithGoogle_existingActiveUser_returnsToken() throws AppException {
         // Arrange
         GoogleIdToken.Payload payload = new GoogleIdToken.Payload();
         payload.setEmail(testEmail);
@@ -173,7 +174,7 @@ class AuthServiceImplTest {
     }
 
     @Test
-    void loginWithGoogle_inactiveUser_throwsException() throws Exception {
+    void loginWithGoogle_inactiveUser_throwsException() throws AppException {
         // Arrange
         testUser.setIsActive(false);
         GoogleIdToken.Payload payload = new GoogleIdToken.Payload();
@@ -198,7 +199,7 @@ class AuthServiceImplTest {
     }
 
     @Test
-    void loginWithGoogle_emailNotInFapApi_throwsException() throws Exception {
+    void loginWithGoogle_emailNotInFapApi_throwsException() throws AppException {
         // Arrange
         GoogleIdToken.Payload payload = new GoogleIdToken.Payload();
         payload.setEmail(testEmail);
@@ -216,7 +217,7 @@ class AuthServiceImplTest {
     }
 
     @Test
-    void loginWithGoogle_refreshTokenStorageFails_continuesWithLogin() throws Exception {
+    void loginWithGoogle_refreshTokenStorageFails_continuesWithLogin() throws AppException {
         // Arrange
         GoogleIdToken.Payload payload = new GoogleIdToken.Payload();
         payload.setEmail(testEmail);
@@ -364,7 +365,7 @@ class AuthServiceImplTest {
         // Act & Assert
         RuntimeException exception = assertThrows(RuntimeException.class, () ->
             authService.logout(testAccessToken, request, response));
-        assertEquals(ErrorCode.UNAUTHORIZED.getMessage(), exception.getMessage());
+        assertEquals(ErrorCode.USER_NOT_FOUND.getMessage(), exception.getMessage());
     }
 
     @Test

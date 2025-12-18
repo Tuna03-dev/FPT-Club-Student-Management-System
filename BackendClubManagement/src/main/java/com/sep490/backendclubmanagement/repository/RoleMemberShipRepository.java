@@ -725,6 +725,7 @@ SELECT CASE WHEN EXISTS (
     """)
     boolean isUserClubOfficer(@Param("userId") Long userId, @Param("clubId") Long clubId);
     List<RoleMemberShip> findByTeamIdAndIsActiveTrue(Long teamId);
+    boolean existsByClubMemberShip_User_IdAndTeam_IdAndSemester_IsCurrentTrue(Long userId, Long teamId);
     @Query("""
     SELECT rm.clubMemberShip.user.id
     FROM RoleMemberShip rm
@@ -757,8 +758,6 @@ SELECT CASE WHEN EXISTS (
       AND rm.isActive = true
 """)
     void deactivateActiveTeamRoles(Long clubMembershipId, Long semesterId);
-
-
     @Modifying
     @Query("""
     UPDATE RoleMemberShip rm
@@ -807,3 +806,5 @@ WHERE cm.user.id = :userId
 
 
 }
+
+

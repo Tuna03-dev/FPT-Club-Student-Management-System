@@ -25,13 +25,13 @@ const LoginPage: React.FC = () => {
       const params = new URLSearchParams(hash.substring(1));
       const idToken = params.get("id_token");
       const returnedNonce = params.get("nonce");
-      
+
       // Verify nonce
       const storedNonce = sessionStorage.getItem("google_oauth_nonce");
       if (idToken && returnedNonce === storedNonce) {
         // Clear URL hash
         window.history.replaceState(null, "", window.location.pathname);
-        
+
         // Send message to opener window if this is a popup callback
         if (window.opener) {
           window.opener.postMessage(
@@ -44,12 +44,12 @@ const LoginPage: React.FC = () => {
           handleCredentialResponse({ credential: idToken });
         }
       }
-      
+
       // Clean up
       sessionStorage.removeItem("google_oauth_nonce");
       sessionStorage.removeItem("google_oauth_state");
     }
-    
+
     // Mark Google as ready (we don't need the script for OAuth flow)
     setIsGoogleReady(true);
     googleInitialized.current = true;
@@ -84,25 +84,27 @@ const LoginPage: React.FC = () => {
         } else {
           navigate("/"); // Redirect to homepage after successful login
         }
-      } else if (result.code === 403) {
-        toast.error("Tài khoản của bạn không thuộc tổ chức của chúng tôi");
       } else {
         console.error("Login failed:", result.message);
-        toast.error("Đăng nhập không thành công");
+        toast.error(result.message || "Đăng nhập không thành công");
       }
     } catch (error) {
       console.error("Login error:", error);
       // Check if it's a Google authentication error or login API error
+      const err: any = error;
+      const apiMessage = err?.response?.data?.message;
+
       if (error instanceof Error && error.message.includes("credential")) {
         toast.error("Lỗi xác thực Google");
+      } else if (apiMessage) {
+        toast.error(apiMessage);
       } else {
-        toast.error("Đăng nhập không thành công");
+        toast.error(err?.message || "Đăng nhập không thành công");
       }
     } finally {
       setIsLoading(false);
     }
   };
-
 
   const triggerGoogleSignIn = () => {
     // Use Google OAuth 2.0 Implicit Flow with popup
@@ -111,17 +113,19 @@ const LoginPage: React.FC = () => {
     const clientId =
       import.meta.env.VITE_GOOGLE_CLIENT_ID ||
       "982768167645-ol552hiben0blq9es83e1b2ici5l56nj.apps.googleusercontent.com";
-    
+
     // Use a dedicated callback page to handle OAuth redirect
     const redirectUri = `${window.location.origin}/google-oauth-callback.html`;
     const scope = "openid email profile";
     const responseType = "id_token";
-    const nonce = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-    
+    const nonce =
+      Math.random().toString(36).substring(2, 15) +
+      Math.random().toString(36).substring(2, 15);
+
     // Store nonce in sessionStorage for verification
     sessionStorage.setItem("google_oauth_nonce", nonce);
     sessionStorage.setItem("google_oauth_state", "login");
-    
+
     // Build OAuth URL
     const authUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
     authUrl.searchParams.set("client_id", clientId);
@@ -130,38 +134,40 @@ const LoginPage: React.FC = () => {
     authUrl.searchParams.set("scope", scope);
     authUrl.searchParams.set("nonce", nonce);
     authUrl.searchParams.set("prompt", "select_account"); // Show account picker
-    
+
     // Calculate popup position (center of screen)
     const width = 500;
     const height = 600;
     const left = window.screenX + (window.outerWidth - width) / 2;
     const top = window.screenY + (window.outerHeight - height) / 2;
-    
+
     // Open popup window
     const popup = window.open(
       authUrl.toString(),
       "Google Sign-In",
       `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
     );
-    
+
     if (!popup) {
-      toast.error("Trình duyệt đã chặn popup. Vui lòng cho phép popup và thử lại.");
+      toast.error(
+        "Trình duyệt đã chặn popup. Vui lòng cho phép popup và thử lại."
+      );
       return;
     }
-    
+
     // Focus popup
     popup.focus();
-    
+
     // Poll to check if popup was closed manually or check for redirect
     let pollTimer: NodeJS.Timeout | null = null;
-    
+
     // Listen for OAuth callback via postMessage
     const handleMessage = async (event: MessageEvent) => {
       // Verify origin for security
       if (event.origin !== window.location.origin) {
         return;
       }
-      
+
       if (event.data?.type === "GOOGLE_OAUTH_CALLBACK") {
         window.removeEventListener("message", handleMessage);
         if (pollTimer) {
@@ -169,7 +175,7 @@ const LoginPage: React.FC = () => {
           pollTimer = null;
         }
         popup?.close();
-        
+
         const idToken = event.data.idToken;
         if (idToken) {
           // Process the ID token
@@ -179,9 +185,9 @@ const LoginPage: React.FC = () => {
         }
       }
     };
-    
+
     window.addEventListener("message", handleMessage);
-    
+
     // Start polling
     pollTimer = setInterval(() => {
       if (popup.closed) {
@@ -193,7 +199,7 @@ const LoginPage: React.FC = () => {
         // User closed popup manually - don't show error
         return;
       }
-      
+
       // Try to access popup location (may fail due to CORS, that's ok)
       try {
         if (popup.location.href.includes(window.location.origin)) {
@@ -203,7 +209,7 @@ const LoginPage: React.FC = () => {
             const params = new URLSearchParams(hash.substring(1));
             const idToken = params.get("id_token");
             const returnedNonce = params.get("nonce");
-            
+
             // Verify nonce
             const storedNonce = sessionStorage.getItem("google_oauth_nonce");
             if (idToken && returnedNonce === storedNonce) {
@@ -213,7 +219,7 @@ const LoginPage: React.FC = () => {
               }
               window.removeEventListener("message", handleMessage);
               popup.close();
-              
+
               // Process the ID token
               handleCredentialResponse({ credential: idToken });
             }
@@ -294,7 +300,7 @@ const LoginPage: React.FC = () => {
         </div>
 
         <p className="instruction">
-          Sử dụng tài khoản Google <b>@fpt.edu.vn</b> của bạn để truy cập hệ
+          Sử dụng tài khoản Google đã sử dụng với FAP của bạn để truy cập hệ
           thống
         </p>
 
@@ -304,7 +310,6 @@ const LoginPage: React.FC = () => {
           </div>
         )}
       </div>
-
     </div>
   );
 };

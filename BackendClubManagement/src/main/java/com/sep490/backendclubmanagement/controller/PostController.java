@@ -9,6 +9,7 @@ import com.sep490.backendclubmanagement.entity.NotificationType;
 import com.sep490.backendclubmanagement.entity.Post;
 import com.sep490.backendclubmanagement.exception.AppException;
 import com.sep490.backendclubmanagement.repository.PostRepository;
+import com.sep490.backendclubmanagement.security.SecurityConfig;
 import com.sep490.backendclubmanagement.service.NotificationService;
 import com.sep490.backendclubmanagement.service.PostService;
 import com.sep490.backendclubmanagement.service.UserService;
@@ -21,6 +22,7 @@ import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -42,6 +44,7 @@ public class PostController {
     // 1) Bài toàn CLB (club-wide)
     // GET /posts/{clubId}/club-wide?Pageable...
     @GetMapping("/{clubId}/club-wide")
+   // @PreAuthorize("@clubSecurity.isMemberOfClub(#clubId)")
     public ApiResponse<Page<PostWithRelationsData>> getClubWidePosts(
             @PathVariable Long clubId,
             @RequestParam(defaultValue = "0") int page,
@@ -56,6 +59,7 @@ public class PostController {
     // 2) Bài theo team trong CLB
     // GET /posts/{clubId}/teams/{teamId}?Pageable...
     @GetMapping("/{clubId}/teams/{teamId}")
+    //@PreAuthorize("@clubSecurity.isMemberOfClub(#clubId)")
     public ApiResponse<Page<PostWithRelationsData>> getTeamPosts(
             @PathVariable Long clubId,
             @PathVariable Long teamId,
@@ -71,6 +75,7 @@ public class PostController {
     // 2.1) Bài chờ duyệt toàn CLB (club-wide pending)
     // GET /posts/{clubId}/club-wide/pending?Pageable...
     @GetMapping("/{clubId}/club-wide/pending")
+    //@PreAuthorize("@clubSecurity.isMemberOfClub(#clubId)")
     public ApiResponse<Page<PostWithRelationsData>> getPendingClubWidePosts(
             @PathVariable Long clubId,
             @RequestParam(defaultValue = "0") int page,
@@ -85,6 +90,7 @@ public class PostController {
     // 2.2) Bài chờ duyệt theo team
     // GET /posts/{clubId}/teams/{teamId}/pending?Pageable...
     @GetMapping("/{clubId}/teams/{teamId}/pending")
+    //@PreAuthorize("@clubSecurity.isMemberOfClub(#clubId)")
     public ApiResponse<Page<PostWithRelationsData>> getPendingTeamPosts(
             @PathVariable Long clubId,
             @PathVariable Long teamId,
@@ -98,6 +104,10 @@ public class PostController {
     }
     // GET /api/posts/{clubId}/feed?page=0&size=10&sort=createdAt,desc
     @GetMapping("/{clubId}/feed")
+    //@PreAuthorize(
+     //       "@clubSecurity.isStudent() " +
+     //               " and @clubSecurity.isMemberOfClub(#clubId)"
+   // )
     public ApiResponse<Page<PostWithRelationsData>> getClubFeed(
             @PathVariable Long clubId,
             @RequestParam(defaultValue = "0") int page,
@@ -111,6 +121,7 @@ public class PostController {
     }
 
 @PostMapping(path = "/create/with-media", consumes = "multipart/form-data")
+//@PreAuthorize("@clubSecurity.isMemberOfClub(@postService.getClubIdByPostId(#postId))")
 public ApiResponse<PostWithRelationsData> createPostWithMedia(
         @RequestPart("request") String reqJson,                    // 👈 nhận String
         @RequestPart(value = "files", required = false) List<MultipartFile> files
@@ -121,6 +132,7 @@ public ApiResponse<PostWithRelationsData> createPostWithMedia(
 }
 
 @PutMapping(path = "/update/{postId}", consumes = "multipart/form-data")
+//@PreAuthorize("@clubSecurity.isMemberOfClub(@postService.getClubIdByPostId(#postId))")
 public ApiResponse<PostWithRelationsData> updatePost(
         @PathVariable Long postId,
         @RequestPart("request") String reqJson, // đổi sang String
@@ -133,11 +145,13 @@ public ApiResponse<PostWithRelationsData> updatePost(
 }
 
     @DeleteMapping("/delete/{postId}")
+    //@PreAuthorize("@clubSecurity.isMemberOfClub(@postService.getClubIdByPostId(#postId))")
     public ApiResponse<Void> deletePost(@PathVariable Long postId) {
         postService.deletePost(postId);
         return ApiResponse.success(null);
     }
     @DeleteMapping("/delete/{postId}/media/{mediaId}")
+    //@PreAuthorize("@clubSecurity.isMemberOfClub(@postService.getClubIdByPostId(#postId))")
     public ApiResponse<PostWithRelationsData> deleteOneMedia(
             @PathVariable Long postId,
             @PathVariable Long mediaId
@@ -148,6 +162,7 @@ public ApiResponse<PostWithRelationsData> updatePost(
 
 
     @PostMapping("/{postId}/approve")
+    //@PreAuthorize("@clubSecurity.isMemberOfClub(@postService.getClubIdByPostId(#postId))")
     public ApiResponse<Void> approve(@PathVariable Long postId) throws AppException {
         Long approverId = userService.getCurrentUserId();
         Post p = postRepository.findById(postId).orElseThrow();
@@ -207,6 +222,7 @@ public ApiResponse<PostWithRelationsData> updatePost(
         private String reason;
     }
     @PostMapping("/{postId}/reject")
+    //@PreAuthorize("@clubSecurity.isMemberOfClub(@postService.getClubIdByPostId(#postId))")
     public ApiResponse<Void> reject(@PathVariable Long postId, @RequestBody(required = false) RejectRequest body) throws AppException {
         Long approverId = userService.getCurrentUserId();
         Post p = postRepository.findById(postId).orElseThrow();

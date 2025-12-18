@@ -5,6 +5,7 @@ import com.sep490.backendclubmanagement.dto.response.AuthenticationResponse;
 import com.sep490.backendclubmanagement.dto.response.ClubRoleInfo;
 import com.sep490.backendclubmanagement.entity.SystemRole;
 import com.sep490.backendclubmanagement.entity.User;
+import com.sep490.backendclubmanagement.exception.AppException;
 import com.sep490.backendclubmanagement.exception.ErrorCode;
 import com.sep490.backendclubmanagement.util.JwtUtil;
 import jakarta.servlet.http.Cookie;
@@ -35,13 +36,13 @@ public class AuthServiceImpl implements AuthService{
     private final GoogleTokenVerifierService googleTokenVerifier;
 
     @Override
-    public AuthenticationResponse loginWithGoogle(String idToken, HttpServletRequest request, HttpServletResponse response) throws Exception {
+    public AuthenticationResponse loginWithGoogle(String idToken, HttpServletRequest request, HttpServletResponse response) throws AppException {
         GoogleIdToken.Payload payload = googleTokenVerifier.verifyIdToken(idToken);
         String email = payload.getEmail();
 
         Optional<Map<String, Object>> profileOpt = fapApiService.findProfileByEmail(email);
         if (profileOpt.isEmpty()) {
-            throw new RuntimeException(ErrorCode.ORG_UNAUTHORIZED.getMessage());
+            throw new AppException(ErrorCode.ORG_UNAUTHORIZED);
         }
 
         Map<String, Object> profile = profileOpt.get();
@@ -71,7 +72,7 @@ public class AuthServiceImpl implements AuthService{
         } else {
             // Check if existing user is active
             if (!user.getIsActive()) {
-                throw new RuntimeException(ErrorCode.USER_NOT_ACTIVE.getMessage());
+                throw new AppException(ErrorCode.USER_NOT_ACTIVE);
             }
             // Ensure user has system role
             if (user.getSystemRole() == null) {
@@ -130,27 +131,27 @@ public class AuthServiceImpl implements AuthService{
     }
 
     @Override
-    public AuthenticationResponse refreshToken(HttpServletRequest request, HttpServletResponse response) throws Exception {
+    public AuthenticationResponse refreshToken(HttpServletRequest request, HttpServletResponse response) throws AppException {
         // Extract refresh token from HttpOnly cookie
         String refreshToken = extractRefreshTokenFromCookie(request);
 
         if (refreshToken == null || refreshToken.trim().isEmpty()) {
             log.warn("No refresh token found in cookies");
-            throw new RuntimeException(ErrorCode.UNAUTHORIZED.getMessage());
+            throw new AppException(ErrorCode.UNAUTHORIZED);
         }
 
         // Extract email from refresh token
         String email = jwtUtil.extractUsername(refreshToken);
         if (email == null || email.trim().isEmpty()) {
             log.warn("Invalid refresh token provided");
-            throw new RuntimeException(ErrorCode.UNAUTHORIZED.getMessage());
+            throw new AppException(ErrorCode.UNAUTHORIZED);
         }
 
         // Find user in database
         Optional<User> userOpt = userService.findByEmail(email);
         if (userOpt.isEmpty()) {
             log.warn("User not found for refresh: {}", email);
-            throw new RuntimeException(ErrorCode.UNAUTHORIZED.getMessage());
+            throw new AppException(ErrorCode.UNAUTHORIZED);
         }
 
         User user = userOpt.get();
@@ -158,13 +159,13 @@ public class AuthServiceImpl implements AuthService{
         // Check if user is active
         if (!user.getIsActive()) {
             log.warn("Inactive user attempted refresh: {}", email);
-            throw new RuntimeException(ErrorCode.UNAUTHORIZED.getMessage());
+            throw new AppException(ErrorCode.UNAUTHORIZED);
         }
 
         // Validate refresh token against stored token in Redis
         if (!refreshTokenService.isValidRefreshToken(user.getId().toString(), refreshToken)) {
             log.warn("Invalid refresh token for user: {}", email);
-            throw new RuntimeException(ErrorCode.UNAUTHORIZED.getMessage());
+            throw new AppException(ErrorCode.UNAUTHORIZED);
         }
 
         String systemRole = user.getSystemRole() != null ? user.getSystemRole().getRoleName() : "STUDENT";
@@ -223,19 +224,19 @@ public class AuthServiceImpl implements AuthService{
     }
 
     @Override
-    public void logout(String accessToken, HttpServletRequest request, HttpServletResponse response) throws Exception {
+    public void logout(String accessToken, HttpServletRequest request, HttpServletResponse response) throws AppException {
         String email = jwtUtil.extractUsername(accessToken);
 
         if (email == null || email.trim().isEmpty()) {
             log.warn("Invalid access token provided for logout");
-            throw new RuntimeException(ErrorCode.UNAUTHORIZED.getMessage());
+            throw new AppException(ErrorCode.UNAUTHORIZED);
         }
 
         // Find user to get user ID for refresh token revocation
         Optional<User> userOpt = userService.findByEmail(email);
         if (userOpt.isEmpty()) {
             log.warn("User not found for logout: {}", email);
-            throw new RuntimeException(ErrorCode.UNAUTHORIZED.getMessage());
+            throw new AppException(ErrorCode.USER_NOT_FOUND);
         }
 
         User user = userOpt.get();
@@ -264,19 +265,19 @@ public class AuthServiceImpl implements AuthService{
     }
 
     @Override
-    public boolean validateToken(String token) throws Exception {
+    public boolean validateToken(String token) throws AppException {
         // Extract email from token
         String email;
         try {
             email = jwtUtil.extractUsername(token);
         } catch (Exception e) {
             log.debug("Failed to extract username from token: {}", e.getMessage());
-            throw new RuntimeException("Invalid token format");
+            throw new AppException(ErrorCode.UNAUTHORIZED, "Invalid token format");
         }
 
         if (email == null || email.trim().isEmpty()) {
             log.debug("Email extracted from token is null or empty");
-            throw new RuntimeException("Invalid token");
+            throw new AppException(ErrorCode.UNAUTHORIZED, "Token không hợp lệ");
         }
 
         // Check if token is blacklisted (revoked)
@@ -284,7 +285,7 @@ public class AuthServiceImpl implements AuthService{
             String jti = jwtUtil.extractJti(token);
             if (tokenBlacklistService.isRevoked(jti)) {
                 log.debug("Token has been revoked for user: {}", email);
-                throw new RuntimeException("Token has been revoked");
+                throw new AppException(ErrorCode.UNAUTHORIZED, "Token đã bị thu hồi");
             }
         } catch (Exception e) {
             log.warn("Failed to check token blacklist: {}", e.getMessage());
@@ -295,7 +296,7 @@ public class AuthServiceImpl implements AuthService{
         Optional<User> userOpt = userService.findByEmail(email);
         if (userOpt.isEmpty()) {
             log.debug("User not found for email: {}", email);
-            throw new RuntimeException("User not found");
+            throw new AppException(ErrorCode.USER_NOT_FOUND,"User not found");
         }
 
         User user = userOpt.get();
@@ -303,13 +304,13 @@ public class AuthServiceImpl implements AuthService{
         // Check if user is active
         if (!user.getIsActive()) {
             log.debug("User is inactive: {}", email);
-            throw new RuntimeException("User account is inactive");
+            throw new AppException(ErrorCode.USER_NOT_ACTIVE,"User account is inactive");
         }
 
         // Check if token is expired
         if (jwtUtil.isTokenExpired(token)) {
             log.debug("Token is expired for user: {}", email);
-            throw new RuntimeException("Token expired");
+            throw new AppException(ErrorCode.UNAUTHENTICATED, "Token expired");
         }
 
         log.debug("Token validated successfully for user: {}", email);
@@ -317,10 +318,10 @@ public class AuthServiceImpl implements AuthService{
     }
 
     @Override
-    public List<ClubRoleInfo> getMyRoles(String email) throws Exception {
+    public List<ClubRoleInfo> getMyRoles(String email) throws AppException {
         Optional<User> userOpt = userService.findByEmail(email);
         if (userOpt.isEmpty()) {
-            throw new RuntimeException(ErrorCode.UNAUTHORIZED.getMessage());
+            throw new AppException(ErrorCode.UNAUTHORIZED);
         }
 
         User user = userOpt.get();
@@ -369,5 +370,3 @@ public class AuthServiceImpl implements AuthService{
         }
     }
 }
-
-

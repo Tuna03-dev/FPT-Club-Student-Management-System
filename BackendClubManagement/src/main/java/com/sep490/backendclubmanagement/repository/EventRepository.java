@@ -128,6 +128,8 @@ public interface EventRepository extends JpaRepository<Event, Long> {
             "JOIN e.club c " +
             "WHERE e.club IS NOT NULL " +
             "AND e.isDraft = false " +
+            // Exclude events of type 'MEETING'
+            "AND (e.eventType IS NULL OR UPPER(TRIM(e.eventType.typeName)) <> 'MEETING') " +
             "AND NOT EXISTS (" +
             "    SELECT 1 FROM SubmissionReportRequirement srr " +
             "    JOIN ClubReportRequirement crr ON crr.submissionReportRequirement.id = srr.id " +
