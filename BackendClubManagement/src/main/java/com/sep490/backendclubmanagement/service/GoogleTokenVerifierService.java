@@ -4,6 +4,7 @@ import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
 import com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier;
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
 import com.google.api.client.json.jackson2.JacksonFactory;
+import com.sep490.backendclubmanagement.exception.AppException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -28,7 +29,7 @@ public class GoogleTokenVerifierService {
      * @return GoogleIdToken.Payload containing user information
      * @throws Exception if token verification fails
      */
-    public GoogleIdToken.Payload verifyIdToken(String idTokenString) throws Exception {
+    public GoogleIdToken.Payload verifyIdToken(String idTokenString) throws AppException {
         if (idTokenString == null || idTokenString.trim().isEmpty()) {
             log.error("ID token is null or empty");
             throw new IllegalArgumentException("ID token cannot be null or empty");
