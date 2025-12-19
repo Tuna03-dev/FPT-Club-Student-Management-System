@@ -180,15 +180,30 @@ public class MemberServiceImpl implements MemberService{
 
 
         List<RoleMemberShip> rms = roleMemberShipRepository.findByClubMemberShipIdAndSemesterId(cms.getId(), semester.getId());
-        RoleMemberShip target = rms.stream().findFirst().orElse(null);
-        
-        if (target == null) {
+
+        // ✅ FIX: Chỉ giữ lại 1 RoleMemberShip duy nhất cho mỗi member trong mỗi semester
+        RoleMemberShip target;
+        if (rms.isEmpty()) {
             // Create new record if none exists for this semester
             target = new RoleMemberShip();
             target.setClubMemberShip(cms);
             target.setSemester(semester);
+            target.setIsActive(true); // ✅ Set active ngay khi tạo mới
+        } else {
+            // Use existing record (should only be one due to unique constraint)
+            target = rms.get(0);
+
+            // ✅ FIX: Xóa các duplicate records nếu có (do bug cũ)
+            if (rms.size() > 1) {
+                log.warn("[Member] Found {} duplicate RoleMemberShip records for member {} in semester {}. Cleaning up...",
+                        rms.size(), userId, semester.getId());
+                for (int i = 1; i < rms.size(); i++) {
+                    roleMemberShipRepository.delete(rms.get(i));
+                }
+            }
         }
-        // Update existing record with new role (no duplicate creation)
+
+        // Update existing record with new role
         target.setClubRole(clubRole);
         target.setIsActive(true);
         roleMemberShipRepository.save(target);
@@ -228,31 +243,56 @@ public class MemberServiceImpl implements MemberService{
     }
 
     @Override
+    @Transactional
     public void updateMemberTeam(Long clubId, Long userId, Long teamId, Long semesterId) throws AppException {
         ClubMemberShip cms = clubMemberShipRepository.findByClubIdAndUserId(clubId, userId);
         if (cms == null || cms.getStatus() == ClubMemberShipStatus.LEFT) {
             throw new AppException(ErrorCode.MEMBER_NOT_FOUND);
         }
+
+        // ✅ FIX: Validate team exists và thuộc về club này
+        Team team = teamRepository.findById(teamId)
+                .orElseThrow(() -> new AppException(ErrorCode.TEAM_NOT_FOUND));
+
+        if (!team.getClub().getId().equals(clubId)) {
+            throw new AppException(ErrorCode.INVALID_INPUT, "Team does not belong to this club");
+        }
+
         Semester semester = resolveSemester(semesterId);
 
         // Find existing role membership for this semester - should be only one per member per semester
         List<RoleMemberShip> rms = roleMemberShipRepository.findByClubMemberShipIdAndSemesterId(cms.getId(), semester.getId());
-        RoleMemberShip target = rms.stream().findFirst().orElse(null);
-        
-        if (target == null) {
-            // Create new record if none exists for this semester
+
+        RoleMemberShip target;
+        if (rms.isEmpty()) {
+            // ✅ FIX: Member phải có role trước khi assign team
+            // Tạo RoleMemberShip mới nếu chưa có (member chưa được gán role trong kỳ này)
             target = new RoleMemberShip();
             target.setClubMemberShip(cms);
             target.setSemester(semester);
+            target.setIsActive(true); // ✅ Set active ngay khi tạo mới
+            // clubRole sẽ null - member cần được assign role riêng sau
+        } else {
+            target = rms.get(0);
+
+            // ✅ FIX: Xóa các duplicate records nếu có
+            if (rms.size() > 1) {
+                log.warn("[Member] Found {} duplicate RoleMemberShip records for member {} in semester {}. Cleaning up...",
+                        rms.size(), userId, semester.getId());
+                for (int i = 1; i < rms.size(); i++) {
+                    roleMemberShipRepository.delete(rms.get(i));
+                }
+            }
         }
-        // Update existing record with new team (no duplicate creation)
-        Team teamRef = new Team();
-        teamRef.setId(teamId);
-        target.setTeam(teamRef);
+
+        // Update existing record with new team
+        target.setTeam(team);
+        target.setIsActive(true); // ✅ Đảm bảo active khi assign team
         roleMemberShipRepository.save(target);
     }
 
     @Override
+    @Transactional
     public void updateMemberActiveStatus(Long clubId, Long userId, boolean isActive, Long semesterId) {
         ClubMemberShip cms = clubMemberShipRepository.findByClubIdAndUserId(clubId, userId);
         if (cms == null || cms.getStatus() == ClubMemberShipStatus.LEFT) {
@@ -263,23 +303,38 @@ public class MemberServiceImpl implements MemberService{
 
         if (isActive) {
             // Activate: ensure there is at least ONE role membership record in this semester
-            RoleMemberShip target = rms.stream().findFirst().orElse(null);
-            if (target == null) {
+            RoleMemberShip target;
+            if (rms.isEmpty()) {
                 target = new RoleMemberShip();
                 target.setClubMemberShip(cms);
                 target.setSemester(semester);
+                target.setIsActive(true); // ✅ Set active ngay khi tạo mới
+            } else {
+                target = rms.get(0);
+                target.setIsActive(true);
+
+                // ✅ FIX: Xóa các duplicate records nếu có
+                if (rms.size() > 1) {
+                    log.warn("[Member] Found {} duplicate RoleMemberShip records for member {} in semester {}. Cleaning up...",
+                            rms.size(), userId, semester.getId());
+                    for (int i = 1; i < rms.size(); i++) {
+                        roleMemberShipRepository.delete(rms.get(i));
+                    }
+                }
             }
-            target.setIsActive(true);
             roleMemberShipRepository.save(target);
         } else {
-            // Pause: per business rule, inactive means NO role membership record in that semester
+            // Pause: per business rule, inactive means set isActive = false
+            // ✅ FIX: Không xóa record, chỉ set isActive = false để giữ lại lịch sử
             for (RoleMemberShip rm : rms) {
-                roleMemberShipRepository.delete(rm);
+                rm.setIsActive(false);
+                roleMemberShipRepository.save(rm);
             }
         }
     }
 
     @Override
+    @Transactional
     public void removeMemberFromClub(Long clubId, Long userId, String reason) {
         ClubMemberShip cms = clubMemberShipRepository.findByClubIdAndUserId(clubId, userId);
         if (cms == null) {
@@ -288,6 +343,16 @@ public class MemberServiceImpl implements MemberService{
         cms.setStatus(ClubMemberShipStatus.LEFT);
         cms.setEndDate(java.time.LocalDate.now());
         clubMemberShipRepository.save(cms);
+
+        // ✅ FIX: Deactivate tất cả RoleMemberShip records của member này
+        // Để đảm bảo member không còn hiển thị trong danh sách active members
+        List<RoleMemberShip> allRoleMemberships = roleMemberShipRepository.findByClubMemberShipId(cms.getId());
+        for (RoleMemberShip rm : allRoleMemberships) {
+            rm.setIsActive(false);
+            roleMemberShipRepository.save(rm);
+        }
+        log.info("[Member] Deactivated {} RoleMemberShip records for removed member {} from club {}",
+                allRoleMemberships.size(), userId, clubId);
 
         // 🔔 Gửi notification cho member bị remove
         try {
