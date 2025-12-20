@@ -43,7 +43,9 @@ public interface NewsRepository extends JpaRepository<News, Long> {
             FROM news e
             LEFT JOIN clubs c ON e.club_id = c.id
             WHERE (:#{#request.clubId} IS NULL OR e.club_id = :#{#request.clubId})
-              AND e.is_draft = false
+            AND e.is_draft = false
+            AND e.is_hidden = false
+            OrDER BY e.created_at DESC
             """,
             nativeQuery = true, countProjection = "e.id")
     Page<News> getAllNewsByFilter(NewsRequest request, Pageable pageable);

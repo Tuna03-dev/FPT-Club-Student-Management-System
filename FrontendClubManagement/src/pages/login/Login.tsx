@@ -79,7 +79,9 @@ const LoginPage: React.FC = () => {
           ? String(user.systemRole).trim().toUpperCase()
           : "";
 
-        if (normalizedSystemRole === "STAFF") {
+        if (normalizedSystemRole === "ADMIN") {
+          navigate("/admin", { replace: true });
+        } else if (normalizedSystemRole === "STAFF") {
           navigate("/staff/events", { replace: true });
         } else {
           navigate("/"); // Redirect to homepage after successful login

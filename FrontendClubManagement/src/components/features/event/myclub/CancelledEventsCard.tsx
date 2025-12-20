@@ -37,6 +37,7 @@ interface CancelledEventsCardProps {
   determineEventStatus: (startDate: Date, endDate: Date) => "upcoming" | "ongoing" | "completed"
   getErrorMessage: (error: unknown, fallback?: string) => string
   setCancelledEvents: (events: Event[]) => void
+  onCancelledEventClick?: (event: Event) => void
 }
 
 export function CancelledEventsCard({
@@ -47,6 +48,7 @@ export function CancelledEventsCard({
   determineEventStatus,
   getErrorMessage,
   setCancelledEvents,
+  onCancelledEventClick,
 }: CancelledEventsCardProps) {
   const user = authService.getCurrentUser()
   const isStaff = !!user && user.systemRole === "STAFF"
@@ -75,7 +77,15 @@ export function CancelledEventsCard({
       ) : (
         <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
           {items.map((ev) => (
-            <div key={ev.id} className="rounded-md border bg-gray-50 px-4 py-3">
+            <div 
+              key={ev.id} 
+              className="rounded-md border bg-gray-50 px-4 py-3 cursor-pointer hover:bg-gray-100 transition-colors"
+              onClick={() => {
+                if (onCancelledEventClick) {
+                  onCancelledEventClick(ev)
+                }
+              }}
+            >
               <div className="font-semibold text-foreground">{ev.title}</div>
               <div className="text-xs text-muted-foreground mt-1 mb-3">
                 <span>
@@ -95,7 +105,7 @@ export function CancelledEventsCard({
                 </span>
                 {ev.location ? <div className="mt-1">📍 {ev.location}</div> : null}
               </div>
-              <div className="flex gap-3">
+              <div className="flex gap-3" onClick={(e) => e.stopPropagation()}>
                 <Button
                   size="sm"
                   variant="secondary"
