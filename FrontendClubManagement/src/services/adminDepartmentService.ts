@@ -44,6 +44,15 @@ export const adminDepartmentService = {
     );
   },
 
+  async getDepartmentsByCampus(
+    campusId?: number
+  ): Promise<ApiResponse<AdminDepartmentResponse[]>> {
+    const url = campusId 
+      ? `/admin-departments?campusId=${campusId}`
+      : `/admin-departments`;
+    return axiosClient.get<AdminDepartmentResponse[]>(url);
+  },
+
   async updateDepartment(
     id: number,
     data: AdminDepartmentUpdateRequest
