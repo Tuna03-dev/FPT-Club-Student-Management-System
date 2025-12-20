@@ -751,13 +751,15 @@ SELECT CASE WHEN EXISTS (
     );
     @Modifying
     @Query("""
-    UPDATE RoleMemberShip rm
-    SET rm.isActive = false
-    WHERE rm.clubMemberShip.id = :clubMembershipId
-      AND rm.semester.id = :semesterId
-      AND rm.isActive = true
+UPDATE RoleMemberShip rm
+SET rm.isActive = false
+WHERE rm.clubMemberShip.id = :membershipId
+  AND rm.semester.id = :semesterId
+  AND rm.team IS NOT NULL
+  AND rm.isActive = true
 """)
-    void deactivateActiveTeamRoles(Long clubMembershipId, Long semesterId);
+    void deactivateActiveTeamRoles(Long membershipId, Long semesterId);
+
     @Modifying
     @Query("""
     UPDATE RoleMemberShip rm
@@ -803,6 +805,28 @@ WHERE cm.user.id = :userId
 """)
     boolean isManagerSimple(@Param("userId") Long userId,
                             @Param("clubId") Long clubId);
+
+    Optional<RoleMemberShip> findByClubMemberShipIdAndSemesterIdAndClubRoleId(
+            Long clubMembershipId,
+            Long semesterId,
+            Long clubRoleId
+    );
+    @Query("""
+SELECT rm
+FROM RoleMemberShip rm
+JOIN FETCH rm.clubRole
+LEFT JOIN FETCH rm.team
+WHERE rm.clubMemberShip.user.id = :userId
+  AND rm.clubMemberShip.club.id = :clubId
+  AND rm.semester.id = :semesterId
+  AND rm.isActive = true
+""")
+    List<RoleMemberShip> findActiveRolesOfUser(
+            Long userId,
+            Long clubId,
+            Long semesterId
+    );
+
 
 
 }

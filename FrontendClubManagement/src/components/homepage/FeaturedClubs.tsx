@@ -42,7 +42,7 @@ const FeaturedClubs: React.FC<Props> = ({ clubs }) => {
         {clubs.slice(0, 4).map((club) => (
           <Link
             key={club.id}
-            to={`/clubs/${club.id}`}
+            to={`/club/${club.id}`}
             className="group text-center"
           >
             {/* CARD IMAGE */}
