@@ -37,7 +37,7 @@ public class TeamServiceImpl implements TeamService {
     // === ROLE CODE CHUẨN ===
     private static final String ROLE_CODE_TEAM_HEAD = "CLUB_TEAM_HEAD";
     private static final String ROLE_CODE_TEAM_DEPUTY = "CLUB_TEAM_DEPUTY";
-    private static final String ROLE_CODE_TEAM_MEMBER = "CLUB_MEMBER";
+    private static final String ROLE_CODE_TEAM_MEMBER = "MEMBER";
 
     @Override
     public List<TeamResponse> getTeamsByClubId(Long clubId) {
@@ -510,10 +510,7 @@ public class TeamServiceImpl implements TeamService {
     @Transactional(readOnly = true)
     public List<AvailableMemberDTO> getAvailableMembers(Long clubId) {
 
-        Semester currentSemester = semesterRepository.findCurrentSemester()
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy học kỳ hiện tại."));
-
-        List<Long> ids = clubMembershipRepository.findAllActiveNonLeadersMemberIds(clubId);
+        List<Long> ids = clubMembershipRepository.findAvailableMemberUserIds(clubId);
 
         if (ids.isEmpty()) return List.of();
 
