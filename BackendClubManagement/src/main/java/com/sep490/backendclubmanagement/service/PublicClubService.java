@@ -5,6 +5,6 @@ import com.sep490.backendclubmanagement.dto.response.PublicClubCardDTO;
 import com.sep490.backendclubmanagement.dto.response.PublicClubDetailDTO;
 
 public interface PublicClubService {
-    PageResp<PublicClubCardDTO> list(String q, Long campusId, Long categoryId, int page, int size);
+    PageResp<PublicClubCardDTO> list(String q, Long campusId, Long categoryId, Boolean hasActiveRecruitment, int page, int size);
     PublicClubDetailDTO detail(Long clubId, String expand);
 }

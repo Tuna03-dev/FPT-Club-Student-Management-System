@@ -6,8 +6,11 @@ public enum WebSocketMessageType {
     EVENT,
     MEMBER,
     POST,
-    SYSTEM
+    SYSTEM,
+    FEE
 }
+
+
 
 
 

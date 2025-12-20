@@ -562,158 +562,121 @@ export function ApplicationsList({
 
         {/* Pagination for Applications */}
         {!applicationsLoading && onPageChange && totalPages > 1 && (
-          <div className="space-y-4">
-            {/* Results info */}
-            <div className="flex items-center justify-between text-sm text-muted-foreground">
-              <div>
-                Hiển thị{" "}
-                <span className="font-semibold">
-                  {Math.min((currentPage - 1) * 10 + 1, totalElements)} -{" "}
-                  {Math.min(currentPage * 10, totalElements)}
-                </span>{" "}
-                trong tổng số{" "}
-                <span className="font-semibold">{totalElements}</span> đơn ứng
-                tuyển
-              </div>
-              <div>
-                Trang {currentPage} / {totalPages}
-              </div>
-            </div>
+          <div className="mt-8 flex justify-center">
+            <Pagination>
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious
+                    onClick={() => {
+                      onPageChange(Math.max(1, currentPage - 1));
+                      window.scrollTo({ top: 0, behavior: "smooth" });
+                    }}
+                    className={
+                      currentPage === 1
+                        ? "pointer-events-none opacity-50"
+                        : "cursor-pointer"
+                    }
+                  />
+                </PaginationItem>
 
-            {/* Pagination controls */}
-            <div className="flex justify-center">
-              <Pagination>
-                <PaginationContent>
-                  <PaginationItem>
-                    <PaginationPrevious
-                      onClick={() => {
-                        if (currentPage > 1) {
-                          onPageChange(currentPage - 1);
-                          window.scrollTo({
-                            top: 0,
-                            behavior: "smooth",
-                          });
-                        }
-                      }}
-                      className={
-                        currentPage === 1
-                          ? "pointer-events-none opacity-50"
-                          : "cursor-pointer"
-                      }
-                    />
-                  </PaginationItem>
+                {/* Show page numbers with ellipsis when needed */}
+                {(() => {
+                  const pages: (number | "ellipsis")[] = [];
 
-                  {/* First page */}
-                  {currentPage > 3 && (
-                    <>
-                      <PaginationItem>
-                        <PaginationLink
-                          onClick={() => {
-                            onPageChange(1);
-                            window.scrollTo({
-                              top: 0,
-                              behavior: "smooth",
-                            });
-                          }}
-                          className="cursor-pointer"
-                        >
-                          1
-                        </PaginationLink>
-                      </PaginationItem>
-                      {currentPage > 3 && (
-                        <PaginationItem>
-                          <PaginationEllipsis />
-                        </PaginationItem>
-                      )}
-                    </>
-                  )}
+                  if (totalPages <= 7) {
+                    // Show all pages if 7 or fewer
+                    for (let i = 1; i <= totalPages; i++) {
+                      pages.push(i);
+                    }
+                  } else {
+                    // Always show first page
+                    pages.push(1);
 
-                  {/* Pages around current page */}
-                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                    let pageNum;
-                    if (totalPages <= 5) {
-                      pageNum = i;
-                    } else if (currentPage <= 2) {
-                      pageNum = i;
-                    } else if (currentPage >= totalPages - 3) {
-                      pageNum = totalPages - 5 + i;
-                    } else {
-                      pageNum = currentPage - 2 + i;
+                    // Show ellipsis if current page is far from start
+                    if (currentPage > 3) {
+                      pages.push("ellipsis");
                     }
 
-                    if (pageNum < 0 || pageNum >= totalPages) return null;
-                    if (currentPage > 2 && pageNum === 0) return null;
-                    if (
-                      currentPage < totalPages - 3 &&
-                      pageNum === totalPages - 1
-                    )
-                      return null;
+                    // Show pages around current (avoid duplicates with first/last)
+                    const start = Math.max(2, currentPage - 1);
+                    const end = Math.min(totalPages - 1, currentPage + 1);
+                    for (let i = start; i <= end; i++) {
+                      if (i !== 1 && i !== totalPages) {
+                        pages.push(i);
+                      }
+                    }
 
+                    // Show ellipsis if current page is far from end
+                    if (currentPage < totalPages - 2) {
+                      pages.push("ellipsis");
+                    }
+
+                    // Always show last page (if not already shown)
+                    if (totalPages !== 1) {
+                      pages.push(totalPages);
+                    }
+                  }
+
+                  // Remove duplicates
+                  const seen = new Set<number | string>();
+                  const uniquePages: (number | "ellipsis")[] = [];
+                  for (const item of pages) {
+                    if (item === "ellipsis") {
+                      // Only add ellipsis if not immediately after another ellipsis
+                      if (uniquePages[uniquePages.length - 1] !== "ellipsis") {
+                        uniquePages.push(item);
+                      }
+                    } else {
+                      if (!seen.has(item)) {
+                        seen.add(item);
+                        uniquePages.push(item);
+                      }
+                    }
+                  }
+
+                  return uniquePages.map((item, index) => {
+                    if (item === "ellipsis") {
+                      return (
+                        <PaginationItem key={`ellipsis-${index}`}>
+                          <PaginationEllipsis />
+                        </PaginationItem>
+                      );
+                    }
                     return (
-                      <PaginationItem key={pageNum}>
+                      <PaginationItem key={item}>
                         <PaginationLink
                           onClick={() => {
-                            onPageChange(pageNum);
+                            onPageChange(item);
                             window.scrollTo({
                               top: 0,
                               behavior: "smooth",
                             });
                           }}
-                          isActive={currentPage === pageNum}
+                          isActive={currentPage === item}
                           className="cursor-pointer"
                         >
-                          {pageNum}
+                          {item}
                         </PaginationLink>
                       </PaginationItem>
                     );
-                  })}
+                  });
+                })()}
 
-                  {/* Last page */}
-                  {currentPage < totalPages - 2 && (
-                    <>
-                      {currentPage < totalPages - 3 && (
-                        <PaginationItem>
-                          <PaginationEllipsis />
-                        </PaginationItem>
-                      )}
-                      <PaginationItem>
-                        <PaginationLink
-                          onClick={() => {
-                            onPageChange(totalPages);
-                            window.scrollTo({
-                              top: 0,
-                              behavior: "smooth",
-                            });
-                          }}
-                          className="cursor-pointer"
-                        >
-                          {totalPages}
-                        </PaginationLink>
-                      </PaginationItem>
-                    </>
-                  )}
-
-                  <PaginationItem>
-                    <PaginationNext
-                      onClick={() => {
-                        if (currentPage < totalPages) {
-                          onPageChange(currentPage + 1);
-                          window.scrollTo({
-                            top: 0,
-                            behavior: "smooth",
-                          });
-                        }
-                      }}
-                      className={
-                        currentPage === totalPages
-                          ? "pointer-events-none opacity-50"
-                          : "cursor-pointer"
-                      }
-                    />
-                  </PaginationItem>
-                </PaginationContent>
-              </Pagination>
-            </div>
+                <PaginationItem>
+                  <PaginationNext
+                    onClick={() => {
+                      onPageChange(Math.min(totalPages, currentPage + 1));
+                      window.scrollTo({ top: 0, behavior: "smooth" });
+                    }}
+                    className={
+                      currentPage === totalPages
+                        ? "pointer-events-none opacity-50"
+                        : "cursor-pointer"
+                    }
+                  ></PaginationNext>
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
           </div>
         )}
       </div>

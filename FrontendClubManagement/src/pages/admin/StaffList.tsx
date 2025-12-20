@@ -11,6 +11,7 @@ import { ChevronLeftIcon, ChevronRightIcon, Eye, Plus } from "lucide-react";
 import { useDebounce } from "@/hooks/useDebounce";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
+import { AxiosError } from "axios";
 
 
 const defaultSort = ["id,desc"];
@@ -100,11 +101,18 @@ export default function StaffList() {
         gender: createForm.gender || undefined,
         isActive: createForm.isActive,
       });
-      toast.success("Tạo staff thành công");
+      toast.success("Tạo nhân viên thành công");
       setCreateOpen(false);
       fetchData();
     } catch (e: any) {
-      toast.error(e?.message || "Tạo staff thất bại");
+      // Extract error message from AxiosError response
+      let errorMessage = "Tạo nhân viên thất bại";
+      if (e instanceof AxiosError && e.response?.data?.message) {
+        errorMessage = e.response.data.message;
+      } else if (e?.message) {
+        errorMessage = e.message;
+      }
+      toast.error(errorMessage);
     } finally {
       setCreateLoading(false);
     }
@@ -424,7 +432,7 @@ export default function StaffList() {
                 Hủy
               </Button>
               <Button onClick={handleCreate} disabled={createLoading}>
-                {createLoading ? "Đang tạo..." : "Tạo staff"}
+                {createLoading ? "Đang tạo..." : "Tạo nhân viên"}
               </Button>
             </DialogFooter>
           </div>

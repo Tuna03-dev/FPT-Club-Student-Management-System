@@ -33,6 +33,9 @@ interface Event {
   images: string[];
   isMyDraft?: boolean;
   requestStatus?: string;
+  clubId?: number;
+  clubName?: string;
+  eventTypeName?: string;
 }
 
 interface PendingRequestMeta {
@@ -179,6 +182,9 @@ export function PendingRequestsCard({
                     images: [],
                     isMyDraft: true,
                     requestStatus: req.status,
+                    clubId: req.club?.id,
+                    clubName: req.club?.name,
+                    eventTypeName: req.event.eventTypeName,
                   };
                   onRequestClick(mapped, {
                     requestEventId: req.requestEventId,

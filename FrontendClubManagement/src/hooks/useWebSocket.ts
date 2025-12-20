@@ -77,6 +77,19 @@ export interface EventWebSocketPayload {
   message?: string;
 }
 
+export interface FeeWebSocketPayload {
+  feeId?: number;
+  title?: string;
+  description?: string;
+  amount?: number;
+  isMandatory?: boolean;
+  dueDate?: string;
+  clubId?: number;
+  clubName?: string;
+  feeType?: string;
+  message?: string;
+}
+
 interface UseWebSocketOptions {
   url?: string;
   reconnectDelay?: number;

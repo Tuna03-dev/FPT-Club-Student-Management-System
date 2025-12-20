@@ -148,11 +148,21 @@ public interface PublicClubRepository extends JpaRepository<Club, Long> {
             OR LOWER(COALESCE(c.description,'')) LIKE CONCAT('%', LOWER(:q), '%'))
           AND (:campusId IS NULL OR c.campus_id = :campusId)
           AND (:categoryId IS NULL OR c.club_category_id = :categoryId)
+          AND (:hasActiveRecruitment IS NULL OR 
+               (:hasActiveRecruitment = TRUE AND r.id IS NOT NULL) OR 
+               (:hasActiveRecruitment = FALSE AND r.id IS NULL))
         ORDER BY c.is_featured DESC, c.created_at DESC
         """,
             countQuery = """
         SELECT COUNT(1)
         FROM clubs c
+        LEFT JOIN (
+          SELECT club_id, MIN(id) AS id
+          FROM recruitments
+          WHERE deleted_at IS NULL
+            AND status = 'OPEN'
+          GROUP BY club_id
+        ) r ON r.club_id = c.id
         WHERE c.deleted_at IS NULL
           AND c.status = 'ACTIVE'
           AND (:q IS NULL OR
@@ -161,12 +171,16 @@ public interface PublicClubRepository extends JpaRepository<Club, Long> {
             OR LOWER(COALESCE(c.description,'')) LIKE CONCAT('%', LOWER(:q), '%'))
           AND (:campusId IS NULL OR c.campus_id = :campusId)
           AND (:categoryId IS NULL OR c.club_category_id = :categoryId)
+          AND (:hasActiveRecruitment IS NULL OR 
+               (:hasActiveRecruitment = TRUE AND r.id IS NOT NULL) OR 
+               (:hasActiveRecruitment = FALSE AND r.id IS NULL))
         """,
             nativeQuery = true)
     Page<ClubCardRow> findPublicClubs(
             @Param("q") String q,
             @Param("campusId") Long campusId,
             @Param("categoryId") Long categoryId,
+            @Param("hasActiveRecruitment") Boolean hasActiveRecruitment,
             Pageable pageable);
 
     // 2) DETAIL 1 club theo id

@@ -5,6 +5,7 @@ export async function getPublicClubs(params?: {
   q?: string;
   campusId?: number;
   categoryId?: number;
+  hasActiveRecruitment?: boolean;
   page?: number;
   size?: number;
 }): Promise<PageResp<ClubCard>> {

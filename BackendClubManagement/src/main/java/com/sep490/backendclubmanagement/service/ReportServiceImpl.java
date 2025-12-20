@@ -120,14 +120,14 @@ public class ReportServiceImpl implements ReportServiceInterface {
         // If keyword is provided, use client-side filtering with Vietnamese normalization
         if (keyword != null && !keyword.trim().isEmpty()) {
             String trimmedKeyword = keyword.trim();
-            // Get all reports without keyword filter
+            // Get all reports without keyword filter, but with sort from pageable
             reportPage = reportRepository.findAllWithFilters(
                     status,
                     clubId,
                     semesterId,
                     reportType,
                     null,
-                    PageRequest.of(0, Integer.MAX_VALUE)
+                    PageRequest.of(0, Integer.MAX_VALUE, pageable.getSort())
             );
 
             // Filter using Vietnamese normalization - optimized with helper method
@@ -914,7 +914,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
             // Resubmission after university rejection:
             // - If club president: RESUBMITTED_UNIVERSITY (nộp lại lên trường)
             // - If team officer: UPDATED_PENDING_CLUB (nộp lại lên câu lạc bộ)
-            if (isClubOfficer || currentStatus == ReportStatus.UPDATED_PENDING_CLUB) {
+            if (isClubOfficer) {
                 newStatus = ReportStatus.RESUBMITTED_UNIVERSITY;
             } else {
                 // Team officer resubmits to club level
@@ -1022,14 +1022,14 @@ public class ReportServiceImpl implements ReportServiceInterface {
         // If keyword is provided, use client-side filtering with Vietnamese normalization
         if (keyword != null && !keyword.trim().isEmpty()) {
             String trimmedKeyword = keyword.trim();
-            // Get all reports without keyword filter
+            // Get all reports without keyword filter, but with sort from pageable
             reportPage = reportRepository.findByClubIdWithFilter(
                     status,
                     clubId,
                     semesterId,
                     reportType,
                     null,
-                    PageRequest.of(0, Integer.MAX_VALUE)
+                    PageRequest.of(0, Integer.MAX_VALUE, pageable.getSort())
             );
 
             // Filter using Vietnamese normalization - optimized with helper method
@@ -1090,7 +1090,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
         // If keyword is provided, use client-side filtering with Vietnamese normalization
         if (keyword != null && !keyword.trim().isEmpty()) {
             String trimmedKeyword = keyword.trim();
-            // Get all reports without keyword filter
+            // Get all reports without keyword filter, but with sort from pageable
             reportPage = reportRepository.findByClubIdAndUserIdWithFilter(
                     status,
                     clubId,
@@ -1098,7 +1098,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
                     reportType,
                     null,
                     userId,
-                    PageRequest.of(0, Integer.MAX_VALUE)
+                    PageRequest.of(0, Integer.MAX_VALUE, pageable.getSort())
             );
 
             // Filter using Vietnamese normalization - optimized with helper method
@@ -1155,12 +1155,12 @@ public class ReportServiceImpl implements ReportServiceInterface {
         // If keyword is provided, use client-side filtering with Vietnamese normalization
         if (keyword != null && !keyword.trim().isEmpty()) {
             String trimmedKeyword = keyword.trim();
-            // Get all requirements without keyword filter
+            // Get all requirements without keyword filter, but with sort from pageable
             requirementPage = submissionReportRequirementRepository.findAllWithFilters(
                     reportType,
                     clubId,
                     null,
-                    PageRequest.of(0, Integer.MAX_VALUE)
+                    PageRequest.of(0, Integer.MAX_VALUE, pageable.getSort())
             );
 
             // Filter using Vietnamese normalization - optimized with helper method
@@ -1440,7 +1440,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
         // If keyword is provided, use client-side filtering with Vietnamese normalization
         if (keyword != null && !keyword.trim().isEmpty()) {
             String trimmedKeyword = keyword.trim();
-            // Get all club report requirements without keyword filter
+            // Get all club report requirements without keyword filter, but with sort from pageable
             requirementPage = clubReportRequirementRepository.findByClubIdWithFilters(
                     clubId,
                     null,
@@ -1450,7 +1450,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
                     semesterId,
                     filterTeamId,
                     currentDate,
-                    PageRequest.of(0, Integer.MAX_VALUE)
+                    PageRequest.of(0, Integer.MAX_VALUE, pageable.getSort())
             );
 
             // Filter using Vietnamese normalization on the submission requirement's title and description - optimized
@@ -1752,6 +1752,12 @@ public class ReportServiceImpl implements ReportServiceInterface {
         if (request.getStatus() == ReportStatus.PENDING_UNIVERSITY) {
             // When approving and submitting to university, reset reviewerFeedback to null
             // This ensures that when a report is submitted to university level, any previous feedback is cleared
+            report.setReviewerFeedback(null);
+            // Set submittedDate when submitting to university (if not already set)
+            if (report.getSubmittedDate() == null) {
+                report.setSubmittedDate(LocalDateTime.now());
+            }
+        } else if (request.getStatus() == ReportStatus.RESUBMITTED_UNIVERSITY) {
             report.setReviewerFeedback(null);
             // Set submittedDate when submitting to university (if not already set)
             if (report.getSubmittedDate() == null) {
@@ -2074,6 +2080,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
         normalized = normalized.replaceAll("\\p{InCombiningDiacriticalMarks}+", "");
         return normalized.toLowerCase();
     }
+
 
     /**
      * Helper method to check if any of the keywords match the given texts using Vietnamese normalization
