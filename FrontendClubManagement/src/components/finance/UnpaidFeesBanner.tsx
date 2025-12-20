@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { authService } from "@/services/authService";
 import feeService from "@/services/feeService";
 import type { Fee } from "@/types/fee";
-import { useWebSocket, type FeeWebSocketPayload, type WebSocketMessage } from "@/hooks/useWebSocket";
+import { useWebSocket, type WebSocketMessage } from "@/hooks/useWebSocket";
 import { calculatePaymentStatus } from "@/utils/feeUtils";
 
 export default function UnpaidFeesBanner() {
@@ -157,4 +157,5 @@ export default function UnpaidFeesBanner() {
     </div>
   );
 }
+
 
