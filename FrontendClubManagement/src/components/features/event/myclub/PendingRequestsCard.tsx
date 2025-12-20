@@ -33,6 +33,9 @@ interface Event {
   images: string[];
   isMyDraft?: boolean;
   requestStatus?: string;
+  clubId?: number;
+  clubName?: string;
+  eventTypeName?: string;
 }
 
 interface PendingRequestMeta {
