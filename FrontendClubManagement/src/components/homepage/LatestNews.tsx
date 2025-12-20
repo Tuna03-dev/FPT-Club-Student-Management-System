@@ -21,7 +21,7 @@ const LatestNews: React.FC<Props> = ({ news }) => {
             className="flex gap-4 group"
           >
             <img
-              src={item.thumbnailUrl || "/public/default-fallback-image.png"}
+              src={item.thumbnailUrl || "/default-fallback-image.png"}
               alt={item.title}
               className="w-24 h-24 object-cover rounded-lg flex-shrink-0"
             />
