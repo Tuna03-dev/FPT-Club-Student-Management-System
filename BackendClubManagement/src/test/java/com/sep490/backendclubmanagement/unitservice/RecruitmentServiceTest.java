@@ -780,7 +780,7 @@ class RecruitmentServiceTest {
 
         when(recruitmentRepository.findById(testRecruitmentId)).thenReturn(Optional.of(testRecruitment));
         when(userRepository.findById(testApplicantId)).thenReturn(Optional.of(testApplicant));
-        when(clubMemberShipRepository.existsByUserIdAndClubId(testApplicantId, testClubId)).thenReturn(false);
+        when(clubMemberShipRepository.existsByUserIdAndClubIdAndStatus(testApplicantId, testClubId, ClubMemberShipStatus.ACTIVE)).thenReturn(false);
         when(applicationRepository.findByApplicant_IdAndRecruitment_Id(testApplicantId, testRecruitmentId))
                 .thenReturn(Optional.empty());
         when(questionRepository.findByRecruitment_IdOrderByQuestionOrderAsc(testRecruitmentId))
@@ -835,7 +835,7 @@ class RecruitmentServiceTest {
 
         when(recruitmentRepository.findById(testRecruitmentId)).thenReturn(Optional.of(testRecruitment));
         when(userRepository.findById(testApplicantId)).thenReturn(Optional.of(testApplicant));
-        when(clubMemberShipRepository.existsByUserIdAndClubId(testApplicantId, testClubId)).thenReturn(false);
+        when(clubMemberShipRepository.existsByUserIdAndClubIdAndStatus(testApplicantId, testClubId,ClubMemberShipStatus.ACTIVE)).thenReturn(false);
         when(applicationRepository.findByApplicant_IdAndRecruitment_Id(testApplicantId, testRecruitmentId))
                 .thenReturn(Optional.of(testApplication));
 
@@ -871,7 +871,7 @@ class RecruitmentServiceTest {
 
         when(recruitmentRepository.findById(testRecruitmentId)).thenReturn(Optional.of(testRecruitment));
         when(userRepository.findById(testApplicantId)).thenReturn(Optional.of(testApplicant));
-        when(clubMemberShipRepository.existsByUserIdAndClubId(testApplicantId, testClubId)).thenReturn(false);
+        when(clubMemberShipRepository.existsByUserIdAndClubIdAndStatus(testApplicantId, testClubId, ClubMemberShipStatus.ACTIVE)).thenReturn(false);
         when(applicationRepository.findByApplicant_IdAndRecruitment_Id(testApplicantId, testRecruitmentId))
                 .thenReturn(Optional.empty());
         when(questionRepository.findByRecruitment_IdOrderByQuestionOrderAsc(testRecruitmentId))
@@ -913,7 +913,7 @@ class RecruitmentServiceTest {
 
         when(recruitmentRepository.findById(testRecruitmentId)).thenReturn(Optional.of(testRecruitment));
         when(userRepository.findById(testApplicantId)).thenReturn(Optional.of(testApplicant));
-        when(clubMemberShipRepository.existsByUserIdAndClubId(testApplicantId, testClubId)).thenReturn(false);
+        when(clubMemberShipRepository.existsByUserIdAndClubIdAndStatus(testApplicantId, testClubId,ClubMemberShipStatus.ACTIVE)).thenReturn(false);
         when(applicationRepository.findByApplicant_IdAndRecruitment_Id(testApplicantId, testRecruitmentId))
                 .thenReturn(Optional.empty());
         when(questionRepository.findByRecruitment_IdOrderByQuestionOrderAsc(testRecruitmentId))
@@ -1057,7 +1057,7 @@ class RecruitmentServiceTest {
         request.reviewNotes = "Good candidate";
 
         when(applicationRepository.findById(testApplicationId)).thenReturn(Optional.of(testApplication));
-        when(clubMemberShipRepository.existsByUserIdAndClubId(testApplicantId, testClubId)).thenReturn(false);
+        when(clubMemberShipRepository.existsByUserIdAndClubIdAndStatus(testApplicantId, testClubId,ClubMemberShipStatus.ACTIVE)).thenReturn(false);
         when(clubMemberShipRepository.save(any(ClubMemberShip.class))).thenReturn(testClubMembership);
         when(semesterRepository.findCurrentSemester()).thenReturn(Optional.of(testSemester));
         when(teamRepository.findById(testTeamId)).thenReturn(Optional.of(testTeam));

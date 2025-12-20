@@ -1290,14 +1290,11 @@ public class ReportServiceImpl implements ReportServiceInterface {
                     .toList();
         }
 
-        // Apply sorting from pageable
-        List<ClubReportRequirement> sortedList = applySortToClubRequirements(filteredClubRequirements, pageable.getSort());
-
         // Apply pagination
         int start = (int) pageable.getOffset();
-        int end = Math.min((start + pageable.getPageSize()), sortedList.size());
-        List<ClubReportRequirement> paginatedList = start >= sortedList.size() ?
-                Collections.emptyList() : sortedList.subList(start, end);
+        int end = Math.min((start + pageable.getPageSize()), filteredClubRequirements.size());
+        List<ClubReportRequirement> paginatedList = start >= filteredClubRequirements.size() ?
+                Collections.emptyList() : filteredClubRequirements.subList(start, end);
 
         // Map to response
         List<ReportRequirementResponse.ClubRequirementInfo> content = paginatedList.stream()
@@ -1324,7 +1321,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
                 .toList();
 
         // Build page response
-        int totalElements = sortedList.size();
+        int totalElements = filteredClubRequirements.size();
         int totalPages = (int) Math.ceil((double) totalElements / pageable.getPageSize());
 
         return PageResponse.<ReportRequirementResponse.ClubRequirementInfo>builder()
@@ -2084,60 +2081,6 @@ public class ReportServiceImpl implements ReportServiceInterface {
         return normalized.toLowerCase();
     }
 
-    /**
-     * Helper method to apply sorting to a list of ClubReportRequirements
-     * @param list The list to sort
-     * @param sort The Sort object from Pageable
-     * @return Sorted list
-     */
-    private List<ClubReportRequirement> applySortToClubRequirements(List<ClubReportRequirement> list, org.springframework.data.domain.Sort sort) {
-        if (sort.isUnsorted() || list.isEmpty()) {
-            return list;
-        }
-
-        return list.stream()
-                .sorted((crr1, crr2) -> {
-                    for (org.springframework.data.domain.Sort.Order order : sort) {
-                        String property = order.getProperty();
-                        int comparison;
-
-                        // Compare based on property
-                        switch (property.toLowerCase()) {
-                            case "id":
-                                comparison = Long.compare(crr1.getId(), crr2.getId());
-                                break;
-                            case "clubname":
-                                String clubName1 = crr1.getClub() != null ? crr1.getClub().getClubName() : "";
-                                String clubName2 = crr2.getClub() != null ? crr2.getClub().getClubName() : "";
-                                comparison = clubName1.compareToIgnoreCase(clubName2);
-                                break;
-                            case "clubcode":
-                                String clubCode1 = crr1.getClub() != null ? crr1.getClub().getClubCode() : "";
-                                String clubCode2 = crr2.getClub() != null ? crr2.getClub().getClubCode() : "";
-                                comparison = clubCode1.compareToIgnoreCase(clubCode2);
-                                break;
-                            case "status":
-                                String status1 = crr1.getReport() != null && crr1.getReport().getStatus() != null
-                                        ? crr1.getReport().getStatus().name() : "";
-                                String status2 = crr2.getReport() != null && crr2.getReport().getStatus() != null
-                                        ? crr2.getReport().getStatus().name() : "";
-                                comparison = status1.compareToIgnoreCase(status2);
-                                break;
-                            default:
-                                // For unknown properties, compare by id
-                                comparison = Long.compare(crr1.getId(), crr2.getId());
-                                break;
-                        }
-
-                        // Apply direction (ASC or DESC)
-                        if (comparison != 0) {
-                            return order.isAscending() ? comparison : -comparison;
-                        }
-                    }
-                    return 0;
-                })
-                .toList();
-    }
 
     /**
      * Helper method to check if any of the keywords match the given texts using Vietnamese normalization

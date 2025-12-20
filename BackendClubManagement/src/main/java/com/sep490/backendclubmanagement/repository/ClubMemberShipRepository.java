@@ -22,6 +22,7 @@ public interface ClubMemberShipRepository extends JpaRepository<ClubMemberShip, 
         from ClubMemberShip cm
             join cm.club c
         where cm.user.id = :userId
+          and cm.status = 'ACTIVE'
           and exists (
                 select 1
                 from RoleMemberShip rm
