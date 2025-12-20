@@ -8,6 +8,9 @@ import com.sep490.backendclubmanagement.dto.response.FeeDetailResponse;
 import com.sep490.backendclubmanagement.dto.response.PageResponse;
 import com.sep490.backendclubmanagement.dto.response.PayOSCreatePaymentResponse;
 import com.sep490.backendclubmanagement.dto.websocket.PaymentWebSocketPayload;
+import com.sep490.backendclubmanagement.dto.websocket.FeeWebSocketPayload;
+import com.sep490.backendclubmanagement.dto.websocket.WebSocketMessageType;
+import com.sep490.backendclubmanagement.dto.websocket.WebSocketMessageAction;
 import com.sep490.backendclubmanagement.entity.*;
 import com.sep490.backendclubmanagement.exception.AppException;
 import com.sep490.backendclubmanagement.exception.ErrorCode;
@@ -256,7 +259,81 @@ public class FeeServiceImpl implements FeeService {
                 .semester(semester)
                 .build();
         Fee saved = feeRepository.save(fee);
+        
+        // 🔔 Gửi notification và WebSocket nếu là phí bắt buộc và không phải draft
+        if (Boolean.TRUE.equals(saved.getIsMandatory()) && !saved.getIsDraft()) {
+            sendFeeNotificationAndWebSocket(saved);
+        }
+        
         return feeMapper.toFeeDetailResponse(saved);
+    }
+    
+    /**
+     * Helper method để gửi notification và WebSocket khi có phí bắt buộc mới
+     */
+    private void sendFeeNotificationAndWebSocket(Fee fee) {
+        try {
+            List<Long> activeMemberIds = roleMemberShipRepository.findActiveMemberUserIdsByClubId(fee.getClub().getId());
+            
+            if (!activeMemberIds.isEmpty()) {
+                // Tạo message với thông tin chi tiết
+                String mandatoryText = Boolean.TRUE.equals(fee.getIsMandatory()) ? " (BẮT BUỘC)" : "";
+                String title = "Khoản phí mới" + mandatoryText + ": " + fee.getTitle();
+                String message = String.format("Số tiền: %s VND%s",
+                    fee.getAmount().toString(),
+                    fee.getDueDate() != null ? " - Hạn đóng: " + fee.getDueDate().toString() : "");
+                
+                if (Boolean.TRUE.equals(fee.getIsMandatory())) {
+                    message += " - Đây là khoản phí bắt buộc, vui lòng đóng đúng hạn!";
+                }
+                
+                String actionUrl = "/clubs/" + fee.getClub().getId() + "/fees/" + fee.getId();
+                
+                // Gửi notification cho từng user
+                notificationService.sendToUsers(
+                    activeMemberIds,
+                    null, // actor (system)
+                    title,
+                    message,
+                    NotificationType.FEE_PUBLISHED,
+                    NotificationPriority.HIGH,
+                    actionUrl,
+                    fee.getClub().getId(),
+                    null, // relatedNewsId
+                    null, // relatedTeamId
+                    null  // relatedRequestId
+                );
+                
+                // Gửi WebSocket broadcast đến tất cả members trong club
+                FeeWebSocketPayload payload = FeeWebSocketPayload.builder()
+                    .feeId(fee.getId())
+                    .title(fee.getTitle())
+                    .description(fee.getDescription())
+                    .amount(fee.getAmount())
+                    .isMandatory(fee.getIsMandatory())
+                    .dueDate(fee.getDueDate())
+                    .clubId(fee.getClub().getId())
+                    .clubName(fee.getClub().getClubName())
+                    .feeType(fee.getFeeType() != null ? fee.getFeeType().name() : null)
+                    .message(message)
+                    .build();
+                
+                webSocketService.broadcastToClub(
+                    fee.getClub().getId(),
+                    WebSocketMessageType.FEE.name(),
+                    WebSocketMessageAction.CREATED.name(),
+                    payload
+                );
+                
+                log.info("[Fee] Notification and WebSocket sent to {} members: mandatory fee created {}", 
+                    activeMemberIds.size(), fee.getId());
+            } else {
+                log.warn("[Fee] No active members found to notify for club {}", fee.getClub().getId());
+            }
+        } catch (Exception e) {
+            log.error("[Fee] Failed to send fee notification/WebSocket: {}", e.getMessage(), e);
+            // Don't throw - notification failure shouldn't break fee creation
+        }
     }
 
     @Override
@@ -326,39 +403,8 @@ public class FeeServiceImpl implements FeeService {
         fee.setIsDraft(false);
         feeRepository.save(fee);
 
-        // 🔔 Gửi notification cho tất cả active members trong club
-        try {
-            List<Long> activeMemberIds = roleMemberShipRepository.findActiveMemberUserIdsByClubId(fee.getClub().getId());
-
-            if (!activeMemberIds.isEmpty()) {
-                String title = "Khoản phí mới: " + fee.getTitle();
-                String message = String.format("Số tiền: %s VND%s",
-                    fee.getAmount().toString(),
-                    fee.getDueDate() != null ? " - Hạn: " + fee.getDueDate().toString() : "");
-                String actionUrl = "/clubs/" + fee.getClub().getId() + "/fees/" + fee.getId();
-
-                notificationService.sendToUsers(
-                        activeMemberIds,
-                        null, // actor (system)
-                        title,
-                        message,
-                        NotificationType.FEE_PUBLISHED,
-                        NotificationPriority.HIGH,
-                        actionUrl,
-                        fee.getClub().getId(),
-                        null, // relatedNewsId
-                        null, // relatedTeamId
-                        null  // relatedRequestId
-                );
-
-                log.info("[Fee] Notification sent to {} members: fee published {}", activeMemberIds.size(), fee.getId());
-            } else {
-                log.warn("[Fee] No active members found to notify for club {}", fee.getClub().getId());
-            }
-        } catch (Exception e) {
-            log.error("[Fee] Failed to send publish notification: {}", e.getMessage(), e);
-            // Don't throw - notification failure shouldn't break fee publishing
-        }
+        // 🔔 Gửi notification và WebSocket cho tất cả active members trong club
+        sendFeeNotificationAndWebSocket(fee);
 
         return feeMapper.toFeeDetailResponse(fee);
     }
