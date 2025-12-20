@@ -120,14 +120,14 @@ public class ReportServiceImpl implements ReportServiceInterface {
         // If keyword is provided, use client-side filtering with Vietnamese normalization
         if (keyword != null && !keyword.trim().isEmpty()) {
             String trimmedKeyword = keyword.trim();
-            // Get all reports without keyword filter
+            // Get all reports without keyword filter, but with sort from pageable
             reportPage = reportRepository.findAllWithFilters(
                     status,
                     clubId,
                     semesterId,
                     reportType,
                     null,
-                    PageRequest.of(0, Integer.MAX_VALUE)
+                    PageRequest.of(0, Integer.MAX_VALUE, pageable.getSort())
             );
 
             // Filter using Vietnamese normalization - optimized with helper method
@@ -914,7 +914,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
             // Resubmission after university rejection:
             // - If club president: RESUBMITTED_UNIVERSITY (nộp lại lên trường)
             // - If team officer: UPDATED_PENDING_CLUB (nộp lại lên câu lạc bộ)
-            if (isClubOfficer || currentStatus == ReportStatus.UPDATED_PENDING_CLUB) {
+            if (isClubOfficer) {
                 newStatus = ReportStatus.RESUBMITTED_UNIVERSITY;
             } else {
                 // Team officer resubmits to club level
@@ -1022,14 +1022,14 @@ public class ReportServiceImpl implements ReportServiceInterface {
         // If keyword is provided, use client-side filtering with Vietnamese normalization
         if (keyword != null && !keyword.trim().isEmpty()) {
             String trimmedKeyword = keyword.trim();
-            // Get all reports without keyword filter
+            // Get all reports without keyword filter, but with sort from pageable
             reportPage = reportRepository.findByClubIdWithFilter(
                     status,
                     clubId,
                     semesterId,
                     reportType,
                     null,
-                    PageRequest.of(0, Integer.MAX_VALUE)
+                    PageRequest.of(0, Integer.MAX_VALUE, pageable.getSort())
             );
 
             // Filter using Vietnamese normalization - optimized with helper method
@@ -1090,7 +1090,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
         // If keyword is provided, use client-side filtering with Vietnamese normalization
         if (keyword != null && !keyword.trim().isEmpty()) {
             String trimmedKeyword = keyword.trim();
-            // Get all reports without keyword filter
+            // Get all reports without keyword filter, but with sort from pageable
             reportPage = reportRepository.findByClubIdAndUserIdWithFilter(
                     status,
                     clubId,
@@ -1098,7 +1098,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
                     reportType,
                     null,
                     userId,
-                    PageRequest.of(0, Integer.MAX_VALUE)
+                    PageRequest.of(0, Integer.MAX_VALUE, pageable.getSort())
             );
 
             // Filter using Vietnamese normalization - optimized with helper method
@@ -1155,12 +1155,12 @@ public class ReportServiceImpl implements ReportServiceInterface {
         // If keyword is provided, use client-side filtering with Vietnamese normalization
         if (keyword != null && !keyword.trim().isEmpty()) {
             String trimmedKeyword = keyword.trim();
-            // Get all requirements without keyword filter
+            // Get all requirements without keyword filter, but with sort from pageable
             requirementPage = submissionReportRequirementRepository.findAllWithFilters(
                     reportType,
                     clubId,
                     null,
-                    PageRequest.of(0, Integer.MAX_VALUE)
+                    PageRequest.of(0, Integer.MAX_VALUE, pageable.getSort())
             );
 
             // Filter using Vietnamese normalization - optimized with helper method
@@ -1290,11 +1290,14 @@ public class ReportServiceImpl implements ReportServiceInterface {
                     .toList();
         }
 
+        // Apply sorting from pageable
+        List<ClubReportRequirement> sortedList = applySortToClubRequirements(filteredClubRequirements, pageable.getSort());
+
         // Apply pagination
         int start = (int) pageable.getOffset();
-        int end = Math.min((start + pageable.getPageSize()), filteredClubRequirements.size());
-        List<ClubReportRequirement> paginatedList = start >= filteredClubRequirements.size() ?
-                Collections.emptyList() : filteredClubRequirements.subList(start, end);
+        int end = Math.min((start + pageable.getPageSize()), sortedList.size());
+        List<ClubReportRequirement> paginatedList = start >= sortedList.size() ?
+                Collections.emptyList() : sortedList.subList(start, end);
 
         // Map to response
         List<ReportRequirementResponse.ClubRequirementInfo> content = paginatedList.stream()
@@ -1321,7 +1324,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
                 .toList();
 
         // Build page response
-        int totalElements = filteredClubRequirements.size();
+        int totalElements = sortedList.size();
         int totalPages = (int) Math.ceil((double) totalElements / pageable.getPageSize());
 
         return PageResponse.<ReportRequirementResponse.ClubRequirementInfo>builder()
@@ -1440,7 +1443,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
         // If keyword is provided, use client-side filtering with Vietnamese normalization
         if (keyword != null && !keyword.trim().isEmpty()) {
             String trimmedKeyword = keyword.trim();
-            // Get all club report requirements without keyword filter
+            // Get all club report requirements without keyword filter, but with sort from pageable
             requirementPage = clubReportRequirementRepository.findByClubIdWithFilters(
                     clubId,
                     null,
@@ -1450,7 +1453,7 @@ public class ReportServiceImpl implements ReportServiceInterface {
                     semesterId,
                     filterTeamId,
                     currentDate,
-                    PageRequest.of(0, Integer.MAX_VALUE)
+                    PageRequest.of(0, Integer.MAX_VALUE, pageable.getSort())
             );
 
             // Filter using Vietnamese normalization on the submission requirement's title and description - optimized
@@ -1752,6 +1755,12 @@ public class ReportServiceImpl implements ReportServiceInterface {
         if (request.getStatus() == ReportStatus.PENDING_UNIVERSITY) {
             // When approving and submitting to university, reset reviewerFeedback to null
             // This ensures that when a report is submitted to university level, any previous feedback is cleared
+            report.setReviewerFeedback(null);
+            // Set submittedDate when submitting to university (if not already set)
+            if (report.getSubmittedDate() == null) {
+                report.setSubmittedDate(LocalDateTime.now());
+            }
+        } else if (request.getStatus() == ReportStatus.RESUBMITTED_UNIVERSITY) {
             report.setReviewerFeedback(null);
             // Set submittedDate when submitting to university (if not already set)
             if (report.getSubmittedDate() == null) {
@@ -2073,6 +2082,61 @@ public class ReportServiceImpl implements ReportServiceInterface {
         normalized = java.text.Normalizer.normalize(normalized, java.text.Normalizer.Form.NFD);
         normalized = normalized.replaceAll("\\p{InCombiningDiacriticalMarks}+", "");
         return normalized.toLowerCase();
+    }
+
+    /**
+     * Helper method to apply sorting to a list of ClubReportRequirements
+     * @param list The list to sort
+     * @param sort The Sort object from Pageable
+     * @return Sorted list
+     */
+    private List<ClubReportRequirement> applySortToClubRequirements(List<ClubReportRequirement> list, org.springframework.data.domain.Sort sort) {
+        if (sort.isUnsorted() || list.isEmpty()) {
+            return list;
+        }
+
+        return list.stream()
+                .sorted((crr1, crr2) -> {
+                    for (org.springframework.data.domain.Sort.Order order : sort) {
+                        String property = order.getProperty();
+                        int comparison;
+
+                        // Compare based on property
+                        switch (property.toLowerCase()) {
+                            case "id":
+                                comparison = Long.compare(crr1.getId(), crr2.getId());
+                                break;
+                            case "clubname":
+                                String clubName1 = crr1.getClub() != null ? crr1.getClub().getClubName() : "";
+                                String clubName2 = crr2.getClub() != null ? crr2.getClub().getClubName() : "";
+                                comparison = clubName1.compareToIgnoreCase(clubName2);
+                                break;
+                            case "clubcode":
+                                String clubCode1 = crr1.getClub() != null ? crr1.getClub().getClubCode() : "";
+                                String clubCode2 = crr2.getClub() != null ? crr2.getClub().getClubCode() : "";
+                                comparison = clubCode1.compareToIgnoreCase(clubCode2);
+                                break;
+                            case "status":
+                                String status1 = crr1.getReport() != null && crr1.getReport().getStatus() != null
+                                        ? crr1.getReport().getStatus().name() : "";
+                                String status2 = crr2.getReport() != null && crr2.getReport().getStatus() != null
+                                        ? crr2.getReport().getStatus().name() : "";
+                                comparison = status1.compareToIgnoreCase(status2);
+                                break;
+                            default:
+                                // For unknown properties, compare by id
+                                comparison = Long.compare(crr1.getId(), crr2.getId());
+                                break;
+                        }
+
+                        // Apply direction (ASC or DESC)
+                        if (comparison != 0) {
+                            return order.isAscending() ? comparison : -comparison;
+                        }
+                    }
+                    return 0;
+                })
+                .toList();
     }
 
     /**

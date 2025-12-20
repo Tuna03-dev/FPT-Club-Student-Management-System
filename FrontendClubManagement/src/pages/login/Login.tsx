@@ -300,7 +300,7 @@ const LoginPage: React.FC = () => {
         </div>
 
         <p className="instruction">
-          Sử dụng tài khoản Google đã sử dụng với FAP của bạn để truy cập hệ
+          Dùng tài khoản Google đã đăng nhập với FAP của bạn để truy cập hệ
           thống
         </p>
 

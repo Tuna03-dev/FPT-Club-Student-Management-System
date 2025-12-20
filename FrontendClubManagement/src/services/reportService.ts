@@ -433,7 +433,7 @@ export async function deleteReport(reportId: number): Promise<void> {
  */
 export interface ReviewReportByClubRequest {
   reportId: number;
-  status: "PENDING_UNIVERSITY" | "REJECTED_CLUB";
+  status: "PENDING_UNIVERSITY" | "REJECTED_CLUB" | "RESUBMITTED_UNIVERSITY";
   reviewerFeedback?: string;
 }
 

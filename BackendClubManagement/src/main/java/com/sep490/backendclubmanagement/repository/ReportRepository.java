@@ -22,8 +22,7 @@ public interface ReportRepository extends JpaRepository<Report, Long> {
            "AND (:semesterId IS NULL OR r.semester.id = :semesterId) " +
            "AND (:reportType IS NULL OR r.clubReportRequirement.submissionReportRequirement.reportType = :reportType) " +
            "AND (:keyword IS NULL OR LOWER(r.reportTitle) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
-           "OR LOWER(r.content) LIKE LOWER(CONCAT('%', :keyword, '%'))) " +
-           "ORDER BY r.submittedDate DESC, r.createdAt DESC")
+           "OR LOWER(r.content) LIKE LOWER(CONCAT('%', :keyword, '%')))")
     Page<Report> findAllWithFilters(
             @Param("status") ReportStatus status,
             @Param("clubId") Long clubId,
@@ -64,8 +63,7 @@ public interface ReportRepository extends JpaRepository<Report, Long> {
             "AND (:semesterId IS NULL OR r.semester.id = :semesterId) " +
             "AND (:reportType IS NULL OR r.clubReportRequirement.submissionReportRequirement.reportType = :reportType) " +
             "AND (:keyword IS NULL OR LOWER(r.reportTitle) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
-            "OR LOWER(r.content) LIKE LOWER(CONCAT('%', :keyword, '%'))) " +
-            "ORDER BY r.submittedDate DESC, r.createdAt DESC")
+            "OR LOWER(r.content) LIKE LOWER(CONCAT('%', :keyword, '%')))")
     Page<Report> findByClubIdWithFilter(@Param("status") ReportStatus status,
                                         @Param("clubId") Long clubId,
                                         @Param("semesterId") Long semesterId,
@@ -80,8 +78,7 @@ public interface ReportRepository extends JpaRepository<Report, Long> {
             "AND r.createdBy.id = :userId " +
             "AND (:reportType IS NULL OR r.clubReportRequirement.submissionReportRequirement.reportType = :reportType) " +
             "AND (:keyword IS NULL OR LOWER(r.reportTitle) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
-            "OR LOWER(r.content) LIKE LOWER(CONCAT('%', :keyword, '%'))) " +
-            "ORDER BY r.submittedDate DESC, r.createdAt DESC")
+            "OR LOWER(r.content) LIKE LOWER(CONCAT('%', :keyword, '%')))")
     Page<Report> findByClubIdAndUserIdWithFilter(@Param("status") ReportStatus status,
                                         @Param("clubId") Long clubId,
                                         @Param("semesterId") Long semesterId,

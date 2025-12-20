@@ -79,10 +79,10 @@ public class RecruitmentService implements RecruitmentServiceInterface {
         if (keyword != null && !keyword.trim().isEmpty()) {
             String trimmedKeyword = keyword.trim();
 
-            // Get all records without keyword filter
+            // Get all records without keyword filter, but with sort from pageable
             Page<Recruitment> allRecruitmentsPage = (status == null)
-                    ? recruitmentRepository.findByClub_Id(clubId, PageRequest.of(0, Integer.MAX_VALUE))
-                    : recruitmentRepository.findByClub_IdAndStatus(clubId, status, PageRequest.of(0, Integer.MAX_VALUE));
+                    ? recruitmentRepository.findByClub_Id(clubId, PageRequest.of(0, Integer.MAX_VALUE, pageable.getSort()))
+                    : recruitmentRepository.findByClub_IdAndStatus(clubId, status, PageRequest.of(0, Integer.MAX_VALUE, pageable.getSort()));
 
             // Filter using Vietnamese normalization
             List<Recruitment> filteredList = allRecruitmentsPage.getContent().stream()
@@ -375,9 +375,9 @@ public class RecruitmentService implements RecruitmentServiceInterface {
         if (keyword != null && !keyword.trim().isEmpty()) {
             String trimmedKeyword = keyword.trim();
 
-            // Get all records without keyword filter
+            // Get all records without keyword filter, but with sort from pageable
             Page<RecruitmentApplication> allApplicationsPage =
-                applicationRepository.findApplicationsByRecruitment(recruitmentId, status, null, PageRequest.of(0, Integer.MAX_VALUE));
+                applicationRepository.findApplicationsByRecruitment(recruitmentId, status, null, PageRequest.of(0, Integer.MAX_VALUE, adjustedPageable.getSort()));
 
             // Filter using Vietnamese normalization
             List<RecruitmentApplication> filteredList = allApplicationsPage.getContent().stream()
@@ -435,9 +435,9 @@ public class RecruitmentService implements RecruitmentServiceInterface {
         if (keyword != null && !keyword.trim().isEmpty()) {
             String trimmedKeyword = keyword.trim();
 
-            // Get all records without keyword filter
+            // Get all records without keyword filter, but with sort from pageable
             Page<RecruitmentApplication> allApplicationsPage =
-                applicationRepository.findMyApplications(applicantId, status, null, PageRequest.of(0, Integer.MAX_VALUE));
+                applicationRepository.findMyApplications(applicantId, status, null, PageRequest.of(0, Integer.MAX_VALUE, adjustedPageable.getSort()));
 
             // Filter using Vietnamese normalization
             List<RecruitmentApplication> filteredList = allApplicationsPage.getContent().stream()
