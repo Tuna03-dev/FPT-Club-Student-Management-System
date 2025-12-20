@@ -227,8 +227,21 @@ public interface ClubMemberShipRepository extends JpaRepository<ClubMemberShip, 
     @Query("""
     SELECT cms FROM ClubMemberShip cms
     WHERE cms.club.id = :clubId AND cms.user.id = :userId
+    ORDER BY cms.id ASC
     """)
-    ClubMemberShip findByClubIdAndUserId(@Param("clubId") Long clubId, @Param("userId") Long userId);
+    List<ClubMemberShip> findByClubIdAndUserIdList(@Param("clubId") Long clubId, @Param("userId") Long userId);
+    
+    @Query("""
+    SELECT cms FROM ClubMemberShip cms
+    WHERE cms.club.id = :clubId AND cms.user.id = :userId
+    ORDER BY cms.id ASC
+    """)
+    java.util.Optional<ClubMemberShip> findFirstByClubIdAndUserId(@Param("clubId") Long clubId, @Param("userId") Long userId);
+    
+    // Giữ lại method cũ để tương thích, nhưng sẽ lấy phần tử đầu tiên
+    default ClubMemberShip findByClubIdAndUserId(Long clubId, Long userId) {
+        return findFirstByClubIdAndUserId(clubId, userId).orElse(null);
+    }
     @Query("SELECT COUNT(cms) > 0 FROM ClubMemberShip cms WHERE cms.club.id = :clubId AND cms.user.id = :userId AND cms.status = 'ACTIVE'")
     boolean existsByClubIdAndUserIdAndStatusActive(@Param("clubId") Long clubId, @Param("userId") Long userId);
 

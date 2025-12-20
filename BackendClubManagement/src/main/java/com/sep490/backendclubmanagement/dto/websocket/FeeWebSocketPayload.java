@@ -5,39 +5,23 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class PaymentWebSocketPayload {
-    private Long orderCode;
-    private String transactionCode;
-    private BigDecimal amount;
-    private String status;
-    private String message;
-    private Long userId;
+public class FeeWebSocketPayload {
     private Long feeId;
+    private String title;
+    private String description;
+    private BigDecimal amount;
+    private Boolean isMandatory;
+    private LocalDate dueDate;
+    private Long clubId;
+    private String clubName;
+    private String feeType;
+    private String message;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
