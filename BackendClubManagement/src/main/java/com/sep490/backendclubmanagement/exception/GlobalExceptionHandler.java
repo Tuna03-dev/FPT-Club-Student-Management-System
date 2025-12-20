@@ -130,6 +130,14 @@ public class GlobalExceptionHandler {
                 .status(ErrorCode.TEAM_NAME_EXISTED.getHttpStatus())
                 .body(ApiResponse.error(ErrorCode.TEAM_NAME_EXISTED, ex.getMessage(), null));
     }
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ApiResponse<Void>> handleIllegalArgument(IllegalArgumentException ex) {
+        log.warn("Illegal argument: {}", ex.getMessage());
+
+        return ResponseEntity
+                .status(ErrorCode.INVALID_INPUT.getHttpStatus())
+                .body(ApiResponse.error(ErrorCode.INVALID_INPUT, ex.getMessage(), null));
+    }
 
 
 

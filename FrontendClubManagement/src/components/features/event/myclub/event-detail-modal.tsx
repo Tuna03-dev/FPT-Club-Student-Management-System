@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { UpdateEventForm, type UpdateEventFormData } from "./update-event-form"
-import { updateEvent, deleteEvent, getEventById, registerForEvent, cancelEventRegistration, getRegistrationStatus, cancelClubEventByStaff, publishEventByStaff, approveByClub, approveByUniversity, type UpdateEventPayload } from "@/service/EventService"
+import { updateEvent, deleteEvent, getEventById, registerForEvent, cancelEventRegistration, getRegistrationStatus, cancelClubEventByStaff, publishEventByStaff, approveByClub, approveByUniversity, restoreCancelledEventByStaff, deleteCancelledEventByStaff, type UpdateEventPayload } from "@/service/EventService"
 import { authService } from "@/services/authService"
 import { toast } from "sonner"
 import React from "react"
@@ -70,11 +70,14 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
   const [isProcessingPendingAction, setIsProcessingPendingAction] = useState(false)
   const [pendingRejectDialogOpen, setPendingRejectDialogOpen] = useState(false)
   const [pendingRejectReason, setPendingRejectReason] = useState("")
+  const [isRestoring, setIsRestoring] = useState(false)
+  const [isDeletingCancelled, setIsDeletingCancelled] = useState(false)
   
   // Get clubId from props or URL params
   const currentClubId = clubId || (params.clubId ? parseInt(params.clubId as string, 10) : undefined)
   const user = authService.getCurrentUser()
   const isStaff = user?.systemRole === "STAFF"
+  const isCancelledEvent = event.requestStatus === "CANCELLED"
   // Check systemRole in clubRoleList instead of global systemRole
   const clubRole = currentClubId ? authService.getClubRole(currentClubId) : null
   const systemRoleInClub = clubRole?.systemRole?.toUpperCase()
@@ -157,16 +160,47 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
   // Kiểm tra sự kiện đang diễn ra (thời gian hiện tại nằm giữa startDate và endDate)
   const isEventOngoing = new Date() >= event.startDate && new Date() < event.endDate
 
-  // Fetch full event details to get clubName and mediaUrls - gọi song song để tối ưu
+  // Fetch full event details chỉ khi cần thiết - tối ưu để hiển thị dữ liệu có sẵn ngay
   React.useEffect(() => {
     let cancelled = false
-    setIsLoadingDetails(true)
+    
+    // Khởi tạo dữ liệu từ props ngay lập tức
+    if (event.clubName && !clubName) {
+      setClubName(event.clubName)
+    }
+    if (event.eventTypeName && !eventTypeName) {
+      setEventTypeName(event.eventTypeName)
+    }
+    if (event.clubId !== undefined && eventClubId === null) {
+      setEventClubId(event.clubId)
+    }
+    if (event.images && event.images.length > 0 && (!images || images.length === 0)) {
+      setImages(event.images)
+    }
     
     // Nếu là draft hoặc đã kết thúc, không cần check registration
     const needsRegistrationCheck = !event.isMyDraft && !isEventEnded && event.isRegistered === undefined
     if (!needsRegistrationCheck) {
       setIsLoadingRegistration(false)
     }
+    
+    // Chỉ fetch từ API nếu thiếu thông tin quan trọng hoặc cần check registration
+    const needsApiFetch = 
+      (!clubName && !event.clubName) || 
+      (!eventTypeName && !event.eventTypeName) || 
+      (!images || images.length === 0) ||
+      needsRegistrationCheck ||
+      (eventClubId === null && event.clubId === undefined)
+    
+    if (!needsApiFetch) {
+      setIsLoadingDetails(false)
+      if (!needsRegistrationCheck) {
+        setIsLoadingRegistration(false)
+      }
+      return
+    }
+    
+    setIsLoadingDetails(true)
     
     // Gọi API song song thay vì tuần tự
     const fetchDetails = async () => {
@@ -188,9 +222,9 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
           }
           setMediaTypes(full.mediaTypes ?? [])
           // Chỉ cập nhật nếu chưa có từ props
-          if (!clubName) setClubName(full.clubName || null)
-          if (!eventTypeName) setEventTypeName(full.eventTypeName || null)
-          if (eventClubId === null) setEventClubId(full.clubId ?? null)
+          if (!clubName && !event.clubName) setClubName(full.clubName || null)
+          if (!eventTypeName && !event.eventTypeName) setEventTypeName(full.eventTypeName || null)
+          if (eventClubId === null && event.clubId === undefined) setEventClubId(full.clubId ?? null)
         }
         
         // Xử lý kết quả getRegistrationStatus
@@ -224,7 +258,7 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
     fetchDetails()
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [event.id, event.isMyDraft, isEventEnded])
+  }, [event.id, event.isMyDraft, isEventEnded, event.clubName, event.eventTypeName, event.clubId, event.images])
 
   const handlePrevImage = () => {
     setCurrentImageIndex((prev) => (prev === 0 ? images.length - 1 : prev - 1))
@@ -699,6 +733,71 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
               </div>
             </div>
           )}
+
+          {/* Actions for cancelled events (STAFF only) */}
+          {isCancelledEvent && isStaff && (
+            <div className="border-t border-border pt-4">
+              <p className="text-sm font-semibold text-foreground mb-2">Quản lý sự kiện đã hủy</p>
+              <div className="flex gap-2">
+                <Button
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white h-10 text-sm gap-2"
+                  disabled={isRestoring || new Date() >= event.startDate}
+                  onClick={async () => {
+                    if (new Date() >= event.startDate) {
+                      toast.error("Sự kiện đã bắt đầu, không thể khôi phục")
+                      return
+                    }
+                    try {
+                      setIsRestoring(true)
+                      await restoreCancelledEventByStaff(Number(event.id))
+                      toast.success("Đã khôi phục sự kiện")
+                      // Refresh events
+                      try {
+                        window.dispatchEvent(new CustomEvent('events:refetch'))
+                      } catch { /* empty */ }
+                      onClose()
+                    } catch (error: unknown) {
+                      console.error("Error restoring event:", error)
+                      toast.error(getErrorMessage(error, "Không thể khôi phục sự kiện. Vui lòng thử lại."))
+                    } finally {
+                      setIsRestoring(false)
+                    }
+                  }}
+                >
+                  {isRestoring ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Đang khôi phục...
+                    </>
+                  ) : (
+                    <>
+                      <ClipboardCheck className="w-4 h-4" />
+                      Khôi phục
+                    </>
+                  )}
+                </Button>
+                <Button
+                  className="flex-1 bg-rose-600 hover:bg-rose-700 text-white h-10 text-sm gap-2"
+                  disabled={isDeletingCancelled}
+                  onClick={() => {
+                    setDeleteDialogOpen(true)
+                  }}
+                >
+                  {isDeletingCancelled ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Đang xóa...
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="w-4 h-4" />
+                      Xóa
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       </Card>
       {/* Update Modal */}
@@ -896,12 +995,22 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
             </Button>
             <Button
               variant="destructive"
-              disabled={isDeleting}
+              disabled={isDeleting || isDeletingCancelled}
               onClick={async () => {
                 try {
-                  setIsDeleting(true)
-                  await deleteEvent(Number(event.id))
-                  toast.success("Đã xóa sự kiện thành công")
+                  if (isCancelledEvent && isStaff) {
+                    setIsDeletingCancelled(true)
+                    await deleteCancelledEventByStaff(Number(event.id))
+                    toast.success("Đã xóa sự kiện thành công")
+                    // Refresh cancelled events
+                    try {
+                      window.dispatchEvent(new CustomEvent('events:refetch'))
+                    } catch { /* empty */ }
+                  } else {
+                    setIsDeleting(true)
+                    await deleteEvent(Number(event.id))
+                    toast.success("Đã xóa sự kiện thành công")
+                  }
                   onDeleted?.(event.id)
                   setDeleteDialogOpen(false)
                   onClose()
@@ -910,10 +1019,11 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
                   toast.error(getErrorMessage(error, "Không thể xóa sự kiện. Vui lòng thử lại."))
                 } finally {
                   setIsDeleting(false)
+                  setIsDeletingCancelled(false)
                 }
               }}
             >
-              {isDeleting ? (
+              {(isDeleting || isDeletingCancelled) ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin mr-2" />
                   Đang xóa...

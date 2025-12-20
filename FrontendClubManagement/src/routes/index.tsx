@@ -181,19 +181,40 @@ export const router = createBrowserRouter([
     ),
     children: [
       { index: true, element: <Navigate to="staff" replace /> },
-      { path: "staff", element: <StaffList /> },
-      { path: "campus", element: <CampusManagement /> },
-      { path: "semester", element: <SemesterManagement /> },
       {
-        path: "settings",
-        element: <div className="p-6">Cấu hình hệ thống</div>,
+        path: "staff",
+        element: (
+          <RequireAdmin>
+            <StaffList />
+          </RequireAdmin>
+        ),
+      },
+      {
+        path: "campus",
+        element: (
+          <RequireAdmin>
+            <CampusManagement />
+          </RequireAdmin>
+        ),
+      },
+      {
+        path: "semester",
+        element: (
+          <RequireAdmin>
+            <SemesterManagement />
+          </RequireAdmin>
+        ),
       },
       {
         path: "settings",
-        element: <div className="p-6">Cấu hình hệ thống</div>,
+        element: (
+          <RequireAdmin>
+            <div className="p-6">Cấu hình hệ thống</div>
+          </RequireAdmin>
+        ),
       },
       {
-        path: "/admin/banner",
+        path: "banner",
         element: (
           <RequireAdmin>
             <BannerAdminPage />

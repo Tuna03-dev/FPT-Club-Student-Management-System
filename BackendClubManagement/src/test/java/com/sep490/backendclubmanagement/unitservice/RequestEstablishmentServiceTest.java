@@ -218,9 +218,8 @@ class RequestEstablishmentServiceTest {
         CreateRequestEstablishmentRequest request = buildCreateRequest(true);
         User student = buildStudent(userId, "student1@fpt.edu.vn");
 
-        when(userRepository.findById(userId)).thenReturn(Optional.of(student));
         when(clubRepository.existsByClubNameIgnoreCase(anyString())).thenReturn(false);
-        when(requestEstablishmentRepository.existsByClubNameIgnoreCase(anyString())).thenReturn(false);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(student));
         when(requestEstablishmentRepository.save(any(RequestEstablishment.class))).thenAnswer(invocation -> {
             RequestEstablishment req = invocation.getArgument(0);
             req.setId(100L);
@@ -246,9 +245,8 @@ class RequestEstablishmentServiceTest {
         CreateRequestEstablishmentRequest request = buildCreateRequest(false);
         User student = buildStudent(userId, "student1@fpt.edu.vn");
 
-        when(userRepository.findById(userId)).thenReturn(Optional.of(student));
         when(clubRepository.existsByClubNameIgnoreCase(anyString())).thenReturn(false);
-        when(requestEstablishmentRepository.existsByClubNameIgnoreCase(anyString())).thenReturn(false);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(student));
         when(requestEstablishmentRepository.save(any(RequestEstablishment.class))).thenAnswer(invocation -> {
             RequestEstablishment req = invocation.getArgument(0);
             req.setId(100L);
@@ -304,7 +302,6 @@ class RequestEstablishmentServiceTest {
         CreateRequestEstablishmentRequest request = buildCreateRequest(true);
 
         when(clubRepository.existsByClubNameIgnoreCase(anyString())).thenReturn(false);
-        when(requestEstablishmentRepository.existsByClubNameIgnoreCase(anyString())).thenReturn(false);
         when(userRepository.findById(userId)).thenReturn(Optional.empty());
 
         // Act & Assert
@@ -355,7 +352,6 @@ class RequestEstablishmentServiceTest {
         request.setClubCode("EXISTING_CODE");
 
         when(clubRepository.existsByClubNameIgnoreCase(anyString())).thenReturn(false);
-        when(requestEstablishmentRepository.existsByClubNameIgnoreCase(anyString())).thenReturn(false);
         when(clubRepository.existsByClubCodeIgnoreCase("EXISTING_CODE")).thenReturn(true);
 
         // Act & Assert
@@ -1069,13 +1065,13 @@ class RequestEstablishmentServiceTest {
 
         when(requestEstablishmentRepository.findDetailById(requestId)).thenReturn(Optional.of(request));
         when(clubRepository.existsByClubNameIgnoreCase(anyString())).thenReturn(false);
-        when(requestEstablishmentRepository.existsByClubNameIgnoreCaseAndIdNot(anyString(), anyLong())).thenReturn(false);
         when(requestEstablishmentRepository.save(any(RequestEstablishment.class))).thenAnswer(invocation -> {
             RequestEstablishment req = invocation.getArgument(0);
             req.setClubName("Updated Club Name");
             req.setStatus(RequestEstablishmentStatus.CONTACT_CONFIRMED);
             return req;
         });
+        doNothing().when(requestEstablishmentRepository).flush();
         doNothing().when(workflowHistoryService).createWorkflowHistory(anyLong(), anyLong(), anyString(), anyString());
 
         // Act

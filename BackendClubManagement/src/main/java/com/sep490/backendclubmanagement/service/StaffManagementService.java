@@ -29,6 +29,7 @@ public class StaffManagementService {
     private final SystemRoleRepository systemRoleRepository;
     private final UserMapper userMapper;
     private final CloudinaryService cloudinaryService;
+    private final FapApiService fapApiService;
 
     private static final String STAFF_ROLE_NAME = "STAFF";
 
@@ -40,6 +41,9 @@ public class StaffManagementService {
         String email = request.getEmail() != null ? request.getEmail().trim() : null;
         if (email == null || email.isEmpty()) {
             throw new IllegalArgumentException("Email không được để trống");
+        }
+        if (fapApiService.findProfileByEmail(email).isEmpty()) {
+            throw new IllegalArgumentException("Email không hợp lệ hoặc không tồn tại trong FAP");
         }
         if (userRepository.findByEmailIgnoreCase(email).isPresent()) {
             throw new IllegalArgumentException("Email đã tồn tại trong hệ thống");
