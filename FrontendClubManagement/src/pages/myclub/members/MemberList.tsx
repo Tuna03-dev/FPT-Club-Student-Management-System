@@ -1718,8 +1718,8 @@ const Members = () => {
                           <td className="px-3 py-2 font-mono text-xs">phone</td>
                           <td className="px-3 py-2">Số điện thoại</td>
                           <td className="px-3 py-2">
-                            <Badge variant="outline" className="text-xs">
-                              Không
+                            <Badge variant="destructive" className="text-xs">
+                              Có
                             </Badge>
                           </td>
                           <td className="px-3 py-2 text-muted-foreground">
@@ -1732,8 +1732,8 @@ const Members = () => {
                           </td>
                           <td className="px-3 py-2">Mã vai trò</td>
                           <td className="px-3 py-2">
-                            <Badge variant="outline" className="text-xs">
-                              Không
+                            <Badge variant="destructive" className="text-xs">
+                              Có
                             </Badge>
                           </td>
                           <td className="px-3 py-2 text-muted-foreground">
@@ -1746,8 +1746,8 @@ const Members = () => {
                           </td>
                           <td className="px-3 py-2">Tên ban</td>
                           <td className="px-3 py-2">
-                            <Badge variant="outline" className="text-xs">
-                              Không
+                            <Badge variant="destructive" className="text-xs">
+                              Có
                             </Badge>
                           </td>
                           <td className="px-3 py-2 text-muted-foreground">
@@ -1760,8 +1760,8 @@ const Members = () => {
                           </td>
                           <td className="px-3 py-2">Trạng thái</td>
                           <td className="px-3 py-2">
-                            <Badge variant="outline" className="text-xs">
-                              Không
+                            <Badge variant="destructive" className="text-xs">
+                              Có
                             </Badge>
                           </td>
                           <td className="px-3 py-2 text-muted-foreground">
@@ -1774,8 +1774,8 @@ const Members = () => {
                           </td>
                           <td className="px-3 py-2">Ngày tham gia</td>
                           <td className="px-3 py-2">
-                            <Badge variant="outline" className="text-xs">
-                              Không
+                            <Badge variant="destructive" className="text-xs">
+                              Có
                             </Badge>
                           </td>
                           <td className="px-3 py-2 text-muted-foreground">
@@ -1797,8 +1797,7 @@ const Members = () => {
                       </p>
                       <ul className="text-xs text-amber-600 dark:text-amber-300 space-y-1 list-disc list-inside">
                         <li>
-                          <strong>student_code</strong> và{" "}
-                          <strong>semester_code</strong> là bắt buộc
+                          <strong>Tất cả các trường đều bắt buộc phải điền</strong>
                         </li>
                         <li>
                           Nếu mã sinh viên đã tồn tại, hệ thống sẽ cập nhật
@@ -1819,9 +1818,11 @@ const Members = () => {
                         <li>
                           team_name phải khớp chính xác với tên ban đã tạo
                         </li>
-                        <li>is_active mặc định là true nếu không chỉ định</li>
                         <li>
-                          join_date mặc định là ngày hiện tại nếu không chỉ định
+                          is_active chỉ nhận giá trị true hoặc false
+                        </li>
+                        <li>
+                          join_date phải theo định dạng YYYY-MM-DD (VD: 2025-01-15)
                         </li>
                       </ul>
                     </div>

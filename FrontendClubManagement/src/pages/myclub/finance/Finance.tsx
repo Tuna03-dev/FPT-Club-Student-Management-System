@@ -315,58 +315,44 @@ export default function Finance() {
     })();
   }, [numericClubId]);
 
-  // State để track xem tab nào đã được load
-  const [loadedTabs, setLoadedTabs] = useState<Set<string>>(new Set());
   const [activeTab, setActiveTab] = useState<string>('income');
 
   useEffect(() => {
     void fetchFinanceSummary();
   }, [fetchFinanceSummary]);
 
-  // Load income transactions khi mount (tab mặc định)
+  // Load lại data mỗi khi chuyển tab
   useEffect(() => {
-    if (activeTab === 'income' && !loadedTabs.has('income')) {
+    if (activeTab === 'income') {
+      setIncomePage(0);
       void fetchIncomeTransactions(0);
-      setLoadedTabs(prev => new Set(prev).add('income'));
+    } else if (activeTab === 'outcome') {
+      setOutcomePage(0);
+      void fetchOutcomeTransactions(0);
+    } else if (activeTab === 'fees') {
+      setCurrentPage(0);
+      void fetchFees(0);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
 
   // Reload income transactions when filters change
   useEffect(() => {
-    if (loadedTabs.has('income')) {
+    if (activeTab === 'income') {
       setIncomePage(0);
       void fetchIncomeTransactions(0);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedIncomeSearch, incomeFilters.status, incomeFilters.fromDate, incomeFilters.toDate, incomeFilters.minAmount, incomeFilters.maxAmount, incomeFilters.source, incomeFilters.feeId]);
 
-  // Load outcome transactions khi chuyển sang tab outcome
-  useEffect(() => {
-    if (activeTab === 'outcome' && !loadedTabs.has('outcome')) {
-      void fetchOutcomeTransactions(0);
-      setLoadedTabs(prev => new Set(prev).add('outcome'));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab]);
-
   // Reload outcome transactions when filters change
   useEffect(() => {
-    if (loadedTabs.has('outcome')) {
+    if (activeTab === 'outcome') {
       setOutcomePage(0);
       void fetchOutcomeTransactions(0);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedOutcomeSearch, outcomeFilters.status, outcomeFilters.fromDate, outcomeFilters.toDate, outcomeFilters.minAmount, outcomeFilters.maxAmount, outcomeFilters.category]);
-
-  // Load fees khi chuyển sang tab fees
-  useEffect(() => {
-    if (activeTab === 'fees' && !loadedTabs.has('fees')) {
-      void fetchFees(0);
-      setLoadedTabs(prev => new Set(prev).add('fees'));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab]);
 
   const handleReloadFees = useCallback(
     async (page?: number, search?: string, isExpired?: boolean) => {
