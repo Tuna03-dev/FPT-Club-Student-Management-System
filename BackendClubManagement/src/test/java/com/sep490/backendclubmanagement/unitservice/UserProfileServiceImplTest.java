@@ -1,8 +1,6 @@
 package com.sep490.backendclubmanagement.unitservice;
 
 import com.sep490.backendclubmanagement.dto.request.UpdateUserProfileRequest;
-import com.sep490.backendclubmanagement.dto.response.ClubMembershipProfileResponse;
-import com.sep490.backendclubmanagement.dto.response.RoleInClubResponse;
 import com.sep490.backendclubmanagement.dto.response.UserProfileResponse;
 import com.sep490.backendclubmanagement.entity.*;
 import com.sep490.backendclubmanagement.exception.AppException;
@@ -12,23 +10,21 @@ import com.sep490.backendclubmanagement.repository.UserRepository;
 import com.sep490.backendclubmanagement.service.CloudinaryService;
 import com.sep490.backendclubmanagement.service.SemesterService;
 import com.sep490.backendclubmanagement.service.UserProfileServiceImpl;
+import com.sep490.backendclubmanagement.entity.ClubMemberShipStatus;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.*;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
-/**
- * Unit test cho UserProfileServiceImpl (JUnit5 + Mockito)
- */
 @ExtendWith(MockitoExtension.class)
 class UserProfileServiceImplTest {
 
@@ -44,125 +40,133 @@ class UserProfileServiceImplTest {
     @Mock
     private SemesterService semesterService;
 
-    @Mock
-    private MultipartFile avatarFile;
-
     @InjectMocks
     private UserProfileServiceImpl userProfileService;
 
-    // ========= Helper =========
+    // ====== helper tạo User + membership ======
 
-    private User buildUser(Long id) {
+    private User sampleUser(Long id, boolean withSystemRole) {
         User u = new User();
         u.setId(id);
-        u.setEmail("user" + id + "@fpt.edu.vn");
+        u.setEmail("user" + id + "@mail.com");
         u.setFullName("User " + id);
         u.setPhoneNumber("0123456789");
         u.setStudentCode("SE" + id);
-        u.setDateOfBirth(LocalDate.of(2001, 2, 19));
-        // không set gender để tránh phụ thuộc enum
-
-        u.setAvatarUrl("https://old-avatar.com/" + id);
+        u.setDateOfBirth(LocalDate.of(2000, 1, 1));
+        u.setGender("MALE");
+        u.setAvatarUrl("http://avatar");
         u.setIsActive(true);
 
-        SystemRole role = new SystemRole();
-        role.setId(1L);
-        role.setRoleName("STUDENT");
-        u.setSystemRole(role);
+        if (withSystemRole) {
+            SystemRole sr = new SystemRole();
+            sr.setId(1L);
+            sr.setRoleName("ADMIN");
+            u.setSystemRole(sr);
+        }
+
         return u;
     }
 
-    private ClubMemberShip buildMembership(Long id) {
+
+
+    private ClubMemberShip sampleMembership(Long membershipId) {
         Club club = new Club();
-        club.setId(100L);
-        club.setClubName("FPT Club");
-        club.setClubCode("FPTC");
-        club.setLogoUrl("https://logo.com/fpt");
-        // không set status/featured nếu field là primitive/enum khó đoán
-
-        Semester semester = new Semester();
-        semester.setId(10L);
-        semester.setSemesterName("Spring 2025");
-        semester.setIsCurrent(true);
-
-        Team team = new Team();
-        team.setId(200L);
-        team.setTeamName("Media Team");
+        club.setId(10L);
+        club.setClubName("Club 10");
+        club.setClubCode("CLB10");
+        club.setLogoUrl("http://logo");
+        club.setStatus("ACTIVE");
+        club.setFeatured(true);
 
         ClubRole clubRole = new ClubRole();
-        clubRole.setId(300L);
-        clubRole.setRoleName("Team Leader");
-        clubRole.setRoleCode("TEAM_LEADER");
-        clubRole.setRoleLevel(2);
+        clubRole.setId(100L);
+        clubRole.setRoleName("President");
+        clubRole.setRoleCode("PRES");
+        clubRole.setRoleLevel(1);
+
+        Team team = new Team();
+        team.setId(20L);
+        team.setTeamName("Media");
+
+        Semester semester = new Semester();
+        semester.setId(30L);
+        semester.setSemesterName("Fall 2025");
+        semester.setIsCurrent(true);
 
         RoleMemberShip rms = new RoleMemberShip();
-        rms.setId(400L);
+        rms.setId(200L);
         rms.setClubRole(clubRole);
         rms.setTeam(team);
         rms.setSemester(semester);
         rms.setIsActive(true);
 
         ClubMemberShip cms = new ClubMemberShip();
-        cms.setId(id);
+        cms.setId(membershipId);
         cms.setClub(club);
         cms.setStatus(ClubMemberShipStatus.ACTIVE);
-        // ✅ FIX: roleMemberships là Set, dùng HashSet
-        cms.setRoleMemberships(new HashSet<>(List.of(rms)));
+
+        // ✅ Dùng Set thay vì List
+        Set<RoleMemberShip> roleMemberships = new HashSet<>();
+        roleMemberships.add(rms);
+        cms.setRoleMemberships(roleMemberships);
+
         return cms;
     }
 
-    // =========================
-    // getUserProfile
-    // =========================
+
+
+    // ========== getUserProfile ==========
 
     @Test
-    void getUserProfile_whenUserExists_shouldReturnProfile() throws AppException {
+    void getUserProfile_success_shouldMapAllFields() throws AppException {
         Long userId = 1L;
-        User user = buildUser(userId);
-        ClubMemberShip cms = buildMembership(500L);
-
-        Semester currentSemester = new Semester();
-        currentSemester.setId(10L);
-        currentSemester.setSemesterName("Spring 2025");
-        currentSemester.setIsCurrent(true);
+        User user = sampleUser(userId, true);
+        ClubMemberShip membership = sampleMembership(1000L);
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
-        when(semesterService.getCurrentSemester()).thenReturn(currentSemester);
+        when(semesterService.getCurrentSemester()).thenReturn(new Semester());
         when(clubMemberShipRepository.findByUserIdWithRoles(
                 eq(userId),
                 eq(ClubMemberShipStatus.ACTIVE),
                 isNull(),
                 eq(true)
-        )).thenReturn(List.of(cms));
+        )).thenReturn(List.of(membership));
 
         UserProfileResponse resp = userProfileService.getUserProfile(userId);
 
         assertEquals(userId, resp.getId());
-        assertEquals("user1@fpt.edu.vn", resp.getEmail());
+        assertEquals("user1@mail.com", resp.getEmail());
         assertEquals("User 1", resp.getFullName());
+        assertEquals("0123456789", resp.getPhoneNumber());
         assertEquals("SE1", resp.getStudentCode());
+        assertEquals("ADMIN", resp.getSystemRoleName());
         assertEquals(1L, resp.getSystemRoleId());
-        assertEquals("STUDENT", resp.getSystemRoleName());
         assertEquals(1, resp.getClubMemberships().size());
 
-        ClubMembershipProfileResponse clubResp = resp.getClubMemberships().get(0);
-        assertEquals(100L, clubResp.getClubId());
-        assertEquals("FPT Club", clubResp.getClubName());
-        assertEquals("FPTC", clubResp.getClubCode());
+        var clubDto = resp.getClubMemberships().get(0);
+        assertEquals(membership.getId(), clubDto.getClubMembershipId());
+        assertEquals(10L, clubDto.getClubId());
+        assertEquals("Club 10", clubDto.getClubName());
+        assertEquals("CLB10", clubDto.getClubCode());
+        assertEquals(1, clubDto.getRoles().size());
 
-        assertEquals(1, clubResp.getRoles().size());
-        RoleInClubResponse roleResp = clubResp.getRoles().get(0);
-        assertEquals(300L, roleResp.getClubRoleId());
-        assertEquals("Team Leader", roleResp.getClubRoleName());
-        assertEquals("TEAM_LEADER", roleResp.getClubRoleCode());
-        assertEquals(200L, roleResp.getTeamId());
-        assertEquals(10L, roleResp.getSemesterId());
-        assertTrue(roleResp.getSemesterIsCurrent());
+        var roleDto = clubDto.getRoles().get(0);
+        assertEquals(200L, roleDto.getRoleMembershipId());
+        assertEquals(100L, roleDto.getClubRoleId());
+        assertEquals("President", roleDto.getClubRoleName());
+        assertEquals("PRES", roleDto.getClubRoleCode());
+        assertEquals(1, roleDto.getClubRoleLevel());
+        assertEquals(20L, roleDto.getTeamId());
+        assertEquals("Media", roleDto.getTeamName());
+        assertEquals(30L, roleDto.getSemesterId());
+        assertEquals("Fall 2025", roleDto.getSemesterName());
+        assertTrue(roleDto.getSemesterIsCurrent());
+        assertTrue(roleDto.getIsActive());
     }
 
     @Test
-    void getUserProfile_whenUserNotFound_shouldThrowAppException() {
-        Long userId = 99L;
+    void getUserProfile_userNotFound_shouldThrowAppException() {
+        Long userId = 1L;
         when(userRepository.findById(userId)).thenReturn(Optional.empty());
 
         AppException ex = assertThrows(AppException.class,
@@ -171,116 +175,114 @@ class UserProfileServiceImplTest {
         assertEquals(ErrorCode.USER_NOT_FOUND, ex.getErrorCode());
     }
 
-    // =========================
-    // updateUserProfile
-    // =========================
+    // ========== updateUserProfile ==========
 
     @Test
-    void updateUserProfile_whenUserExists_shouldUpdateOnlyNonNullFields() throws AppException {
-        Long userId = 2L;
-        User user = buildUser(userId);
-
-        UpdateUserProfileRequest req = new UpdateUserProfileRequest();
-        req.setFullName("New Name");
-        req.setPhoneNumber(null);               // null -> không đổi
-        req.setStudentCode("SE0002");
-        req.setDateOfBirth(LocalDate.of(2002, 1, 1));
+    void updateUserProfile_success_shouldUpdateFieldsAndReturnProfile() throws AppException {
+        Long userId = 1L;
+        User user = sampleUser(userId, false); // systemRole null
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(semesterService.getCurrentSemester()).thenReturn(new Semester());
         when(clubMemberShipRepository.findByUserIdWithRoles(
                 eq(userId),
                 eq(ClubMemberShipStatus.ACTIVE),
                 isNull(),
                 eq(true)
-        )).thenReturn(List.of());
-        when(semesterService.getCurrentSemester()).thenReturn(new Semester());
+        )).thenReturn(Collections.emptyList());
+        when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        UpdateUserProfileRequest req = new UpdateUserProfileRequest();
+        req.setFullName("  New Name  "); // có trim
+        req.setPhoneNumber("0987654321");
+        req.setStudentCode("NEWCODE");
+        req.setDateOfBirth(LocalDate.of(1999, 12, 31));
+        req.setGender("FEMALE");
 
         UserProfileResponse resp = userProfileService.updateUserProfile(userId, req);
 
-        ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
-        verify(userRepository).save(userCaptor.capture());
+        // check đã update
+        assertEquals("New Name", user.getFullName());
+        assertEquals("0987654321", user.getPhoneNumber());
+        assertEquals("NEWCODE", user.getStudentCode());
+        assertEquals(LocalDate.of(1999, 12, 31), user.getDateOfBirth());
+        assertEquals("FEMALE", user.getGender());
 
-        User saved = userCaptor.getValue();
-        assertEquals("New Name", saved.getFullName());
-        assertEquals("0123456789", saved.getPhoneNumber());  // giữ nguyên
-        assertEquals("SE0002", saved.getStudentCode());
-        assertEquals(LocalDate.of(2002, 1, 1), saved.getDateOfBirth());
-
+        // check response lấy từ getUserProfile
         assertEquals("New Name", resp.getFullName());
-        assertEquals("SE0002", resp.getStudentCode());
+        assertNull(resp.getSystemRoleId());
+        assertNull(resp.getSystemRoleName());
+
+        verify(userRepository, atLeastOnce()).save(user);
     }
 
     @Test
-    void updateUserProfile_whenUserNotFound_shouldThrowAppException() {
-        Long userId = 100L;
-        UpdateUserProfileRequest req = new UpdateUserProfileRequest();
-        req.setFullName("Any");
+    void updateUserProfile_invalidFullName_shouldThrow() {
+        Long userId = 1L;
+        User user = sampleUser(userId, false);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
 
+        UpdateUserProfileRequest req = new UpdateUserProfileRequest();
+        req.setFullName("   "); // chỉ toàn space
+
+        AppException ex = assertThrows(AppException.class,
+                () -> userProfileService.updateUserProfile(userId, req));
+
+        assertEquals(ErrorCode.INVALID_FULL_NAME, ex.getErrorCode());
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void updateUserProfile_invalidPhoneNumber_shouldThrow() {
+        Long userId = 1L;
+        User user = sampleUser(userId, false);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        UpdateUserProfileRequest req = new UpdateUserProfileRequest();
+        req.setPhoneNumber("12345"); // sai regex
+
+        AppException ex = assertThrows(AppException.class,
+                () -> userProfileService.updateUserProfile(userId, req));
+
+        assertEquals(ErrorCode.INVALID_PHONE_NUMBER, ex.getErrorCode());
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void updateUserProfile_futureDateOfBirth_shouldThrow() {
+        Long userId = 1L;
+        User user = sampleUser(userId, false);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        UpdateUserProfileRequest req = new UpdateUserProfileRequest();
+        req.setDateOfBirth(LocalDate.now().plusDays(1));
+
+        AppException ex = assertThrows(AppException.class,
+                () -> userProfileService.updateUserProfile(userId, req));
+
+        assertEquals(ErrorCode.INVALID_DATE_OF_BIRTH, ex.getErrorCode());
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void updateUserProfile_userNotFound_shouldThrow() {
+        Long userId = 1L;
         when(userRepository.findById(userId)).thenReturn(Optional.empty());
+
+        UpdateUserProfileRequest req = new UpdateUserProfileRequest();
+        req.setFullName("Someone");
 
         AppException ex = assertThrows(AppException.class,
                 () -> userProfileService.updateUserProfile(userId, req));
 
         assertEquals(ErrorCode.USER_NOT_FOUND, ex.getErrorCode());
-        verify(userRepository, never()).save(any());
     }
 
-    // =========================
-    // updateUserAvatar
-    // =========================
+    // ========== updateUserAvatar ==========
 
     @Test
-    void updateUserAvatar_whenValidFile_shouldUploadAndUpdateUrl() throws AppException {
-        Long userId = 3L;
-        User user = buildUser(userId);
-
-        when(avatarFile.isEmpty()).thenReturn(false);
-
-        // UploadResult có 4 tham số: url, publicId, format, bytes
-        CloudinaryService.UploadResult uploadResult =
-                new CloudinaryService.UploadResult(
-                        "https://new-avatar.com/3",
-                        "public-id-3",
-                        "jpg",
-                        12345L
-                );
-
-        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
-        when(cloudinaryService.uploadImage(avatarFile, "users/avatars"))
-                .thenReturn(uploadResult);
-
-        when(clubMemberShipRepository.findByUserIdWithRoles(
-                eq(userId),
-                eq(ClubMemberShipStatus.ACTIVE),
-                isNull(),
-                eq(true)
-        )).thenReturn(List.of());
-        when(semesterService.getCurrentSemester()).thenReturn(new Semester());
-
-        UserProfileResponse resp = userProfileService.updateUserAvatar(userId, avatarFile);
-
-        ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
-        verify(userRepository).save(userCaptor.capture());
-
-        User saved = userCaptor.getValue();
-        assertEquals("https://new-avatar.com/3", saved.getAvatarUrl());
-        assertEquals("https://new-avatar.com/3", resp.getAvatarUrl());
-    }
-
-    @Test
-    void updateUserAvatar_whenFileNull_shouldThrowAppException() {
-        Long userId = 3L;
-
-        AppException ex = assertThrows(AppException.class,
-                () -> userProfileService.updateUserAvatar(userId, null));
-
-        assertEquals(ErrorCode.INVALID_INPUT, ex.getErrorCode());
-        verifyNoInteractions(userRepository, cloudinaryService);
-    }
-
-    @Test
-    void updateUserAvatar_whenFileEmpty_shouldThrowAppException() {
-        Long userId = 3L;
+    void updateUserAvatar_invalidFile_shouldThrow() {
+        Long userId = 1L;
         MultipartFile emptyFile = mock(MultipartFile.class);
         when(emptyFile.isEmpty()).thenReturn(true);
 
@@ -288,19 +290,58 @@ class UserProfileServiceImplTest {
                 () -> userProfileService.updateUserAvatar(userId, emptyFile));
 
         assertEquals(ErrorCode.INVALID_INPUT, ex.getErrorCode());
-        verifyNoInteractions(userRepository, cloudinaryService);
+        verifyNoInteractions(userRepository, cloudinaryService, clubMemberShipRepository, semesterService);
     }
 
     @Test
-    void updateUserAvatar_whenUserNotFound_shouldThrowAppException() {
-        Long userId = 3L;
-        when(avatarFile.isEmpty()).thenReturn(false);
+    void updateUserAvatar_userNotFound_shouldThrow() {
+        Long userId = 1L;
+        MultipartFile file = mock(MultipartFile.class);
+        when(file.isEmpty()).thenReturn(false);
+
         when(userRepository.findById(userId)).thenReturn(Optional.empty());
 
         AppException ex = assertThrows(AppException.class,
-                () -> userProfileService.updateUserAvatar(userId, avatarFile));
+                () -> userProfileService.updateUserAvatar(userId, file));
 
         assertEquals(ErrorCode.USER_NOT_FOUND, ex.getErrorCode());
         verify(cloudinaryService, never()).uploadImage(any(), anyString());
     }
+
+    @Test
+    void updateUserAvatar_success_shouldUploadAndReturnProfile() throws AppException {
+        Long userId = 1L;
+        User user = sampleUser(userId, false);
+
+        MultipartFile file = mock(MultipartFile.class);
+        when(file.isEmpty()).thenReturn(false);
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        // ⭐ Không new UploadResult, mà mock nó
+        CloudinaryService.UploadResult uploadResult = mock(CloudinaryService.UploadResult.class);
+        when(uploadResult.url()).thenReturn("http://new-avatar");
+
+        when(cloudinaryService.uploadImage(file, "users/avatars"))
+                .thenReturn(uploadResult);
+
+        // stub cho getUserProfile() được gọi sau khi update
+        when(semesterService.getCurrentSemester()).thenReturn(new Semester());
+        when(clubMemberShipRepository.findByUserIdWithRoles(
+                eq(userId),
+                eq(ClubMemberShipStatus.ACTIVE),
+                isNull(),
+                eq(true)
+        )).thenReturn(Collections.emptyList());
+
+        var resp = userProfileService.updateUserAvatar(userId, file);
+
+        assertEquals("http://new-avatar", user.getAvatarUrl());
+        assertEquals("http://new-avatar", resp.getAvatarUrl());
+
+        verify(cloudinaryService).uploadImage(file, "users/avatars");
+        verify(userRepository, atLeastOnce()).save(user);
+    }
+
 }

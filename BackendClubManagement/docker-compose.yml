@@ -7,6 +7,11 @@ services:
     restart: always
     ports:
       - "8081:8081"
+    environment:
+      - TZ=Asia/Ho_Chi_Minh
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
     networks:
       - fcm-network
 
@@ -27,11 +32,14 @@ services:
       HOST_FRONT_END: ${HOST_FRONT_END:-http://localhost:5173}
       PAYOS_WEBHOOK_URL: ${PAYOS_WEBHOOK_URL}
       FAP_API_URL: http://fap-api:8081/api/allowed-users
+      TZ: Asia/Ho_Chi_Minh
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
     depends_on:
       - fap-api
     networks:
       - fcm-network
-
 
 volumes:
   redis-app-data:

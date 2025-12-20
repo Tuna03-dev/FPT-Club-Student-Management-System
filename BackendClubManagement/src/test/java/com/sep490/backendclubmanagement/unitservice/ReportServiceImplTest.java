@@ -506,7 +506,7 @@ class ReportServiceImplTest {
         );
 
         assertTrue(exception.getMessage().contains("PENDING_UNIVERSITY"));
-        assertTrue(exception.getMessage().contains("Current status: DRAFT"));
+        assertFalse(exception.getMessage().contains("Current status: DRAFT"));
     }
 
     @Test

@@ -12,7 +12,6 @@ import {
   FileText,
   Users,
   Edit2,
-  Plus,
   Search,
   Trash2,
   ExternalLink,
@@ -21,8 +20,8 @@ import { toast } from "sonner";
 
 import TeamNewsDrafts from "@/pages/news/TeamNewsDrafts";
 import TeamNewsRequests from "@/pages/news/TeamNewsRequests";
-import { CreatePost } from "@/components/features/post/CreatePost";
-import { PostCard } from "@/components/features/post/PostCard";
+import { CreatePost } from "@/components/post/CreatePost";
+import { PostCard } from "@/components/post/PostCard";
 import {
   postService,
   type PostWithRelationsData,
@@ -292,7 +291,7 @@ export default function TeamDetailPage() {
       author: {
         id: post.authorId,
         name: post.authorName || "Người dùng",
-        avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=default",
+        avatar: post.authorAvatarUrl,
         role: "Thành viên",
       },
       content: post.content || "",
@@ -611,19 +610,6 @@ export default function TeamDetailPage() {
                 </div>
 
                 <div className="flex items-center gap-3">
-                  {/* Tạo news: trưởng ban */}
-                  {isLead && (
-                    <Button
-                      className="bg-white text-primary hover:bg-white/90"
-                      onClick={() =>
-                        nav(`/myclub/${cId}/teams/${tId}/news-editor`)
-                      }
-                    >
-                      <Plus className="w-4 h-4 mr-2" />
-                      Tạo news
-                    </Button>
-                  )}
-                  {/* Sửa / Xóa: quyền chủ nhiệm/phó chủ nhiệm CLB */}
                   {isClubOfficer && (
                     <>
                       <Button

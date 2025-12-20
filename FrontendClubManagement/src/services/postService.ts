@@ -40,6 +40,7 @@ export interface PostWithRelationsData {
   clubName: string;
   authorId: number;
   authorName: string;
+  authorAvatarUrl?: string;
 
   comments: CommentData[];
   likes: LikeData[];

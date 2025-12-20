@@ -4,6 +4,9 @@ import com.sep490.backendclubmanagement.dto.request.CreatePostRequest;
 import com.sep490.backendclubmanagement.dto.request.UpdatePostRequest;
 import com.sep490.backendclubmanagement.dto.response.*;
 import com.sep490.backendclubmanagement.entity.*;
+import com.sep490.backendclubmanagement.exception.AccessDeniedException;
+import com.sep490.backendclubmanagement.exception.AppException;
+import com.sep490.backendclubmanagement.exception.ErrorCode;
 import com.sep490.backendclubmanagement.repository.ClubMemberShipRepository;
 import com.sep490.backendclubmanagement.repository.PostRepository;
 import com.sep490.backendclubmanagement.repository.RoleMemberShipRepository;
@@ -184,7 +187,7 @@ public class PostService {
             CreatePostRequest req,
             List<MultipartFile> files,
             Long authorId
-    ) {
+    ) throws AppException {
         // 1) Validate cờ clubWide/teamId
         if (Boolean.TRUE.equals(req.getClubWide())) {
             req.setTeamId(null);
@@ -200,6 +203,12 @@ public class PostService {
 
         boolean isClubPresident = clubRoleService.isClubLeaderOrVice(authorId, clubId);
         boolean isTeamLead = (teamId != null) && clubRoleService.isTeamLeader(authorId, teamId);
+        if (!isClubPresident && !isTeamLead && teamId != null) {
+            boolean inHisTeam = clubRoleService.isMemberOfTeam(authorId, teamId);
+            if (!inHisTeam) {
+                throw new AccessDeniedException("Bạn chỉ có thể đăng bài trong team mà bạn là thành viên.");
+            }
+        }
 
         if (isClubPresident){
             status = PostStatus.PUBLISHED;          // Chủ nhiệm/Phó đăng ⇒ auto publish
@@ -519,6 +528,16 @@ public class PostService {
             sorted.get(i).setDisplayOrder(i);
         }
     }
+    public Long getClubIdByPostId(Long postId) {
+        Post p = postRepository.findById(postId)
+                .orElseThrow(() ->
+                        new IllegalArgumentException("Post not found with id = " + postId));
+
+        if (p.getClub() == null) {
+            throw new IllegalStateException("Post " + postId + " does not belong to any club");
+        }
+        return p.getClub().getId();
+    }
 
 
     private PostWithRelationsData toDetailsDTO(Post p) {
@@ -581,6 +600,7 @@ public class PostService {
                 .clubName(p.getClub() != null ? p.getClub().getClubName() : null)
                 .authorId(p.getCreatedBy() != null ? p.getCreatedBy().getId() : null)
                 .authorName(p.getCreatedBy() != null ? p.getCreatedBy().getFullName() : null)
+                .authorAvatarUrl(p.getCreatedBy() != null ? p.getCreatedBy().getAvatarUrl() : null)
                 .media(medias)
                 .comments(comments)
                 .likes(likes)

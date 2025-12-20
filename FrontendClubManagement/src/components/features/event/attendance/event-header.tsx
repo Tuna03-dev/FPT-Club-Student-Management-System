@@ -1,4 +1,4 @@
-"use client"
+
 
 import { Calendar, MapPin, Clock } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"

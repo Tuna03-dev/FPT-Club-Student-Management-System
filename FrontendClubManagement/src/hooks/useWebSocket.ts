@@ -153,7 +153,7 @@ export const useWebSocket = (
         Authorization: `Bearer ${token}`,
       },
       // Do not expose STOMP debug via props; use runtime DEBUG flag
-      debug: DEBUG ? (str) => console.log("[STOMP]", str) : undefined,
+      debug: DEBUG ? (str) => console.log("[STOMP]", str) : () => {},
       reconnectDelay,
       heartbeatIncoming,
       heartbeatOutgoing,
@@ -347,6 +347,9 @@ export const useWebSocket = (
     disconnect,
   };
 };
+
+
+
 
 
 

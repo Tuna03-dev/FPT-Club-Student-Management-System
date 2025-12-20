@@ -477,6 +477,11 @@ public class RecruitmentService implements RecruitmentServiceInterface {
             if (app.getTeamId() != null) {
                 data.setTeamName(teamNameMap.get(app.getTeamId()));
             }
+            // Only show reviewNotes when status is ACCEPTED or REJECTED
+            if (app.getStatus() != RecruitmentApplicationStatus.ACCEPTED &&
+                app.getStatus() != RecruitmentApplicationStatus.REJECTED) {
+                data.setReviewNotes(null);
+            }
             return data;
         });
         return PagedResponse.of(dataPage);
@@ -663,6 +668,12 @@ public class RecruitmentService implements RecruitmentServiceInterface {
         
         RecruitmentApplicationData data = recruitmentApplicationMapper.toDto(app);
         setTeamName(data, app.getTeamId());
+
+        // Only show reviewNotes when status is ACCEPTED or REJECTED
+        if (app.getStatus() != RecruitmentApplicationStatus.ACCEPTED &&
+            app.getStatus() != RecruitmentApplicationStatus.REJECTED) {
+            data.setReviewNotes(null);
+        }
 
         return data;
     }
@@ -965,7 +976,7 @@ public class RecruitmentService implements RecruitmentServiceInterface {
             if (q.id != null) {
                 // UPDATE existing question
                 entity = questionRepository.findById(q.id)
-                        .orElseThrow(() -> new RuntimeException("Question not found: " + q.id));
+                        .orElseThrow(() -> new RuntimeException("Không tìm thấy câu hỏi: " + q.id));
                 entity.setQuestionText(q.questionText);
                 entity.setQuestionType(q.questionType);
                 entity.setQuestionOrder(q.questionOrder);
@@ -1014,7 +1025,7 @@ public class RecruitmentService implements RecruitmentServiceInterface {
     private void upsertTeamOptions(Recruitment recruitment, List<Long> teamIds) {
         // Validate teamIds is not null or empty (should be enforced by validation, but double-check)
         if (teamIds == null || teamIds.isEmpty()) {
-            throw new RuntimeException("teamOptionIds cannot be empty. Must select at least one team.");
+            throw new RuntimeException("Danh sách teamOptionIds không được để trống. Vui lòng chọn ít nhất một đội.");
         }
         
         // Get existing team options
@@ -1044,8 +1055,8 @@ public class RecruitmentService implements RecruitmentServiceInterface {
             if (!existingTeamIds.contains(teamId)) {
                 // Verify team exists
                 Team team = teamRepository.findById(teamId)
-                        .orElseThrow(() -> new RuntimeException("Team not found: " + teamId));
-                
+                        .orElseThrow(() -> new RuntimeException("Không tìm thấy đội: " + teamId));
+
                 TeamOption teamOption = TeamOption.builder()
                         .recruitment(recruitment)
                         .team(team)
@@ -1117,6 +1128,20 @@ public class RecruitmentService implements RecruitmentServiceInterface {
             }
         }
         return false;
+    }
+
+    @Override
+    public ApplicationStatusCheckData checkApplicationStatus(Long userId, Long recruitmentId) throws AppException {
+        // Verify recruitment exists
+        Recruitment recruitment = recruitmentRepository.findById(recruitmentId)
+                .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND));
+
+        // Check if user has already applied for this recruitment
+        Optional<RecruitmentApplication> existingApp = applicationRepository.findByApplicant_IdAndRecruitment_Id(userId, recruitmentId);
+
+        return ApplicationStatusCheckData.builder()
+                .hasApplied(existingApp.isPresent())
+                .build();
     }
 
 }

@@ -24,8 +24,8 @@ import {
   Edit,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { ClubReportModal } from "@/components/features/report/ClubReportModal";
-import { UpdateReportRequirementDialog } from "@/components/features/report/UpdateReportRequirementDialog";
+import { ClubReportModal } from "@/components/report/ClubReportModal";
+import { UpdateReportRequirementDialog } from "@/components/report/UpdateReportRequirementDialog";
 import {
   getClubsByReportRequirement,
   getClubReportByRequirement,
@@ -106,13 +106,10 @@ interface Report {
   fileUrl?: string;
 }
 
-interface Club {
+interface ClubWithReport {
   id: string;
   name: string;
   code: string;
-}
-
-interface ClubWithReport extends Club {
   reportStatus: ReportStatus;
   backendStatus: string | null; // Store the original backend status
   mustResubmit: boolean; // Store mustResubmit flag from report
@@ -133,7 +130,7 @@ export function PeriodicReportClubs() {
   const [totalPages, setTotalPages] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
   const [selectedReport, setSelectedReport] = useState<Report | null>(null);
-  const [selectedClub, setSelectedClub] = useState<Club | null>(null);
+  const [selectedClub, setSelectedClub] = useState<ClubWithReport | null>(null);
   const [isClubReportModalOpen, setIsClubReportModalOpen] = useState(false);
   const [periodicReport, setPeriodicReport] =
     useState<ReportRequirementResponse | null>(null);
