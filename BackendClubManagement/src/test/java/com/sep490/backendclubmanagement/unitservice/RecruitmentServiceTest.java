@@ -1057,11 +1057,14 @@ class RecruitmentServiceTest {
         request.reviewNotes = "Good candidate";
 
         when(applicationRepository.findById(testApplicationId)).thenReturn(Optional.of(testApplication));
-        when(clubMemberShipRepository.existsByUserIdAndClubIdAndStatus(testApplicantId, testClubId,ClubMemberShipStatus.ACTIVE)).thenReturn(false);
+        // User is not yet a member - findByClubIdAndUserId returns null
+        when(clubMemberShipRepository.findByClubIdAndUserId(testClubId, testApplicantId)).thenReturn(null);
         when(clubMemberShipRepository.save(any(ClubMemberShip.class))).thenReturn(testClubMembership);
         when(semesterRepository.findCurrentSemester()).thenReturn(Optional.of(testSemester));
         when(teamRepository.findById(testTeamId)).thenReturn(Optional.of(testTeam));
         when(clubRoleRepository.findByClubIdAndRoleCode(testClubId, "MEMBER")).thenReturn(Optional.of(testClubRole));
+        // No existing role membership in current semester
+        when(roleMembershipRepository.findByClubMemberShipAndSemester(any(ClubMemberShip.class), eq(testSemester))).thenReturn(Optional.empty());
         when(roleMembershipRepository.save(any(RoleMemberShip.class))).thenReturn(testRoleMembership);
         when(applicationRepository.save(any(RecruitmentApplication.class))).thenReturn(testApplication);
         // Mock for getApplicationInternal - using findByIdWithDetails
