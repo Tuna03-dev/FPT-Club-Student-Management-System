@@ -552,7 +552,7 @@ export function ClubApplicationForm({
             <h2 className="text-2xl font-bold mb-2">Gửi đơn thành công!</h2>
             <p className="text-muted-foreground mb-6">
               Đơn ứng tuyển của bạn đã được gửi đến {club.clubName}. Chúng tôi
-              sẽ xem xét và liên hệ với bạn trong vòng 3-5 ngày làm việc.
+              sẽ xem xét và liên hệ với bạn sau.
             </p>
             <div className="space-y-2">
               <p className="text-sm text-muted-foreground">
