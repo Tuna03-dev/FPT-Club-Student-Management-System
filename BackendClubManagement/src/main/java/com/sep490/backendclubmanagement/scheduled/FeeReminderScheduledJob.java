@@ -163,7 +163,7 @@ public class FeeReminderScheduledJob {
         try {
             String title = buildNotificationTitle(daysBeforeDue);
             String message = buildNotificationMessage(fee, daysBeforeDue);
-            String actionUrl = "/clubs/" + fee.getClub().getId() + "/fees/" + fee.getId();
+            String actionUrl = "/myclub/" + fee.getClub().getId() + "/payments";
 
             notificationService.sendToUsers(
                     unpaidMemberIds,
