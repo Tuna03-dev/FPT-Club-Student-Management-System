@@ -101,12 +101,10 @@ public interface ClubRepository extends JpaRepository<Club, Long> {
 
     // 🔹 Filter clubs for staff management with search and pagination
     @Query("SELECT c FROM Club c " +
-            "LEFT JOIN c.campus ca " +
-            "LEFT JOIN c.clubCategory cc " +
             "WHERE (:keyword IS NULL OR LOWER(c.clubName) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
             "OR LOWER(c.clubCode) LIKE LOWER(CONCAT('%', :keyword, '%'))) " +
-            "AND (:campusId IS NULL OR ca.id = :campusId) " +
-            "AND (:categoryId IS NULL OR cc.id = :categoryId) " +
+            "AND (:campusId IS NULL OR c.campus.id = :campusId) " +
+            "AND (:categoryId IS NULL OR c.clubCategory.id = :categoryId) " +
             "AND (:status IS NULL OR c.status = :status)")
     Page<Club> getAllClubsByFilter(
             @Param("keyword") String keyword,
