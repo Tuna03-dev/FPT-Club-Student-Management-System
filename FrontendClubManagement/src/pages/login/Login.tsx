@@ -75,6 +75,15 @@ const LoginPage: React.FC = () => {
         window.dispatchEvent(new Event("auth-state-changed"));
 
         toast.success("Đăng nhập thành công!", { duration: 2000 });
+        
+        // Kiểm tra xem có redirect path được lưu không
+        const redirectPath = sessionStorage.getItem("redirectAfterLogin");
+        if (redirectPath) {
+          sessionStorage.removeItem("redirectAfterLogin");
+          navigate(redirectPath, { replace: true });
+          return;
+        }
+        
         const normalizedSystemRole = user?.systemRole
           ? String(user.systemRole).trim().toUpperCase()
           : "";

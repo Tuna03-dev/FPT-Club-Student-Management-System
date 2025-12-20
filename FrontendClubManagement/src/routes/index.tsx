@@ -68,6 +68,7 @@ import StaffNotifications from "@/pages/myclub/staff/StaffNotifications";
 import CreateClubPage from "@/pages/CreateClubPage";
 import ClubCreationManagement from "@/pages/staff/ClubCreationManagement";
 import { StaffClubsManagement } from "@/pages/staff/ClubManagement";
+import AdminDepartmentManagement from "@/pages/staff/AdminDepartmentManagement";
 import AboutPage from "@/pages/AboutPage";
 
 export const router = createBrowserRouter([
@@ -479,6 +480,7 @@ export const router = createBrowserRouter([
       { path: "news/drafts/:draftId", element: <DraftDetail /> },
       { path: "news/requests/:id", element: <RequestDetail /> },
       { path: "notifications", element: <StaffNotifications /> },
+      { path: "admin-department", element: <AdminDepartmentManagement /> },
     ],
   },
 
