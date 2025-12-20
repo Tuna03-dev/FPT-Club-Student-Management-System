@@ -92,6 +92,12 @@ const managementItems = [
     icon: Bell,
     label: "Thông báo",
   },
+  {
+    key: "admin_department",
+    url: "/admin-department",
+    icon: Building2,
+    label: "Quản lý thông tin liên hệ",
+  },
 ];
 
 const managementColors: Record<string, string> = {
@@ -103,6 +109,7 @@ const managementColors: Record<string, string> = {
   manage_reports: "bg-gradient-to-br from-pink-500 to-pink-600",
   staff_notifications: "bg-gradient-to-br from-purple-500 to-purple-600",
   manage_club: "bg-gradient-to-br from-red-500 to-red-600",
+  admin_department: "bg-gradient-to-br from-blue-500 to-blue-600",
 };
 
 export const StaffLayout = () => {

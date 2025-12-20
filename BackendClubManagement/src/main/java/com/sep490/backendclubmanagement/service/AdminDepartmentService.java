@@ -11,7 +11,7 @@ public interface AdminDepartmentService {
 
     AdminDepartmentResponse getDepartmentById(Long id) throws AppException;
 
-    List<AdminDepartmentResponse> getDepartmentsByCampus(Long campusId)throws AppException;
+    List<AdminDepartmentResponse> getDepartmentsByCampus(Long campusId);
 
     AdminDepartmentResponse updateDepartment(Long id, AdminDepartmentUpdateRequest request) throws AppException;
 }
