@@ -238,6 +238,17 @@ const HomePage: React.FC = () => {
           <h2 className="text-4xl md:text-6xl font-black uppercase text-[#ff6b35]">
             {banner?.subtitle ?? ""}
           </h2>
+          {banner?.ctaLabel && banner?.ctaLink && (
+            <div className="mt-8">
+              <button
+                onClick={() => navigate(banner.ctaLink)}
+                className="px-8 py-3 rounded-full bg-[#ff6b35] text-white text-lg font-semibold
+                 hover:bg-[#e55a2b] transition shadow-lg"
+              >
+                {banner.ctaLabel}
+              </button>
+            </div>
+          )}
 
           {/* SEARCH BOX GIỮ NGUYÊN */}
           <div className="mt-8 max-w-2xl mx-auto relative">
