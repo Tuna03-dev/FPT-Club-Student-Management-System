@@ -548,6 +548,8 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
             isMyDraft: true,
             requestStatus: "CANCELLED",
             eventTypeName: e.eventTypeName,
+            clubId: e.clubId,
+            clubName: e.clubName,
           }));
           setCancelledEvents(mapped);
         })
@@ -583,6 +585,8 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
           requestStatus: "CANCELLED",
           eventTypeName: e.eventTypeName,
           isPendingPublish: false,
+          clubId: e.clubId,
+          clubName: e.clubName,
         }));
         setCancelledEvents(mapped);
       }
@@ -1095,6 +1099,12 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
     setSelectedPendingRequest(meta ?? null);
   };
 
+  const handleCancelledEventClick = (event: Event) => {
+    setSelectedEvent(event);
+    setSelectedReadOnly(true);
+    setSelectedPendingRequest(null);
+  };
+
   const handlePendingActionSuccess = async () => {
     await refetchEvents();
     await refreshPendingRequests();
@@ -1159,6 +1169,7 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
             cancelledEvents={cancelledEvents}
             loadingCancelled={loadingCancelled}
             onRequestClick={handleRequestClick}
+            onCancelledEventClick={handleCancelledEventClick}
             onRefetch={refetchEvents}
             determineEventStatus={determineEventStatus}
             getRequestStatusInfo={getRequestStatusInfo}
