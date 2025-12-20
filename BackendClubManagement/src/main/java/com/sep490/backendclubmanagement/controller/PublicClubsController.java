@@ -21,11 +21,12 @@ public class PublicClubsController {
             @RequestParam(required = false) String q,
             @RequestParam(required = false) Long campusId,
             @RequestParam(required = false) Long categoryId,
+            @RequestParam(required = false) Boolean hasActiveRecruitment,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "12") int size
     ) {
         PageResp<PublicClubCardDTO> data =
-                publicClubService.list(q, campusId, categoryId, page, size);
+                publicClubService.list(q, campusId, categoryId, hasActiveRecruitment, page, size);
         return ApiResponse.success(data);
     }
 

@@ -148,13 +148,13 @@ public class ClubService implements ClubServiceInterface {
         // If keyword is provided, use client-side filtering with Vietnamese normalization
         if (keyword != null && !keyword.trim().isEmpty()) {
             String trimmedKeyword = keyword.trim();
-            // Get all clubs without keyword filter
+            // Get all clubs without keyword filter, but with sort from pageable
             page = clubRepository.getAllClubsByFilter(
                     null,
                     campusId,
                     categoryId,
                     status,
-                    PageRequest.of(0, Integer.MAX_VALUE)
+                    PageRequest.of(0, Integer.MAX_VALUE, pageable.getSort())
             );
 
             // Filter using Vietnamese normalization

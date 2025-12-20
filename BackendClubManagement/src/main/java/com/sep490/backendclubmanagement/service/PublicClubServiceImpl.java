@@ -23,9 +23,9 @@ public class PublicClubServiceImpl implements PublicClubService {
     private final PublicClubRepository repo;
 
     @Override
-    public PageResp<PublicClubCardDTO> list(String q, Long campusId, Long categoryId, int page, int size) {
+    public PageResp<PublicClubCardDTO> list(String q, Long campusId, Long categoryId, Boolean hasActiveRecruitment, int page, int size) {
         Page<PublicClubRepository.ClubCardRow> rows =
-                repo.findPublicClubs(normalize(q), campusId, categoryId, PageRequest.of(page, size));
+                repo.findPublicClubs(normalize(q), campusId, categoryId, hasActiveRecruitment, PageRequest.of(page, size));
 
         List<PublicClubCardDTO> content = rows.getContent().stream().map(r -> {
             List<String> topTags = splitCsv2(r.getTop2_names());

@@ -108,7 +108,7 @@ export function RecruitmentManagement() {
   // Pagination states for recruitments
   const [recruitmentsPage, setRecruitmentsPage] = useState(1);
   const [recruitmentsTotalPages, setRecruitmentsTotalPages] = useState(0);
-  const [recruitmentsTotalElements, setRecruitmentsTotalElements] = useState(0);
+  const [, setRecruitmentsTotalElements] = useState(0);
   const recruitmentsPageSize = 10;
 
   // Pagination states for applications
@@ -919,171 +919,128 @@ export function RecruitmentManagement() {
 
             {/* Pagination for Recruitments */}
             {!loading && !error && recruitmentsTotalPages > 1 && (
-              <div className="space-y-4">
-                {/* Results info */}
-                <div className="flex items-center justify-between text-sm text-muted-foreground">
-                  <div>
-                    Hiển thị{" "}
-                    <span className="font-semibold">
-                      {(recruitmentsPage - 1) * recruitmentsPageSize + 1} -{" "}
-                      {Math.min(
-                        recruitmentsPage * recruitmentsPageSize,
-                        recruitmentsTotalElements
-                      )}
-                    </span>{" "}
-                    trong tổng số{" "}
-                    <span className="font-semibold">
-                      {recruitmentsTotalElements}
-                    </span>{" "}
-                    đợt tuyển dụng
-                  </div>
-                  <div>
-                    Trang {recruitmentsPage} / {recruitmentsTotalPages}
-                  </div>
-                </div>
+              <div className="mt-8 flex justify-center">
+                <Pagination>
+                  <PaginationContent>
+                    <PaginationItem>
+                      <PaginationPrevious
+                        onClick={() => {
+                          setRecruitmentsPage((prev) => Math.max(1, prev - 1));
+                          window.scrollTo({ top: 0, behavior: "smooth" });
+                        }}
+                        className={
+                          recruitmentsPage === 1
+                            ? "pointer-events-none opacity-50"
+                            : "cursor-pointer"
+                        }
+                      />
+                    </PaginationItem>
 
-                {/* Pagination controls */}
-                <div className="flex justify-center">
-                  <Pagination>
-                    <PaginationContent>
-                      <PaginationItem>
-                        <PaginationPrevious
-                          onClick={() => {
-                            if (recruitmentsPage > 1) {
-                              setRecruitmentsPage(recruitmentsPage - 1);
-                              window.scrollTo({
-                                top: 0,
-                                behavior: "smooth",
-                              });
-                            }
-                          }}
-                          className={
-                            recruitmentsPage === 1
-                              ? "pointer-events-none opacity-50"
-                              : "cursor-pointer"
+                    {/* Show page numbers with ellipsis when needed */}
+                    {(() => {
+                      const pages: (number | "ellipsis")[] = [];
+
+                      if (recruitmentsTotalPages <= 7) {
+                        // Show all pages if 7 or fewer
+                        for (let i = 1; i <= recruitmentsTotalPages; i++) {
+                          pages.push(i);
+                        }
+                      } else {
+                        // Always show first page
+                        pages.push(1);
+
+                        // Show ellipsis if current page is far from start
+                        if (recruitmentsPage > 3) {
+                          pages.push("ellipsis");
+                        }
+
+                        // Show pages around current (avoid duplicates with first/last)
+                        const start = Math.max(2, recruitmentsPage - 1);
+                        const end = Math.min(
+                          recruitmentsTotalPages - 1,
+                          recruitmentsPage + 1
+                        );
+                        for (let i = start; i <= end; i++) {
+                          if (i !== 1 && i !== recruitmentsTotalPages) {
+                            pages.push(i);
                           }
-                        />
-                      </PaginationItem>
+                        }
 
-                      {/* First page */}
-                      {recruitmentsPage > 4 && (
-                        <>
-                          <PaginationItem>
-                            <PaginationLink
-                              onClick={() => {
-                                setRecruitmentsPage(1);
-                                window.scrollTo({
-                                  top: 0,
-                                  behavior: "smooth",
-                                });
-                              }}
-                              className="cursor-pointer"
-                            >
-                              1
-                            </PaginationLink>
-                          </PaginationItem>
-                          {recruitmentsPage > 4 && (
-                            <PaginationItem>
-                              <PaginationEllipsis />
-                            </PaginationItem>
-                          )}
-                        </>
-                      )}
+                        // Show ellipsis if current page is far from end
+                        if (recruitmentsPage < recruitmentsTotalPages - 2) {
+                          pages.push("ellipsis");
+                        }
 
-                      {/* Pages around current page */}
-                      {Array.from(
-                        { length: Math.min(5, recruitmentsTotalPages) },
-                        (_, i) => {
-                          let pageNum;
-                          if (recruitmentsTotalPages <= 5) {
-                            pageNum = i + 1;
-                          } else if (recruitmentsPage <= 4) {
-                            pageNum = i + 1;
-                          } else if (
-                            recruitmentsPage >=
-                            recruitmentsTotalPages - 3
-                          ) {
-                            pageNum = recruitmentsTotalPages - 4 + i;
-                          } else {
-                            pageNum = recruitmentsPage - 2 + i;
-                          }
+                        // Always show last page (if not already shown)
+                        if (recruitmentsTotalPages !== 1) {
+                          pages.push(recruitmentsTotalPages);
+                        }
+                      }
 
-                          if (pageNum < 1 || pageNum > recruitmentsTotalPages)
-                            return null;
-                          if (recruitmentsPage > 4 && pageNum === 1)
-                            return null;
+                      // Remove duplicates
+                      const seen = new Set<number | string>();
+                      const uniquePages: (number | "ellipsis")[] = [];
+                      for (const item of pages) {
+                        if (item === "ellipsis") {
+                          // Only add ellipsis if not immediately after another ellipsis
                           if (
-                            recruitmentsPage < recruitmentsTotalPages - 3 &&
-                            pageNum === recruitmentsTotalPages
-                          )
-                            return null;
+                            uniquePages[uniquePages.length - 1] !== "ellipsis"
+                          ) {
+                            uniquePages.push(item);
+                          }
+                        } else {
+                          if (!seen.has(item)) {
+                            seen.add(item);
+                            uniquePages.push(item);
+                          }
+                        }
+                      }
 
+                      return uniquePages.map((item, index) => {
+                        if (item === "ellipsis") {
                           return (
-                            <PaginationItem key={pageNum}>
-                              <PaginationLink
-                                onClick={() => {
-                                  setRecruitmentsPage(pageNum);
-                                  window.scrollTo({
-                                    top: 0,
-                                    behavior: "smooth",
-                                  });
-                                }}
-                                isActive={recruitmentsPage === pageNum}
-                                className="cursor-pointer"
-                              >
-                                {pageNum}
-                              </PaginationLink>
+                            <PaginationItem key={`ellipsis-${index}`}>
+                              <PaginationEllipsis />
                             </PaginationItem>
                           );
                         }
-                      )}
-
-                      {/* Last page */}
-                      {recruitmentsPage < recruitmentsTotalPages - 3 && (
-                        <>
-                          {recruitmentsPage < recruitmentsTotalPages - 4 && (
-                            <PaginationItem>
-                              <PaginationEllipsis />
-                            </PaginationItem>
-                          )}
-                          <PaginationItem>
+                        return (
+                          <PaginationItem key={item}>
                             <PaginationLink
                               onClick={() => {
-                                setRecruitmentsPage(recruitmentsTotalPages);
+                                setRecruitmentsPage(item);
                                 window.scrollTo({
                                   top: 0,
                                   behavior: "smooth",
                                 });
                               }}
+                              isActive={recruitmentsPage === item}
                               className="cursor-pointer"
                             >
-                              {recruitmentsTotalPages}
+                              {item}
                             </PaginationLink>
                           </PaginationItem>
-                        </>
-                      )}
+                        );
+                      });
+                    })()}
 
-                      <PaginationItem>
-                        <PaginationNext
-                          onClick={() => {
-                            if (recruitmentsPage < recruitmentsTotalPages) {
-                              setRecruitmentsPage(recruitmentsPage + 1);
-                              window.scrollTo({
-                                top: 0,
-                                behavior: "smooth",
-                              });
-                            }
-                          }}
-                          className={
-                            recruitmentsPage >= recruitmentsTotalPages
-                              ? "pointer-events-none opacity-50"
-                              : "cursor-pointer"
-                          }
-                        />
-                      </PaginationItem>
-                    </PaginationContent>
-                  </Pagination>
-                </div>
+                    <PaginationItem>
+                      <PaginationNext
+                        onClick={() => {
+                          setRecruitmentsPage((prev) =>
+                            Math.min(recruitmentsTotalPages, prev + 1)
+                          );
+                          window.scrollTo({ top: 0, behavior: "smooth" });
+                        }}
+                        className={
+                          recruitmentsPage === recruitmentsTotalPages
+                            ? "pointer-events-none opacity-50"
+                            : "cursor-pointer"
+                        }
+                      ></PaginationNext>
+                    </PaginationItem>
+                  </PaginationContent>
+                </Pagination>
               </div>
             )}
           </div>

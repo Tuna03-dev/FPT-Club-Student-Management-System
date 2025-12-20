@@ -147,7 +147,6 @@ public class ClubManagementService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id " + userId));
 
-        // Adjust this check if your User entity uses a different field/name for active status
         if (!user.getIsActive()) {
             throw new ResourceNotFoundException("User is not active.");
         }
@@ -155,31 +154,22 @@ public class ClubManagementService {
         Semester currentSemester = semesterRepository.findCurrentSemester()
                 .orElseThrow(() -> new ResourceNotFoundException("Current semester not found."));
 
-        // Lấy danh sách clubs mà user tham gia
-        List<MyClubDTO> clubs = clubMembershipRepository
-                .findClubsByUserIdAndSemesterId(userId, currentSemester.getId());
+        // ✅ Lấy luôn ClubMemberShip entity (đã filter ACTIVE), loại bỏ N+1 query
+        List<ClubMemberShip> memberships = clubMembershipRepository
+                .findActiveClubMembershipsByUserId(userId);
 
         List<ClubRoleInfo> clubRoleInfos = new ArrayList<>();
 
-        for (MyClubDTO club : clubs) {
-            // Lấy ClubMemberShip của user trong club này (chỉ ACTIVE)
-            ClubMemberShip clubMemberShip = clubMembershipRepository
-                    .findByClubIdAndUserId(club.getClubId(), userId);
-
-            if (clubMemberShip == null) {
-                continue;
-            }
-            
-            // Chỉ xử lý nếu status là ACTIVE
-            if (clubMemberShip.getStatus() != ClubMemberShipStatus.ACTIVE) {
-                continue;
-            }
+        for (ClubMemberShip membership : memberships) {
+            // ✅ Đã có entity, không cần query lại
+            Long clubId = membership.getClub().getId();
+            String clubName = membership.getClub().getClubName();
 
             // Lấy danh sách role memberships của user trong club này
             // Sử dụng query với fetch join để load team và clubRole cùng lúc, tránh lazy loading issues
             List<RoleMemberShip> roleMemberships = roleMembershipRepository
                     .findByClubMemberShipIdAndSemesterIdAndIsActiveWithFetch(
-                            clubMemberShip.getId(),
+                            membership.getId(),
                             currentSemester.getId(),
                             true
                     );
@@ -187,8 +177,8 @@ public class ClubManagementService {
             // Nếu không có role membership, thêm role mặc định "thành viên"
             if (roleMemberships.isEmpty()) {
                 clubRoleInfos.add(ClubRoleInfo.builder()
-                        .clubId(club.getClubId())
-                        .clubName(club.getClubName())
+                        .clubId(clubId)
+                        .clubName(clubName)
                         .clubRole("thành viên")
                         .systemRole("MEMBER")
                         .build());
@@ -196,19 +186,16 @@ public class ClubManagementService {
                 // Lấy tất cả roles của user trong club này
                 for (RoleMemberShip rm : roleMemberships) {
                     // Với fetch join, team, clubRole và systemRole đã được load
-                    Long teamId = rm.getTeam() != null ? rm.getTeam().getId() : null;
-                    Long clubRoleId = rm.getClubRole() != null ? rm.getClubRole().getId() : null;
                     String clubRoleName = rm.getClubRole() != null ? rm.getClubRole().getRoleName() : null;
                     // Lấy roleName từ SystemRole thay vì roleCode từ ClubRole
                     String systemRoleName = rm.getClubRole() != null && rm.getClubRole().getSystemRole() != null 
                             ? rm.getClubRole().getSystemRole().getRoleName() : null;
                     
                     // Nếu có clubRole thì thêm vào kết quả (bất kể có team hay không)
-                    // Vì clubRole là role ở cấp độ club, còn team chỉ là thông tin bổ sung
-                    if (clubRoleId != null) {
+                    if (rm.getClubRole() != null) {
                         clubRoleInfos.add(ClubRoleInfo.builder()
-                                .clubId(club.getClubId())
-                                .clubName(club.getClubName())
+                                .clubId(clubId)
+                                .clubName(clubName)
                                 .clubRole(clubRoleName)
                                 .systemRole(systemRoleName)
                                 .build());

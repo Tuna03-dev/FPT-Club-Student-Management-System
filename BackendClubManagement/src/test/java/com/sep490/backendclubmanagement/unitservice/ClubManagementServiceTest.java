@@ -176,6 +176,14 @@ class ClubManagementServiceTest {
     void getUserClubRoles_happyPath() {
         Long userId = 10L;
 
+        // Mock User với isActive = true
+        User u = new User();
+        u.setId(userId);
+        u.setFullName("User 10");
+        u.setIsActive(true);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(u));
+
+        // Mock current semester
         Semester sem = new Semester();
         sem.setId(5L);
         sem.setSemesterCode("2024A");
@@ -184,30 +192,19 @@ class ClubManagementServiceTest {
         sem.setEndDate(LocalDate.now().plusDays(1));
         when(semesterRepository.findCurrentSemester()).thenReturn(Optional.of(sem));
 
-        MyClubDTO clubDto = new MyClubDTO();
-        clubDto.setClubId(1L);
-        clubDto.setClubName("CLB Dev");
-
-        when(clubMembershipRepository.findClubsByUserIdAndSemesterId(userId, sem.getId()))
-                .thenReturn(List.of(clubDto));
-
-        // 🔥==> THÊM PHẦN NÀY
-        User u = new User();
-        u.setId(userId);
-        u.setFullName("User 10");
-        when(userRepository.findById(userId)).thenReturn(Optional.of(u));
-        // <==🔥
-
+        // Mock ClubMemberShip entity (refactored method)
         ClubMemberShip cms = new ClubMemberShip();
         cms.setId(100L);
+        cms.setUser(u);
+
         Club club = new Club();
         club.setId(1L);
         club.setClubName("CLB Dev");
         cms.setClub(club);
         cms.setStatus(ClubMemberShipStatus.ACTIVE);
 
-        when(clubMembershipRepository.findByClubIdAndUserId(1L, userId))
-                .thenReturn(cms);
+        when(clubMembershipRepository.findActiveClubMembershipsByUserId(userId))
+                .thenReturn(List.of(cms));
 
         RoleMemberShip rm = new RoleMemberShip();
         rm.setId(200L);

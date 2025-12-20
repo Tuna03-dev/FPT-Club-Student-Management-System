@@ -33,6 +33,18 @@ public interface ClubMemberShipRepository extends JpaRepository<ClubMemberShip, 
     List<MyClubDTO> findClubsByUserIdAndSemesterId(@Param("userId") Long userId,
                                                    @Param("semesterId") Long semesterId);
 
+    // Lấy ClubMemberShip entity của user trong semester hiện tại (ACTIVE status only)
+    // Không check EXISTS role vì logic xử lý member không có role được handle ở code
+    @Query("""
+        select cm
+        from ClubMemberShip cm
+            join fetch cm.club c
+            join fetch cm.user u
+        where cm.user.id = :userId
+          and cm.status = 'ACTIVE'
+        """)
+    List<ClubMemberShip> findActiveClubMembershipsByUserId(@Param("userId") Long userId);
+
     // Tất cả membership của user (để dùng ở service khác)
     List<ClubMemberShip> findAllByUserId(Long userId);
 
