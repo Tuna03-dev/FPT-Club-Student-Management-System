@@ -332,13 +332,21 @@ public interface ClubMemberShipRepository extends JpaRepository<ClubMemberShip, 
       AND cr.roleCode NOT IN ('CLUB_PRESIDENT', 'CLUB_VICE')
 """)
     List<Long> findAllActiveNonLeadersMemberIds(Long clubId);
-    @Query("""
-SELECT DISTINCT cm.user.id
-FROM ClubMemberShip cm
-WHERE cm.club.id = :clubId
-  AND cm.status = 'ACTIVE'
-""")
-    List<Long> findAvailableMemberUserIds(Long clubId);
+    @Query(value = """
+    SELECT DISTINCT u.id
+    FROM club_memberships cm
+    JOIN role_memberships rm ON rm.club_membership_id = cm.id
+    JOIN semesters s ON s.id = rm.semester_id
+    JOIN users u ON u.id = cm.user_id
+    WHERE cm.club_id = :clubId
+      AND cm.status = 'ACTIVE'
+      AND cm.deleted_at IS NULL
+      AND rm.is_active = 1
+      AND rm.deleted_at IS NULL
+      AND s.is_current = 1
+""", nativeQuery = true)
+    List<Long> findAvailableMemberUserIds(@Param("clubId") Long clubId);
+
 
 
 

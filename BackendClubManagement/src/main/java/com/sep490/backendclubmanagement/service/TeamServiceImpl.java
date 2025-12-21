@@ -35,9 +35,9 @@ public class TeamServiceImpl implements TeamService {
     private final WebSocketService webSocketService;
 
     // === ROLE CODE CHUẨN ===
-    private static final String ROLE_CODE_TEAM_HEAD = "CLUB_TEAM_HEAD";
-    private static final String ROLE_CODE_TEAM_DEPUTY = "CLUB_TEAM_DEPUTY";
-    private static final String ROLE_CODE_TEAM_MEMBER = "MEMBER";
+    private static final String ROLE_CODE_TEAM_HEAD = "CLUB_TEAM_HEAD";//truong ban
+    private static final String ROLE_CODE_TEAM_DEPUTY = "CLUB_TEAM_DEPUTY";//pho ban
+    private static final String ROLE_CODE_TEAM_MEMBER = "CLUB_MEMBER";//thanh vien
 
     @Override
     public List<TeamResponse> getTeamsByClubId(Long clubId) {
