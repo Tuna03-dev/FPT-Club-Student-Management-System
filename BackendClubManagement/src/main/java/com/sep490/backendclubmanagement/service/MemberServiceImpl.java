@@ -267,6 +267,24 @@ public class MemberServiceImpl implements MemberService{
                 "Không thể cập nhật vai trò cho kỳ học không phải kỳ hiện tại. Chỉ có thể cập nhật vai trò cho kỳ học đang hoạt động.");
         }
 
+        // ✅ VALIDATION: Kiểm tra nếu đang thay đổi từ CLUB_PRESIDENT sang role khác
+        // Club phải luôn có ít nhất 1 chủ nhiệm
+        ClubRole currentRole = target.getClubRole();
+        boolean isCurrentlyPresident = currentRole != null && "CLUB_PRESIDENT".equals(currentRole.getRoleCode());
+        boolean willBePresident = "CLUB_PRESIDENT".equals(clubRole.getRoleCode());
+        
+        if (isCurrentlyPresident && !willBePresident) {
+            // Kiểm tra xem club còn chủ nhiệm nào khác không (trừ user hiện tại)
+            long otherPresidentsCount = roleMemberShipRepository.countActivePresidentsInClubExcludingUser(
+                    clubId, semester.getId(), userId);
+            
+            if (otherPresidentsCount == 0) {
+                throw new AppException(ErrorCode.INVALID_INPUT, 
+                    "Câu lạc bộ phải có ít nhất 1 chủ nhiệm. Hiện tại bạn là chủ nhiệm duy nhất. " +
+                    "Vui lòng gán chủ nhiệm cho thành viên khác trước khi thay đổi vai trò của bạn.");
+            }
+        }
+
         // Update existing record with new role
         target.setClubRole(clubRole);
         target.setIsActive(true);
@@ -322,16 +340,21 @@ public class MemberServiceImpl implements MemberService{
         Semester semester = resolveSemester(semesterId);
 
         // ✅ FIX: Sử dụng helper method để đảm bảo chỉ có 1 RoleMemberShip
+        // Chỉ update bản ghi hiện tại, không ảnh hưởng đến các bản ghi khác (nếu có)
         RoleMemberShip target = getOrCreateSingleRoleMemberShip(cms, semester);
         if (target == null) {
             throw new AppException(ErrorCode.INVALID_INPUT, 
                 "Không thể phân ban cho kỳ học không phải kỳ hiện tại. Chỉ có thể phân ban cho kỳ học đang hoạt động.");
         }
 
-        // Update existing record with new team
+        // ✅ CHỈ UPDATE BẢN GHI HIỆN TẠI: Chỉ update team cho bản ghi RoleMemberShip này
+        // Không ảnh hưởng đến các RoleMemberShip khác (nếu có) trong cùng semester
         target.setTeam(team);
         target.setIsActive(true); // ✅ Đảm bảo active khi assign team
         roleMemberShipRepository.save(target);
+        
+        log.info("[Member] Updated team for user {} in club {} semester {}: teamId={}", 
+                userId, clubId, semester.getSemesterCode(), teamId);
     }
 
     @Override
