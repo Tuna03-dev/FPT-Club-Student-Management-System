@@ -333,12 +333,13 @@ public interface ClubMemberShipRepository extends JpaRepository<ClubMemberShip, 
 """)
     List<Long> findAllActiveNonLeadersMemberIds(Long clubId);
     @Query("""
-SELECT cm.user.id
+SELECT DISTINCT cm.user.id
 FROM ClubMemberShip cm
 WHERE cm.club.id = :clubId
   AND cm.status = 'ACTIVE'
 """)
     List<Long> findAvailableMemberUserIds(Long clubId);
+
 
 
 }

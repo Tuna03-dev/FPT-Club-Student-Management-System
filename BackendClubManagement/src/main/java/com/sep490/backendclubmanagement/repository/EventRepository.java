@@ -146,6 +146,7 @@ public interface EventRepository extends JpaRepository<Event, Long> {
     @Query("SELECT e FROM Event e " +
            "WHERE e.club.id = :clubId " +
            "AND e.isDraft = false " +
+            "AND (e.eventType IS NULL OR UPPER(TRIM(e.eventType.typeName)) <> 'MEETING') " +
             "AND e.deletedAt IS NULL " +
            "AND (:keyword IS NULL OR :keyword = '' OR " +
            "LOWER(e.title) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +

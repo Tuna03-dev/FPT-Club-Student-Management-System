@@ -429,25 +429,48 @@ public class TeamServiceImpl implements TeamService {
             Long actorId
     ) {
         if (membership == null) {
-            throw new ResourceNotFoundException("User ID " + userId + " không phải là thành viên của CLB.");
+            throw new ResourceNotFoundException(
+                    "User ID " + userId + " không phải là thành viên của CLB."
+            );
         }
 
-        // 🔥 Remove toàn bộ role active ở các ban trước
-        roleMembershipRepository.deactivateActiveTeamRoles(
-                membership.getId(),
-                semester.getId()
-        );
+        // 1️⃣ Lấy TẤT CẢ role của user trong kỳ
+        List<RoleMemberShip> rolesInSemester =
+                roleMembershipRepository.findByClubMemberShipIdAndSemesterId(
+                        membership.getId(),
+                        semester.getId()
+                );
 
-        RoleMemberShip newRoleAssignment = new RoleMemberShip();
-        newRoleAssignment.setClubMemberShip(membership);
-        newRoleAssignment.setClubRole(role);
-        newRoleAssignment.setTeam(team);
-        newRoleAssignment.setSemester(semester);
-        newRoleAssignment.setIsActive(true);
+        RoleMemberShip targetRole = null;
 
-        roleMembershipRepository.save(newRoleAssignment);
+        for (RoleMemberShip rm : rolesInSemester) {
+            // ❌ mỗi người chỉ được thuộc 1 team
+            rm.setTeam(null);
 
-        // SOCKET thông báo user được chuyển/gán vào ban mới
+            // 🔍 tìm role cần assign
+            if (rm.getClubRole().getId().equals(role.getId())) {
+                targetRole = rm;
+            }
+        }
+
+        // 2️⃣ Nếu đã có role này → update
+        if (targetRole != null) {
+            targetRole.setTeam(team);
+            targetRole.setIsActive(true);
+            roleMembershipRepository.save(targetRole);
+        }
+        // 3️⃣ Nếu CHƯA có role này → tạo mới
+        else {
+            RoleMemberShip rm = new RoleMemberShip();
+            rm.setClubMemberShip(membership);
+            rm.setClubRole(role);
+            rm.setSemester(semester);
+            rm.setTeam(team);
+            rm.setIsActive(true);
+            roleMembershipRepository.save(rm);
+        }
+
+        // 4️⃣ Realtime
         webSocketService.broadcastToUser(
                 userId,
                 "TEAM",
@@ -459,8 +482,17 @@ public class TeamServiceImpl implements TeamService {
                 )
         );
 
-        sendTeamWelcomeNotification(userId, actorId, membership.getClub(), team, role);
+        // 5️⃣ Notification
+        sendTeamWelcomeNotification(
+                userId,
+                actorId,
+                membership.getClub(),
+                team,
+                role
+        );
     }
+
+
     private void sendTeamWelcomeNotification(
             Long recipientId,
             Long actorId,
