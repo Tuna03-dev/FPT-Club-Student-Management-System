@@ -51,7 +51,7 @@ public interface EventRepository extends JpaRepository<Event, Long> {
     @Query("SELECT et FROM EventType et")
     List<EventType> findAllEventTypes();
 
-    @Query("SELECT c FROM Club c")
+    @Query("SELECT c FROM Club c WHERE c.status = 'ACTIVE'")
     List<Club> findAllClubs();
 
     @Query("SELECT e FROM Event e WHERE (e.club.id = :clubId OR e.club.id IS NULL ) AND e.isDraft = false")
@@ -129,6 +129,7 @@ public interface EventRepository extends JpaRepository<Event, Long> {
             "JOIN e.club c " +
             "WHERE e.club IS NOT NULL " +
             "AND e.isDraft = false " +
+            "AND e.deletedAt IS NULL " +
             // Exclude events of type 'MEETING'
             "AND (e.eventType IS NULL OR UPPER(TRIM(e.eventType.typeName)) <> 'MEETING') " +
             "AND NOT EXISTS (" +
@@ -146,6 +147,7 @@ public interface EventRepository extends JpaRepository<Event, Long> {
            "WHERE e.club.id = :clubId " +
            "AND e.isDraft = false " +
             "AND (e.eventType IS NULL OR UPPER(TRIM(e.eventType.typeName)) <> 'MEETING') " +
+            "AND e.deletedAt IS NULL " +
            "AND (:keyword IS NULL OR :keyword = '' OR " +
            "LOWER(e.title) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
            "LOWER(e.description) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
