@@ -172,7 +172,11 @@ export function ApplicationsList({
         setSelectedApplicationDetail(detail);
       } catch (error: any) {
         console.error("Error fetching application detail:", error);
-        toast.error("Không thể tải chi tiết đơn ứng tuyển");
+        const errorMessage =
+          error?.response?.data?.message ||
+          error?.message ||
+          "Không thể tải chi tiết đơn ứng tuyển";
+        toast.error(errorMessage);
         setSelectedApplicationListItem(null);
       } finally {
         setLoadingApplicationDetail(false);

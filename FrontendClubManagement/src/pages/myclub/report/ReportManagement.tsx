@@ -458,12 +458,12 @@ export function ClubReportManagement() {
         setTotalElements(response.totalElements);
         setHasNext(response.hasNext);
         setHasPrevious(response.hasPrevious);
-      } catch (err) {
+      } catch (err: any) {
         console.error("Error fetching report requirements:", err);
         const errorMessage =
-          err instanceof Error
-            ? err.message
-            : "Không thể tải danh sách yêu cầu nộp báo cáo";
+          err?.response?.data?.message ||
+          err?.message ||
+          "Không thể tải danh sách yêu cầu nộp báo cáo";
         setError(errorMessage);
         toast.error(errorMessage);
       } finally {
@@ -513,12 +513,12 @@ export function ClubReportManagement() {
         const response = await getMyReports(filterRequest);
         setMyReports(response.content);
         setTotalPagesMyReports(response.totalPages);
-      } catch (err) {
+      } catch (err: any) {
         console.error("Error fetching my reports:", err);
         const errorMessage =
-          err instanceof Error
-            ? err.message
-            : "Không thể tải danh sách báo cáo của tôi";
+          err?.response?.data?.message ||
+          err?.message ||
+          "Không thể tải danh sách báo cáo của tôi";
         setError(errorMessage);
         toast.error(errorMessage);
         setMyReports([]);
@@ -569,12 +569,12 @@ export function ClubReportManagement() {
         const response = await getClubReports(filterRequest);
         setAllClubReports(response.content);
         setTotalPagesClubReports(response.totalPages);
-      } catch (err) {
+      } catch (err: any) {
         console.error("Error fetching all club reports:", err);
         const errorMessage =
-          err instanceof Error
-            ? err.message
-            : "Không thể tải danh sách báo cáo của câu lạc bộ";
+          err?.response?.data?.message ||
+          err?.message ||
+          "Không thể tải danh sách báo cáo của câu lạc bộ";
         setError(errorMessage);
         toast.error(errorMessage);
         setAllClubReports([]);
@@ -863,10 +863,10 @@ export function ClubReportManagement() {
 
       // Refresh current tab data to update status
       await refreshCurrentTabData();
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error saving draft:", err);
       const errorMessage =
-        err instanceof Error ? err.message : "Không thể lưu báo cáo";
+        err?.response?.data?.message || err?.message || "Không thể lưu báo cáo";
       toast.error(errorMessage);
     } finally {
       setSavingDraft(false);
@@ -1103,9 +1103,13 @@ export function ClubReportManagement() {
                       } else {
                         toast.error("Không tìm thấy báo cáo");
                       }
-                    } catch (error) {
+                    } catch (error: any) {
                       console.error("Error fetching report detail:", error);
-                      toast.error("Không thể tải chi tiết báo cáo");
+                      const errorMessage =
+                        error?.response?.data?.message ||
+                        error?.message ||
+                        "Không thể tải chi tiết báo cáo";
+                      toast.error(errorMessage);
                     } finally {
                       setLoadingReportDetailId(null);
                     }
@@ -2636,12 +2640,12 @@ export function ClubReportManagement() {
 
                             // Refresh current tab data to update status
                             await refreshCurrentTabData();
-                          } catch (err) {
+                          } catch (err: any) {
                             console.error("Error submitting report:", err);
                             const errorMessage =
-                              err instanceof Error
-                                ? err.message
-                                : "Không thể nộp báo cáo";
+                              err?.response?.data?.message ||
+                              err?.message ||
+                              "Không thể nộp báo cáo";
                             toast.error(errorMessage);
                           } finally {
                             setApprovingReport(false);
@@ -2728,12 +2732,12 @@ export function ClubReportManagement() {
 
                             // Refresh current tab data to update status
                             await refreshCurrentTabData();
-                          } catch (err) {
+                          } catch (err: any) {
                             console.error("Error submitting report:", err);
                             const errorMessage =
-                              err instanceof Error
-                                ? err.message
-                                : "Không thể nộp báo cáo";
+                              err?.response?.data?.message ||
+                              err?.message ||
+                              "Không thể nộp báo cáo";
                             toast.error(errorMessage);
                           } finally {
                             setSubmitting(false);
@@ -2867,12 +2871,12 @@ export function ClubReportManagement() {
 
                             // Refresh current tab data to update status
                             await refreshCurrentTabData();
-                          } catch (err) {
+                          } catch (err: any) {
                             console.error("Error approving report:", err);
                             const errorMessage =
-                              err instanceof Error
-                                ? err.message
-                                : "Không thể duyệt báo cáo";
+                              err?.response?.data?.message ||
+                              err?.message ||
+                              "Không thể duyệt báo cáo";
                             toast.error(errorMessage);
                           } finally {
                             setApprovingReport(false);
