@@ -154,28 +154,55 @@ public class MemberServiceImpl implements MemberService{
                 ? searchTerm.trim()
                 : null;
 
-        // 🚀 OPTIMIZED: Single query với JOIN FETCH để load tất cả relationships
-        // Search sẽ được filter trong Java (sau query) để support tìm kiếm không dấu
-        org.springframework.data.domain.Page<ClubMemberShip> memberPage =
-                clubMemberShipRepository.findMembersWithFiltersOptimized(
-                        clubId,
-                        status,
-                        effectiveSemesterId,
-                        roleId,
-                        isActive,
-                        pageable
-                );
-
-        // 🔍 SEARCH FILTER: Filter theo searchTerm trong Java với accent-insensitive
-        List<ClubMemberShip> filteredMembers = memberPage.getContent();
+        List<ClubMemberShip> filteredMembers;
+        long totalFilteredElements;
+        int pageSize = pageable.getPageSize();
+        int currentPage = pageable.getPageNumber();
+        
         if (normalizedSearch != null) {
-            filteredMembers = filteredMembers.stream()
+            // ✅ FIX: Khi có search, query TẤT CẢ records matching filters (không pagination)
+            // Sau đó filter trong Java và paginate trong Java để đảm bảo chính xác
+            List<ClubMemberShip> allMatchingMembers = clubMemberShipRepository.findMembersWithFiltersOptimized(
+                    clubId,
+                    status,
+                    effectiveSemesterId,
+                    roleId,
+                    isActive,
+                    org.springframework.data.domain.Pageable.unpaged() // Query tất cả, không pagination
+            ).getContent();
+            
+            // 🔍 SEARCH FILTER: Filter theo searchTerm trong Java với accent-insensitive
+            filteredMembers = allMatchingMembers.stream()
                     .filter(cms -> com.sep490.backendclubmanagement.util.VietnameseTextNormalizer.matchesAny(
                             normalizedSearch,
                             cms.getUser().getFullName(),
                             cms.getUser().getStudentCode()
                     ))
                     .toList();
+            
+            totalFilteredElements = filteredMembers.size();
+            
+            // Paginate trong Java sau khi filter
+            int start = currentPage * pageSize;
+            int end = Math.min(start + pageSize, filteredMembers.size());
+            filteredMembers = filteredMembers.subList(start, end);
+            
+            log.debug("[Member] Search filter applied: {} total matches, showing page {} ({} items)", 
+                    totalFilteredElements, currentPage + 1, filteredMembers.size());
+        } else {
+            // ✅ OPTIMIZED: Không có search, dùng pagination từ database (hiệu quả hơn)
+            org.springframework.data.domain.Page<ClubMemberShip> memberPage =
+                    clubMemberShipRepository.findMembersWithFiltersOptimized(
+                            clubId,
+                            status,
+                            effectiveSemesterId,
+                            roleId,
+                            isActive,
+                            pageable
+                    );
+            
+            filteredMembers = memberPage.getContent();
+            totalFilteredElements = memberPage.getTotalElements();
         }
 
         // 🚀 OPTIMIZED: Map các entities đã được JOIN FETCH loaded
@@ -183,14 +210,19 @@ public class MemberServiceImpl implements MemberService{
                 .map(cms -> mapToMemberResponse(cms, effectiveSemesterId))
                 .toList();
 
+        // Tính lại pagination metadata dựa trên filtered results
+        int totalPages = (int) Math.ceil((double) totalFilteredElements / pageSize);
+        boolean hasNext = currentPage < totalPages - 1;
+        boolean hasPrevious = currentPage > 0;
+
         return PageResponse.<MemberResponse>builder()
                 .content(memberResponses)
-                .pageNumber(memberPage.getNumber())
-                .pageSize(memberPage.getSize())
-                .totalElements(memberPage.getTotalElements())
-                .totalPages(memberPage.getTotalPages())
-                .hasNext(memberPage.hasNext())
-                .hasPrevious(memberPage.hasPrevious())
+                .pageNumber(currentPage)
+                .pageSize(pageSize)
+                .totalElements(totalFilteredElements)
+                .totalPages(totalPages)
+                .hasNext(hasNext)
+                .hasPrevious(hasPrevious)
                 .build();
     }
 
@@ -205,23 +237,47 @@ public class MemberServiceImpl implements MemberService{
                 ? searchTerm.trim()
                 : null;
 
-        // 🚀 OPTIMIZED: Single query với JOIN FETCH để load tất cả relationships
-        org.springframework.data.domain.Page<ClubMemberShip> memberPage =
-                clubMemberShipRepository.findLeftMembersOptimized(
-                        clubId,
-                        pageable
-                );
-
-        // 🔍 SEARCH FILTER: Filter theo searchTerm trong Java với accent-insensitive
-        List<ClubMemberShip> filteredMembers = memberPage.getContent();
+        List<ClubMemberShip> filteredMembers;
+        long totalFilteredElements;
+        int pageSize = pageable.getPageSize();
+        int currentPage = pageable.getPageNumber();
+        
         if (normalizedSearch != null) {
-            filteredMembers = filteredMembers.stream()
+            // ✅ FIX: Khi có search, query TẤT CẢ left members (không pagination)
+            // Sau đó filter trong Java và paginate trong Java để đảm bảo chính xác
+            List<ClubMemberShip> allLeftMembers = clubMemberShipRepository.findLeftMembersOptimized(
+                    clubId,
+                    org.springframework.data.domain.Pageable.unpaged() // Query tất cả, không pagination
+            ).getContent();
+            
+            // 🔍 SEARCH FILTER: Filter theo searchTerm trong Java với accent-insensitive
+            filteredMembers = allLeftMembers.stream()
                     .filter(cms -> com.sep490.backendclubmanagement.util.VietnameseTextNormalizer.matchesAny(
                             normalizedSearch,
                             cms.getUser().getFullName(),
                             cms.getUser().getStudentCode()
                     ))
                     .toList();
+            
+            totalFilteredElements = filteredMembers.size();
+            
+            // Paginate trong Java sau khi filter
+            int start = currentPage * pageSize;
+            int end = Math.min(start + pageSize, filteredMembers.size());
+            filteredMembers = filteredMembers.subList(start, end);
+            
+            log.debug("[Member] Search filter applied for left members: {} total matches, showing page {} ({} items)", 
+                    totalFilteredElements, currentPage + 1, filteredMembers.size());
+        } else {
+            // ✅ OPTIMIZED: Không có search, dùng pagination từ database (hiệu quả hơn)
+            org.springframework.data.domain.Page<ClubMemberShip> memberPage =
+                    clubMemberShipRepository.findLeftMembersOptimized(
+                            clubId,
+                            pageable
+                    );
+            
+            filteredMembers = memberPage.getContent();
+            totalFilteredElements = memberPage.getTotalElements();
         }
 
         // 🚀 OPTIMIZED: Map các entities đã được JOIN FETCH loaded
@@ -229,14 +285,19 @@ public class MemberServiceImpl implements MemberService{
                 .map(cms -> mapToMemberResponse(cms, null)) // No specific semester for left members
                 .toList();
 
+        // Tính lại pagination metadata
+        int totalPages = (int) Math.ceil((double) totalFilteredElements / pageSize);
+        boolean hasNext = currentPage < totalPages - 1;
+        boolean hasPrevious = currentPage > 0;
+
         return PageResponse.<MemberResponse>builder()
                 .content(memberResponses)
-                .pageNumber(memberPage.getNumber())
-                .pageSize(memberPage.getSize())
-                .totalElements(memberPage.getTotalElements())
-                .totalPages(memberPage.getTotalPages())
-                .hasNext(memberPage.hasNext())
-                .hasPrevious(memberPage.hasPrevious())
+                .pageNumber(currentPage)
+                .pageSize(pageSize)
+                .totalElements(totalFilteredElements)
+                .totalPages(totalPages)
+                .hasNext(hasNext)
+                .hasPrevious(hasPrevious)
                 .build();
     }
 
@@ -841,6 +902,10 @@ public class MemberServiceImpl implements MemberService{
             List<RoleMemberShip> roleMembershipsToSave = new ArrayList<>();
             List<ClubMemberShip> duplicateMembershipsToDelete = new ArrayList<>();
             
+            // ✅ FIX: Track để tránh duplicate trong cùng batch
+            Set<String> studentCodesInBatch = new HashSet<>();
+            Set<String> emailsInBatch = new HashSet<>();
+            
             int batchSize = 50; // Flush every 50 rows
             for (int r = 1; r <= lastRow; r++) {
                 Row row = sheet.getRow(r);
@@ -883,16 +948,90 @@ public class MemberServiceImpl implements MemberService{
                     User user = userMap.get(studentCode);
                     boolean userCreated = false;
                     if (user == null) {
-                        user = User.builder()
-                                .studentCode(studentCode)
-                                .fullName(fullName)
-                                .email(email)
-                                .phoneNumber(phone)
-                                .isActive(true)
-                                .build();
-                        usersToCreate.add(user);
-                        userCreated = true;
-                        createdUsers++;
+                        // ✅ FIX: Kiểm tra duplicate trong batch trước khi tạo
+                        // Kiểm tra duplicate student_code
+                        if (studentCode != null && !studentCode.isEmpty() && studentCodesInBatch.contains(studentCode)) {
+                            throw new IllegalArgumentException(
+                                String.format("Mã sinh viên '%s' bị trùng lặp trong file Excel (dòng %d). Mỗi mã sinh viên chỉ được xuất hiện một lần.", 
+                                    studentCode, r + 1));
+                        }
+                        
+                        // Kiểm tra duplicate email
+                        if (email != null && !email.isEmpty() && emailsInBatch.contains(email.toLowerCase())) {
+                            throw new IllegalArgumentException(
+                                String.format("Email '%s' bị trùng lặp trong file Excel (dòng %d). Mỗi email chỉ được xuất hiện một lần.", 
+                                    email, r + 1));
+                        }
+                        
+                        // Kiểm tra email đã tồn tại trong database (ngoài cache)
+                        if (email != null && !email.isEmpty()) {
+                            Optional<User> existingUserByEmail = userRepository.findByEmailIgnoreCase(email);
+                            if (existingUserByEmail.isPresent()) {
+                                // User đã tồn tại với email này, nhưng khác student_code
+                                // Có thể là trường hợp user đã có email nhưng chưa có student_code
+                                User existingUser = existingUserByEmail.get();
+                                if (existingUser.getStudentCode() == null || existingUser.getStudentCode().isEmpty()) {
+                                    // User chưa có student_code, update thay vì tạo mới
+                                    existingUser.setStudentCode(studentCode);
+                                    userMap.put(studentCode, existingUser); // Update cache
+                                    user = existingUser;
+                                    usersToUpdate.add(user);
+                                    updatedUsers++;
+                                } else {
+                                    throw new IllegalArgumentException(
+                                        String.format("Email '%s' đã được sử dụng bởi mã sinh viên khác (%s) trong hệ thống (dòng %d).", 
+                                            email, existingUser.getStudentCode(), r + 1));
+                                }
+                            } else {
+                                // Tạo user mới
+                                user = User.builder()
+                                        .studentCode(studentCode)
+                                        .fullName(fullName)
+                                        .email(email)
+                                        .phoneNumber(phone)
+                                        .isActive(true)
+                                        .build();
+                                usersToCreate.add(user);
+                                if (studentCode != null && !studentCode.isEmpty()) {
+                                    studentCodesInBatch.add(studentCode);
+                                }
+                                if (email != null && !email.isEmpty()) {
+                                    emailsInBatch.add(email.toLowerCase());
+                                }
+                                userCreated = true;
+                                createdUsers++;
+                            }
+                        } else {
+                            // Không có email trong Excel
+                            // User entity yêu cầu email NOT NULL, nên cần tạo email tạm thời hoặc bỏ qua
+                            // Tạo email tạm thời dựa trên student_code để tránh lỗi NOT NULL
+                            String tempEmail = studentCode + "@temp.fpt.edu.vn";
+                            
+                            // Kiểm tra email tạm thời có bị trùng không
+                            Optional<User> existingUserByTempEmail = userRepository.findByEmailIgnoreCase(tempEmail);
+                            if (existingUserByTempEmail.isPresent()) {
+                                throw new IllegalArgumentException(
+                                    String.format("Không thể tạo user cho mã sinh viên '%s' (dòng %d). Email tạm thời đã tồn tại. Vui lòng cung cấp email trong file Excel.", 
+                                        studentCode, r + 1));
+                            }
+                            
+                            user = User.builder()
+                                    .studentCode(studentCode)
+                                    .fullName(fullName)
+                                    .email(tempEmail) // Email tạm thời, có thể update sau
+                                    .phoneNumber(phone)
+                                    .isActive(true)
+                                    .build();
+                            usersToCreate.add(user);
+                            if (studentCode != null && !studentCode.isEmpty()) {
+                                studentCodesInBatch.add(studentCode);
+                            }
+                            if (tempEmail != null && !tempEmail.isEmpty()) {
+                                emailsInBatch.add(tempEmail.toLowerCase());
+                            }
+                            userCreated = true;
+                            createdUsers++;
+                        }
                     } else {
                         // Update user info
                         boolean changed = false;
@@ -1016,9 +1155,17 @@ public class MemberServiceImpl implements MemberService{
                             userRepository.saveAll(usersToCreate);
                             // Update cache với các user mới tạo
                             for (User u : usersToCreate) {
-                                userMap.put(u.getStudentCode(), u);
+                                if (u.getStudentCode() != null && !u.getStudentCode().isEmpty()) {
+                                    userMap.put(u.getStudentCode(), u);
+                                }
+                                if (u.getEmail() != null && !u.getEmail().isEmpty()) {
+                                    emailsInBatch.add(u.getEmail().toLowerCase());
+                                }
                             }
                             usersToCreate.clear();
+                            // Clear batch tracking sau khi save
+                            studentCodesInBatch.clear();
+                            emailsInBatch.clear();
                         }
                         if (!usersToUpdate.isEmpty()) {
                             userRepository.saveAll(usersToUpdate);
