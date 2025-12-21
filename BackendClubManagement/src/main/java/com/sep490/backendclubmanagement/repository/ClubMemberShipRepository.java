@@ -250,12 +250,16 @@ public interface ClubMemberShipRepository extends JpaRepository<ClubMemberShip, 
     @Query("""
         SELECT cm
         FROM ClubMemberShip cm
-        WHERE cm.user.id IN :userIds
-          AND cm.club.id = :clubId
+        WHERE cm.club.id = :clubId
+          AND cm.user.id IN :userIds
           AND cm.status = 'ACTIVE'
+          AND cm.deletedAt IS NULL
+          AND (cm.endDate IS NULL OR cm.endDate > CURRENT_DATE)
     """)
-    List<ClubMemberShip> findByUserIdInAndClubId(@Param("userIds") List<Long> userIds,
-                                                 @Param("clubId") Long clubId);
+    List<ClubMemberShip> findByUserIdInAndClubId(
+            @Param("userIds") List<Long> userIds,
+            @Param("clubId") Long clubId
+    );
 
 
     @Query("""
