@@ -787,7 +787,7 @@ export function ClubDetail({ clubId: propClubId }: ClubDetailProps) {
                           <div className="mt-6 p-4 bg-accent/5 rounded-lg border border-accent/20">
                             <p className="text-sm text-muted-foreground mb-3">
                               {leaders.length > 1
-                                ? "Ban chủ nhiệm"
+                                ? "Các chủ nhiệm"
                                 : "Chủ tịch câu lạc bộ"}
                             </p>
 
