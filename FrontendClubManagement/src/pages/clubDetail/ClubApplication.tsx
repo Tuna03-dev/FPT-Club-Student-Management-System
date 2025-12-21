@@ -94,9 +94,13 @@ export function ClubApplicationForm({
 
         const clubData = await getClubDetailById(recruitmentData.clubId);
         setClub(clubData);
-      } catch (err) {
+      } catch (err: any) {
         console.error("Error fetching data:", err);
-        setError("Không thể tải thông tin tuyển dụng");
+        const errorMessage =
+          err?.response?.data?.message ||
+          err?.message ||
+          "Không thể tải thông tin tuyển dụng";
+        setError(errorMessage);
       } finally {
         setLoading(false);
       }

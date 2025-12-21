@@ -189,7 +189,11 @@ export function StaffClubsManagement() {
       setTotalElements(response.totalElements);
     } catch (error: any) {
       console.error("Error fetching clubs:", error);
-      toast.error(error.message || "Không thể tải danh sách câu lạc bộ");
+      const errorMessage =
+        error?.response?.data?.message ||
+        error?.message ||
+        "Không thể tải danh sách câu lạc bộ";
+      toast.error(errorMessage);
     } finally {
       if (!silent) setLoading(false);
     }
@@ -215,9 +219,13 @@ export function StaffClubsManagement() {
       if (!force && clubCategories && clubCategories.length > 0) return; // already loaded
       const categoriesData = await getAllClubCategories();
       setClubCategories(categoriesData);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error loading club categories:", err);
-      toast.error("Không thể tải thể loại câu lạc bộ");
+      const errorMessage =
+        err?.response?.data?.message ||
+        err?.message ||
+        "Không thể tải thể loại câu lạc bộ";
+      toast.error(errorMessage);
     }
   };
 
