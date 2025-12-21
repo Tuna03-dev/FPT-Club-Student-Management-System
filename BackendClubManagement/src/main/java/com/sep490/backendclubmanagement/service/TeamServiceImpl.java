@@ -37,7 +37,7 @@ public class TeamServiceImpl implements TeamService {
     // === ROLE CODE CHUẨN ===
     private static final String ROLE_CODE_TEAM_HEAD = "CLUB_TEAM_HEAD";
     private static final String ROLE_CODE_TEAM_DEPUTY = "CLUB_TEAM_DEPUTY";
-    private static final String ROLE_CODE_TEAM_MEMBER = "MEMBER";
+    private static final String ROLE_CODE_TEAM_MEMBER = "CLUB_MEMBER";
 
     @Override
     public List<TeamResponse> getTeamsByClubId(Long clubId) {

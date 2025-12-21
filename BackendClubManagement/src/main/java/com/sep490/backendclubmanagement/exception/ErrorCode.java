@@ -5,8 +5,8 @@ import org.springframework.http.HttpStatus;
 
 @Getter
 public enum ErrorCode {
-    INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, 500, "Internal server error"),
-    VALIDATION_ERROR(HttpStatus.BAD_REQUEST, 1000, "Validation failed"),
+    INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, 500, "Lỗi máy chủ nội bộ"),
+    VALIDATION_ERROR(HttpStatus.BAD_REQUEST, 1000, "Dữ liệu không hợp lệ"),
     UNAUTHORIZED(HttpStatus.FORBIDDEN, 403, "Người dùng không được phép truy cập"),
     INSUFFICIENT_PERMISSION(HttpStatus.FORBIDDEN, 403, "Không đủ quyền"),
     FORBIDDEN(HttpStatus.FORBIDDEN, 403, "Người dùng không được phép"),

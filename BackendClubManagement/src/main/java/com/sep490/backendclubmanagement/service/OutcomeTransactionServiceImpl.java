@@ -259,7 +259,9 @@ public class OutcomeTransactionServiceImpl implements OutcomeTransactionService 
 
         // Only allow update if status is PENDING
         if (transaction.getStatus() != TransactionStatus.PENDING) {
-            throw new AppException(ErrorCode.TRANSACTION_CANNOT_BE_UPDATED);
+            throw new AppException(ErrorCode.TRANSACTION_CANNOT_BE_UPDATED, 
+                    String.format("Chỉ có thể chỉnh sửa giao dịch ở trạng thái PENDING. Giao dịch hiện tại đang ở trạng thái %s.", 
+                            transaction.getStatus()));
         }
 
         // Update fields
@@ -287,7 +289,8 @@ public class OutcomeTransactionServiceImpl implements OutcomeTransactionService 
                 .orElseThrow(() -> new AppException(ErrorCode.TRANSACTION_NOT_FOUND));
 
         if (transaction.getStatus() != TransactionStatus.PENDING) {
-            throw new AppException(ErrorCode.TRANSACTION_ALREADY_PROCESSED);
+            throw new AppException(ErrorCode.TRANSACTION_ALREADY_PROCESSED, 
+                    String.format("Giao dịch đã được xử lý. Trạng thái hiện tại: %s.", transaction.getStatus()));
         }
 
         // Store old state for wallet processing
@@ -319,7 +322,8 @@ public class OutcomeTransactionServiceImpl implements OutcomeTransactionService 
                 .orElseThrow(() -> new AppException(ErrorCode.TRANSACTION_NOT_FOUND));
 
         if (transaction.getStatus() != TransactionStatus.PENDING) {
-            throw new AppException(ErrorCode.TRANSACTION_ALREADY_PROCESSED);
+            throw new AppException(ErrorCode.TRANSACTION_ALREADY_PROCESSED, 
+                    String.format("Giao dịch đã được xử lý. Trạng thái hiện tại: %s.", transaction.getStatus()));
         }
 
         transaction.setStatus(TransactionStatus.CANCELLED);
@@ -341,7 +345,9 @@ public class OutcomeTransactionServiceImpl implements OutcomeTransactionService 
         // Can only delete PENDING or CANCELLED transactions
         if (transaction.getStatus() == TransactionStatus.SUCCESS ||
             transaction.getStatus() == TransactionStatus.PROCESSING) {
-            throw new AppException(ErrorCode.TRANSACTION_CANNOT_BE_DELETED);
+            throw new AppException(ErrorCode.TRANSACTION_CANNOT_BE_DELETED, 
+                    String.format("Không thể xóa giao dịch ở trạng thái %s. Chỉ có thể xóa giao dịch ở trạng thái PENDING hoặc CANCELLED.", 
+                            transaction.getStatus()));
         }
 
         outcomeTransactionRepository.delete(transaction);

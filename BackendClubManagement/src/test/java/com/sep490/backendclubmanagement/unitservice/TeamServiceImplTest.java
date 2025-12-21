@@ -120,8 +120,8 @@ class TeamServiceImplTest {
                 .thenReturn(Optional.of(buildRole("CLUB_TEAM_HEAD")));
         when(clubRoleRepository.findByClubIdAndRoleCode(1L, "CLUB_TEAM_DEPUTY"))
                 .thenReturn(Optional.of(buildRole("CLUB_TEAM_DEPUTY")));
-        when(clubRoleRepository.findByClubIdAndRoleCode(1L, "MEMBER"))
-                .thenReturn(Optional.of(buildRole("MEMBER")));
+        when(clubRoleRepository.findByClubIdAndRoleCode(1L, "CLUB_MEMBER"))
+                .thenReturn(Optional.of(buildRole("CLUB_MEMBER")));
 
         // IMPORTANT: mock role lookup in semester
         when(roleMemberShipRepository
