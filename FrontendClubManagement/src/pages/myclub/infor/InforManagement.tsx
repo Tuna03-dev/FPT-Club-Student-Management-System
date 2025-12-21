@@ -309,23 +309,26 @@ export function ClubInforManagement() {
       toast.success("Đã cập nhật thông tin câu lạc bộ thành công");
     } catch (error: any) {
       console.error("Error saving club info:", error);
-      // If API returned structured validation errors, map them to fields
-      if (error && error.errors && Array.isArray(error.errors)) {
-        const apiFieldErrors: Record<string, string> = {};
-        for (const e of error.errors) {
-          if (e.field) apiFieldErrors[e.field] = e.errorMessage || e.field;
+
+      // Lấy message và errors trực tiếp từ error.response.data (backend response)
+      const apiMessage = error?.response?.data?.message;
+      const apiErrors = error?.response?.data?.errors;
+
+      // Xử lý field errors nếu có
+      if (apiErrors && Array.isArray(apiErrors)) {
+        const fieldErrs: Record<string, string> = {};
+        for (const e of apiErrors) {
+          if (e.field) fieldErrs[e.field] = e.errorMessage || e.field;
         }
-        setFieldErrors(apiFieldErrors);
-        // show first error via toast
-        const first = error.errors[0];
-        toast.error(
-          first?.errorMessage ||
-            error.message ||
-            "Không thể cập nhật thông tin câu lạc bộ"
-        );
-      } else {
-        toast.error(error.message || "Không thể cập nhật thông tin câu lạc bộ");
+        setFieldErrors(fieldErrs);
       }
+
+      // Hiển thị message từ backend
+      const errorMessage =
+        apiMessage ||
+        error?.message ||
+        "Không thể cập nhật thông tin câu lạc bộ";
+      toast.error(errorMessage);
     } finally {
       setIsSaving(false);
     }

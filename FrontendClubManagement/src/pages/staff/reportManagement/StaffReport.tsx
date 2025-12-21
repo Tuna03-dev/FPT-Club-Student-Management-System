@@ -174,7 +174,11 @@ export function StaffReportManagement() {
       setTotalElements(response.totalElements);
     } catch (error: any) {
       console.error("Error fetching report requirements:", error);
-      toast.error("Không thể tải danh sách yêu cầu nộp báo cáo");
+      const errorMessage =
+        error?.response?.data?.message ||
+        error?.message ||
+        "Không thể tải danh sách yêu cầu nộp báo cáo";
+      toast.error(errorMessage);
       setReports([]);
     } finally {
       setIsLoading(false);
@@ -208,7 +212,11 @@ export function StaffReportManagement() {
       setReportListTotalElements(response.totalElements);
     } catch (error: any) {
       console.error("Error fetching reports:", error);
-      toast.error("Không thể tải danh sách báo cáo");
+      const errorMessage =
+        error?.response?.data?.message ||
+        error?.message ||
+        "Không thể tải danh sách báo cáo";
+      toast.error(errorMessage);
       setReportList([]);
     } finally {
       setReportListLoading(false);
@@ -260,7 +268,11 @@ export function StaffReportManagement() {
           clubIds = [event.clubId];
         } catch (error: any) {
           console.error("Error fetching event details:", error);
-          toast.error("Không thể lấy thông tin sự kiện. Vui lòng thử lại.");
+          const errorMessage =
+            error?.response?.data?.message ||
+            error?.message ||
+            "Không thể lấy thông tin sự kiện. Vui lòng thử lại.";
+          toast.error(errorMessage);
           return;
         }
       } else if (formData.type === "other") {
@@ -307,7 +319,11 @@ export function StaffReportManagement() {
       await fetchReportRequirements();
     } catch (error: any) {
       console.error("Error creating report requirement:", error);
-      toast.error(error.message || "Không thể tạo yêu cầu báo cáo");
+      const errorMessage =
+        error?.response?.data?.message ||
+        error?.message ||
+        "Không thể tạo yêu cầu báo cáo";
+      toast.error(errorMessage);
     } finally {
       setIsSubmitting(false);
     }
@@ -445,7 +461,11 @@ export function StaffReportManagement() {
       setIsReportDetailModalOpen(true);
     } catch (error: any) {
       console.error("Error fetching report detail:", error);
-      toast.error(error.message || "Không thể tải chi tiết báo cáo");
+      const errorMessage =
+        error?.response?.data?.message ||
+        error?.message ||
+        "Không thể tải chi tiết báo cáo";
+      toast.error(errorMessage);
     }
   };
 
