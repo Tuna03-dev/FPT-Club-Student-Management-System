@@ -63,6 +63,7 @@ import {
 } from "@/services/clubService";
 import { authService } from "@/services/authService";
 import { type PageResponse } from "@/types";
+import { getErrorMessage } from "@/lib/utils";
 
 import { toast } from "sonner";
 
@@ -444,7 +445,8 @@ const Members = () => {
       loadMembers();
     } catch (err) {
       console.error(err);
-      toast.error("Cập nhật vai trò thất bại");
+      const errorMessage = getErrorMessage(err, "Cập nhật vai trò thất bại");
+      toast.error(errorMessage);
     }
   };
 
@@ -471,7 +473,8 @@ const Members = () => {
       loadMembers();
     } catch (err) {
       console.error(err);
-      toast.error("Cập nhật trạng thái thất bại");
+      const errorMessage = getErrorMessage(err, "Cập nhật trạng thái thất bại");
+      toast.error(errorMessage);
     }
   };
 
@@ -491,7 +494,8 @@ const Members = () => {
       loadMembers();
     } catch (err) {
       console.error(err);
-      toast.error("Xóa thành viên thất bại");
+      const errorMessage = getErrorMessage(err, "Xóa thành viên thất bại");
+      toast.error(errorMessage);
     }
   };
 
@@ -509,7 +513,8 @@ const Members = () => {
       loadMembers();
     } catch (err) {
       console.error(err);
-      toast.error("Phân ban thất bại");
+      const errorMessage = getErrorMessage(err, "Phân ban thất bại");
+      toast.error(errorMessage);
     }
   };
 
@@ -1209,7 +1214,7 @@ const Members = () => {
                         {/* Stats */}
                         <div className="flex items-center gap-3 sm:gap-6 flex-wrap lg:flex-nowrap">
                           <div className="text-center p-3 rounded-xl bg-gradient-to-br from-red-500/10 to-red-600/10 border border-red-500/20 min-w-[70px]">
-                            <div className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-red-500 to-red-600 bg-clip-text text-transparent">
+                            <div className="text-xl sm:text-2xl font-bold text-black/80">
                               {member.totalTerms}
                             </div>
                             <div className="text-xs text-muted-foreground">

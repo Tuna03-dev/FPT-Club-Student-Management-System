@@ -239,11 +239,16 @@ public class FeeServiceImpl implements FeeService {
             .orElseThrow(() -> new AppException(ErrorCode.CLUB_NOT_FOUND));
         boolean isDraft = request.getIsDraft() == null || Boolean.TRUE.equals(request.getIsDraft());
 
+        // Check if title already exists (only for non-draft fees)
+        if (!isDraft && isFeeTitleExists(clubId, request.getTitle())) {
+            throw new AppException(ErrorCode.VALIDATION_ERROR, "Tên khoản phí đã tồn tại");
+        }
+
         // Handle semester for MEMBERSHIP fee type
         Semester semester = null;
         if (request.getFeeType() == FeeType.MEMBERSHIP && request.getSemesterId() != null) {
             semester = semesterRepository.findById(request.getSemesterId())
-                .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND, "Semester not found"));
+                .orElseThrow(() -> new AppException(ErrorCode.SEMESTER_NOT_FOUND, "Không tìm thấy kỳ học"));
         }
 
         Fee fee = Fee.builder()
@@ -287,7 +292,7 @@ public class FeeServiceImpl implements FeeService {
                     message += " - Đây là khoản phí bắt buộc, vui lòng đóng đúng hạn!";
                 }
                 
-                String actionUrl = "/clubs/" + fee.getClub().getId() + "/fees/" + fee.getId();
+                String actionUrl = "/myclub/" + fee.getClub().getId() + "/payments";
                 
                 // Gửi notification cho từng user
                 notificationService.sendToUsers(
@@ -350,7 +355,7 @@ public class FeeServiceImpl implements FeeService {
     @Transactional
     public FeeDetailResponse updateFee(Long feeId, UpdateFeeRequest request) throws AppException {
         Fee fee = feeRepository.findById(feeId)
-                .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND, "Fee not found"));
+                .orElseThrow(() -> new AppException(ErrorCode.FEE_NOT_FOUND, "Không tìm thấy khoản phí"));
 
         // Check if title already exists (excluding current fee)
         if (isFeeTitleExistsExcluding(fee.getClub().getId(), request.getTitle(), feeId)) {
@@ -370,7 +375,7 @@ public class FeeServiceImpl implements FeeService {
         // Handle semester for MEMBERSHIP fee type
         if (request.getFeeType() == FeeType.MEMBERSHIP && request.getSemesterId() != null) {
             Semester semester = semesterRepository.findById(request.getSemesterId())
-                .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND, "Semester not found"));
+                .orElseThrow(() -> new AppException(ErrorCode.SEMESTER_NOT_FOUND, "Không tìm thấy kỳ học"));
             fee.setSemester(semester);
         } else {
             fee.setSemester(null);
@@ -399,7 +404,7 @@ public class FeeServiceImpl implements FeeService {
     @Transactional
     public FeeDetailResponse publishFee(Long feeId) throws AppException {
         Fee fee = feeRepository.findById(feeId)
-                .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND, "Fee not found"));
+                .orElseThrow(() -> new AppException(ErrorCode.FEE_NOT_FOUND, "Không tìm thấy khoản phí"));
         fee.setIsDraft(false);
         feeRepository.save(fee);
 
@@ -413,7 +418,7 @@ public class FeeServiceImpl implements FeeService {
     @Transactional
     public void deleteFee(Long feeId) throws AppException {
         Fee fee = feeRepository.findById(feeId)
-                .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND, "Fee not found"));
+                .orElseThrow(() -> new AppException(ErrorCode.FEE_NOT_FOUND, "Không tìm thấy khoản phí"));
 
         // Check if any members have already paid
         int paidCount = fee.getIncomeTransactions() != null
@@ -451,6 +456,14 @@ public class FeeServiceImpl implements FeeService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND, "Người dùng không tồn tại"));
 
+        // ✅ Check PayOS keys trước khi tạo QR code
+        ClubWallet wallet = clubWalletRepository.findByClub_Id(clubId).orElse(null);
+        if (wallet == null || wallet.getPayOsClientId() == null || wallet.getPayOsApiKey() == null || wallet.getPayOsChecksumKey() == null) {
+            throw new AppException(ErrorCode.VALIDATION_ERROR, "Câu lạc bộ chưa cấu hình PayOS. Vui lòng liên hệ quản trị viên để cấu hình.");
+        }
+        if (wallet.getPayOsStatus() != null && !wallet.getPayOsStatus().equalsIgnoreCase("ACTIVE")) {
+            throw new AppException(ErrorCode.VALIDATION_ERROR, "PayOS đang ở trạng thái không hoạt động. Vui lòng liên hệ quản trị viên.");
+        }
 
         long orderCode = createOrderCode(feeId, userId);
 
@@ -721,7 +734,7 @@ public class FeeServiceImpl implements FeeService {
         try {
             String title = "Thanh toán thành công";
             String message = "Khoản phí: " + fee.getTitle() + " - Số tiền: " + fee.getAmount().toString() + " VND";
-            String actionUrl = "/clubs/" + fee.getClub().getId() + "/fees/" + fee.getId();
+            String actionUrl = "/clubs/" + fee.getClub().getId() + "/payments" ;
 
             notificationService.sendToUser(
                     user.getId(),

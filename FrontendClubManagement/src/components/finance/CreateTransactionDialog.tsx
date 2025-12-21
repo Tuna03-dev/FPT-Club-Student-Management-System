@@ -20,6 +20,7 @@ import {
 import type { Fee } from "@/types/fee";
 import { toast } from "sonner";
 import { ImagePlus, X } from "lucide-react";
+import { getErrorMessage } from "@/lib/utils";
 import type {
   CreateIncomeTransactionRequest,
   CreateOutcomeTransactionRequest,
@@ -286,9 +287,8 @@ export function CreateTransactionDialog({
       }
     } catch (error) {
       console.error("Error creating transaction:", error);
-      toast.error(
-        error instanceof Error ? error.message : "Không thể tạo giao dịch"
-      );
+      const errorMessage = getErrorMessage(error, "Không thể tạo giao dịch");
+      toast.error(errorMessage);
     } finally {
       setSubmitting(false);
     }
