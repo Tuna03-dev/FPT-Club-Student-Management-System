@@ -617,8 +617,8 @@ SELECT CASE WHEN EXISTS (
           AND rm.team IS NOT NULL
           AND cr IS NOT NULL
           AND (
-              (UPPER(TRIM(cr.roleCode)) = 'TEAM_OFFICER' AND sr IS NULL)
-              OR (sr IS NOT NULL AND UPPER(TRIM(sr.roleName)) = 'TEAM_OFFICER')
+              (UPPER(TRIM(cr.roleCode)) IN ('TEAM_OFFICER','CLUB_TREASURE') AND sr IS NULL)
+              OR (sr IS NOT NULL AND UPPER(TRIM(sr.roleName)) IN ('TEAM_OFFICER','CLUB_TREASURE'))
           )
         ORDER BY rm.id DESC
     """)
