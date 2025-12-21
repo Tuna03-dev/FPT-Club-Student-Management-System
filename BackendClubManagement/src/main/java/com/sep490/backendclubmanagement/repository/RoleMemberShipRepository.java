@@ -806,6 +806,28 @@ WHERE cm.user.id = :userId
     boolean isManagerSimple(@Param("userId") Long userId,
                             @Param("clubId") Long clubId);
 
+    /**
+     * Đếm số lượng chủ nhiệm đang hoạt động trong club (trừ user được chỉ định)
+     * Dùng để validate khi thay đổi role từ CLUB_PRESIDENT sang role khác
+     */
+    @Query("""
+        SELECT COUNT(rm)
+        FROM RoleMemberShip rm
+        JOIN rm.clubMemberShip cm
+        JOIN rm.clubRole cr
+        JOIN rm.semester s
+        WHERE cm.club.id = :clubId
+          AND s.id = :semesterId
+          AND rm.isActive = TRUE
+          AND cm.status = com.sep490.backendclubmanagement.entity.ClubMemberShipStatus.ACTIVE
+          AND UPPER(cr.roleCode) = 'CLUB_PRESIDENT'
+          AND cm.user.id != :excludeUserId
+        """)
+    long countActivePresidentsInClubExcludingUser(
+            @Param("clubId") Long clubId,
+            @Param("semesterId") Long semesterId,
+            @Param("excludeUserId") Long excludeUserId);
+
     Optional<RoleMemberShip> findByClubMemberShipIdAndSemesterIdAndClubRoleId(
             Long clubMembershipId,
             Long semesterId,
