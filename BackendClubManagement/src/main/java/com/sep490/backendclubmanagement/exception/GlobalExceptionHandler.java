@@ -139,6 +139,25 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error(ErrorCode.INVALID_INPUT, ex.getMessage(), null));
     }
 
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<ApiResponse<Void>> handleIllegalState(IllegalStateException ex) {
+        log.warn("Illegal state: {}", ex.getMessage());
 
+        // Nếu message là tiếng Anh, chuyển sang tiếng Việt
+        String message = ex.getMessage();
+        if (message != null) {
+            if (message.contains("Member not found")) {
+                message = "Không tìm thấy thành viên";
+            } else if (message.contains("No current semester")) {
+                message = "Chưa cấu hình kỳ học hiện tại";
+            } else if (message.contains("already left")) {
+                message = "Thành viên đã rời câu lạc bộ";
+            }
+        }
+
+        return ResponseEntity
+                .status(ErrorCode.INVALID_INPUT.getHttpStatus())
+                .body(ApiResponse.error(ErrorCode.INVALID_INPUT, message, null));
+    }
 
 }

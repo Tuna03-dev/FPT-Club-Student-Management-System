@@ -7,6 +7,7 @@ import com.sep490.backendclubmanagement.dto.response.IncomeTransactionResponse;
 import com.sep490.backendclubmanagement.dto.response.PageResponse;
 import com.sep490.backendclubmanagement.entity.TransactionStatus;
 import com.sep490.backendclubmanagement.exception.AppException;
+import com.sep490.backendclubmanagement.exception.ErrorCode;
 import com.sep490.backendclubmanagement.service.CloudinaryService;
 import com.sep490.backendclubmanagement.service.CloudinaryService.UploadResult;
 import com.sep490.backendclubmanagement.service.IncomeTransactionService;
@@ -72,7 +73,7 @@ public class IncomeTransactionController {
             try {
                 parsedFromDate = java.time.LocalDate.parse(fromDate);
             } catch (Exception e) {
-                return ApiResponse.error(400, "Invalid fromDate format. Use yyyy-MM-dd");
+                return ApiResponse.error(ErrorCode.VALIDATION_ERROR, "Định dạng ngày bắt đầu không hợp lệ. Vui lòng sử dụng định dạng yyyy-MM-dd", null);
             }
         }
         
@@ -80,7 +81,7 @@ public class IncomeTransactionController {
             try {
                 parsedToDate = java.time.LocalDate.parse(toDate);
             } catch (Exception e) {
-                return ApiResponse.error(400, "Invalid toDate format. Use yyyy-MM-dd");
+                return ApiResponse.error(ErrorCode.VALIDATION_ERROR, "Định dạng ngày kết thúc không hợp lệ. Vui lòng sử dụng định dạng yyyy-MM-dd", null);
             }
         }
 
@@ -102,9 +103,13 @@ public class IncomeTransactionController {
     public ApiResponse<IncomeTransactionResponse> getIncomeTransactionById(
             @PathVariable Long clubId,
             @PathVariable Long transactionId
-    ) throws AppException {
-        IncomeTransactionResponse response = incomeTransactionServiceImpl.getIncomeTransactionById(transactionId);
-        return ApiResponse.success(response);
+    ) {
+        try {
+            IncomeTransactionResponse response = incomeTransactionServiceImpl.getIncomeTransactionById(transactionId);
+            return ApiResponse.success(response);
+        } catch (AppException ex) {
+            return ApiResponse.error(ex.getErrorCode(), ex.getMessage(), null);
+        }
     }
 
     /**
@@ -116,9 +121,13 @@ public class IncomeTransactionController {
     public ApiResponse<IncomeTransactionResponse> createIncomeTransaction(
             @PathVariable Long clubId,
             @Valid @RequestBody CreateIncomeTransactionRequest request
-    ) throws AppException {
-        IncomeTransactionResponse response = incomeTransactionServiceImpl.createIncomeTransaction(clubId, request);
-        return ApiResponse.success(response);
+    ) {
+        try {
+            IncomeTransactionResponse response = incomeTransactionServiceImpl.createIncomeTransaction(clubId, request);
+            return ApiResponse.success(response);
+        } catch (AppException ex) {
+            return ApiResponse.error(ex.getErrorCode(), ex.getMessage(), null);
+        }
     }
 
     /**
@@ -131,9 +140,13 @@ public class IncomeTransactionController {
             @PathVariable Long clubId,
             @PathVariable Long transactionId,
             @Valid @RequestBody UpdateIncomeTransactionRequest request
-    ) throws AppException {
-        IncomeTransactionResponse response = incomeTransactionServiceImpl.updateIncomeTransaction(transactionId, request);
-        return ApiResponse.success(response);
+    ) {
+        try {
+            IncomeTransactionResponse response = incomeTransactionServiceImpl.updateIncomeTransaction(transactionId, request);
+            return ApiResponse.success(response);
+        } catch (AppException ex) {
+            return ApiResponse.error(ex.getErrorCode(), ex.getMessage(), null);
+        }
     }
 
     /**
@@ -145,9 +158,13 @@ public class IncomeTransactionController {
     public ApiResponse<IncomeTransactionResponse> approveIncomeTransaction(
             @PathVariable Long clubId,
             @PathVariable Long transactionId
-    ) throws AppException {
-        IncomeTransactionResponse response = incomeTransactionServiceImpl.approveIncomeTransaction(transactionId);
-        return ApiResponse.success(response);
+    ) {
+        try {
+            IncomeTransactionResponse response = incomeTransactionServiceImpl.approveIncomeTransaction(transactionId);
+            return ApiResponse.success(response);
+        } catch (AppException ex) {
+            return ApiResponse.error(ex.getErrorCode(), ex.getMessage(), null);
+        }
     }
 
     /**
@@ -159,9 +176,13 @@ public class IncomeTransactionController {
     public ApiResponse<IncomeTransactionResponse> rejectIncomeTransaction(
             @PathVariable Long clubId,
             @PathVariable Long transactionId
-    ) throws AppException {
-        IncomeTransactionResponse response = incomeTransactionServiceImpl.rejectIncomeTransaction(transactionId);
-        return ApiResponse.success(response);
+    ) {
+        try {
+            IncomeTransactionResponse response = incomeTransactionServiceImpl.rejectIncomeTransaction(transactionId);
+            return ApiResponse.success(response);
+        } catch (AppException ex) {
+            return ApiResponse.error(ex.getErrorCode(), ex.getMessage(), null);
+        }
     }
 
     /**
@@ -173,9 +194,13 @@ public class IncomeTransactionController {
     public ApiResponse<Void> deleteIncomeTransaction(
             @PathVariable Long clubId,
             @PathVariable Long transactionId
-    ) throws AppException {
-        incomeTransactionServiceImpl.deleteIncomeTransaction(transactionId);
-        return ApiResponse.success();
+    ) {
+        try {
+            incomeTransactionServiceImpl.deleteIncomeTransaction(transactionId);
+            return ApiResponse.success();
+        } catch (AppException ex) {
+            return ApiResponse.error(ex.getErrorCode(), ex.getMessage(), null);
+        }
     }
 
     /**
@@ -217,7 +242,7 @@ public class IncomeTransactionController {
                     "message", "Upload ảnh bằng chứng thành công"
             ));
         } catch (Exception e) {
-            return ApiResponse.error(500, "Lỗi khi upload ảnh: " + e.getMessage());
+            return ApiResponse.error(ErrorCode.INTERNAL_SERVER_ERROR, "Lỗi khi upload ảnh. Vui lòng thử lại sau.", null);
         }
     }
 }

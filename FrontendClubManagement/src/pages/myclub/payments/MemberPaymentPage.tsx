@@ -13,6 +13,7 @@ import type { Fee, FeeType } from "@/types/fee";
 import { calculatePaymentStatus } from "@/utils/feeUtils";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import PaymentSuccessDialog from "@/components/finance/PaymentSuccessDialog";
+import { getErrorMessage } from "@/lib/utils";
 import {
   Table,
   TableBody,
@@ -289,10 +290,7 @@ export default function Payment() {
         }
       } catch (err) {
         console.error("Error generating payment QR:", err);
-        const errorMessage =
-          err instanceof Error
-            ? err.message
-            : "Có lỗi khi tạo mã QR thanh toán";
+        const errorMessage = getErrorMessage(err, "Có lỗi khi tạo mã QR thanh toán");
         toast.error(errorMessage);
         setSelectedFee(null);
       } finally {
@@ -370,9 +368,10 @@ export default function Payment() {
       }
     });
 
-    pollIntervalRef.current = window.setInterval(() => {
-      void refreshFees();
-    }, 15000);
+    // Scheduled check số dư wallet đã được bỏ qua
+    // pollIntervalRef.current = window.setInterval(() => {
+    //   void refreshFees();
+    // }, 15000);
 
     paymentTimeoutRef.current = window.setTimeout(() => {
       toast.error("Thời gian chờ thanh toán đã hết. Vui lòng thử lại.");

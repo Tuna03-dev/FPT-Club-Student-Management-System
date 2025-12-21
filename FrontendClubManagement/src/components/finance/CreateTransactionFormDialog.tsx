@@ -9,6 +9,7 @@ import { IncomeTransactionForm } from "./IncomeTransactionForm";
 import { OutcomeTransactionForm } from "./OutcomeTransactionForm";
 import type { Fee } from "@/types/fee";
 import { toast } from "sonner";
+import { getErrorMessage } from "@/lib/utils";
 import type {
   CreateIncomeTransactionRequest,
   CreateOutcomeTransactionRequest,
@@ -77,9 +78,8 @@ export function CreateTransactionFormDialog({
       onOpenChange(false);
     } catch (error) {
       console.error("Error creating income transaction:", error);
-      toast.error(
-        error instanceof Error ? error.message : "Không thể tạo giao dịch thu"
-      );
+      const errorMessage = getErrorMessage(error, "Không thể tạo giao dịch thu");
+      toast.error(errorMessage);
       throw error; // Re-throw để form handle
     }
   };
@@ -91,9 +91,8 @@ export function CreateTransactionFormDialog({
       onOpenChange(false);
     } catch (error) {
       console.error("Error creating outcome transaction:", error);
-      toast.error(
-        error instanceof Error ? error.message : "Không thể tạo giao dịch chi"
-      );
+      const errorMessage = getErrorMessage(error, "Không thể tạo giao dịch chi");
+      toast.error(errorMessage);
       throw error; // Re-throw để form handle
     }
   };

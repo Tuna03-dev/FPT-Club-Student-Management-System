@@ -20,6 +20,7 @@ import {
 import type { Fee } from "@/types/fee";
 import { toast } from "sonner";
 import { ImagePlus, X } from "lucide-react";
+import { getErrorMessage } from "@/lib/utils";
 import type { Transaction } from "./TransactionsTable";
 import { uploadImage } from "@/api/uploads";
 import type {
@@ -253,9 +254,8 @@ export function EditTransactionDialog({
       onOpenChange(false);
     } catch (error) {
       console.error("Error updating transaction:", error);
-      toast.error(
-        error instanceof Error ? error.message : "Không thể cập nhật giao dịch"
-      );
+      const errorMessage = getErrorMessage(error, "Không thể cập nhật giao dịch");
+      toast.error(errorMessage);
     } finally {
       setSubmitting(false);
     }

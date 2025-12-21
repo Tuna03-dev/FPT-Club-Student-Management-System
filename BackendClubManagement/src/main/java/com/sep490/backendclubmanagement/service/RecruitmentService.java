@@ -921,8 +921,8 @@ public class RecruitmentService implements RecruitmentServiceInterface {
         Team team = teamRepository.findById(teamId)
                 .orElseThrow(() -> new AppException(ErrorCode.INTERNAL_SERVER_ERROR));
         
-        // Find ClubRole with role code MEMBER
-        ClubRole memberRole = clubRoleRepository.findByClubIdAndRoleCode(clubId, "MEMBER")
+        // Find ClubRole with role code CLUB_MEMBER
+        ClubRole memberRole = clubRoleRepository.findByClubIdAndRoleCode(clubId, "CLUB_MEMBER")
                 .orElse(null); // If not found, set to null (keep original behavior)
         
         // Check if user already has a RoleMemberShip in current semester
@@ -941,7 +941,7 @@ public class RecruitmentService implements RecruitmentServiceInterface {
             RoleMemberShip roleMembership = RoleMemberShip.builder()
                     .clubMemberShip(clubMembership)
                     .team(team)
-                    .clubRole(memberRole) // Assign MEMBER role if found
+                    .clubRole(memberRole) // Assign CLUB_MEMBER role if found
                     .semester(currentSemester)
                     .isActive(true)
                     .build();
