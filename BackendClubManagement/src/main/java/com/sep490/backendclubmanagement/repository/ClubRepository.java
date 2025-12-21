@@ -58,7 +58,7 @@ public interface ClubRepository extends JpaRepository<Club, Long> {
     List<Club> findClubsWithoutWallet();
 
     // 🔹 Count total events for a club (only published events)
-    @Query("SELECT COUNT(e.id) FROM Event e WHERE e.club.id = :clubId AND e.isDraft = false AND (e.eventType IS NULL OR UPPER(TRIM(e.eventType.typeName)) <> 'MEETING')")
+    @Query("SELECT COUNT(e.id) FROM Event e WHERE e.club.id = :clubId AND e.isDraft = false AND (e.eventType IS NULL OR UPPER(TRIM(e.eventType.typeName)) <> 'MEETING') AND e.deletedAt IS NULL")
     Long countEventsByClubId(@Param("clubId") Long clubId);
 
     // 🔹 Count total news for a club (only published news)
