@@ -280,7 +280,7 @@ public class MemberServiceImpl implements MemberService{
                 if (club != null) {
                     String title = "Bạn đã được gán vai trò mới trong " + club.getClubName();
                     String message = "Vai trò: " + clubRole.getRoleName();
-                    String actionUrl = "/clubs/" + clubId + "/members";
+                    String actionUrl = "/myclub/" + clubId + "/members";
 
                     notificationService.sendToUser(
                             userId,
@@ -342,7 +342,7 @@ public class MemberServiceImpl implements MemberService{
         try {
             cms = getClubMemberShipOrThrow(clubId, userId);
         } catch (AppException e) {
-            throw new IllegalStateException("Member not found or already left club");
+            throw new IllegalStateException("Không tìm thấy thành viên hoặc thành viên đã rời câu lạc bộ");
         }
         
         Semester semester = resolveSemester(semesterId);
@@ -390,21 +390,33 @@ public class MemberServiceImpl implements MemberService{
         }
         ClubMemberShip cms = cmsList.get(0);
         if (cms == null) {
-            throw new IllegalStateException("Member not found");
+            throw new IllegalStateException("Không tìm thấy thành viên");
         }
         cms.setStatus(ClubMemberShipStatus.LEFT);
         cms.setEndDate(java.time.LocalDate.now());
         clubMemberShipRepository.save(cms);
 
-        // ✅ FIX: Deactivate tất cả RoleMemberShip records của member này
-        // Để đảm bảo member không còn hiển thị trong danh sách active members
-        List<RoleMemberShip> allRoleMemberships = roleMemberShipRepository.findByClubMemberShipId(cms.getId());
-        for (RoleMemberShip rm : allRoleMemberships) {
-            rm.setIsActive(false);
-            roleMemberShipRepository.save(rm);
+        // ✅ FIX: CHỈ deactivate RoleMemberShip của KỲ HIỆN TẠI (giữ lại lịch sử các kỳ trước)
+        Semester currentSemester = semesterRepository.findAll().stream()
+                .filter(Semester::getIsCurrent)
+                .findFirst()
+                .orElse(null);
+
+        if (currentSemester != null) {
+            List<RoleMemberShip> currentSemesterMemberships = roleMemberShipRepository
+                    .findByClubMemberShipIdAndSemesterId(cms.getId(), currentSemester.getId());
+
+            for (RoleMemberShip rm : currentSemesterMemberships) {
+                rm.setIsActive(false);
+                roleMemberShipRepository.save(rm);
+            }
+
+            log.info("[Member] Deactivated {} RoleMemberShip records in current semester for removed member {} from club {}",
+                    currentSemesterMemberships.size(), userId, clubId);
+        } else {
+            log.warn("[Member] No current semester found, cannot deactivate RoleMemberShip for removed member {} from club {}",
+                    userId, clubId);
         }
-        log.info("[Member] Deactivated {} RoleMemberShip records for removed member {} from club {}",
-                allRoleMemberships.size(), userId, clubId);
 
         // 🔔 Gửi notification cho member bị remove
         try {
@@ -442,12 +454,12 @@ public class MemberServiceImpl implements MemberService{
     private Semester resolveSemester(Long semesterId) {
         if (semesterId != null) {
             return semesterRepository.findById(semesterId)
-                    .orElseThrow(() -> new IllegalArgumentException("Semester not found"));
+                    .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy kỳ học"));
         }
         return semesterRepository.findAll().stream()
                 .filter(Semester::getIsCurrent)
                 .findFirst()
-                .orElseThrow(() -> new IllegalStateException("No current semester configured"));
+                .orElseThrow(() -> new IllegalStateException("Chưa cấu hình kỳ học hiện tại"));
     }
 
 
@@ -476,8 +488,10 @@ public class MemberServiceImpl implements MemberService{
             throw new AppException(ErrorCode.INSUFFICIENT_PERMISSION);
         }
 
-        if (currentUserRoleLevel >= targetRoleLevel) {
-            throw new AppException(ErrorCode.INSUFFICIENT_PERMISSION);
+
+        if (currentUserRoleLevel > targetRoleLevel) {
+            throw new AppException(ErrorCode.INSUFFICIENT_PERMISSION,
+                "Bạn không có quyền gán vai trò cao hơn vai trò hiện tại của mình");
         }
     }
 
@@ -729,10 +743,82 @@ public class MemberServiceImpl implements MemberService{
                     "File Excel thiếu các cột bắt buộc: " + String.join(", ", missingHeaders));
             }
 
+            // ✅ OPTIMIZATION: Pre-load và cache data để tránh N+1 queries
+            int lastRow = sheet.getLastRowNum();
+            
+            // 1. Collect all student codes, semester codes, role codes, team names, emails
+            Set<String> allStudentCodes = new HashSet<>();
+            Set<String> allSemesterCodes = new HashSet<>();
+            Set<String> allRoleCodes = new HashSet<>();
+            Set<String> allTeamNames = new HashSet<>();
+            Set<String> allEmails = new HashSet<>();
+            
+            for (int r = 1; r <= lastRow; r++) {
+                Row row = sheet.getRow(r);
+                if (row == null) continue;
+                
+                String studentCode = readCell(row, colIndex.get("student_code"));
+                String semesterCode = readCell(row, colIndex.get("semester_code"));
+                String roleCode = colIndex.containsKey("role_code") ? readCell(row, colIndex.get("role_code")) : null;
+                String teamName = colIndex.containsKey("team_name") ? readCell(row, colIndex.get("team_name")) : null;
+                String email = colIndex.containsKey("email") ? readCell(row, colIndex.get("email")) : null;
+                
+                if (studentCode != null && !studentCode.isEmpty()) {
+                    allStudentCodes.add(studentCode);
+                }
+                if (semesterCode != null && !semesterCode.isEmpty()) {
+                    allSemesterCodes.add(semesterCode);
+                }
+                if (roleCode != null && !roleCode.isEmpty()) {
+                    allRoleCodes.add(roleCode);
+                }
+                if (teamName != null && !teamName.isEmpty()) {
+                    allTeamNames.add(teamName);
+                }
+                if (email != null && !email.isEmpty()) {
+                    allEmails.add(email);
+                }
+            }
+            
+            // 2. Batch load và cache
+            Map<String, User> userMap = new HashMap<>();
+            if (!allStudentCodes.isEmpty()) {
+                List<User> existingUsers = userRepository.findByStudentCodeIn(new ArrayList<>(allStudentCodes));
+                for (User u : existingUsers) {
+                    userMap.put(u.getStudentCode(), u);
+                }
+            }
+            
+            Map<String, Semester> semesterMap = new HashMap<>();
+            for (String code : allSemesterCodes) {
+                semesterRepository.findBySemesterCode(code).ifPresent(s -> semesterMap.put(code, s));
+            }
+            
+            Map<String, ClubRole> roleMap = new HashMap<>();
+            for (String code : allRoleCodes) {
+                clubRoleRepository.findByClubIdAndRoleCode(clubId, code).ifPresent(r -> roleMap.put(code, r));
+            }
+            
+            Map<String, Team> teamMap = new HashMap<>();
+            for (String name : allTeamNames) {
+                teamRepository.findByClubIdAndTeamName(clubId, name).ifPresent(t -> teamMap.put(name, t));
+            }
+            
+            // 3. Cache FAP API responses để tránh duplicate calls
+            Map<String, Boolean> emailValidationCache = new HashMap<>();
+            
             // Track processed users
             Set<String> processedUserCodes = new HashSet<>();
-
-            int lastRow = sheet.getLastRowNum();
+            
+            // Batch collections for save
+            List<User> usersToCreate = new ArrayList<>();
+            List<User> usersToUpdate = new ArrayList<>();
+            List<ClubMemberShip> membershipsToCreate = new ArrayList<>();
+            List<ClubMemberShip> membershipsToUpdate = new ArrayList<>();
+            List<RoleMemberShip> roleMembershipsToSave = new ArrayList<>();
+            List<ClubMemberShip> duplicateMembershipsToDelete = new ArrayList<>();
+            
+            int batchSize = 50; // Flush every 50 rows
             for (int r = 1; r <= lastRow; r++) {
                 Row row = sheet.getRow(r);
                 if (row == null) continue;
@@ -756,16 +842,22 @@ public class MemberServiceImpl implements MemberService{
                         throw new IllegalArgumentException("Mã học kỳ không được để trống");
                     }
 
-                    // ✅ VALIDATE EMAIL với FAP API
+                    // ✅ OPTIMIZATION: Sử dụng cached data
+                    // Validate email với cache
                     if (email != null && !email.isEmpty()) {
-                        var profile = fapApiService.findProfileByEmail(email);
-                        if (profile.isEmpty()) {
+                        Boolean isValid = emailValidationCache.get(email);
+                        if (isValid == null) {
+                            var profile = fapApiService.findProfileByEmail(email);
+                            isValid = profile.isPresent();
+                            emailValidationCache.put(email, isValid);
+                        }
+                        if (!isValid) {
                             throw new IllegalArgumentException("Email " + email + " không có trong danh sách người dùng được phép");
                         }
                     }
 
-                    // Find or create user
-                    User user = userRepository.findByStudentCode(studentCode).orElse(null);
+                    // Find user from cache
+                    User user = userMap.get(studentCode);
                     boolean userCreated = false;
                     if (user == null) {
                         user = User.builder()
@@ -775,7 +867,7 @@ public class MemberServiceImpl implements MemberService{
                                 .phoneNumber(phone)
                                 .isActive(true)
                                 .build();
-                        user = userRepository.save(user);
+                        usersToCreate.add(user);
                         userCreated = true;
                         createdUsers++;
                     } else {
@@ -786,11 +878,7 @@ public class MemberServiceImpl implements MemberService{
                             changed = true;
                         }
                         if (email != null && !email.isEmpty() && !email.equals(user.getEmail())) {
-                            // ✅ VALIDATE EMAIL trước khi update
-                            var profile = fapApiService.findProfileByEmail(email);
-                            if (profile.isEmpty()) {
-                                throw new IllegalArgumentException("Email " + email + " không có trong danh sách người dùng được phép");
-                            }
+                            // Email đã được validate ở trên
                             user.setEmail(email);
                             changed = true;
                         }
@@ -799,7 +887,7 @@ public class MemberServiceImpl implements MemberService{
                             changed = true;
                         }
                         if (changed) {
-                            userRepository.save(user);
+                            usersToUpdate.add(user);
                             updatedUsers++;
                         }
                     }
@@ -809,10 +897,21 @@ public class MemberServiceImpl implements MemberService{
                         processedUserCodes.add(studentCode);
                     }
 
-                    // Find semester
-                    Semester semester = semesterRepository.findBySemesterCode(semesterCode)
-                            .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy học kỳ: " + semesterCode));
+                    // Find semester from cache
+                    Semester semester = semesterMap.get(semesterCode);
+                    if (semester == null) {
+                        throw new IllegalArgumentException("Không tìm thấy học kỳ: " + semesterCode);
+                    }
 
+                    // ✅ OPTIMIZATION: Đảm bảo user đã có ID trước khi tìm membership
+                    // Nếu user mới tạo, cần save ngay để có ID
+                    if (user.getId() == null && usersToCreate.contains(user)) {
+                        // Remove from batch và save ngay
+                        usersToCreate.remove(user);
+                        user = userRepository.save(user);
+                        userMap.put(user.getStudentCode(), user); // Update cache
+                    }
+                    
                     // Find or create ClubMemberShip
                     // ✅ FIX: Xử lý trường hợp có nhiều ClubMemberShip trùng lặp
                     List<ClubMemberShip> membershipList = clubMemberShipRepository.findByClubIdAndUserIdList(clubId, user.getId());
@@ -825,8 +924,7 @@ public class MemberServiceImpl implements MemberService{
                         log.warn("[Import] Found {} duplicate ClubMemberShip records for user {} in club {}. Keeping the first one (id: {}) and cleaning up duplicates...",
                                 membershipList.size(), user.getId(), clubId, membership.getId());
                         for (int i = 1; i < membershipList.size(); i++) {
-                            clubMemberShipRepository.delete(membershipList.get(i));
-                            log.info("[Import] Deleted duplicate ClubMemberShip with id: {}", membershipList.get(i).getId());
+                            duplicateMembershipsToDelete.add(membershipList.get(i));
                         }
                     }
                     boolean membershipCreated = false;
@@ -838,7 +936,7 @@ public class MemberServiceImpl implements MemberService{
                                 .joinDate(joinDate)
                                 .status(ClubMemberShipStatus.ACTIVE)
                                 .build();
-                        membership = clubMemberShipRepository.save(membership);
+                        membershipsToCreate.add(membership);
                         membershipCreated = true;
                         createdMemberships++;
                     } else {
@@ -846,7 +944,7 @@ public class MemberServiceImpl implements MemberService{
                         if (membership.getStatus() != ClubMemberShipStatus.ACTIVE) {
                             membership.setStatus(ClubMemberShipStatus.ACTIVE);
                             membership.setEndDate(null);
-                            clubMemberShipRepository.save(membership);
+                            membershipsToUpdate.add(membership);
                             updatedMemberships++;
                         }
                     }
@@ -863,17 +961,15 @@ public class MemberServiceImpl implements MemberService{
                     
                     boolean rmCreated = roleMemberShip.getId() == null; // Check if it's a new entity
 
-                    // Set role
+                    // Set role from cache
                     if (roleCode != null && !roleCode.isEmpty()) {
-                        ClubRole clubRole = clubRoleRepository.findByClubIdAndRoleCode(clubId, roleCode)
-                                .orElse(null);
+                        ClubRole clubRole = roleMap.get(roleCode);
                         roleMemberShip.setClubRole(clubRole);
                     }
 
-                    // Set team
+                    // Set team from cache
                     if (teamName != null && !teamName.isEmpty()) {
-                        Team team = teamRepository.findByClubIdAndTeamName(clubId, teamName)
-                                .orElse(null);
+                        Team team = teamMap.get(teamName);
                         roleMemberShip.setTeam(team);
                     }
 
@@ -881,7 +977,7 @@ public class MemberServiceImpl implements MemberService{
                     boolean isActive = "true".equalsIgnoreCase(isActiveStr) || "1".equals(isActiveStr);
                     roleMemberShip.setIsActive(isActive);
 
-                    roleMemberShipRepository.save(roleMemberShip);
+                    roleMembershipsToSave.add(roleMemberShip);
                     if (rmCreated) {
                         createdRoleMemberships++;
                     } else {
@@ -889,6 +985,45 @@ public class MemberServiceImpl implements MemberService{
                     }
 
                     processedHistories++;
+                    
+                    // ✅ OPTIMIZATION: Batch save và flush định kỳ
+                    if (totalRows % batchSize == 0) {
+                        // Save users first (they are referenced by memberships)
+                        if (!usersToCreate.isEmpty()) {
+                            userRepository.saveAll(usersToCreate);
+                            // Update cache với các user mới tạo
+                            for (User u : usersToCreate) {
+                                userMap.put(u.getStudentCode(), u);
+                            }
+                            usersToCreate.clear();
+                        }
+                        if (!usersToUpdate.isEmpty()) {
+                            userRepository.saveAll(usersToUpdate);
+                            usersToUpdate.clear();
+                        }
+                        
+                        // Delete duplicates
+                        if (!duplicateMembershipsToDelete.isEmpty()) {
+                            clubMemberShipRepository.deleteAll(duplicateMembershipsToDelete);
+                            duplicateMembershipsToDelete.clear();
+                        }
+                        
+                        // Save memberships
+                        if (!membershipsToCreate.isEmpty()) {
+                            clubMemberShipRepository.saveAll(membershipsToCreate);
+                            membershipsToCreate.clear();
+                        }
+                        if (!membershipsToUpdate.isEmpty()) {
+                            clubMemberShipRepository.saveAll(membershipsToUpdate);
+                            membershipsToUpdate.clear();
+                        }
+                        
+                        // Save role memberships
+                        if (!roleMembershipsToSave.isEmpty()) {
+                            roleMemberShipRepository.saveAll(roleMembershipsToSave);
+                            roleMembershipsToSave.clear();
+                        }
+                    }
 
                 } catch (Exception exRow) {
                     errors.add(ImportMemberError.builder()
@@ -898,6 +1033,26 @@ public class MemberServiceImpl implements MemberService{
                             .message(exRow.getMessage())
                             .build());
                 }
+            }
+            
+            // ✅ OPTIMIZATION: Flush remaining batches
+            if (!usersToCreate.isEmpty()) {
+                userRepository.saveAll(usersToCreate);
+            }
+            if (!usersToUpdate.isEmpty()) {
+                userRepository.saveAll(usersToUpdate);
+            }
+            if (!duplicateMembershipsToDelete.isEmpty()) {
+                clubMemberShipRepository.deleteAll(duplicateMembershipsToDelete);
+            }
+            if (!membershipsToCreate.isEmpty()) {
+                clubMemberShipRepository.saveAll(membershipsToCreate);
+            }
+            if (!membershipsToUpdate.isEmpty()) {
+                clubMemberShipRepository.saveAll(membershipsToUpdate);
+            }
+            if (!roleMembershipsToSave.isEmpty()) {
+                roleMemberShipRepository.saveAll(roleMembershipsToSave);
             }
         }
 

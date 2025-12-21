@@ -7,6 +7,7 @@ import com.sep490.backendclubmanagement.dto.response.OutcomeTransactionResponse;
 import com.sep490.backendclubmanagement.dto.response.PageResponse;
 import com.sep490.backendclubmanagement.entity.TransactionStatus;
 import com.sep490.backendclubmanagement.exception.AppException;
+import com.sep490.backendclubmanagement.exception.ErrorCode;
 import com.sep490.backendclubmanagement.service.CloudinaryService;
 import com.sep490.backendclubmanagement.service.CloudinaryService.UploadResult;
 import com.sep490.backendclubmanagement.service.OutcomeTransactionService;
@@ -69,7 +70,7 @@ public class OutcomeTransactionController {
             try {
                 parsedFromDate = java.time.LocalDate.parse(fromDate);
             } catch (Exception e) {
-                return ApiResponse.error(400, "Invalid fromDate format. Use yyyy-MM-dd");
+                return ApiResponse.error(ErrorCode.VALIDATION_ERROR, "Định dạng ngày bắt đầu không hợp lệ. Vui lòng sử dụng định dạng yyyy-MM-dd", null);
             }
         }
         
@@ -77,7 +78,7 @@ public class OutcomeTransactionController {
             try {
                 parsedToDate = java.time.LocalDate.parse(toDate);
             } catch (Exception e) {
-                return ApiResponse.error(400, "Invalid toDate format. Use yyyy-MM-dd");
+                return ApiResponse.error(ErrorCode.VALIDATION_ERROR, "Định dạng ngày kết thúc không hợp lệ. Vui lòng sử dụng định dạng yyyy-MM-dd", null);
             }
         }
 
@@ -99,9 +100,13 @@ public class OutcomeTransactionController {
     public ApiResponse<OutcomeTransactionResponse> getOutcomeTransactionById(
             @PathVariable Long clubId,
             @PathVariable Long transactionId
-    ) throws AppException {
-        OutcomeTransactionResponse response = outcomeTransactionServiceImpl.getOutcomeTransactionById(transactionId);
-        return ApiResponse.success(response);
+    ) {
+        try {
+            OutcomeTransactionResponse response = outcomeTransactionServiceImpl.getOutcomeTransactionById(transactionId);
+            return ApiResponse.success(response);
+        } catch (AppException ex) {
+            return ApiResponse.error(ex.getErrorCode(), ex.getMessage(), null);
+        }
     }
 
     /**
@@ -113,9 +118,13 @@ public class OutcomeTransactionController {
     public ApiResponse<OutcomeTransactionResponse> createOutcomeTransaction(
             @PathVariable Long clubId,
             @Valid @RequestBody CreateOutcomeTransactionRequest request
-    ) throws AppException {
-        OutcomeTransactionResponse response = outcomeTransactionServiceImpl.createOutcomeTransaction(clubId, request);
-        return ApiResponse.success(response);
+    ) {
+        try {
+            OutcomeTransactionResponse response = outcomeTransactionServiceImpl.createOutcomeTransaction(clubId, request);
+            return ApiResponse.success(response);
+        } catch (AppException ex) {
+            return ApiResponse.error(ex.getErrorCode(), ex.getMessage(), null);
+        }
     }
 
     /**
@@ -128,9 +137,13 @@ public class OutcomeTransactionController {
             @PathVariable Long clubId,
             @PathVariable Long transactionId,
             @Valid @RequestBody UpdateOutcomeTransactionRequest request
-    ) throws AppException {
-        OutcomeTransactionResponse response = outcomeTransactionServiceImpl.updateOutcomeTransaction(transactionId, request);
-        return ApiResponse.success(response);
+    ) {
+        try {
+            OutcomeTransactionResponse response = outcomeTransactionServiceImpl.updateOutcomeTransaction(transactionId, request);
+            return ApiResponse.success(response);
+        } catch (AppException ex) {
+            return ApiResponse.error(ex.getErrorCode(), ex.getMessage(), null);
+        }
     }
 
     /**
@@ -142,9 +155,13 @@ public class OutcomeTransactionController {
     public ApiResponse<OutcomeTransactionResponse> approveOutcomeTransaction(
             @PathVariable Long clubId,
             @PathVariable Long transactionId
-    ) throws AppException {
-        OutcomeTransactionResponse response = outcomeTransactionServiceImpl.approveOutcomeTransaction(transactionId);
-        return ApiResponse.success(response);
+    ) {
+        try {
+            OutcomeTransactionResponse response = outcomeTransactionServiceImpl.approveOutcomeTransaction(transactionId);
+            return ApiResponse.success(response);
+        } catch (AppException ex) {
+            return ApiResponse.error(ex.getErrorCode(), ex.getMessage(), null);
+        }
     }
 
     /**
@@ -156,9 +173,13 @@ public class OutcomeTransactionController {
     public ApiResponse<OutcomeTransactionResponse> rejectOutcomeTransaction(
             @PathVariable Long clubId,
             @PathVariable Long transactionId
-    ) throws AppException {
-        OutcomeTransactionResponse response = outcomeTransactionServiceImpl.rejectOutcomeTransaction(transactionId);
-        return ApiResponse.success(response);
+    ) {
+        try {
+            OutcomeTransactionResponse response = outcomeTransactionServiceImpl.rejectOutcomeTransaction(transactionId);
+            return ApiResponse.success(response);
+        } catch (AppException ex) {
+            return ApiResponse.error(ex.getErrorCode(), ex.getMessage(), null);
+        }
     }
 
     /**
@@ -170,9 +191,13 @@ public class OutcomeTransactionController {
     public ApiResponse<Void> deleteOutcomeTransaction(
             @PathVariable Long clubId,
             @PathVariable Long transactionId
-    ) throws AppException {
-        outcomeTransactionServiceImpl.deleteOutcomeTransaction(transactionId);
-        return ApiResponse.success();
+    ) {
+        try {
+            outcomeTransactionServiceImpl.deleteOutcomeTransaction(transactionId);
+            return ApiResponse.success();
+        } catch (AppException ex) {
+            return ApiResponse.error(ex.getErrorCode(), ex.getMessage(), null);
+        }
     }
 
     /**
@@ -214,7 +239,7 @@ public class OutcomeTransactionController {
                     "message", "Upload ảnh bằng chứng thành công"
             ));
         } catch (Exception e) {
-            return ApiResponse.error(500, "Lỗi khi upload ảnh: " + e.getMessage());
+            return ApiResponse.error(ErrorCode.INTERNAL_SERVER_ERROR, "Lỗi khi upload ảnh. Vui lòng thử lại sau.", null);
         }
     }
 }

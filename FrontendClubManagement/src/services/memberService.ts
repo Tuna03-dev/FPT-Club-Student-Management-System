@@ -202,6 +202,7 @@ export const memberService = {
         headers: {
           "Content-Type": "multipart/form-data",
         },
+        timeout: 60000, // 60 seconds for large file imports
       }
     );
   },

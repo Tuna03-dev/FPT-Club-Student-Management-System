@@ -142,7 +142,7 @@ public class MemberController {
             ImportMembersResponse result = memberService.importMembersFromExcel(clubId, file, currentUserId);
             return ApiResponse.success(result);
         } catch (AppException e) {
-            // AppException sẽ được GlobalExceptionHandler xử lý, nhưng nếu cần xử lý đặc biệt ở đây
+            // AppException sẽ được GlobalExceptionHandler xử lý
             throw e;
         } catch (Exception e) {
             // Xử lý các exception không mong đợi (như IOException khi đọc file)

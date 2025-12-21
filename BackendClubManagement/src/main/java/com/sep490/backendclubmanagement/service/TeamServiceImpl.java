@@ -39,6 +39,7 @@ public class TeamServiceImpl implements TeamService {
     private static final String ROLE_CODE_TEAM_DEPUTY = "CLUB_TEAM_DEPUTY";//pho ban
     private static final String ROLE_CODE_TEAM_MEMBER = "CLUB_MEMBER";//thanh vien
 
+
     @Override
     public List<TeamResponse> getTeamsByClubId(Long clubId) {
         return teamRepository.findVisibleTeams(clubId).stream()

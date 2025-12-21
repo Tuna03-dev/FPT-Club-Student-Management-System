@@ -31,6 +31,7 @@ import type {
 import { useMemo, useState, useCallback, useEffect, useRef } from "react";
 import feeService from "@/services/feeService";
 import { clubService, type SemesterDTO } from "@/services/clubService";
+import { getErrorMessage } from "@/lib/utils";
 import { Switch } from "@/components/ui/switch";
 import { format, addDays } from "date-fns";
 import { z } from "zod";
@@ -351,11 +352,8 @@ export function FeesTable({
           throw new Error("Lỗi tạo khoản phí");
         }
       } catch (e: unknown) {
-        toast.error(
-          e && typeof e === "object" && "message" in e
-            ? (e as { message?: string }).message || "Đã xảy ra lỗi khi tạo phí"
-            : "Đã xảy ra lỗi khi tạo phí"
-        );
+        const errorMessage = getErrorMessage(e, "Đã xảy ra lỗi khi tạo phí");
+        toast.error(errorMessage);
       } finally {
         setSubmitting(false);
       }
@@ -532,12 +530,8 @@ export function FeesTable({
           throw new Error("Lỗi cập nhật khoản phí");
         }
       } catch (e: unknown) {
-        toast.error(
-          e && typeof e === "object" && "message" in e
-            ? (e as { message?: string }).message ||
-                "Đã xảy ra lỗi khi cập nhật phí"
-            : "Đã xảy ra lỗi khi cập nhật phí"
-        );
+        const errorMessage = getErrorMessage(e, "Đã xảy ra lỗi khi cập nhật phí");
+        toast.error(errorMessage);
       } finally {
         setSubmitting(false);
       }
@@ -571,12 +565,8 @@ export function FeesTable({
           editForm.reset();
         }
       } catch (e: unknown) {
-        toast.error(
-          e && typeof e === "object" && "message" in e
-            ? (e as { message?: string }).message ||
-                "Đã xảy ra lỗi khi kích hoạt phí"
-            : "Đã xảy ra lỗi khi kích hoạt phí"
-        );
+        const errorMessage = getErrorMessage(e, "Đã xảy ra lỗi khi kích hoạt phí");
+        toast.error(errorMessage);
       } finally {
         setPublishingFeeId(null);
       }
@@ -649,11 +639,8 @@ export function FeesTable({
       setIsDeleteOpen(false);
       setDeleteFeeId(null);
     } catch (e: unknown) {
-      const errorMsg =
-        e && typeof e === "object" && "message" in e
-          ? (e as { message?: string }).message
-          : "Đã xảy ra lỗi khi xóa phí";
-      toast.error(errorMsg || "Đã xảy ra lỗi khi xóa phí");
+      const errorMessage = getErrorMessage(e, "Đã xảy ra lỗi khi xóa phí");
+      toast.error(errorMessage);
     } finally {
       setDeleteLoading(false);
     }

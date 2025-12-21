@@ -40,6 +40,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
     boolean existsByStudentCodeIgnoreCase(String studentCode);
 
     Optional<User> findByStudentCode(String studentCode);
+    List<User> findByStudentCodeIn(List<String> studentCodes);
 
     @Query("SELECT u.id FROM User u WHERE UPPER(u.systemRole.roleName) = UPPER(:roleName)")
     List<Long> findIdsBySystemRoleName(@Param("roleName") String roleName);

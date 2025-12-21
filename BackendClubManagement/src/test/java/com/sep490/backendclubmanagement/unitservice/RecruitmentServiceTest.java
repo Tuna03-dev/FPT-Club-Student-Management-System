@@ -145,7 +145,7 @@ class RecruitmentServiceTest {
         testClubRole = ClubRole.builder()
                 .id(1L)
                 .roleName("Member")
-                .roleCode("MEMBER")
+                .roleCode("CLUB_MEMBER")
                 .club(testClub)
                 .build();
 
@@ -1062,7 +1062,7 @@ class RecruitmentServiceTest {
         when(clubMemberShipRepository.save(any(ClubMemberShip.class))).thenReturn(testClubMembership);
         when(semesterRepository.findCurrentSemester()).thenReturn(Optional.of(testSemester));
         when(teamRepository.findById(testTeamId)).thenReturn(Optional.of(testTeam));
-        when(clubRoleRepository.findByClubIdAndRoleCode(testClubId, "MEMBER")).thenReturn(Optional.of(testClubRole));
+        when(clubRoleRepository.findByClubIdAndRoleCode(testClubId, "CLUB_MEMBER")).thenReturn(Optional.of(testClubRole));
         // No existing role membership in current semester
         when(roleMembershipRepository.findByClubMemberShipAndSemester(any(ClubMemberShip.class), eq(testSemester))).thenReturn(Optional.empty());
         when(roleMembershipRepository.save(any(RoleMemberShip.class))).thenReturn(testRoleMembership);
