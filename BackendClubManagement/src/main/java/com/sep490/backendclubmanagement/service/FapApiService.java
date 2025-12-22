@@ -28,7 +28,7 @@ public class FapApiService {
                     .uri(FapApiUrl + "/verify")
                     .contentType(MediaType.APPLICATION_JSON)
                     .accept(MediaType.APPLICATION_JSON)
-                    .body(Map.of("email", email))
+                    .body(Map.of("email", email.trim().toLowerCase()))
                     .retrieve()
                     .body(Map.class);
             //noinspection unchecked

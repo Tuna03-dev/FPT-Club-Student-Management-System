@@ -35,14 +35,19 @@ public class ClubManagementService {
         Semester currentSemester = semesterRepository.findCurrentSemester()
                 .orElseThrow(() -> new ResourceNotFoundException("Current semester not found."));
 
+        // ✅ Đồng bộ với getUserClubRoles(): lấy tất cả active memberships, không yêu cầu role trong semester
         List<MyClubDTO> clubs = clubMembershipRepository
-                .findClubsByUserIdAndSemesterId(currentUser.getId(), currentSemester.getId());
+                .findActiveClubsByUserId(currentUser.getId());
         
         // Enrich với club roles cho mỗi club
         for (MyClubDTO club : clubs) {
             List<String> roles = roleMembershipRepository.findClubRolesByUserAndClub(
                 currentUser.getId(), club.getClubId(), currentSemester.getId()
             );
+            // Nếu không có role trong semester hiện tại, thêm role mặc định "thành viên"
+            if (roles.isEmpty()) {
+                roles = List.of("thành viên");
+            }
             club.setClubRoles(roles);
         }
         
@@ -125,16 +130,15 @@ public class ClubManagementService {
 
     private void validateUserMembership(Long clubId) {
         User currentUser = getCurrentUser();
-        Semester currentSemester = semesterRepository.findCurrentSemester()
-                .orElseThrow(() -> new ResourceNotFoundException("No active semester."));
 
+        // ✅ Đồng bộ với getUserClubRoles(): chỉ cần check active membership, không yêu cầu role trong semester
         boolean isMember = clubMembershipRepository
-                .findClubsByUserIdAndSemesterId(currentUser.getId(), currentSemester.getId())
+                .findActiveClubsByUserId(currentUser.getId())
                 .stream()
                 .anyMatch(c -> c.getClubId().equals(clubId));
 
         if (!isMember) {
-            throw new ResourceNotFoundException("User is not a member of this club in the current semester.");
+            throw new ResourceNotFoundException("User is not an active member of this club.");
         }
     }
 
@@ -181,6 +185,7 @@ public class ClubManagementService {
                         .clubName(clubName)
                         .clubRole("thành viên")
                         .systemRole("MEMBER")
+                        .teamId(null)
                         .build());
             } else {
                 // Lấy tất cả roles của user trong club này
@@ -198,6 +203,7 @@ public class ClubManagementService {
                                 .clubName(clubName)
                                 .clubRole(clubRoleName)
                                 .systemRole(systemRoleName)
+                                .teamId(rm.getTeam() != null ? rm.getTeam().getId() : null)
                                 .build());
                     }
                 }

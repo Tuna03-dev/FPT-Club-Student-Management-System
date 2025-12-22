@@ -61,7 +61,7 @@ export interface SubmissionFormData {
 
 const REPORT_TYPES = [
   { value: "periodic", label: "Báo cáo định kỳ" },
-  { value: "post-event", label: "Báo cáo hậu sự kiện" },
+  { value: "post-event", label: "Báo cáo cho sự kiện" },
   { value: "other", label: "Loại báo cáo khác" },
 ];
 
@@ -91,9 +91,9 @@ const REPORT_TEMPLATES: Record<
     ],
   },
   "post-event": {
-    label: "Báo cáo hậu sự kiện",
+    label: "Báo cáo cho sự kiện",
     description: "Báo cáo chi tiết sau khi kết thúc sự kiện",
-    placeholder: `Nhập nội dung báo cáo hậu sự kiện:
+    placeholder: `Nhập nội dung báo cáo cho sự kiện:
 
 1. Tên sự kiện
 2. Thời gian và địa điểm

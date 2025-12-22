@@ -9,6 +9,7 @@ export interface ClubRoleInfo {
   clubName: string;
   clubRole: string; // "thành viên", "Chủ nhiệm"
   systemRole: string; // "MEMBER", "CLUB_PRESIDENT"
+  teamId?: number | null;
 }
 
 export interface UserInfo {

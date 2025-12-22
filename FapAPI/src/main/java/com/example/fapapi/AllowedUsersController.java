@@ -24,7 +24,10 @@ public class AllowedUsersController {
 
     @PostMapping(path = "/verify", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<Map<String, Object>> verify(@RequestBody Map<String, String> request) throws IOException {
-        String email = Optional.ofNullable(request.get("email")).orElse("");
+        String email = Optional.ofNullable(request.get("email"))
+                .map(String::trim)
+                .map(String::toLowerCase)
+                .orElse("");
         if (email.isBlank()) {
             return ResponseEntity.badRequest().build();
         }
@@ -34,7 +37,7 @@ public class AllowedUsersController {
         );
         for (Map<String, Object> user : users) {
             Object e = user.get("email");
-            if (e instanceof String s && s.equalsIgnoreCase(email)) {
+            if (e instanceof String s && s.trim().equalsIgnoreCase(email)) {
                 return ResponseEntity.ok(user);
             }
         }

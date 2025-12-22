@@ -622,8 +622,8 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
                       ) : null}
                     </>
                   )}
-              {/* Nút Điểm danh/Xem điểm danh - chỉ hiện cho CLUB_OFFICER và TEAM_OFFICER */}
-              {canMarkAttendance && currentClubId && (
+              {/* Nút Điểm danh/Xem điểm danh - chỉ hiện cho CLUB_OFFICER và TEAM_OFFICER, và chỉ cho sự kiện của club (không phải sự kiện toàn trường) */}
+              {canMarkAttendance && currentClubId && eventClubId != null && (
                 <Button
                   className={`${(!isEventEnded || isWithinOneDayAfterEnd) ? "flex-1" : "flex-1"} h-10 text-sm gap-2 ${
                     (isEventEnded && !isWithinOneDayAfterEnd)

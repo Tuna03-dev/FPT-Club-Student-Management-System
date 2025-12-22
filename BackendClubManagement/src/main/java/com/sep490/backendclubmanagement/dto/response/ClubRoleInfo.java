@@ -14,5 +14,6 @@ public class ClubRoleInfo {
     private String clubName;
     private String clubRole; // roleName từ ClubRole (ví dụ: "thành viên", "Chủ nhiệm")
     private String systemRole; // roleCode từ ClubRole (ví dụ: "CLUB_MEMBER", "CLUB_PRESIDENT")
+    private Long teamId;
 }
 
