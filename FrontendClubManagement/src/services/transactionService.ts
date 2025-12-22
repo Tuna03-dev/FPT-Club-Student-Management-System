@@ -95,6 +95,7 @@ export const transactionService = {
     const url = `/clubs/${clubId}/transactions/income`;
     return axiosClient.get<PageResponse<IncomeTransactionResponse>>(url, {
       params,
+      timeout: 20000, // Allow up to 20 seconds for income transactions
     });
   },
 

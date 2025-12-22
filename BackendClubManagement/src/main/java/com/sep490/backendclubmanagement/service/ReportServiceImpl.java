@@ -663,6 +663,28 @@ public class ReportServiceImpl implements ReportServiceInterface {
         // Check deadline before creating report (no existing report, so pass null)
         validateDeadlineForAction(reportRequirement, null, "tạo báo cáo");
 
+        // Check user role and team assignment
+        boolean isClubOfficer = roleMemberShipRepository.isClubOfficerInCurrentSemester(
+                userId, request.getClubId(), currentSemester.getId());
+
+        if (!isClubOfficer) {
+            // User is not club officer - must be team officer
+            // Check if requirement is assigned to their team
+            if (clubReportRequirement.getTeamId() == null) {
+                throw new ForbiddenException("Yêu cầu báo cáo này chưa được gán cho phòng ban nào. Vui lòng liên hệ chủ nhiệm CLB.");
+            }
+
+            // Get user's team in current semester
+            Long userTeamId = roleMemberShipRepository.findTeamIdByUserIdAndClubIdAndSemesterId(
+                    userId, request.getClubId(), currentSemester.getId())
+                    .orElseThrow(() -> new ForbiddenException("Bạn không thuộc phòng ban nào trong CLB này"));
+
+            // Check if requirement is assigned to user's team
+            if (!userTeamId.equals(clubReportRequirement.getTeamId())) {
+                throw new ForbiddenException("Yêu cầu báo cáo này được gán cho phòng ban khác. Bạn chỉ có thể tạo báo cáo cho phòng ban của mình.");
+            }
+        }
+
         // Validate file size before processing upload
         if (file != null && !file.isEmpty()) {
             checkFileSize(file);
@@ -693,8 +715,6 @@ public class ReportServiceImpl implements ReportServiceInterface {
         ReportStatus status;
         boolean shouldAutoSubmit = false;
 
-        boolean isClubOfficer = roleMemberShipRepository.isClubOfficerInCurrentSemester(
-                userId, request.getClubId(), currentSemester.getId());
         if (isClubOfficer) {
             // Club president: if autoSubmit is true or null (default), create and submit directly
             // If autoSubmit is false, create as draft
@@ -891,6 +911,14 @@ public class ReportServiceImpl implements ReportServiceInterface {
         // Check permissions efficiently - single query for club officer
         boolean isClubOfficer = roleMemberShipRepository.isClubOfficerInCurrentSemester(
                 userId, clubId, semesterId);
+
+        // Authorization: Only club officer OR report creator can submit
+        if (!isClubOfficer) {
+            // If not club officer, must be the creator
+            if (report.getCreatedBy() == null || !report.getCreatedBy().getId().equals(userId)) {
+                throw new ForbiddenException("Chỉ chủ nhiệm CLB hoặc người tạo báo cáo mới có quyền nộp báo cáo này");
+            }
+        }
 
         // Get report requirement and check deadline
         if (report.getClubReportRequirement() != null &&
@@ -1390,26 +1418,22 @@ public class ReportServiceImpl implements ReportServiceInterface {
         Semester currentSemester = semesterRepository.findCurrentSemester()
                 .orElse(null);
 
-        // Check if user is CLUB_OFFICER or TEAM_OFFICER (from club_roles table), TREASURER in current semester
-        Long userTeamId = null; // Team ID of team officer
-
-        if (currentSemester != null) {
-            // Check if user is club officer (not team officer)
+        // Determine filterTeamId based on user role
+        Long filterTeamId = null;
+        if(currentSemester != null){
             boolean isClubOfficer = roleMemberShipRepository.isClubOfficerInCurrentSemester(
                     userId, clubId, currentSemester.getId());
 
-            if (!isClubOfficer) {
-                // User is team officer, get their team ID
-                userTeamId = roleMemberShipRepository.findTeamIdByUserIdAndClubIdAndSemesterId(
-                        userId, clubId, currentSemester.getId()).orElse(null);
+            if (isClubOfficer) {
+                // Club officer: can filter by teamId or show all
+                filterTeamId = teamId;
+            } else {
+                // Team officer: must filter by their team only
+                filterTeamId = roleMemberShipRepository.findTeamIdByUserIdAndClubIdAndSemesterId(
+                                userId, clubId, currentSemester.getId())
+                        .orElseThrow(() -> new NotFoundException("Không tìm thấy đội nhóm cho người dùng này"));
             }
         }
-
-        // Determine filterTeamId:
-        // - If user is team officer, always use their teamId (ignore teamId param for security)
-        // - If user is club officer, use teamId param if provided, otherwise null (show all)
-        Long filterTeamId = userTeamId != null ? userTeamId : teamId;
-
         // Parse status filter
         Boolean filterUnsubmitted = null;
         Boolean filterOverdue = null;
@@ -1559,10 +1583,21 @@ public class ReportServiceImpl implements ReportServiceInterface {
 
         // Check if user is CLUB_OFFICER or TEAM_OFFICER (from club_roles table) in current semester
         boolean isClubOfficerOrTeamOfficerOrTreasurer = false;
+        boolean isClubOfficer = false;
+        Long userTeamId = null;
 
         if (currentSemester != null) {
             isClubOfficerOrTeamOfficerOrTreasurer = roleMemberShipRepository.isClubOfficerOrTeamOfficerOrTreasurerInCurrentSemester(
                     userId, clubId, currentSemester.getId());
+
+            isClubOfficer = roleMemberShipRepository.isClubOfficerInCurrentSemester(
+                    userId, clubId, currentSemester.getId());
+
+            if (!isClubOfficer) {
+                // Get user's team if not club officer
+                userTeamId = roleMemberShipRepository.findTeamIdByUserIdAndClubIdAndSemesterId(
+                        userId, clubId, currentSemester.getId()).orElse(null);
+            }
         }
 
         if (!isClubOfficerOrTeamOfficerOrTreasurer) {
@@ -1581,6 +1616,33 @@ public class ReportServiceImpl implements ReportServiceInterface {
         }
 
         Report report = reportOptional.get();
+        // 1. If report is DRAFT, only creator can view
+        if (report.getStatus() == ReportStatus.DRAFT) {
+            if (report.getCreatedBy() == null || !report.getCreatedBy().getId().equals(userId)) {
+                throw new ForbiddenException("Báo cáo nháp chỉ có thể được xem bởi người tạo");
+            }
+        }
+        // Authorization checks
+        if (!isClubOfficer) {
+            // Non-club officers have restrictions
+                // 2. For non-draft reports, can only view reports assigned to their team
+                if (userTeamId == null) {
+                    throw new ForbiddenException("Bạn không thuộc phòng ban nào trong CLB này");
+                }
+
+                // Check if report requirement is assigned to user's team
+                if (report.getClubReportRequirement() != null) {
+                    Long assignedTeamId = report.getClubReportRequirement().getTeamId();
+                    if (assignedTeamId == null) {
+                        throw new ForbiddenException("Báo cáo này chưa được gán cho phòng ban nào");
+                    }
+                    if (!userTeamId.equals(assignedTeamId)) {
+                        throw new ForbiddenException("Báo cáo này được gán cho phòng ban khác. Bạn chỉ có thể xem báo cáo của phòng ban mình");
+                    }
+                }
+        }
+        // Club officers can view all reports without restrictions
+
         return reportMapper.toDetail(report);
     }
 
@@ -1660,18 +1722,50 @@ public class ReportServiceImpl implements ReportServiceInterface {
                 .orElse(null);
 
         boolean isClubOfficer = false;
+        Long userTeamId = null;
 
         if (currentSemester != null) {
             isClubOfficer = roleMemberShipRepository.isClubOfficerInCurrentSemester(
                     userId, clubId, currentSemester.getId());
-        }
 
-        // If user is team officer, treasurer only allow viewing their own reports
-        if (!isClubOfficer) {
-            if (report.getCreatedBy() == null || !report.getCreatedBy().getId().equals(userId)) {
-                throw new ForbiddenException("Bạn chỉ có thể xem báo cáo do chính bạn tạo");
+            if (!isClubOfficer) {
+                // Get user's team if not club officer
+                userTeamId = roleMemberShipRepository.findTeamIdByUserIdAndClubIdAndSemesterId(
+                        userId, clubId, currentSemester.getId()).orElse(null);
             }
         }
+
+        // Authorization checks
+        if (!isClubOfficer) {
+            // If the user is the creator, allow viewing regardless of team assignment
+            boolean isCreator = report.getCreatedBy() != null && report.getCreatedBy().getId().equals(userId);
+            if (isCreator) {
+                return reportMapper.toDetail(report);
+            }
+
+            // Non-creator non-club-officers have restrictions
+            // 1. If report is DRAFT, only creator can view (we already rejected non-creator above)
+            if (report.getStatus() == ReportStatus.DRAFT) {
+                throw new ForbiddenException("Báo cáo nháp chỉ có thể được xem bởi người tạo");
+            }
+
+            // 2. For non-draft reports, can only view reports assigned to their team
+            if (userTeamId == null) {
+                throw new ForbiddenException("Bạn không thuộc phòng ban nào trong CLB này");
+            }
+
+            // Check if report requirement is assigned to user's team
+            if (report.getClubReportRequirement() != null) {
+                Long assignedTeamId = report.getClubReportRequirement().getTeamId();
+                if (assignedTeamId == null) {
+                    throw new ForbiddenException("Báo cáo này chưa được gán cho phòng ban nào");
+                }
+                if (!userTeamId.equals(assignedTeamId)) {
+                    throw new ForbiddenException("Báo cáo này được gán cho phòng ban khác. Bạn chỉ có thể xem báo cáo của phòng ban mình");
+                }
+            }
+        }
+        // Club officers can view all reports without restrictions
 
         return reportMapper.toDetail(report);
     }

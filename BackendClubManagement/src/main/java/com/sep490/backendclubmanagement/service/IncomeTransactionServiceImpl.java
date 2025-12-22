@@ -298,6 +298,15 @@ public class IncomeTransactionServiceImpl implements IncomeTransactionService {
         IncomeTransaction transaction = incomeTransactionRepository.findById(transactionId)
                 .orElseThrow(() -> new AppException(ErrorCode.TRANSACTION_NOT_FOUND));
 
+        // ✅ Không cho chỉnh sửa các khoản thu tự động từ PayOS
+        if (transaction.getPayOSPayment() != null ||
+                (transaction.getSource() != null && transaction.getSource().equalsIgnoreCase("PayOS"))) {
+            throw new AppException(
+                    ErrorCode.VALIDATION_ERROR,
+                    "Các khoản thu được tạo tự động từ PayOS không thể chỉnh sửa. Vui lòng xem lịch sử giao dịch thay vì chỉnh sửa."
+            );
+        }
+
         // Only allow update if status is PENDING
         if (transaction.getStatus() != TransactionStatus.PENDING) {
             throw new AppException(ErrorCode.TRANSACTION_CANNOT_BE_UPDATED, 

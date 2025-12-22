@@ -344,9 +344,9 @@ export function StaffReportManagement() {
   const getReportTypeLabel = (type: FrontendReportType) => {
     switch (type) {
       case "periodic":
-        return "Báo cáo Định kỳ";
+        return "Báo cáo định kỳ";
       case "post-event":
-        return "Báo cáo Sau sự kiện";
+        return "Báo cáo cho sự kiện";
       case "other":
         return "Loại báo cáo khác";
       default:
@@ -502,8 +502,8 @@ export function StaffReportManagement() {
         >
           <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="reports">Danh sách báo cáo</TabsTrigger>
-            <TabsTrigger value="periodic">Yêu cầu Định kỳ</TabsTrigger>
-            <TabsTrigger value="post-event">Yêu cầu Sau sự kiện</TabsTrigger>
+            <TabsTrigger value="periodic">Yêu cầu định kỳ</TabsTrigger>
+            <TabsTrigger value="post-event">Yêu cầu cho sự kiện</TabsTrigger>
             <TabsTrigger value="other">Yêu cầu khác</TabsTrigger>
           </TabsList>
         </Tabs>
