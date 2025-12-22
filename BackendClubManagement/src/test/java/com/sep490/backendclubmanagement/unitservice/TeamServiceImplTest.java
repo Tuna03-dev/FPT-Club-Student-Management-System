@@ -8,7 +8,6 @@ import com.sep490.backendclubmanagement.entity.*;
 import com.sep490.backendclubmanagement.exception.AccessDeniedException;
 import com.sep490.backendclubmanagement.exception.AppException;
 import com.sep490.backendclubmanagement.exception.DuplicateResourceException;
-import com.sep490.backendclubmanagement.exception.ResourceNotFoundException;
 import com.sep490.backendclubmanagement.mapper.TeamMapper;
 import com.sep490.backendclubmanagement.repository.*;
 import com.sep490.backendclubmanagement.security.RoleGuard;
@@ -116,23 +115,31 @@ class TeamServiceImplTest {
                 .thenReturn(List.of(m1, m2, m3));
 
         // roles
+        ClubRole leaderRole = buildRole("CLUB_TEAM_HEAD");
+        ClubRole viceRole = buildRole("CLUB_TEAM_DEPUTY");
+        ClubRole memberRole = buildRole("CLUB_MEMBER");
+
         when(clubRoleRepository.findByClubIdAndRoleCode(1L, "CLUB_TEAM_HEAD"))
-                .thenReturn(Optional.of(buildRole("CLUB_TEAM_HEAD")));
+                .thenReturn(Optional.of(leaderRole));
         when(clubRoleRepository.findByClubIdAndRoleCode(1L, "CLUB_TEAM_DEPUTY"))
-                .thenReturn(Optional.of(buildRole("CLUB_TEAM_DEPUTY")));
+                .thenReturn(Optional.of(viceRole));
         when(clubRoleRepository.findByClubIdAndRoleCode(1L, "CLUB_MEMBER"))
-                .thenReturn(Optional.of(buildRole("CLUB_MEMBER")));
+                .thenReturn(Optional.of(memberRole));
 
-        // IMPORTANT: mock role lookup in semester
-        when(roleMemberShipRepository
-                .findByClubMemberShipIdAndSemesterId(anyLong(), eq(semester.getId())))
-                .thenReturn(Collections.emptyList());
+        // 🔥 MOCK ĐÚNG LOGIC MỚI
+        when(roleMemberShipRepository.findByClubMemberShipAndSemester(m1, semester))
+                .thenReturn(Optional.of(buildRoleMembership(m1, leaderRole, semester)));
+        when(roleMemberShipRepository.findByClubMemberShipAndSemester(m2, semester))
+                .thenReturn(Optional.of(buildRoleMembership(m2, viceRole, semester)));
+        when(roleMemberShipRepository.findByClubMemberShipAndSemester(m3, semester))
+                .thenReturn(Optional.of(buildRoleMembership(m3, memberRole, semester)));
 
-        // team saved
+        // save team
         Team saved = new Team();
         saved.setId(200L);
         saved.setTeamName("Kỹ thuật");
         saved.setClub(club);
+
         when(teamRepository.save(any())).thenReturn(saved);
 
         TeamResponse res = new TeamResponse();
@@ -292,5 +299,18 @@ class TeamServiceImplTest {
         r.setRoleCode(code);
         r.setRoleName(code);
         return r;
+    }
+
+    private RoleMemberShip buildRoleMembership(
+            ClubMemberShip cm,
+            ClubRole role,
+            Semester semester
+    ) {
+        RoleMemberShip rm = new RoleMemberShip();
+        rm.setClubMemberShip(cm);
+        rm.setClubRole(role);
+        rm.setSemester(semester);
+        rm.setIsActive(true);
+        return rm;
     }
 }
