@@ -15,6 +15,7 @@ import java.util.List;
 public interface ClubMemberShipRepository extends JpaRepository<ClubMemberShip, Long> {
 
     // CLB mà user đang tham gia trong 1 học kỳ (không phụ thuộc tên collection ở ClubMemberShip)
+    // Yêu cầu phải có role trong semester hiện tại
     @Query("""
         select new com.sep490.backendclubmanagement.dto.response.MyClubDTO(
             c.id, c.clubName, c.logoUrl
@@ -33,6 +34,19 @@ public interface ClubMemberShipRepository extends JpaRepository<ClubMemberShip, 
         """)
     List<MyClubDTO> findClubsByUserIdAndSemesterId(@Param("userId") Long userId,
                                                    @Param("semesterId") Long semesterId);
+
+    // CLB mà user đang tham gia (tất cả active memberships, không yêu cầu role trong semester)
+    // Đồng bộ với logic getUserClubRoles()
+    @Query("""
+        select new com.sep490.backendclubmanagement.dto.response.MyClubDTO(
+            c.id, c.clubName, c.logoUrl
+        )
+        from ClubMemberShip cm
+            join cm.club c
+        where cm.user.id = :userId
+          and cm.status = 'ACTIVE'
+        """)
+    List<MyClubDTO> findActiveClubsByUserId(@Param("userId") Long userId);
 
     // Lấy ClubMemberShip entity của user trong semester hiện tại (ACTIVE status only)
     // Không check EXISTS role vì logic xử lý member không có role được handle ở code
