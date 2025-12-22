@@ -138,7 +138,7 @@ interface ReportRequest {
 
 const reportTypeLabels: Record<ReportType, string> = {
   periodic: "Báo cáo định kỳ",
-  post_event: "Báo cáo hậu sự kiện",
+  post_event: "Báo cáo cho sự kiện",
 };
 
 const reportTypeColors: Record<ReportType, string> = {
