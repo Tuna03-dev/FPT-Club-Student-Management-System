@@ -1358,13 +1358,14 @@ class ReportServiceImplTest {
     void createReport_Success_AsTeamOfficer_CreatesAsDraft() throws AppException {
         // Arrange
         Long userId = user.getId();
+        Long userTeamId = 1L; // Team ID for the team officer
 
         CreateReportRequest request = new CreateReportRequest();
         request.setClubId(club.getId());
         request.setReportTitle("Team Report");
         request.setContent("Report from team officer");
         request.setFileUrl("https://example.com/reports/team-report.pdf");
-        request.setReportRequirementId(clubRequirement.getId());
+        request.setReportRequirementId(submissionRequirement.getId()); // Use submissionRequirement ID
         request.setAutoSubmit(false);
 
         // Create a new clubRequirement without report for this test
@@ -1372,7 +1373,8 @@ class ReportServiceImplTest {
         emptyClubRequirement.setId(1L);
         emptyClubRequirement.setClub(club);
         emptyClubRequirement.setSubmissionReportRequirement(submissionRequirement);
-        emptyClubRequirement.setReport(null); // Ensure no report exists
+        emptyClubRequirement.setReport(null);
+        emptyClubRequirement.setTeamId(userTeamId); // IMPORTANT: Assign to user's team
 
         when(semesterRepository.findCurrentSemester()).thenReturn(Optional.of(currentSemester));
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
@@ -1380,14 +1382,18 @@ class ReportServiceImplTest {
             userId, club.getId(), currentSemester.getId()
         )).thenReturn(true);
         when(clubRepository.findById(club.getId())).thenReturn(Optional.of(club));
-        when(submissionReportRequirementRepository.findById(emptyClubRequirement.getId()))
+        when(submissionReportRequirementRepository.findById(submissionRequirement.getId()))
             .thenReturn(Optional.of(submissionRequirement));
         when(clubReportRequirementRepository.findByClubIdAndSubmissionReportRequirementId(
-            club.getId(), emptyClubRequirement.getId()
+            club.getId(), submissionRequirement.getId()
         )).thenReturn(Optional.of(emptyClubRequirement));
         when(roleMemberShipRepository.isClubOfficerInCurrentSemester(
             userId, club.getId(), currentSemester.getId()
         )).thenReturn(false); // Not club officer, just team officer
+        // Mock team ID lookup for authorization check
+        when(roleMemberShipRepository.findTeamIdByUserIdAndClubIdAndSemesterId(
+            userId, club.getId(), currentSemester.getId()
+        )).thenReturn(Optional.of(userTeamId));
         when(reportRepository.save(any(Report.class))).thenAnswer(invocation -> {
             Report savedReport = invocation.getArgument(0);
             savedReport.setId(1L);
