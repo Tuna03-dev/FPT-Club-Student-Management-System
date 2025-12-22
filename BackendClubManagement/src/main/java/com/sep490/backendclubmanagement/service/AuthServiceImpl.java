@@ -60,65 +60,33 @@ public class AuthServiceImpl implements AuthService{
         User user = userService.findByEmail(email).orElse(null);
 
         if (user == null) {
-            // ✅ FIX: Kiểm tra xem có user nào đã tồn tại với student_code này không
-            // (Có thể đã được import từ Excel với email tạm thời)
-            if (studentCode != null && !studentCode.isEmpty()) {
-                Optional<User> existingUserByStudentCode = userRepository.findByStudentCode(studentCode);
-                if (existingUserByStudentCode.isPresent()) {
-                    // User đã tồn tại với student_code này, update email và thông tin
-                    user = existingUserByStudentCode.get();
-                    log.info("[Login] Found existing user with student_code {} but different email. Updating email from {} to {}", 
-                            studentCode, user.getEmail(), email);
-                    
-                    // Update email và thông tin từ Google/FAP API
-                    user.setEmail(email);
-                    if (fullName != null && !fullName.isEmpty()) {
-                        user.setFullName(fullName);
-                    }
-                    if (avatarUrl != null && !avatarUrl.isEmpty()) {
-                        user.setAvatarUrl(avatarUrl);
-                    }
-                    user.setProvider("GOOGLE");
-                    user.setProviderId(payload.getSubject());
-                    user.setIsActive(true);
-                    if (user.getSystemRole() == null) {
-                        user.setSystemRole(role);
-                    }
-                    user = userService.save(user);
-                } else {
-                    // Tạo user mới với information from Google/FapAPI
-                    user = new User();
-                    user.setEmail(email);
-                    user.setFullName(fullName);
-                    user.setAvatarUrl(avatarUrl);
-                    user.setProvider("GOOGLE");
-                    user.setProviderId(payload.getSubject());
-                    user.setIsActive(true);
-                    user.setStudentCode(studentCode);
-                    user.setSystemRole(role);
-                    user = userService.save(user);
-                }
-            } else {
-                // Không có student_code, tạo user mới
-                user = new User();
-                user.setEmail(email);
-                user.setFullName(fullName);
-                user.setAvatarUrl(avatarUrl);
-                user.setProvider("GOOGLE");
-                user.setProviderId(payload.getSubject());
-                user.setIsActive(true);
-                user.setStudentCode(studentCode);
-                user.setSystemRole(role);
-                user = userService.save(user);
-            }
+            // Create new user with information from Google/FapAPI
+            user = new User();
+            user.setEmail(email);
+            user.setFullName(fullName);
+            user.setAvatarUrl(avatarUrl);
+            user.setProvider("GOOGLE");
+            user.setProviderId(payload.getSubject());
+            user.setIsActive(true);
+            user.setStudentCode(studentCode);
+            user.setSystemRole(role);
+            user = userService.save(user);
         } else {
             // Check if existing user is active
             if (!user.getIsActive()) {
                 throw new AppException(ErrorCode.USER_NOT_ACTIVE);
             }
+            boolean needSave = false;
+            if (!Objects.equals(user.getStudentCode(), studentCode)) {
+                user.setStudentCode(studentCode);
+                needSave = true;
+            }
             // Ensure user has system role
             if (user.getSystemRole() == null) {
                 user.setSystemRole(role);
+                needSave = true;
+            }
+            if (needSave) {
                 user = userService.save(user);
             }
         }

@@ -13,6 +13,7 @@ import java.util.Optional;
 import com.sep490.backendclubmanagement.dto.request.StaffFilterRequest;
 @Repository
 public interface UserRepository extends JpaRepository<User, Long> {
+    @Query("SELECT u FROM User u WHERE LOWER(u.email) = LOWER(:email)")
     Optional<User> findByEmail(String email);
 
     Optional<User> findByEmailIgnoreCase(String email);
