@@ -1,7 +1,6 @@
 package com.sep490.backendclubmanagement.unitservice;
 
 import com.sep490.backendclubmanagement.dto.response.*;
-import com.sep490.backendclubmanagement.entity.Club;
 import com.sep490.backendclubmanagement.repository.ClubRepository;
 import com.sep490.backendclubmanagement.repository.EventRepository;
 import com.sep490.backendclubmanagement.repository.NewsRepository;
@@ -14,24 +13,32 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageRequest;
 
+import java.sql.Timestamp;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class HomepageServiceTest {
 
-    @Mock private ClubRepository clubRepository;
-    @Mock private EventRepository eventRepository;
-    @Mock private NewsRepository newsRepository;
+    @Mock
+    private ClubRepository clubRepository;
 
-    @InjectMocks private HomepageService homepageService;
+    @Mock
+    private EventRepository eventRepository;
+
+    @Mock
+    private NewsRepository newsRepository;
+
+    @InjectMocks
+    private HomepageService homepageService;
 
     private FeaturedClubDTO featuredClub;
-    private UpcomingEventDTO upcomingEvent;
     private LatestNewsDTO latestNews;
 
     @BeforeEach
@@ -41,15 +48,6 @@ class HomepageServiceTest {
                 "DEV Club",
                 "logo.png",
                 "Club description"
-        );
-
-        upcomingEvent = new UpcomingEventDTO(
-                10L,
-                "Hackathon",
-                LocalDateTime.now().plusDays(1),
-                "Hall A",
-                "DEV Club",
-                "event.png"
         );
 
         latestNews = new LatestNewsDTO(
@@ -63,56 +61,85 @@ class HomepageServiceTest {
 
     @Test
     void getHomepageData_success() {
-        // Mock STEP 1
+        // ===== STEP 1: Featured clubs auto update =====
         doNothing().when(clubRepository).resetAllFeatured();
         when(clubRepository.findTopClubIdsByEventCount(any(PageRequest.class)))
                 .thenReturn(List.of(1L, 2L));
         doNothing().when(clubRepository).updateFeaturedClubs(anyList());
 
-        // STEP 2: Featured clubs
+        // ===== STEP 2: Get featured clubs =====
         when(clubRepository.findFeaturedClubs())
                 .thenReturn(List.of(featuredClub));
 
-        // STEP 3: Upcoming events
-        when(eventRepository.findUpcomingEvents(any(), any(PageRequest.class)))
-                .thenReturn(List.of(upcomingEvent));
+        // ===== STEP 3: Upcoming events (RAW Object[]) =====
+        List<Object[]> rawEvents = new ArrayList<>();
+        rawEvents.add(new Object[]{
+                10L,
+                "Hackathon",
+                Timestamp.valueOf(LocalDateTime.now().plusDays(1)),
+                "Hall A",
+                "DEV Club",
+                "event.png"
+        });
 
-        // STEP 4: Latest news
+        when(eventRepository.findUpcomingEventsRaw(any(LocalDateTime.class)))
+                .thenReturn(rawEvents);
+
+        // ===== STEP 4: Latest news =====
         when(newsRepository.findLatestNews(any(PageRequest.class)))
                 .thenReturn(List.of(latestNews));
 
-        // STEP 4.5 spotlight
-        Club mockNews = new Club(); // <-- fake entity chỉ để getId
+        // ===== STEP 4.5: Spotlight (NO DATA) =====
         when(newsRepository.findTopByIsDraftFalseOrderByCreatedAtDesc())
                 .thenReturn(Optional.empty());
         when(newsRepository.findTopByIsSpotlightTrueOrderByCreatedAtDesc())
                 .thenReturn(Optional.empty());
 
-        // Act
-        HomepageResponse resp = homepageService.getHomepageData();
+        // ===== ACT =====
+        HomepageResponse response = homepageService.getHomepageData();
 
-        // Assert
-        assertNotNull(resp);
+        // ===== ASSERT =====
+        assertNotNull(response);
 
-        // Featured
-        assertEquals(1, resp.getFeaturedClubs().size());
-        assertEquals("DEV Club", resp.getFeaturedClubs().get(0).getClubName());
+        // Featured clubs
+        assertEquals(1, response.getFeaturedClubs().size());
+        assertEquals(
+                "DEV Club",
+                response.getFeaturedClubs().get(0).getClubName()
+        );
 
         // Upcoming events
-        assertEquals(1, resp.getUpcomingEvents().size());
-        assertEquals("Hackathon", resp.getUpcomingEvents().get(0).getTitle());
+        assertEquals(1, response.getUpcomingEvents().size());
+        assertEquals(
+                "Hackathon",
+                response.getUpcomingEvents().get(0).getTitle()
+        );
 
         // Latest news
-        assertEquals(1, resp.getLatestNews().size());
-        assertEquals("New Project Launch", resp.getLatestNews().get(0).getTitle());
+        assertEquals(1, response.getLatestNews().size());
+        assertEquals(
+                "New Project Launch",
+                response.getLatestNews().get(0).getTitle()
+        );
 
-        // Spotlight (empty)
-        assertNull(resp.getSpotlight());
+        // Spotlight
+        assertNull(response.getSpotlight());
 
-        // Verify internal behavior
-        verify(clubRepository, times(1)).resetAllFeatured();
-        verify(clubRepository, times(1)).updateFeaturedClubs(anyList());
-        verify(eventRepository, times(1)).findUpcomingEvents(any(), any(PageRequest.class));
-        verify(newsRepository, times(1)).findLatestNews(any(PageRequest.class));
+        // ===== VERIFY =====
+        verify(clubRepository).resetAllFeatured();
+        verify(clubRepository)
+                .findTopClubIdsByEventCount(any(PageRequest.class));
+        verify(clubRepository).updateFeaturedClubs(anyList());
+        verify(clubRepository).findFeaturedClubs();
+
+        verify(eventRepository)
+                .findUpcomingEventsRaw(any(LocalDateTime.class));
+
+        verify(newsRepository)
+                .findLatestNews(any(PageRequest.class));
+        verify(newsRepository)
+                .findTopByIsDraftFalseOrderByCreatedAtDesc();
+        verify(newsRepository)
+                .findTopByIsSpotlightTrueOrderByCreatedAtDesc();
     }
 }
