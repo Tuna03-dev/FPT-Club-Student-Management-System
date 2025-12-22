@@ -198,7 +198,7 @@ export function IncomeTransactionForm({
                     type="number"
                     placeholder="0"
                     min="0"
-                    step="0.01"
+                    step="1000"
                     {...field}
                     onChange={(e) => field.onChange(Number(e.target.value))}
                   />
