@@ -381,6 +381,7 @@ public class NewsWorkflowService {
 
         // Realtime: broadcast toàn hệ thống + cho người tạo
         webSocketService.broadcastSystemWide("NEWS", "PUBLISHED", newsMapper.toDto(usedNews));
+        webSocketService.broadcastHomepageUpdated("NEWS");
         webSocketService.broadcastToUser(r.getCreatedBy().getId(), "NEWS_REQUEST", "APPROVED",
                 Map.of("requestId", r.getId(), "status", r.getStatus().name()));
 
@@ -498,7 +499,7 @@ public class NewsWorkflowService {
 
         // Realtime
         webSocketService.broadcastSystemWide("NEWS", "PUBLISHED", newsMapper.toDto(news));
-
+        webSocketService.broadcastHomepageUpdated("NEWS");
         return new PublishResult(news.getId(), newsMapper.toDto(news), "Đăng trực tiếp thành công");
     }
 

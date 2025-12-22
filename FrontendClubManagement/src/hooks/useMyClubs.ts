@@ -36,7 +36,22 @@ export function useMyClubs(enabled: boolean = true) {
     };
   }, [enabled]);
 
-  return { data, loading, error };
+  const refetch = async () => {
+    if (!enabled) return;
+    setLoading(true);
+    setErr(null);
+
+    try {
+      const clubs = await getMyClubs();
+      setData(clubs);
+    } catch (e: any) {
+      setErr(e?.message || "Cannot load clubs");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return { data, loading, error, refetch };
 }
 
 export default useMyClubs;
