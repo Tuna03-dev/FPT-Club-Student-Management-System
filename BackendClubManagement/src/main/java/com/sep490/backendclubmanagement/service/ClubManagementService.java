@@ -185,6 +185,7 @@ public class ClubManagementService {
                         .clubName(clubName)
                         .clubRole("thành viên")
                         .systemRole("MEMBER")
+                        .teamId(null)
                         .build());
             } else {
                 // Lấy tất cả roles của user trong club này
@@ -202,6 +203,7 @@ public class ClubManagementService {
                                 .clubName(clubName)
                                 .clubRole(clubRoleName)
                                 .systemRole(systemRoleName)
+                                .teamId(rm.getTeam() != null ? rm.getTeam().getId() : null)
                                 .build());
                     }
                 }
