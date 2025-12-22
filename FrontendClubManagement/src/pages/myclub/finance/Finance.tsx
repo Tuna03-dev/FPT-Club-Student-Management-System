@@ -468,7 +468,16 @@ export default function Finance() {
     data: CreateIncomeTransactionRequest
   ) => {
     try {
-      await transactionService.createIncomeTransaction(numericClubId, data);
+      const res = await transactionService.createIncomeTransaction(
+        numericClubId,
+        data
+      );
+
+      // Nếu backend trả mã lỗi (vd: trùng đóng phí), ném lỗi để dialog hiển thị toast lỗi
+      if (res.code !== 200) {
+        throw new Error(res.message || "Không thể tạo giao dịch thu");
+      }
+
       await fetchIncomeTransactions(incomePage);
       await fetchFinanceSummary();
     } catch (error) {

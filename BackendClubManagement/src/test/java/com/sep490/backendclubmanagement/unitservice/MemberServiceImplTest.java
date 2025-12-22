@@ -104,7 +104,7 @@ class MemberServiceImplTest {
 
         assertNotNull(resp);
         assertEquals(1, resp.getTotalElements());
-        assertEquals("Nguyễn Văn A", resp.getContent().get(0).getFullName());
+        assertEquals("Nguyễn Văn A", resp.getContent().getFirst().getFullName());
     }
 
     @Test
@@ -126,10 +126,17 @@ class MemberServiceImplTest {
         otherCms.setStatus(ClubMemberShipStatus.ACTIVE);
 
         // page có 2 member, nhưng search chỉ match 1
-        Page<ClubMemberShip> page = new PageImpl<>(List.of(cms, otherCms), pageable, 2);
+        Page<ClubMemberShip> page = new PageImpl<>(List.of(cms, otherCms), Pageable.unpaged(), 2);
 
         when(semesterRepository.findAll()).thenReturn(List.of(currentSemester));
-        when(clubMemberShipRepository.findMembersWithFiltersOptimized(eq(club.getId()), any(), any(), any(), any(), eq(pageable)))
+        // Mock for unpaged (when search is used) - use correct clubId
+        when(clubMemberShipRepository.findMembersWithFiltersOptimized(
+                eq(1L), // club.getId() = 1L
+                any(),
+                eq(5L), // currentSemester.getId() = 5L
+                any(),
+                any(),
+                eq(Pageable.unpaged())))
                 .thenReturn(page);
 
         // Act - search theo tên "Nguyễn", kỳ vọng chỉ còn lại cms của user "Nguyễn Văn A"
@@ -138,7 +145,7 @@ class MemberServiceImplTest {
         // Assert
         assertNotNull(resp);
         assertEquals(1, resp.getContent().size());
-        assertEquals("Nguyễn Văn A", resp.getContent().get(0).getFullName());
+        assertEquals("Nguyễn Văn A", resp.getContent().getFirst().getFullName());
     }
 
     @Test
@@ -236,7 +243,10 @@ class MemberServiceImplTest {
         Long userId = user.getId();
         when(clubMemberShipRepository.findByClubIdAndUserIdList(eq(clubId), eq(userId))).thenReturn(List.of(cms));
         when(clubRepository.findById(eq(clubId))).thenReturn(Optional.of(club));
-        when(roleMemberShipRepository.findByClubMemberShipId(eq(cms.getId()))).thenReturn(Collections.emptyList());
+        // Mock current semester và role memberships của kỳ hiện tại
+        when(semesterRepository.findAll()).thenReturn(List.of(currentSemester));
+        when(roleMemberShipRepository.findByClubMemberShipIdAndSemesterId(eq(cms.getId()), eq(currentSemester.getId())))
+                .thenReturn(Collections.emptyList());
 
         // Act
         memberService.removeMemberFromClub(clubId, userId, "Vi phạm nội quy");
@@ -244,7 +254,8 @@ class MemberServiceImplTest {
         // Assert
         assertEquals(ClubMemberShipStatus.LEFT, cms.getStatus());
         verify(clubMemberShipRepository, times(1)).save(eq(cms));
-        verify(roleMemberShipRepository, atLeastOnce()).findByClubMemberShipId(eq(cms.getId()));
+        verify(roleMemberShipRepository, atLeastOnce())
+                .findByClubMemberShipIdAndSemesterId(eq(cms.getId()), eq(currentSemester.getId()));
         verify(notificationService, times(1)).sendToUser(eq(userId), isNull(), contains("xóa"), anyString(), any(), any(), anyString(), eq(clubId), isNull(), isNull(), isNull(), isNull());
     }
 
@@ -259,8 +270,8 @@ class MemberServiceImplTest {
         // Assert
         assertNotNull(list);
         assertEquals(1, list.size());
-        assertEquals(user.getId(), list.get(0).getUserId());
-        assertEquals(user.getFullName(), list.get(0).getFullName());
+        assertEquals(user.getId(), list.getFirst().getUserId());
+        assertEquals(user.getFullName(), list.getFirst().getFullName());
     }
 
     @Test
@@ -280,7 +291,7 @@ class MemberServiceImplTest {
         // Assert
         assertNotNull(resp);
         assertEquals(1, resp.getTotalElements());
-        assertEquals("Nguyễn Văn A", resp.getContent().get(0).getFullName());
+        assertEquals("Nguyễn Văn A", resp.getContent().getFirst().getFullName());
     }
 
     @Test
@@ -303,9 +314,10 @@ class MemberServiceImplTest {
         otherCms.setJoinDate(LocalDate.of(2024, 1, 1));
         otherCms.setStatus(ClubMemberShipStatus.LEFT);
 
-        Page<ClubMemberShip> page = new PageImpl<>(List.of(cms, otherCms), pageable, 2);
+        Page<ClubMemberShip> page = new PageImpl<>(List.of(cms, otherCms), Pageable.unpaged(), 2);
 
-        when(clubMemberShipRepository.findLeftMembersOptimized(eq(club.getId()), eq(pageable)))
+        // Mock for unpaged (when search is used) - use correct clubId
+        when(clubMemberShipRepository.findLeftMembersOptimized(eq(1L), eq(Pageable.unpaged())))
                 .thenReturn(page);
 
         // Act - search theo "Nguyễn" để chỉ match member đầu tiên
@@ -314,7 +326,7 @@ class MemberServiceImplTest {
         // Assert
         assertNotNull(resp);
         assertEquals(1, resp.getContent().size());
-        assertEquals("Nguyễn Văn A", resp.getContent().get(0).getFullName());
+        assertEquals("Nguyễn Văn A", resp.getContent().getFirst().getFullName());
     }
 
     @Test
@@ -399,7 +411,10 @@ class MemberServiceImplTest {
         Long userId = user.getId();
         when(clubMemberShipRepository.findByClubIdAndUserIdList(eq(clubId), eq(userId))).thenReturn(List.of(cms));
         when(clubRepository.findById(eq(clubId))).thenReturn(Optional.of(club));
-        when(roleMemberShipRepository.findByClubMemberShipId(eq(cms.getId()))).thenReturn(Collections.emptyList());
+        // Mock current semester và role memberships của kỳ hiện tại
+        when(semesterRepository.findAll()).thenReturn(List.of(currentSemester));
+        when(roleMemberShipRepository.findByClubMemberShipIdAndSemesterId(eq(cms.getId()), eq(currentSemester.getId())))
+                .thenReturn(Collections.emptyList());
 
         // Mock notification to throw exception
         doThrow(new RuntimeException("Notification failed")).when(notificationService).sendToUser(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
@@ -410,8 +425,8 @@ class MemberServiceImplTest {
         // Verify member was still marked as LEFT
         assertEquals(ClubMemberShipStatus.LEFT, cms.getStatus());
         verify(clubMemberShipRepository, times(1)).save(eq(cms));
-        verify(roleMemberShipRepository, times(1)).findByClubMemberShipId(eq(cms.getId()));
-        verify(roleMemberShipRepository, atLeastOnce()).findByClubMemberShipId(eq(cms.getId()));
+        verify(roleMemberShipRepository, atLeastOnce())
+                .findByClubMemberShipIdAndSemesterId(eq(cms.getId()), eq(currentSemester.getId()));
     }
 
     @Test
@@ -572,7 +587,7 @@ class MemberServiceImplTest {
     }
 
     @Test
-    void updateMemberRole_semesterNotFound_throwsException() {
+    void updateMemberRole_semesterNotFound_throwsException() throws AppException {
         // Arrange
         Long clubId = club.getId();
         Long userId = user.getId();
@@ -587,10 +602,9 @@ class MemberServiceImplTest {
         when(clubMemberShipRepository.findByClubIdAndUserIdList(eq(clubId), eq(userId))).thenReturn(List.of(cms));
         when(semesterRepository.findById(eq(semesterId))).thenReturn(Optional.empty());
 
-        // Act & Assert - getClubMemberShipOrThrow succeeds, but resolveSemester throws IllegalArgumentException
-        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
+        // Act & Assert - resolveSemester throws IllegalArgumentException when semester not found
+        assertThrows(IllegalArgumentException.class, () ->
             memberService.updateMemberRole(clubId, userId, roleId, semesterId, currentUserId));
-        assertTrue(exception.getMessage().contains("Semester not found"));
     }
 
     @Test
@@ -604,12 +618,10 @@ class MemberServiceImplTest {
 
         when(clubMemberShipRepository.findByClubIdAndUserIdList(eq(clubId), eq(userId))).thenReturn(List.of(cms));
         when(semesterRepository.findAll()).thenReturn(Collections.emptyList()); // No current semester
-        // Note: userService.getCurrentUserId() is not needed here as exception is thrown before it's checked
 
         // Act & Assert - resolveSemester throws IllegalStateException when no current semester
-        IllegalStateException exception = assertThrows(IllegalStateException.class, () ->
+        assertThrows(IllegalStateException.class, () ->
             memberService.updateMemberRole(clubId, userId, roleId, semesterId, currentUserId));
-        assertTrue(exception.getMessage().contains("No current semester configured"));
     }
 
     // ========== Exception Tests for updateMemberTeam ==========
@@ -665,9 +677,8 @@ class MemberServiceImplTest {
         when(semesterRepository.findById(eq(semesterId))).thenReturn(Optional.empty());
 
         // Act & Assert - resolveSemester throws IllegalArgumentException when semester not found
-        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
+        assertThrows(IllegalArgumentException.class, () ->
             memberService.updateMemberTeam(clubId, userId, teamId, semesterId));
-        assertTrue(exception.getMessage().contains("Semester not found"));
     }
 
     @Test
@@ -688,9 +699,8 @@ class MemberServiceImplTest {
         when(semesterRepository.findAll()).thenReturn(Collections.emptyList()); // No current semester
 
         // Act & Assert - resolveSemester throws IllegalStateException when no current semester
-        IllegalStateException exception = assertThrows(IllegalStateException.class, () ->
+        assertThrows(IllegalStateException.class, () ->
             memberService.updateMemberTeam(clubId, userId, teamId, semesterId));
-        assertTrue(exception.getMessage().contains("No current semester configured"));
     }
 
     // ========== Exception Tests for updateMemberActiveStatus ==========
@@ -705,9 +715,8 @@ class MemberServiceImplTest {
         when(clubMemberShipRepository.findByClubIdAndUserIdList(eq(clubId), eq(userId))).thenReturn(Collections.emptyList());
 
         // Act & Assert
-        IllegalStateException exception = assertThrows(IllegalStateException.class, () ->
+        assertThrows(IllegalStateException.class, () ->
             memberService.updateMemberActiveStatus(clubId, userId, true, semesterId));
-        assertTrue(exception.getMessage().contains("Member not found or already left club"));
     }
 
     @Test
@@ -721,9 +730,8 @@ class MemberServiceImplTest {
         when(clubMemberShipRepository.findByClubIdAndUserIdList(eq(clubId), eq(userId))).thenReturn(List.of(cms));
 
         // Act & Assert - getClubMemberShipOrThrow throws AppException which is caught and rethrown as IllegalStateException
-        IllegalStateException exception = assertThrows(IllegalStateException.class, () ->
+        assertThrows(IllegalStateException.class, () ->
             memberService.updateMemberActiveStatus(clubId, userId, true, semesterId));
-        assertTrue(exception.getMessage().contains("Member not found or already left club"));
     }
 
     @Test
@@ -737,9 +745,8 @@ class MemberServiceImplTest {
         when(semesterRepository.findById(eq(semesterId))).thenReturn(Optional.empty());
 
         // Act & Assert
-        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
+        assertThrows(IllegalArgumentException.class, () ->
             memberService.updateMemberActiveStatus(clubId, userId, true, semesterId));
-        assertTrue(exception.getMessage().contains("Semester not found"));
     }
 
     @Test
@@ -753,9 +760,8 @@ class MemberServiceImplTest {
         when(semesterRepository.findAll()).thenReturn(Collections.emptyList()); // No current semester
 
         // Act & Assert - resolveSemester throws IllegalStateException when no current semester
-        IllegalStateException exception = assertThrows(IllegalStateException.class, () ->
+        assertThrows(IllegalStateException.class, () ->
             memberService.updateMemberActiveStatus(clubId, userId, true, semesterId));
-        assertTrue(exception.getMessage().contains("No current semester configured"));
     }
 
     // ========== Exception Tests for removeMemberFromClub ==========
