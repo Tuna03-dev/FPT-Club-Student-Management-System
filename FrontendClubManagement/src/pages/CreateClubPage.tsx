@@ -1740,7 +1740,7 @@ const CreateClubPage = () => {
                   type="date"
                   value={defenseDate}
                   onChange={(e) => setDefenseDate(e.target.value)}
-                  min={new Date(Date.now() + 86400000).toISOString().split("T")[0]} // Tomorrow
+                  min={new Date().toISOString().split("T")[0]} // Today
                   required
                 />
               </div>
