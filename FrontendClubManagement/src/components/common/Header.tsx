@@ -20,6 +20,8 @@ import {
   PlusCircle,
   FileSignature,
   Bell,
+  Menu,
+  X,
 } from "lucide-react";
 import useMyClubs from "@/hooks/useMyClubs";
 import { toast } from "sonner";
@@ -29,6 +31,7 @@ const Header: React.FC = () => {
   const [user, setUser] = useState<UserInfo | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [showClubsList, setShowClubsList] = useState(false);
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const navigate = useNavigate();
 
   const shouldLoadMyClubs = isAuthenticated && !!user;
@@ -94,10 +97,18 @@ const Header: React.FC = () => {
       .toUpperCase()
       .slice(0, 2);
 
+  const navLinks = [
+    { path: "/", label: "Trang chủ" },
+    { path: "/clubs", label: "Câu lạc bộ" },
+    { path: "/events", label: "Sự kiện" },
+    { path: "/news", label: "Tin tức" },
+    { path: "/about", label: "Giới thiệu" },
+  ];
+
   return (
     <header className="bg-white shadow-sm sticky top-0 z-40">
-      <div className="container mx-auto px-6">
-        <div className="flex items-center justify-between py-3">
+      <div className="container mx-auto px-4 sm:px-6">
+        <div className="flex items-center justify-between py-3 gap-3">
           {/* Logo */}
           <Link to="/" className="flex items-center gap-3">
             <img
@@ -114,14 +125,8 @@ const Header: React.FC = () => {
           </Link>
 
           {/* Navbar */}
-          <nav className="flex items-center gap-7 flex-wrap">
-            {[
-              { path: "/", label: "Trang chủ" },
-              { path: "/clubs", label: "Câu lạc bộ" },
-              { path: "/events", label: "Sự kiện" },
-              { path: "/news", label: "Tin tức" },
-              { path: "/about", label: "Giới thiệu" },
-            ].map((item) => (
+          <nav className="hidden md:flex items-center gap-7 flex-wrap">
+            {navLinks.map((item) => (
               <Link
                 key={item.path}
                 to={item.path}
@@ -133,7 +138,7 @@ const Header: React.FC = () => {
           </nav>
 
           {/* Avatar / Login */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             {isAuthenticated && user && <NotificationBell />}
 
             {isAuthenticated && user ? (
@@ -332,8 +337,44 @@ const Header: React.FC = () => {
                 Đăng nhập
               </Link>
             )}
+
+            {/* Mobile menu toggle */}
+            <button
+              className="md:hidden inline-flex items-center justify-center h-10 w-10 rounded-md border border-gray-200 text-gray-700 hover:bg-orange-50 transition"
+              onClick={() => setIsMobileNavOpen((prev) => !prev)}
+              aria-label="Mở menu"
+            >
+              {isMobileNavOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            </button>
           </div>
         </div>
+
+        {/* Mobile nav panel */}
+        {isMobileNavOpen && (
+          <div className="md:hidden border-t border-gray-100 pb-4">
+            <div className="flex flex-col gap-1 pt-2">
+              {navLinks.map((item) => (
+                <Link
+                  key={item.path}
+                  to={item.path}
+                  onClick={() => setIsMobileNavOpen(false)}
+                  className="px-2 py-2 rounded-md text-[15px] font-medium text-gray-700 hover:bg-orange-50 transition"
+                >
+                  {item.label}
+                </Link>
+              ))}
+              {!isAuthenticated && (
+                <Link
+                  to="/login"
+                  onClick={() => setIsMobileNavOpen(false)}
+                  className="mt-2 px-2 py-2 rounded-md border border-orange-500 text-orange-600 font-medium text-center hover:bg-orange-50 transition"
+                >
+                  Đăng nhập
+                </Link>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </header>
   );
