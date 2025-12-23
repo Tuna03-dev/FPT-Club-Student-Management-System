@@ -178,6 +178,19 @@ class FeeServiceImplTest {
         return transaction;
     }
 
+    private ClubWallet buildClubWallet(Long id, Long clubId) {
+        ClubWallet wallet = new ClubWallet();
+        wallet.setId(id);
+        Club club = buildClub(clubId, "Test Club");
+        wallet.setClub(club);
+        wallet.setBalance(BigDecimal.ZERO);
+        wallet.setPayOsClientId("test-client-id");
+        wallet.setPayOsApiKey("test-api-key");
+        wallet.setPayOsChecksumKey("test-checksum-key");
+        wallet.setPayOsStatus("ACTIVE");
+        return wallet;
+    }
+
     // ==========================================
     // Test: getFeesByClubId
     // ==========================================
@@ -612,7 +625,7 @@ class FeeServiceImplTest {
         AppException exception = assertThrows(AppException.class,
             () -> feeService.publishFee(feeId));
 
-        assertEquals(ErrorCode.NOT_FOUND, exception.getErrorCode());
+        assertEquals(ErrorCode.FEE_NOT_FOUND, exception.getErrorCode());
         verify(feeRepository, never()).save(any());
     }
 
@@ -674,6 +687,7 @@ class FeeServiceImplTest {
         Club club = buildClub(clubId, "Test Club");
         User user = buildUser(userId, "user@fpt.edu.vn", "User 1");
         Fee fee = buildFee(feeId, clubId, "Payment Fee", new BigDecimal("100000"), FeeType.MEMBERSHIP, false);
+        ClubWallet wallet = buildClubWallet(1L, clubId);
 
         PayOSCreatePaymentResponse paymentResponse = new PayOSCreatePaymentResponse();
         paymentResponse.setPaymentLink("https://pay.payos.vn/checkout/xxx");
@@ -682,6 +696,7 @@ class FeeServiceImplTest {
         when(clubRepository.findById(clubId)).thenReturn(Optional.of(club));
         when(feeRepository.findById(feeId)).thenReturn(Optional.of(fee));
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(clubWalletRepository.findByClub_Id(clubId)).thenReturn(Optional.of(wallet));
         when(payOSIntegrationService.createPaymentRequest(eq(clubId), any(PayOSCreatePaymentRequest.class)))
             .thenReturn(paymentResponse);
 
@@ -695,6 +710,7 @@ class FeeServiceImplTest {
         verify(clubRepository).findById(clubId);
         verify(feeRepository).findById(feeId);
         verify(userRepository).findById(userId);
+        verify(clubWalletRepository).findByClub_Id(clubId);
         verify(payOSIntegrationService).createPaymentRequest(eq(clubId), any(PayOSCreatePaymentRequest.class));
     }
 
@@ -783,10 +799,12 @@ class FeeServiceImplTest {
         Club club = buildClub(clubId, "Test Club");
         Fee fee = buildFee(feeId, clubId, "Test Fee", new BigDecimal("100000"), FeeType.MEMBERSHIP, false);
         User user = buildUser(userId, "user@fpt.edu.vn", "User");
+        ClubWallet wallet = buildClubWallet(1L, clubId);
 
         when(clubRepository.findById(clubId)).thenReturn(Optional.of(club));
         when(feeRepository.findById(feeId)).thenReturn(Optional.of(fee));
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(clubWalletRepository.findByClub_Id(clubId)).thenReturn(Optional.of(wallet));
         when(payOSIntegrationService.createPaymentRequest(eq(clubId), any(PayOSCreatePaymentRequest.class)))
             .thenReturn(new PayOSCreatePaymentResponse());
 
