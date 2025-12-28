@@ -40,6 +40,7 @@ const Header: React.FC = () => {
     data: clubs,
     loading: clubsLoading,
     error: clubsError,
+    refetch: refetchClubs,
   } = useMyClubs(shouldLoadMyClubs);
 
   useEffect(() => {
@@ -199,7 +200,10 @@ const Header: React.FC = () => {
                         clubs &&
                         clubs.length > 0 && (
                           <DropdownMenuItem
-                            onClick={() => setShowClubsList(true)}
+                            onClick={async () => {
+                              await refetchClubs(); // ⭐ DÒNG QUAN TRỌNG
+                              setShowClubsList(true);
+                            }}
                             onSelect={(e) => e.preventDefault()}
                             className="cursor-pointer text-[14px] text-gray-700"
                           >
@@ -344,7 +348,11 @@ const Header: React.FC = () => {
               onClick={() => setIsMobileNavOpen((prev) => !prev)}
               aria-label="Mở menu"
             >
-              {isMobileNavOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+              {isMobileNavOpen ? (
+                <X className="h-5 w-5" />
+              ) : (
+                <Menu className="h-5 w-5" />
+              )}
             </button>
           </div>
         </div>

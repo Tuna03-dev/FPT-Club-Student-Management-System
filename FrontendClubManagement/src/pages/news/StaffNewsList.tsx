@@ -1184,7 +1184,7 @@ export default function StaffNewsList() {
                     <div className="w-14 h-14 rounded-lg bg-slate-100 overflow-hidden flex items-center justify-center">
                       {d.thumbnailUrl ? (
                         <img
-                          src={d.thumbnailUrl || "/placeholder.svg"}
+                          src={d.thumbnailUrl || "/default-fallback-image.png"}
                           className="w-full h-full object-cover"
                         />
                       ) : (
@@ -1317,7 +1317,7 @@ export default function StaffNewsList() {
           >
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Xóa bản nháp #{deleteDraftId}</DialogTitle>
+                <DialogTitle>Xóa bản nháp</DialogTitle>
               </DialogHeader>
               <p className="text-sm text-slate-600">
                 Thao tác này sẽ xóa nháp khỏi danh sách. Bạn chắc chắn?
@@ -1382,7 +1382,7 @@ export default function StaffNewsList() {
             {tab === "news"
               ? "Danh sách News"
               : tab === "requests"
-                ? "Requests từ các CLB"
+                ? "Yêu cầu từ các CLB"
                 : "Bản nháp của tôi"}
           </h2>
           {tab === "news"

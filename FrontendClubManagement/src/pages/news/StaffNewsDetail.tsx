@@ -149,7 +149,7 @@ export default function StaffNewsDetail() {
       <div className="rounded-2xl overflow-hidden bg-slate-100">
         {data.thumbnailUrl ? (
           <img
-            src={data.thumbnailUrl || "/placeholder.svg"}
+            src={data.thumbnailUrl || "/default-fallback-image.png"}
             className="w-full h-[340px] object-cover"
           />
         ) : (

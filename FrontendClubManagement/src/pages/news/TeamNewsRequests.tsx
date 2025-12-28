@@ -164,7 +164,7 @@ export default function TeamNewsRequests() {
 
     try {
       await requestsApi.cancel(cancelId);
-      toast.success(`Đã hủy request`);
+      toast.success(`Đã hủy yêu cầu`);
       await load(currentPage);
     } catch (e: any) {
       console.error("cancel request error:", e);
@@ -310,7 +310,9 @@ export default function TeamNewsRequests() {
                       <div className="w-16 h-16 rounded-lg bg-slate-100 overflow-hidden flex items-center justify-center">
                         {r.thumbnailUrl ? (
                           <img
-                            src={r.thumbnailUrl || "/placeholder.svg"}
+                            src={
+                              r.thumbnailUrl || "/default-fallback-image.png"
+                            }
                             className="w-full h-full object-cover"
                           />
                         ) : (
@@ -450,7 +452,7 @@ export default function TeamNewsRequests() {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Hủy request #{cancelId}</DialogTitle>
+            <DialogTitle>Hủy yêu cầu</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-slate-600">
             Bạn chắc chắn muốn hủy yêu cầu này?

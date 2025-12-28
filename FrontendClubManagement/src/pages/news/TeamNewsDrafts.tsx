@@ -98,7 +98,7 @@ export default function TeamNewsDrafts() {
     setDoing(submitId);
     try {
       await draftsApi.submit(submitId);
-      toast.success(`Đã submit bản nháp lên Chủ nhiệm CLB.`);
+      toast.success(`Đã nộp bản nháp lên Chủ nhiệm CLB.`);
       await load();
     } catch (e: any) {
       toast.error(e?.message || "Không submit được nháp.");
@@ -198,7 +198,7 @@ export default function TeamNewsDrafts() {
                     <div className="w-14 h-14 rounded-lg bg-slate-100 overflow-hidden flex items-center justify-center">
                       {d.thumbnailUrl ? (
                         <img
-                          src={d.thumbnailUrl || "/placeholder.svg"}
+                          src={d.thumbnailUrl || "/default-fallback-image.png"}
                           className="w-full h-full object-cover"
                         />
                       ) : (
