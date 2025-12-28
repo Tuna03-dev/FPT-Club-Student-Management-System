@@ -50,6 +50,14 @@ interface EventDetailModalProps {
 export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted, readOnly, pendingRequest, onPendingActionSuccess }: EventDetailModalProps) {
   const navigate = useNavigate()
   const params = useParams()
+  
+  // Helper function to convert Date to local datetime-local input value
+  const toLocalDateTimeInputValue = (date: Date) => {
+    const offset = date.getTimezoneOffset()
+    const local = new Date(date.getTime() - offset * 60000)
+    return local.toISOString().slice(0, 16)
+  }
+  
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
   const [openUpdate, setOpenUpdate] = useState(false)
   const [updateFormMedia, setUpdateFormMedia] = useState<Array<{ id: number; url: string; type: "IMAGE" | "VIDEO" }>>([])
@@ -811,8 +819,8 @@ export function EventDetailModal({ event, clubId, onClose, onUpdated, onDeleted,
               title: event.title,
               description: event.description,
               location: event.location,
-              startTime: new Date(event.startDate).toISOString().slice(0,16),
-              endTime: new Date(event.endDate).toISOString().slice(0,16),
+              startTime: toLocalDateTimeInputValue(new Date(event.startDate)),
+              endTime: toLocalDateTimeInputValue(new Date(event.endDate)),
               // eventTypeId không có sẵn trong event, để trống nghĩa là không đổi
               ...(updateFormMedia.length > 0 ? { existingMedia: updateFormMedia } : {})
             }}
