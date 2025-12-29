@@ -34,6 +34,7 @@ import { type MemberResponseDTO } from "@/services/memberService";
 import { type ClubRoleDTO, type TeamDTO } from "@/services/clubService";
 import { memberService } from "@/services/memberService";
 import { authService } from "@/services/authService";
+import { getErrorMessage } from "@/lib/utils";
 
 interface MemberDetailDialogProps {
   member: MemberResponseDTO | null;
@@ -110,9 +111,7 @@ const MemberDetailDialog = ({
       onClose();
     } catch (err) {
       console.error(err);
-      const error = err as { response?: { data?: { message?: string } } };
-      const errorMessage =
-        error.response?.data?.message || "Cập nhật thông tin thất bại";
+      const errorMessage = getErrorMessage(err, "Cập nhật thông tin thất bại");
       toast.error(errorMessage);
     } finally {
       setIsActionLoading(false);
@@ -144,7 +143,8 @@ const MemberDetailDialog = ({
       onClose();
     } catch (err) {
       console.error(err);
-      toast.error("Cập nhật trạng thái thất bại");
+      const errorMessage = getErrorMessage(err, "Cập nhật trạng thái thất bại");
+      toast.error(errorMessage);
     } finally {
       setIsActionLoading(false);
     }
@@ -161,7 +161,8 @@ const MemberDetailDialog = ({
       onClose();
     } catch (err) {
       console.error(err);
-      toast.error("Xóa thành viên thất bại");
+      const errorMessage = getErrorMessage(err, "Xóa thành viên thất bại");
+      toast.error(errorMessage);
     } finally {
       setIsActionLoading(false);
     }

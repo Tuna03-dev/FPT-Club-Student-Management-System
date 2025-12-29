@@ -59,6 +59,12 @@ export default function ClubsPage() {
     const debounce = setTimeout(() => {
       getPublicClubs({
         q: searchQuery || undefined,
+        hasActiveRecruitment:
+          recruitmentFilter === "has"
+            ? true
+            : recruitmentFilter === "none"
+              ? false
+              : undefined,
         page,
         size: 8,
       })
@@ -67,31 +73,18 @@ export default function ClubsPage() {
     }, 300);
 
     return () => clearTimeout(debounce);
-  }, [page, searchQuery]);
+  }, [page, searchQuery, recruitmentFilter]);
 
   // Reset về page 0 khi search hoặc filter đổi
   useEffect(() => {
     setPage(0);
   }, [searchQuery, recruitmentFilter]);
 
-  // Filter clubs by recruitment status (client-side)
+  // Clubs are now filtered by the API
   const filteredClubs = useMemo(() => {
     if (!data) return [];
-
-    let clubs = data.content;
-
-    if (recruitmentFilter === "has") {
-      clubs = clubs.filter(
-        (club) => club.hasActiveRecruitment && club.activeRecruitmentId
-      );
-    } else if (recruitmentFilter === "none") {
-      clubs = clubs.filter(
-        (club) => !club.hasActiveRecruitment || !club.activeRecruitmentId
-      );
-    }
-
-    return clubs;
-  }, [data, recruitmentFilter]);
+    return data.content;
+  }, [data]);
 
   // Check if user is already a member of a club
   const isAlreadyMember = (clubId: number) => {
@@ -189,7 +182,6 @@ export default function ClubsPage() {
                   <SelectContent>
                     <SelectItem value="all">Tất cả câu lạc bộ</SelectItem>
                     <SelectItem value="has">Có đợt ứng tuyển</SelectItem>
-                    <SelectItem value="none">Không có đợt ứng tuyển</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

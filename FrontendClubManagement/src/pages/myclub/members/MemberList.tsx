@@ -63,6 +63,7 @@ import {
 } from "@/services/clubService";
 import { authService } from "@/services/authService";
 import { type PageResponse } from "@/types";
+import { getErrorMessage } from "@/lib/utils";
 
 import { toast } from "sonner";
 
@@ -444,7 +445,8 @@ const Members = () => {
       loadMembers();
     } catch (err) {
       console.error(err);
-      toast.error("Cập nhật vai trò thất bại");
+      const errorMessage = getErrorMessage(err, "Cập nhật vai trò thất bại");
+      toast.error(errorMessage);
     }
   };
 
@@ -471,7 +473,8 @@ const Members = () => {
       loadMembers();
     } catch (err) {
       console.error(err);
-      toast.error("Cập nhật trạng thái thất bại");
+      const errorMessage = getErrorMessage(err, "Cập nhật trạng thái thất bại");
+      toast.error(errorMessage);
     }
   };
 
@@ -491,7 +494,8 @@ const Members = () => {
       loadMembers();
     } catch (err) {
       console.error(err);
-      toast.error("Xóa thành viên thất bại");
+      const errorMessage = getErrorMessage(err, "Xóa thành viên thất bại");
+      toast.error(errorMessage);
     }
   };
 
@@ -509,7 +513,8 @@ const Members = () => {
       loadMembers();
     } catch (err) {
       console.error(err);
-      toast.error("Phân ban thất bại");
+      const errorMessage = getErrorMessage(err, "Phân ban thất bại");
+      toast.error(errorMessage);
     }
   };
 
@@ -1209,7 +1214,7 @@ const Members = () => {
                         {/* Stats */}
                         <div className="flex items-center gap-3 sm:gap-6 flex-wrap lg:flex-nowrap">
                           <div className="text-center p-3 rounded-xl bg-gradient-to-br from-red-500/10 to-red-600/10 border border-red-500/20 min-w-[70px]">
-                            <div className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-red-500 to-red-600 bg-clip-text text-transparent">
+                            <div className="text-xl sm:text-2xl font-bold text-black/80">
                               {member.totalTerms}
                             </div>
                             <div className="text-xs text-muted-foreground">
@@ -1718,8 +1723,8 @@ const Members = () => {
                           <td className="px-3 py-2 font-mono text-xs">phone</td>
                           <td className="px-3 py-2">Số điện thoại</td>
                           <td className="px-3 py-2">
-                            <Badge variant="outline" className="text-xs">
-                              Không
+                            <Badge variant="destructive" className="text-xs">
+                              Có
                             </Badge>
                           </td>
                           <td className="px-3 py-2 text-muted-foreground">
@@ -1732,8 +1737,8 @@ const Members = () => {
                           </td>
                           <td className="px-3 py-2">Mã vai trò</td>
                           <td className="px-3 py-2">
-                            <Badge variant="outline" className="text-xs">
-                              Không
+                            <Badge variant="destructive" className="text-xs">
+                              Có
                             </Badge>
                           </td>
                           <td className="px-3 py-2 text-muted-foreground">
@@ -1746,8 +1751,8 @@ const Members = () => {
                           </td>
                           <td className="px-3 py-2">Tên ban</td>
                           <td className="px-3 py-2">
-                            <Badge variant="outline" className="text-xs">
-                              Không
+                            <Badge variant="destructive" className="text-xs">
+                              Có
                             </Badge>
                           </td>
                           <td className="px-3 py-2 text-muted-foreground">
@@ -1760,8 +1765,8 @@ const Members = () => {
                           </td>
                           <td className="px-3 py-2">Trạng thái</td>
                           <td className="px-3 py-2">
-                            <Badge variant="outline" className="text-xs">
-                              Không
+                            <Badge variant="destructive" className="text-xs">
+                              Có
                             </Badge>
                           </td>
                           <td className="px-3 py-2 text-muted-foreground">
@@ -1774,8 +1779,8 @@ const Members = () => {
                           </td>
                           <td className="px-3 py-2">Ngày tham gia</td>
                           <td className="px-3 py-2">
-                            <Badge variant="outline" className="text-xs">
-                              Không
+                            <Badge variant="destructive" className="text-xs">
+                              Có
                             </Badge>
                           </td>
                           <td className="px-3 py-2 text-muted-foreground">
@@ -1797,8 +1802,7 @@ const Members = () => {
                       </p>
                       <ul className="text-xs text-amber-600 dark:text-amber-300 space-y-1 list-disc list-inside">
                         <li>
-                          <strong>student_code</strong> và{" "}
-                          <strong>semester_code</strong> là bắt buộc
+                          <strong>Tất cả các trường đều bắt buộc phải điền</strong>
                         </li>
                         <li>
                           Nếu mã sinh viên đã tồn tại, hệ thống sẽ cập nhật
@@ -1819,9 +1823,11 @@ const Members = () => {
                         <li>
                           team_name phải khớp chính xác với tên ban đã tạo
                         </li>
-                        <li>is_active mặc định là true nếu không chỉ định</li>
                         <li>
-                          join_date mặc định là ngày hiện tại nếu không chỉ định
+                          is_active chỉ nhận giá trị true hoặc false
+                        </li>
+                        <li>
+                          join_date phải theo định dạng YYYY-MM-DD (VD: 2025-01-15)
                         </li>
                       </ul>
                     </div>

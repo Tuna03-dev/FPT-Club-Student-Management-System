@@ -145,7 +145,7 @@ class RecruitmentServiceTest {
         testClubRole = ClubRole.builder()
                 .id(1L)
                 .roleName("Member")
-                .roleCode("MEMBER")
+                .roleCode("CLUB_MEMBER")
                 .club(testClub)
                 .build();
 
@@ -780,7 +780,7 @@ class RecruitmentServiceTest {
 
         when(recruitmentRepository.findById(testRecruitmentId)).thenReturn(Optional.of(testRecruitment));
         when(userRepository.findById(testApplicantId)).thenReturn(Optional.of(testApplicant));
-        when(clubMemberShipRepository.existsByUserIdAndClubId(testApplicantId, testClubId)).thenReturn(false);
+        when(clubMemberShipRepository.existsByUserIdAndClubIdAndStatus(testApplicantId, testClubId, ClubMemberShipStatus.ACTIVE)).thenReturn(false);
         when(applicationRepository.findByApplicant_IdAndRecruitment_Id(testApplicantId, testRecruitmentId))
                 .thenReturn(Optional.empty());
         when(questionRepository.findByRecruitment_IdOrderByQuestionOrderAsc(testRecruitmentId))
@@ -835,7 +835,7 @@ class RecruitmentServiceTest {
 
         when(recruitmentRepository.findById(testRecruitmentId)).thenReturn(Optional.of(testRecruitment));
         when(userRepository.findById(testApplicantId)).thenReturn(Optional.of(testApplicant));
-        when(clubMemberShipRepository.existsByUserIdAndClubId(testApplicantId, testClubId)).thenReturn(false);
+        when(clubMemberShipRepository.existsByUserIdAndClubIdAndStatus(testApplicantId, testClubId,ClubMemberShipStatus.ACTIVE)).thenReturn(false);
         when(applicationRepository.findByApplicant_IdAndRecruitment_Id(testApplicantId, testRecruitmentId))
                 .thenReturn(Optional.of(testApplication));
 
@@ -871,7 +871,7 @@ class RecruitmentServiceTest {
 
         when(recruitmentRepository.findById(testRecruitmentId)).thenReturn(Optional.of(testRecruitment));
         when(userRepository.findById(testApplicantId)).thenReturn(Optional.of(testApplicant));
-        when(clubMemberShipRepository.existsByUserIdAndClubId(testApplicantId, testClubId)).thenReturn(false);
+        when(clubMemberShipRepository.existsByUserIdAndClubIdAndStatus(testApplicantId, testClubId, ClubMemberShipStatus.ACTIVE)).thenReturn(false);
         when(applicationRepository.findByApplicant_IdAndRecruitment_Id(testApplicantId, testRecruitmentId))
                 .thenReturn(Optional.empty());
         when(questionRepository.findByRecruitment_IdOrderByQuestionOrderAsc(testRecruitmentId))
@@ -913,7 +913,7 @@ class RecruitmentServiceTest {
 
         when(recruitmentRepository.findById(testRecruitmentId)).thenReturn(Optional.of(testRecruitment));
         when(userRepository.findById(testApplicantId)).thenReturn(Optional.of(testApplicant));
-        when(clubMemberShipRepository.existsByUserIdAndClubId(testApplicantId, testClubId)).thenReturn(false);
+        when(clubMemberShipRepository.existsByUserIdAndClubIdAndStatus(testApplicantId, testClubId,ClubMemberShipStatus.ACTIVE)).thenReturn(false);
         when(applicationRepository.findByApplicant_IdAndRecruitment_Id(testApplicantId, testRecruitmentId))
                 .thenReturn(Optional.empty());
         when(questionRepository.findByRecruitment_IdOrderByQuestionOrderAsc(testRecruitmentId))
@@ -1057,11 +1057,14 @@ class RecruitmentServiceTest {
         request.reviewNotes = "Good candidate";
 
         when(applicationRepository.findById(testApplicationId)).thenReturn(Optional.of(testApplication));
-        when(clubMemberShipRepository.existsByUserIdAndClubId(testApplicantId, testClubId)).thenReturn(false);
+        // User is not yet a member - findByClubIdAndUserId returns null
+        when(clubMemberShipRepository.findByClubIdAndUserId(testClubId, testApplicantId)).thenReturn(null);
         when(clubMemberShipRepository.save(any(ClubMemberShip.class))).thenReturn(testClubMembership);
         when(semesterRepository.findCurrentSemester()).thenReturn(Optional.of(testSemester));
         when(teamRepository.findById(testTeamId)).thenReturn(Optional.of(testTeam));
-        when(clubRoleRepository.findByClubIdAndRoleCode(testClubId, "MEMBER")).thenReturn(Optional.of(testClubRole));
+        when(clubRoleRepository.findByClubIdAndRoleCode(testClubId, "CLUB_MEMBER")).thenReturn(Optional.of(testClubRole));
+        // No existing role membership in current semester
+        when(roleMembershipRepository.findByClubMemberShipAndSemester(any(ClubMemberShip.class), eq(testSemester))).thenReturn(Optional.empty());
         when(roleMembershipRepository.save(any(RoleMemberShip.class))).thenReturn(testRoleMembership);
         when(applicationRepository.save(any(RecruitmentApplication.class))).thenReturn(testApplication);
         // Mock for getApplicationInternal - using findByIdWithDetails

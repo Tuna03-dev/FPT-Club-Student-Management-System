@@ -68,6 +68,7 @@ import StaffNotifications from "@/pages/myclub/staff/StaffNotifications";
 import CreateClubPage from "@/pages/CreateClubPage";
 import ClubCreationManagement from "@/pages/staff/ClubCreationManagement";
 import { StaffClubsManagement } from "@/pages/staff/ClubManagement";
+import AdminDepartmentManagement from "@/pages/staff/AdminDepartmentManagement";
 import AboutPage from "@/pages/AboutPage";
 
 export const router = createBrowserRouter([
@@ -181,19 +182,40 @@ export const router = createBrowserRouter([
     ),
     children: [
       { index: true, element: <Navigate to="staff" replace /> },
-      { path: "staff", element: <StaffList /> },
-      { path: "campus", element: <CampusManagement /> },
-      { path: "semester", element: <SemesterManagement /> },
       {
-        path: "settings",
-        element: <div className="p-6">Cấu hình hệ thống</div>,
+        path: "staff",
+        element: (
+          <RequireAdmin>
+            <StaffList />
+          </RequireAdmin>
+        ),
+      },
+      {
+        path: "campus",
+        element: (
+          <RequireAdmin>
+            <CampusManagement />
+          </RequireAdmin>
+        ),
+      },
+      {
+        path: "semester",
+        element: (
+          <RequireAdmin>
+            <SemesterManagement />
+          </RequireAdmin>
+        ),
       },
       {
         path: "settings",
-        element: <div className="p-6">Cấu hình hệ thống</div>,
+        element: (
+          <RequireAdmin>
+            <div className="p-6">Cấu hình hệ thống</div>
+          </RequireAdmin>
+        ),
       },
       {
-        path: "/admin/banner",
+        path: "banner",
         element: (
           <RequireAdmin>
             <BannerAdminPage />
@@ -458,6 +480,7 @@ export const router = createBrowserRouter([
       { path: "news/drafts/:draftId", element: <DraftDetail /> },
       { path: "news/requests/:id", element: <RequestDetail /> },
       { path: "notifications", element: <StaffNotifications /> },
+      { path: "admin-department", element: <AdminDepartmentManagement /> },
     ],
   },
 

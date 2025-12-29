@@ -44,7 +44,7 @@ spring:
     host: ${MAIL_HOST:smtp.gmail.com}
     port: ${MAIL_PORT:587}
     username: ${MAIL_USERNAME:TuanNMHE173518@fpt.edu.vn}
-    password: ${MAIL_PASSWORD:gltu bbbi xibt wlfw}
+    password: ${MAIL_PASSWORD:zyjq xitj hjtm odta}
     properties:
       mail:
         smtp:
@@ -61,7 +61,7 @@ host:
 
 jwt:
   secret-key: ${JWT_SECRET_KEY:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
-  access-token-expiration: 900000   # 15 minutes in milliseconds
+  access-token-expiration: 1800000   # 30 minutes in milliseconds
   refresh-token-expiration: 86400000  # 1 day in milliseconds
 
 

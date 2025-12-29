@@ -10,7 +10,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
+import java.sql.Timestamp;
 
 @Service
 @RequiredArgsConstructor
@@ -36,8 +38,25 @@ public class HomepageService {
                 .toList();
 
         // 🔹 STEP 3: Sự kiện sắp diễn ra (4)
-        List<UpcomingEventDTO> upcomingEvents = eventRepository.findUpcomingEvents(
-                LocalDateTime.now(), PageRequest.of(0, 4));
+        LocalDateTime nowVN = LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh"));
+
+        System.out.println("🕒 Now (VN) = " + nowVN);
+
+        List<Object[]> rawUpcomingEvents =
+                eventRepository.findUpcomingEventsRaw(nowVN);
+
+        System.out.println("📦 Upcoming events size = " + rawUpcomingEvents.size());
+
+        List<UpcomingEventDTO> upcomingEvents = rawUpcomingEvents.stream()
+                .map(row -> new UpcomingEventDTO(
+                        ((Number) row[0]).longValue(),
+                        (String) row[1],
+                        ((Timestamp) row[2]).toLocalDateTime(),
+                        (String) row[3],
+                        (String) row[4],
+                        (String) row[5]
+                ))
+                .toList();
 
         // 🔹 STEP 4: Tin tức mới nhất (4)
         List<LatestNewsDTO> latestNews = newsRepository.findLatestNews(PageRequest.of(0, 4));
@@ -57,7 +76,7 @@ public class HomepageService {
                                                 : news.getContent())
                         )
                         .imageUrl(news.getThumbnailUrl())
-                        .callToActionText("Read more")
+                        .callToActionText("Đọc thêm")
                         .callToActionLink("/news/" + news.getId())
                         .build())
                 .orElse(null);

@@ -148,13 +148,13 @@ public class ClubService implements ClubServiceInterface {
         // If keyword is provided, use client-side filtering with Vietnamese normalization
         if (keyword != null && !keyword.trim().isEmpty()) {
             String trimmedKeyword = keyword.trim();
-            // Get all clubs without keyword filter
+            // Get all clubs without keyword filter, but with sort from pageable
             page = clubRepository.getAllClubsByFilter(
                     null,
                     campusId,
                     categoryId,
                     status,
-                    PageRequest.of(0, Integer.MAX_VALUE)
+                    PageRequest.of(0, Integer.MAX_VALUE, pageable.getSort())
             );
 
             // Filter using Vietnamese normalization
@@ -642,11 +642,12 @@ public class ClubService implements ClubServiceInterface {
             String newCode = request.getClubCode().trim();
             if (!newCode.equals(club.getClubCode())) {
                 // Nếu có club khác đã dùng mã này -> lỗi
-                clubRepository.findByClubCode(newCode).ifPresent(existing -> {
+                if (clubRepository.findByClubCode(newCode).isPresent()) {
+                    Club existing = clubRepository.findByClubCode(newCode).get();
                     if (!existing.getId().equals(clubId)) {
-                        throw new RuntimeException("CLUB_CODE_EXISTED");
+                        throw new AppException(ErrorCode.CLUB_CODE_EXISTED);
                     }
-                });
+                }
                 club.setClubCode(newCode);
             }
         }
@@ -655,11 +656,12 @@ public class ClubService implements ClubServiceInterface {
         if (request.getClubName() != null) {
             String newName = request.getClubName().trim();
             if (!newName.equals(club.getClubName())) {
-                clubRepository.findByClubName(newName).ifPresent(existing -> {
+                if (clubRepository.findByClubName(newName).isPresent()) {
+                    Club existing = clubRepository.findByClubName(newName).get();
                     if (!existing.getId().equals(clubId)) {
-                        throw new RuntimeException("CLUB_NAME_EXISTED");
+                        throw new AppException(ErrorCode.CLUB_NAME_EXISTED);
                     }
-                });
+                }
                 club.setClubName(newName);
             }
         }
@@ -700,19 +702,8 @@ public class ClubService implements ClubServiceInterface {
             club.setClubCategory(category);
         }
 
-        // Lưu thay đổi — trước sẽ ném RuntimeException nếu trùng tên/mã, chuyển sang AppException
-        try {
-            clubRepository.save(club);
-        } catch (RuntimeException ex) {
-            String msg = ex.getMessage();
-            if ("CLUB_CODE_EXISTED".equals(msg)) {
-                throw new AppException(ErrorCode.CLUB_CODE_EXISTED);
-            }
-            if ("CLUB_NAME_EXISTED".equals(msg)) {
-                throw new AppException(ErrorCode.CLUB_NAME_EXISTED);
-            }
-            throw ex;
-        }
+        // Lưu thay đổi
+        clubRepository.save(club);
 
         log.info("Club officer {} updated club {} information", userId, clubId);
 

@@ -141,8 +141,20 @@ public class MemberController {
         try {
             ImportMembersResponse result = memberService.importMembersFromExcel(clubId, file, currentUserId);
             return ApiResponse.success(result);
+        } catch (AppException e) {
+            // AppException sẽ được GlobalExceptionHandler xử lý
+            throw e;
         } catch (Exception e) {
-            return ApiResponse.error(400, "Import failed: " + e.getMessage());
+            // Xử lý các exception không mong đợi (như IOException khi đọc file)
+            String errorMessage = "Không thể đọc file Excel. Vui lòng kiểm tra lại file của bạn.";
+            if (e.getMessage() != null) {
+                if (e.getMessage().contains("not a valid OOXML") || e.getMessage().contains("Invalid header")) {
+                    errorMessage = "File Excel không hợp lệ. Vui lòng đảm bảo file là định dạng .xlsx hoặc .xls.";
+                } else if (e.getMessage().contains("IOException") || e.getMessage().contains("stream")) {
+                    errorMessage = "Lỗi khi đọc file. Vui lòng thử lại.";
+                }
+            }
+            return ApiResponse.error(400, errorMessage);
         }
     }
 }

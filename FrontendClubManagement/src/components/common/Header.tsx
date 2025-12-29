@@ -19,6 +19,9 @@ import {
   Building2,
   PlusCircle,
   FileSignature,
+  Bell,
+  Menu,
+  X,
 } from "lucide-react";
 import useMyClubs from "@/hooks/useMyClubs";
 import { toast } from "sonner";
@@ -28,6 +31,7 @@ const Header: React.FC = () => {
   const [user, setUser] = useState<UserInfo | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [showClubsList, setShowClubsList] = useState(false);
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const navigate = useNavigate();
 
   const shouldLoadMyClubs = isAuthenticated && !!user;
@@ -36,6 +40,7 @@ const Header: React.FC = () => {
     data: clubs,
     loading: clubsLoading,
     error: clubsError,
+    refetch: refetchClubs,
   } = useMyClubs(shouldLoadMyClubs);
 
   useEffect(() => {
@@ -93,10 +98,18 @@ const Header: React.FC = () => {
       .toUpperCase()
       .slice(0, 2);
 
+  const navLinks = [
+    { path: "/", label: "Trang chủ" },
+    { path: "/clubs", label: "Câu lạc bộ" },
+    { path: "/events", label: "Sự kiện" },
+    { path: "/news", label: "Tin tức" },
+    { path: "/about", label: "Giới thiệu" },
+  ];
+
   return (
     <header className="bg-white shadow-sm sticky top-0 z-40">
-      <div className="container mx-auto px-6">
-        <div className="flex items-center justify-between py-3">
+      <div className="container mx-auto px-4 sm:px-6">
+        <div className="flex items-center justify-between py-3 gap-3">
           {/* Logo */}
           <Link to="/" className="flex items-center gap-3">
             <img
@@ -113,19 +126,8 @@ const Header: React.FC = () => {
           </Link>
 
           {/* Navbar */}
-          {/* Navbar */}
-          <nav className="flex items-center gap-7 flex-wrap">
-            {[
-              { path: "/", label: "Trang chủ" },
-              { path: "/clubs", label: "Câu lạc bộ" },
-              { path: "/events", label: "Sự kiện" },
-              { path: "/news", label: "Tin tức" },
-              { path: "/about", label: "Giới thiệu" },
-              // 👇 Chỉ add mục Thông báo khi đã đăng nhập
-              ...(isAuthenticated && user
-                ? [{ path: "/notifications", label: "Thông báo" }]
-                : []),
-            ].map((item) => (
+          <nav className="hidden md:flex items-center gap-7 flex-wrap">
+            {navLinks.map((item) => (
               <Link
                 key={item.path}
                 to={item.path}
@@ -137,14 +139,13 @@ const Header: React.FC = () => {
           </nav>
 
           {/* Avatar / Login */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             {isAuthenticated && user && <NotificationBell />}
+
             {isAuthenticated && user ? (
               <DropdownMenu
                 onOpenChange={(open) => {
-                  if (open) {
-                    handleAvatarClick();
-                  }
+                  if (open) handleAvatarClick();
                 }}
               >
                 <DropdownMenuTrigger asChild>
@@ -155,7 +156,7 @@ const Header: React.FC = () => {
                         {getInitials(user.fullName)}
                       </AvatarFallback>
                     </Avatar>
-                    <span className="hidden sm:block text-[15px] font-medium text-gray-700 group-hover:text-orange-600">
+                    <span className="hidden sm:block text-[15px] font-medium text-gray-700">
                       {user.fullName}
                     </span>
                   </button>
@@ -173,6 +174,7 @@ const Header: React.FC = () => {
                       <p className="text-[13px] text-gray-500">{user.email}</p>
                     </div>
                   </DropdownMenuLabel>
+
                   <DropdownMenuSeparator />
 
                   {!showClubsList ? (
@@ -185,13 +187,23 @@ const Header: React.FC = () => {
                         Thông tin cá nhân
                       </DropdownMenuItem>
 
-                      {/* “Câu lạc bộ của tôi” chỉ khi có CLB */}
+                      <DropdownMenuItem
+                        onClick={() => navigate("/notifications")}
+                        className="cursor-pointer text-[14px] text-gray-700"
+                      >
+                        <Bell className="mr-2 h-4 w-4 text-orange-500" />
+                        Thông báo
+                      </DropdownMenuItem>
+
                       {!clubsLoading &&
                         !clubsError &&
                         clubs &&
                         clubs.length > 0 && (
                           <DropdownMenuItem
-                            onClick={() => setShowClubsList(true)}
+                            onClick={async () => {
+                              await refetchClubs(); // ⭐ DÒNG QUAN TRỌNG
+                              setShowClubsList(true);
+                            }}
                             onSelect={(e) => e.preventDefault()}
                             className="cursor-pointer text-[14px] text-gray-700"
                           >
@@ -237,6 +249,7 @@ const Header: React.FC = () => {
                       )}
 
                       <DropdownMenuSeparator />
+
                       <DropdownMenuItem
                         onClick={handleLogout}
                         className="cursor-pointer text-[14px] text-red-600"
@@ -254,7 +267,9 @@ const Header: React.FC = () => {
                       >
                         ← Quay lại
                       </DropdownMenuItem>
+
                       <DropdownMenuSeparator />
+
                       <DropdownMenuLabel className="px-3 py-1.5 text-[14px] font-semibold text-gray-800">
                         CLB của bạn
                       </DropdownMenuLabel>
@@ -264,11 +279,13 @@ const Header: React.FC = () => {
                           Đang tải danh sách CLB…
                         </div>
                       )}
+
                       {clubsError && (
                         <div className="px-3 py-2 text-[14px] text-red-600">
                           {clubsError}
                         </div>
                       )}
+
                       {!clubsLoading &&
                         !clubsError &&
                         (!clubs || clubs.length === 0) && (
@@ -324,8 +341,48 @@ const Header: React.FC = () => {
                 Đăng nhập
               </Link>
             )}
+
+            {/* Mobile menu toggle */}
+            <button
+              className="md:hidden inline-flex items-center justify-center h-10 w-10 rounded-md border border-gray-200 text-gray-700 hover:bg-orange-50 transition"
+              onClick={() => setIsMobileNavOpen((prev) => !prev)}
+              aria-label="Mở menu"
+            >
+              {isMobileNavOpen ? (
+                <X className="h-5 w-5" />
+              ) : (
+                <Menu className="h-5 w-5" />
+              )}
+            </button>
           </div>
         </div>
+
+        {/* Mobile nav panel */}
+        {isMobileNavOpen && (
+          <div className="md:hidden border-t border-gray-100 pb-4">
+            <div className="flex flex-col gap-1 pt-2">
+              {navLinks.map((item) => (
+                <Link
+                  key={item.path}
+                  to={item.path}
+                  onClick={() => setIsMobileNavOpen(false)}
+                  className="px-2 py-2 rounded-md text-[15px] font-medium text-gray-700 hover:bg-orange-50 transition"
+                >
+                  {item.label}
+                </Link>
+              ))}
+              {!isAuthenticated && (
+                <Link
+                  to="/login"
+                  onClick={() => setIsMobileNavOpen(false)}
+                  className="mt-2 px-2 py-2 rounded-md border border-orange-500 text-orange-600 font-medium text-center hover:bg-orange-50 transition"
+                >
+                  Đăng nhập
+                </Link>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </header>
   );

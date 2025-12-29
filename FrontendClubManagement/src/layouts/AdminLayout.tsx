@@ -2,13 +2,9 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
-  Tooltip,
-  TooltipContent,
   TooltipProvider,
-  TooltipTrigger,
 } from "@/components/ui/tooltip";
 import {
   DropdownMenu,
@@ -20,17 +16,13 @@ import { authService } from "@/services/authService";
 import { useTranslation } from "react-i18next";
 import {
   Menu,
-  Search,
   Users,
-  Settings,
-  Bell,
   ShieldCheck,
   Building,
   Calendar,
   LayoutTemplate,
+  Home,
 } from "lucide-react";
-
-const topNav = [{ key: "dashboard", url: "/admin", label: "Admin" }];
 
 const managementItems = [
   {
@@ -52,12 +44,6 @@ const managementItems = [
     label: "Quản lý kỳ học",
   },
   {
-    key: "system",
-    url: "/admin/settings",
-    icon: Settings,
-    label: "Cấu hình hệ thống",
-  },
-  {
     key: "banner",
     url: "/admin/banner",
     icon: LayoutTemplate,
@@ -69,7 +55,6 @@ const colorByKey: Record<string, string> = {
   staff: "bg-gradient-to-br from-blue-500 to-blue-600",
   campus: "bg-gradient-to-br from-emerald-500 to-emerald-600",
   semester: "bg-gradient-to-br from-purple-500 to-purple-600",
-  system: "bg-gradient-to-br from-slate-500 to-slate-600",
   banner: "bg-gradient-to-br from-pink-500 to-rose-600",
 };
 
@@ -94,65 +79,21 @@ export const AdminLayout = () => {
       <div className="h-screen w-full bg-background flex flex-col overflow-hidden">
         <header className="sticky top-0 z-50 w-full border-b border-border bg-card shadow-sm">
           <div className="flex h-14 items-center justify-between px-4 max-w-[1920px] mx-auto">
-            <div className="flex items-center gap-4 flex-1 max-w-[320px]">
+            <div className="flex items-center gap-4">
               <div className="h-10 w-10 rounded-full bg-primary text-white flex items-center justify-center shadow">
                 <ShieldCheck className="h-5 w-5" />
               </div>
-              <div className="relative w-full max-w-[240px] hidden md:block">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  type="search"
-                  placeholder={t("search")}
-                  className="pl-9 h-9 bg-secondary/50 border-0"
-                />
-              </div>
             </div>
 
-            <nav className="hidden md:flex items-center gap-2 flex-1 justify-center max-w-[600px]">
-              {topNav.map((item) => (
-                <Tooltip key={item.key}>
-                  <TooltipTrigger asChild>
-                    <NavLink
-                      to={item.url}
-                      end
-                      className={({ isActive }) =>
-                        `flex items-center justify-center px-8 py-2 rounded-lg transition-all relative ${
-                          isActive
-                            ? "text-primary"
-                            : "text-muted-foreground hover:bg-secondary"
-                        }`
-                      }
-                    >
-                      {({ isActive }) => (
-                        <>
-                          <span className="font-medium">{item.label}</span>
-                          {isActive && (
-                            <div className="absolute bottom-0 left-0 right-0 h-1 bg-primary rounded-t-md" />
-                          )}
-                        </>
-                      )}
-                    </NavLink>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom">
-                    <p>{item.label}</p>
-                  </TooltipContent>
-                </Tooltip>
-              ))}
-            </nav>
-
-            <div className="flex items-center gap-2 flex-1 justify-end max-w-[320px]">
-              <NavLink to="/admin/settings">
-                <Button variant="ghost" size="icon" className="rounded-full">
-                  <Settings className="h-5 w-5" />
-                </Button>
-              </NavLink>
+            <div className="flex items-center gap-2 flex-1 justify-end">
               <Button
                 variant="ghost"
                 size="icon"
-                className="rounded-full relative"
+                className="rounded-full"
+                onClick={() => navigate("/")}
+                title="Trở về trang chủ"
               >
-                <Bell className="h-5 w-5" />
-                <span className="absolute top-1 right-1 h-2 w-2 bg-destructive rounded-full" />
+                <Home className="h-5 w-5" />
               </Button>
               <div className="flex items-center gap-2">
                 <Avatar className="h-8 w-8 ring-2 ring-primary/20">

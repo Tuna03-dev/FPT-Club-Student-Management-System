@@ -91,7 +91,7 @@ export const staffManagementService = {
 	async create(payload: CreateStaffPayload): Promise<StaffSummary> {
 		const res = await axiosClient.post<StaffSummary>(`${baseUrl}/staff/create`, payload);
 		if (res.code !== 200 || !res.data) {
-			throw new Error(res.message || "Không thể tạo staff");
+			throw new Error(res.message || "Không thể tạo nhân viên");
 		}
 		return res.data;
 	},

@@ -41,6 +41,90 @@ public class MemberServiceImpl implements MemberService{
     private final NotificationService notificationService;
     private final FapApiService fapApiService;
 
+    /**
+     * Helper method để đảm bảo chỉ có 1 RoleMemberShip cho mỗi member trong mỗi semester
+     * QUAN TRỌNG: Chỉ tạo mới RoleMemberShip khi semester đang là current semester (isCurrent = true)
+     * Nếu semester không phải current, chỉ update bản ghi đã tồn tại, không tạo mới
+     * 
+     * @param membership ClubMemberShip
+     * @param semester Semester
+     * @return RoleMemberShip duy nhất cho member trong semester này, hoặc null nếu không tồn tại và semester không phải current
+     */
+    private RoleMemberShip getOrCreateSingleRoleMemberShip(ClubMemberShip membership, Semester semester) {
+        // Tìm tất cả RoleMemberShip cho member này trong semester này
+        List<RoleMemberShip> existingRms = roleMemberShipRepository.findByClubMemberShipIdAndSemesterId(
+                membership.getId(), semester.getId());
+        
+        if (existingRms.isEmpty()) {
+            // Chưa có bản ghi
+            // ✅ CHỈ TẠO MỚI KHI SEMESTER ĐANG LÀ CURRENT SEMESTER
+            if (semester.getIsCurrent() != null && semester.getIsCurrent()) {
+                // Semester đang hoạt động, được phép tạo mới
+                RoleMemberShip newRm = new RoleMemberShip();
+                newRm.setClubMemberShip(membership);
+                newRm.setSemester(semester);
+                newRm.setIsActive(true);
+                return newRm;
+            } else {
+                // Semester không phải current, không được tạo mới
+                log.warn("[RoleMemberShip] Cannot create new RoleMemberShip for member {} in non-current semester {} (semesterCode: {}). Only current semester allows creating new records.",
+                        membership.getUser().getId(), semester.getId(), semester.getSemesterCode());
+                return null; // Trả về null để caller xử lý
+            }
+        } else if (existingRms.size() == 1) {
+            // Đã có đúng 1 bản ghi, trả về bản ghi đó (cho phép update)
+            return existingRms.get(0);
+        } else {
+            // Có nhiều bản ghi trùng lặp - xóa các bản ghi thừa, giữ lại bản ghi đầu tiên (id nhỏ nhất)
+            log.warn("[RoleMemberShip] Found {} duplicate RoleMemberShip records for member {} (clubMembershipId: {}) in semester {}. Cleaning up...",
+                    existingRms.size(), membership.getUser().getId(), membership.getId(), semester.getId());
+            
+            RoleMemberShip toKeep = existingRms.get(0); // Giữ lại bản ghi đầu tiên (id nhỏ nhất)
+            
+            // Xóa các bản ghi trùng lặp
+            for (int i = 1; i < existingRms.size(); i++) {
+                roleMemberShipRepository.delete(existingRms.get(i));
+                log.info("[RoleMemberShip] Deleted duplicate RoleMemberShip with id: {}", existingRms.get(i).getId());
+            }
+            
+            return toKeep;
+        }
+    }
+
+    /**
+     * Helper method để lấy ClubMemberShip và xử lý trường hợp trùng lặp
+     * @param clubId Club ID
+     * @param userId User ID
+     * @return ClubMemberShip đầu tiên (id nhỏ nhất) nếu tồn tại
+     * @throws AppException nếu không tìm thấy hoặc đã LEFT
+     */
+    private ClubMemberShip getClubMemberShipOrThrow(Long clubId, Long userId) throws AppException {
+        List<ClubMemberShip> cmsList = clubMemberShipRepository.findByClubIdAndUserIdList(clubId, userId);
+        if (cmsList == null || cmsList.isEmpty()) {
+            throw new AppException(ErrorCode.MEMBER_NOT_FOUND);
+        }
+        
+        ClubMemberShip cms = cmsList.get(0);
+        if (cms.getStatus() == ClubMemberShipStatus.LEFT) {
+            throw new AppException(ErrorCode.MEMBER_NOT_FOUND, "Thành viên đã rời CLB");
+        }
+        
+        // ✅ Xử lý trùng lặp: nếu có nhiều ClubMemberShip, xóa các bản ghi trùng lặp
+        if (cmsList.size() > 1) {
+            log.warn("[Member] Found {} duplicate ClubMemberShip records for user {} in club {}. Keeping the first one (id: {}) and cleaning up duplicates...",
+                    cmsList.size(), userId, clubId, cms.getId());
+            for (int i = 1; i < cmsList.size(); i++) {
+                ClubMemberShip duplicate = cmsList.get(i);
+                // Xóa các bản ghi trùng lặp, giữ lại bản ghi cũ nhất (id nhỏ nhất)
+                clubMemberShipRepository.delete(duplicate);
+                log.info("[Member] Deleted duplicate ClubMemberShip with id: {} for user {} in club {}", 
+                        duplicate.getId(), userId, clubId);
+            }
+        }
+        
+        return cms;
+    }
+
 
     @Override
     public PageResponse<MemberResponse> getMembersWithFilters(
@@ -70,28 +154,55 @@ public class MemberServiceImpl implements MemberService{
                 ? searchTerm.trim()
                 : null;
 
-        // 🚀 OPTIMIZED: Single query với JOIN FETCH để load tất cả relationships
-        // Search sẽ được filter trong Java (sau query) để support tìm kiếm không dấu
-        org.springframework.data.domain.Page<ClubMemberShip> memberPage =
-                clubMemberShipRepository.findMembersWithFiltersOptimized(
-                        clubId,
-                        status,
-                        effectiveSemesterId,
-                        roleId,
-                        isActive,
-                        pageable
-                );
-
-        // 🔍 SEARCH FILTER: Filter theo searchTerm trong Java với accent-insensitive
-        List<ClubMemberShip> filteredMembers = memberPage.getContent();
+        List<ClubMemberShip> filteredMembers;
+        long totalFilteredElements;
+        int pageSize = pageable.getPageSize();
+        int currentPage = pageable.getPageNumber();
+        
         if (normalizedSearch != null) {
-            filteredMembers = filteredMembers.stream()
+            // ✅ FIX: Khi có search, query TẤT CẢ records matching filters (không pagination)
+            // Sau đó filter trong Java và paginate trong Java để đảm bảo chính xác
+            List<ClubMemberShip> allMatchingMembers = clubMemberShipRepository.findMembersWithFiltersOptimized(
+                    clubId,
+                    status,
+                    effectiveSemesterId,
+                    roleId,
+                    isActive,
+                    org.springframework.data.domain.Pageable.unpaged() // Query tất cả, không pagination
+            ).getContent();
+            
+            // 🔍 SEARCH FILTER: Filter theo searchTerm trong Java với accent-insensitive
+            filteredMembers = allMatchingMembers.stream()
                     .filter(cms -> com.sep490.backendclubmanagement.util.VietnameseTextNormalizer.matchesAny(
                             normalizedSearch,
                             cms.getUser().getFullName(),
                             cms.getUser().getStudentCode()
                     ))
                     .toList();
+            
+            totalFilteredElements = filteredMembers.size();
+            
+            // Paginate trong Java sau khi filter
+            int start = currentPage * pageSize;
+            int end = Math.min(start + pageSize, filteredMembers.size());
+            filteredMembers = filteredMembers.subList(start, end);
+            
+            log.debug("[Member] Search filter applied: {} total matches, showing page {} ({} items)", 
+                    totalFilteredElements, currentPage + 1, filteredMembers.size());
+        } else {
+            // ✅ OPTIMIZED: Không có search, dùng pagination từ database (hiệu quả hơn)
+            org.springframework.data.domain.Page<ClubMemberShip> memberPage =
+                    clubMemberShipRepository.findMembersWithFiltersOptimized(
+                            clubId,
+                            status,
+                            effectiveSemesterId,
+                            roleId,
+                            isActive,
+                            pageable
+                    );
+            
+            filteredMembers = memberPage.getContent();
+            totalFilteredElements = memberPage.getTotalElements();
         }
 
         // 🚀 OPTIMIZED: Map các entities đã được JOIN FETCH loaded
@@ -99,14 +210,19 @@ public class MemberServiceImpl implements MemberService{
                 .map(cms -> mapToMemberResponse(cms, effectiveSemesterId))
                 .toList();
 
+        // Tính lại pagination metadata dựa trên filtered results
+        int totalPages = (int) Math.ceil((double) totalFilteredElements / pageSize);
+        boolean hasNext = currentPage < totalPages - 1;
+        boolean hasPrevious = currentPage > 0;
+
         return PageResponse.<MemberResponse>builder()
                 .content(memberResponses)
-                .pageNumber(memberPage.getNumber())
-                .pageSize(memberPage.getSize())
-                .totalElements(memberPage.getTotalElements())
-                .totalPages(memberPage.getTotalPages())
-                .hasNext(memberPage.hasNext())
-                .hasPrevious(memberPage.hasPrevious())
+                .pageNumber(currentPage)
+                .pageSize(pageSize)
+                .totalElements(totalFilteredElements)
+                .totalPages(totalPages)
+                .hasNext(hasNext)
+                .hasPrevious(hasPrevious)
                 .build();
     }
 
@@ -121,23 +237,47 @@ public class MemberServiceImpl implements MemberService{
                 ? searchTerm.trim()
                 : null;
 
-        // 🚀 OPTIMIZED: Single query với JOIN FETCH để load tất cả relationships
-        org.springframework.data.domain.Page<ClubMemberShip> memberPage =
-                clubMemberShipRepository.findLeftMembersOptimized(
-                        clubId,
-                        pageable
-                );
-
-        // 🔍 SEARCH FILTER: Filter theo searchTerm trong Java với accent-insensitive
-        List<ClubMemberShip> filteredMembers = memberPage.getContent();
+        List<ClubMemberShip> filteredMembers;
+        long totalFilteredElements;
+        int pageSize = pageable.getPageSize();
+        int currentPage = pageable.getPageNumber();
+        
         if (normalizedSearch != null) {
-            filteredMembers = filteredMembers.stream()
+            // ✅ FIX: Khi có search, query TẤT CẢ left members (không pagination)
+            // Sau đó filter trong Java và paginate trong Java để đảm bảo chính xác
+            List<ClubMemberShip> allLeftMembers = clubMemberShipRepository.findLeftMembersOptimized(
+                    clubId,
+                    org.springframework.data.domain.Pageable.unpaged() // Query tất cả, không pagination
+            ).getContent();
+            
+            // 🔍 SEARCH FILTER: Filter theo searchTerm trong Java với accent-insensitive
+            filteredMembers = allLeftMembers.stream()
                     .filter(cms -> com.sep490.backendclubmanagement.util.VietnameseTextNormalizer.matchesAny(
                             normalizedSearch,
                             cms.getUser().getFullName(),
                             cms.getUser().getStudentCode()
                     ))
                     .toList();
+            
+            totalFilteredElements = filteredMembers.size();
+            
+            // Paginate trong Java sau khi filter
+            int start = currentPage * pageSize;
+            int end = Math.min(start + pageSize, filteredMembers.size());
+            filteredMembers = filteredMembers.subList(start, end);
+            
+            log.debug("[Member] Search filter applied for left members: {} total matches, showing page {} ({} items)", 
+                    totalFilteredElements, currentPage + 1, filteredMembers.size());
+        } else {
+            // ✅ OPTIMIZED: Không có search, dùng pagination từ database (hiệu quả hơn)
+            org.springframework.data.domain.Page<ClubMemberShip> memberPage =
+                    clubMemberShipRepository.findLeftMembersOptimized(
+                            clubId,
+                            pageable
+                    );
+            
+            filteredMembers = memberPage.getContent();
+            totalFilteredElements = memberPage.getTotalElements();
         }
 
         // 🚀 OPTIMIZED: Map các entities đã được JOIN FETCH loaded
@@ -145,23 +285,25 @@ public class MemberServiceImpl implements MemberService{
                 .map(cms -> mapToMemberResponse(cms, null)) // No specific semester for left members
                 .toList();
 
+        // Tính lại pagination metadata
+        int totalPages = (int) Math.ceil((double) totalFilteredElements / pageSize);
+        boolean hasNext = currentPage < totalPages - 1;
+        boolean hasPrevious = currentPage > 0;
+
         return PageResponse.<MemberResponse>builder()
                 .content(memberResponses)
-                .pageNumber(memberPage.getNumber())
-                .pageSize(memberPage.getSize())
-                .totalElements(memberPage.getTotalElements())
-                .totalPages(memberPage.getTotalPages())
-                .hasNext(memberPage.hasNext())
-                .hasPrevious(memberPage.hasPrevious())
+                .pageNumber(currentPage)
+                .pageSize(pageSize)
+                .totalElements(totalFilteredElements)
+                .totalPages(totalPages)
+                .hasNext(hasNext)
+                .hasPrevious(hasPrevious)
                 .build();
     }
 
     @Override
     public void updateMemberRole(Long clubId, Long userId, Long roleId, Long semesterId, Long currentUserId) throws AppException {
-        ClubMemberShip cms = clubMemberShipRepository.findByClubIdAndUserId(clubId, userId);
-        if (cms == null || cms.getStatus() == ClubMemberShipStatus.LEFT) {
-            throw new AppException(ErrorCode.MEMBER_NOT_FOUND);
-        }
+        ClubMemberShip cms = getClubMemberShipOrThrow(clubId, userId);
         Semester semester = resolveSemester(semesterId);
         ClubRole clubRole = clubRoleRepository.findById(roleId)
                 .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_FOUND));
@@ -179,16 +321,32 @@ public class MemberServiceImpl implements MemberService{
         validateRoleAssignmentPermission(currentUserRoleLevel, clubRole.getRoleLevel());
 
 
-        List<RoleMemberShip> rms = roleMemberShipRepository.findByClubMemberShipIdAndSemesterId(cms.getId(), semester.getId());
-        RoleMemberShip target = rms.stream().findFirst().orElse(null);
-        
+        // ✅ FIX: Sử dụng helper method để đảm bảo chỉ có 1 RoleMemberShip
+        RoleMemberShip target = getOrCreateSingleRoleMemberShip(cms, semester);
         if (target == null) {
-            // Create new record if none exists for this semester
-            target = new RoleMemberShip();
-            target.setClubMemberShip(cms);
-            target.setSemester(semester);
+            throw new AppException(ErrorCode.INVALID_INPUT, 
+                "Không thể cập nhật vai trò cho kỳ học không phải kỳ hiện tại. Chỉ có thể cập nhật vai trò cho kỳ học đang hoạt động.");
         }
-        // Update existing record with new role (no duplicate creation)
+
+        // ✅ VALIDATION: Kiểm tra nếu đang thay đổi từ CLUB_PRESIDENT sang role khác
+        // Club phải luôn có ít nhất 1 chủ nhiệm
+        ClubRole currentRole = target.getClubRole();
+        boolean isCurrentlyPresident = currentRole != null && "CLUB_PRESIDENT".equals(currentRole.getRoleCode());
+        boolean willBePresident = "CLUB_PRESIDENT".equals(clubRole.getRoleCode());
+        
+        if (isCurrentlyPresident && !willBePresident) {
+            // Kiểm tra xem club còn chủ nhiệm nào khác không (trừ user hiện tại)
+            long otherPresidentsCount = roleMemberShipRepository.countActivePresidentsInClubExcludingUser(
+                    clubId, semester.getId(), userId);
+            
+            if (otherPresidentsCount == 0) {
+                throw new AppException(ErrorCode.INVALID_INPUT, 
+                    "Câu lạc bộ phải có ít nhất 1 chủ nhiệm. Hiện tại bạn là chủ nhiệm duy nhất. " +
+                    "Vui lòng gán chủ nhiệm cho thành viên khác trước khi thay đổi vai trò của bạn.");
+            }
+        }
+
+        // Update existing record with new role
         target.setClubRole(clubRole);
         target.setIsActive(true);
         roleMemberShipRepository.save(target);
@@ -201,7 +359,7 @@ public class MemberServiceImpl implements MemberService{
                 if (club != null) {
                     String title = "Bạn đã được gán vai trò mới trong " + club.getClubName();
                     String message = "Vai trò: " + clubRole.getRoleName();
-                    String actionUrl = "/clubs/" + clubId + "/members";
+                    String actionUrl = "/myclub/" + clubId + "/members";
 
                     notificationService.sendToUser(
                             userId,
@@ -228,66 +386,121 @@ public class MemberServiceImpl implements MemberService{
     }
 
     @Override
+    @Transactional
     public void updateMemberTeam(Long clubId, Long userId, Long teamId, Long semesterId) throws AppException {
-        ClubMemberShip cms = clubMemberShipRepository.findByClubIdAndUserId(clubId, userId);
-        if (cms == null || cms.getStatus() == ClubMemberShipStatus.LEFT) {
-            throw new AppException(ErrorCode.MEMBER_NOT_FOUND);
+        ClubMemberShip cms = getClubMemberShipOrThrow(clubId, userId);
+
+        // ✅ FIX: Validate team exists và thuộc về club này
+        Team team = teamRepository.findById(teamId)
+                .orElseThrow(() -> new AppException(ErrorCode.TEAM_NOT_FOUND));
+
+        if (!team.getClub().getId().equals(clubId)) {
+            throw new AppException(ErrorCode.INVALID_INPUT, "Team does not belong to this club");
         }
+
         Semester semester = resolveSemester(semesterId);
 
-        // Find existing role membership for this semester - should be only one per member per semester
-        List<RoleMemberShip> rms = roleMemberShipRepository.findByClubMemberShipIdAndSemesterId(cms.getId(), semester.getId());
-        RoleMemberShip target = rms.stream().findFirst().orElse(null);
-        
+        // ✅ FIX: Sử dụng helper method để đảm bảo chỉ có 1 RoleMemberShip
+        // Chỉ update bản ghi hiện tại, không ảnh hưởng đến các bản ghi khác (nếu có)
+        RoleMemberShip target = getOrCreateSingleRoleMemberShip(cms, semester);
         if (target == null) {
-            // Create new record if none exists for this semester
-            target = new RoleMemberShip();
-            target.setClubMemberShip(cms);
-            target.setSemester(semester);
+            throw new AppException(ErrorCode.INVALID_INPUT, 
+                "Không thể phân ban cho kỳ học không phải kỳ hiện tại. Chỉ có thể phân ban cho kỳ học đang hoạt động.");
         }
-        // Update existing record with new team (no duplicate creation)
-        Team teamRef = new Team();
-        teamRef.setId(teamId);
-        target.setTeam(teamRef);
+
+        // ✅ CHỈ UPDATE BẢN GHI HIỆN TẠI: Chỉ update team cho bản ghi RoleMemberShip này
+        // Không ảnh hưởng đến các RoleMemberShip khác (nếu có) trong cùng semester
+        target.setTeam(team);
+        target.setIsActive(true); // ✅ Đảm bảo active khi assign team
         roleMemberShipRepository.save(target);
+        
+        log.info("[Member] Updated team for user {} in club {} semester {}: teamId={}", 
+                userId, clubId, semester.getSemesterCode(), teamId);
     }
 
     @Override
+    @Transactional
     public void updateMemberActiveStatus(Long clubId, Long userId, boolean isActive, Long semesterId) {
-        ClubMemberShip cms = clubMemberShipRepository.findByClubIdAndUserId(clubId, userId);
-        if (cms == null || cms.getStatus() == ClubMemberShipStatus.LEFT) {
-            throw new IllegalStateException("Member not found or already left club");
+        // ✅ FIX: Sử dụng helper method để xử lý trùng lặp
+        ClubMemberShip cms;
+        try {
+            cms = getClubMemberShipOrThrow(clubId, userId);
+        } catch (AppException e) {
+            throw new IllegalStateException("Không tìm thấy thành viên hoặc thành viên đã rời câu lạc bộ");
         }
+        
         Semester semester = resolveSemester(semesterId);
-        List<RoleMemberShip> rms = roleMemberShipRepository.findByClubMemberShipIdAndSemesterId(cms.getId(), semester.getId());
-
+        
         if (isActive) {
             // Activate: ensure there is at least ONE role membership record in this semester
-            RoleMemberShip target = rms.stream().findFirst().orElse(null);
+            // ✅ FIX: Sử dụng helper method để đảm bảo chỉ có 1 RoleMemberShip
+            RoleMemberShip target = getOrCreateSingleRoleMemberShip(cms, semester);
             if (target == null) {
-                target = new RoleMemberShip();
-                target.setClubMemberShip(cms);
-                target.setSemester(semester);
+                throw new IllegalStateException("Không thể kích hoạt thành viên cho kỳ học không phải kỳ hiện tại. Chỉ có thể kích hoạt cho kỳ học đang hoạt động.");
             }
             target.setIsActive(true);
             roleMemberShipRepository.save(target);
         } else {
-            // Pause: per business rule, inactive means NO role membership record in that semester
-            for (RoleMemberShip rm : rms) {
-                roleMemberShipRepository.delete(rm);
+            // Pause: per business rule, inactive means set isActive = false
+            // ✅ FIX: Chỉ update nếu đã có bản ghi, không tạo mới cho kỳ không phải current
+            List<RoleMemberShip> rms = roleMemberShipRepository.findByClubMemberShipIdAndSemesterId(cms.getId(), semester.getId());
+            if (rms.isEmpty()) {
+                // Không có bản ghi và semester không phải current -> không làm gì
+                log.info("[Member] Cannot deactivate member {} in non-current semester {} (semesterCode: {}). No record exists.",
+                        userId, semester.getId(), semester.getSemesterCode());
+                return;
             }
+            // Có bản ghi, set inactive
+            RoleMemberShip target = rms.get(0);
+            if (rms.size() > 1) {
+                // Xóa các bản ghi trùng lặp
+                for (int i = 1; i < rms.size(); i++) {
+                    roleMemberShipRepository.delete(rms.get(i));
+                }
+            }
+            target.setIsActive(false);
+            roleMemberShipRepository.save(target);
         }
     }
 
     @Override
+    @Transactional
     public void removeMemberFromClub(Long clubId, Long userId, String reason) {
-        ClubMemberShip cms = clubMemberShipRepository.findByClubIdAndUserId(clubId, userId);
+        // ✅ FIX: Sử dụng helper method để xử lý trùng lặp
+        List<ClubMemberShip> cmsList = clubMemberShipRepository.findByClubIdAndUserIdList(clubId, userId);
+        if (cmsList == null || cmsList.isEmpty()) {
+            log.warn("[Member] Attempted to remove non-existent member: userId={}, clubId={}", userId, clubId);
+            return; // Không throw exception để tránh lỗi nếu member đã bị xóa
+        }
+        ClubMemberShip cms = cmsList.get(0);
         if (cms == null) {
-            throw new IllegalStateException("Member not found");
+            throw new IllegalStateException("Không tìm thấy thành viên");
         }
         cms.setStatus(ClubMemberShipStatus.LEFT);
         cms.setEndDate(java.time.LocalDate.now());
         clubMemberShipRepository.save(cms);
+
+        // ✅ FIX: CHỈ deactivate RoleMemberShip của KỲ HIỆN TẠI (giữ lại lịch sử các kỳ trước)
+        Semester currentSemester = semesterRepository.findAll().stream()
+                .filter(Semester::getIsCurrent)
+                .findFirst()
+                .orElse(null);
+
+        if (currentSemester != null) {
+            List<RoleMemberShip> currentSemesterMemberships = roleMemberShipRepository
+                    .findByClubMemberShipIdAndSemesterId(cms.getId(), currentSemester.getId());
+
+            for (RoleMemberShip rm : currentSemesterMemberships) {
+                rm.setIsActive(false);
+                roleMemberShipRepository.save(rm);
+            }
+
+            log.info("[Member] Deactivated {} RoleMemberShip records in current semester for removed member {} from club {}",
+                    currentSemesterMemberships.size(), userId, clubId);
+        } else {
+            log.warn("[Member] No current semester found, cannot deactivate RoleMemberShip for removed member {} from club {}",
+                    userId, clubId);
+        }
 
         // 🔔 Gửi notification cho member bị remove
         try {
@@ -325,22 +538,23 @@ public class MemberServiceImpl implements MemberService{
     private Semester resolveSemester(Long semesterId) {
         if (semesterId != null) {
             return semesterRepository.findById(semesterId)
-                    .orElseThrow(() -> new IllegalArgumentException("Semester not found"));
+                    .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy kỳ học"));
         }
         return semesterRepository.findAll().stream()
                 .filter(Semester::getIsCurrent)
                 .findFirst()
-                .orElseThrow(() -> new IllegalStateException("No current semester configured"));
+                .orElseThrow(() -> new IllegalStateException("Chưa cấu hình kỳ học hiện tại"));
     }
 
 
 
 
     private Integer getUserRoleLevel(Long userId, Long clubId, Long semesterId) {
-        ClubMemberShip cms = clubMemberShipRepository.findByClubIdAndUserId(clubId, userId);
-        if (cms == null) {
+        List<ClubMemberShip> cmsList = clubMemberShipRepository.findByClubIdAndUserIdList(clubId, userId);
+        if (cmsList == null || cmsList.isEmpty()) {
             return 999; // No membership = lowest priority
         }
+        ClubMemberShip cms = cmsList.get(0); // Lấy bản ghi đầu tiên
         
         Semester semester = resolveSemester(semesterId);
         List<RoleMemberShip> rms = roleMemberShipRepository.findByClubMemberShipIdAndSemesterId(cms.getId(), semester.getId());
@@ -358,8 +572,10 @@ public class MemberServiceImpl implements MemberService{
             throw new AppException(ErrorCode.INSUFFICIENT_PERMISSION);
         }
 
-        if (currentUserRoleLevel >= targetRoleLevel) {
-            throw new AppException(ErrorCode.INSUFFICIENT_PERMISSION);
+
+        if (currentUserRoleLevel > targetRoleLevel) {
+            throw new AppException(ErrorCode.INSUFFICIENT_PERMISSION,
+                "Bạn không có quyền gán vai trò cao hơn vai trò hiện tại của mình");
         }
     }
 
@@ -584,11 +800,14 @@ public class MemberServiceImpl implements MemberService{
         try (InputStream is = file.getInputStream(); Workbook wb = new XSSFWorkbook(is)) {
             Sheet sheet = wb.getSheetAt(0);
             if (sheet.getPhysicalNumberOfRows() < 2) {
-                throw new AppException(ErrorCode.INVALID_INPUT);
+                throw new AppException(ErrorCode.INVALID_INPUT, "File Excel phải có ít nhất 1 dòng dữ liệu (không tính dòng tiêu đề)");
             }
 
             // Map headers
             Row header = sheet.getRow(0);
+            if (header == null) {
+                throw new AppException(ErrorCode.INVALID_INPUT, "File Excel không có dòng tiêu đề");
+            }
             Map<String, Integer> colIndex = new HashMap<>();
             for (Cell c : header) {
                 String key = c.getStringCellValue().trim().toLowerCase();
@@ -597,16 +816,97 @@ public class MemberServiceImpl implements MemberService{
 
             // Required headers
             String[] required = {"student_code", "full_name", "semester_code"};
+            List<String> missingHeaders = new ArrayList<>();
             for (String r : required) {
                 if (!colIndex.containsKey(r)) {
-                    throw new AppException(ErrorCode.INVALID_INPUT);
+                    missingHeaders.add(r);
                 }
             }
+            if (!missingHeaders.isEmpty()) {
+                throw new AppException(ErrorCode.INVALID_INPUT, 
+                    "File Excel thiếu các cột bắt buộc: " + String.join(", ", missingHeaders));
+            }
 
+            // ✅ OPTIMIZATION: Pre-load và cache data để tránh N+1 queries
+            int lastRow = sheet.getLastRowNum();
+            
+            // 1. Collect all student codes, semester codes, role codes, team names, emails
+            Set<String> allStudentCodes = new HashSet<>();
+            Set<String> allSemesterCodes = new HashSet<>();
+            Set<String> allRoleCodes = new HashSet<>();
+            Set<String> allTeamNames = new HashSet<>();
+            Set<String> allEmails = new HashSet<>();
+            
+            for (int r = 1; r <= lastRow; r++) {
+                Row row = sheet.getRow(r);
+                if (row == null) continue;
+                
+                String studentCode = readCell(row, colIndex.get("student_code"));
+                String semesterCode = readCell(row, colIndex.get("semester_code"));
+                String roleCode = colIndex.containsKey("role_code") ? readCell(row, colIndex.get("role_code")) : null;
+                String teamName = colIndex.containsKey("team_name") ? readCell(row, colIndex.get("team_name")) : null;
+                String email = colIndex.containsKey("email") ? readCell(row, colIndex.get("email")) : null;
+                
+                if (studentCode != null && !studentCode.isEmpty()) {
+                    allStudentCodes.add(studentCode);
+                }
+                if (semesterCode != null && !semesterCode.isEmpty()) {
+                    allSemesterCodes.add(semesterCode);
+                }
+                if (roleCode != null && !roleCode.isEmpty()) {
+                    allRoleCodes.add(roleCode);
+                }
+                if (teamName != null && !teamName.isEmpty()) {
+                    allTeamNames.add(teamName);
+                }
+                if (email != null && !email.isEmpty()) {
+                    allEmails.add(email);
+                }
+            }
+            
+            // 2. Batch load và cache
+            Map<String, User> userMap = new HashMap<>();
+            if (!allStudentCodes.isEmpty()) {
+                List<User> existingUsers = userRepository.findByStudentCodeIn(new ArrayList<>(allStudentCodes));
+                for (User u : existingUsers) {
+                    userMap.put(u.getStudentCode(), u);
+                }
+            }
+            
+            Map<String, Semester> semesterMap = new HashMap<>();
+            for (String code : allSemesterCodes) {
+                semesterRepository.findBySemesterCode(code).ifPresent(s -> semesterMap.put(code, s));
+            }
+            
+            Map<String, ClubRole> roleMap = new HashMap<>();
+            for (String code : allRoleCodes) {
+                clubRoleRepository.findByClubIdAndRoleCode(clubId, code).ifPresent(r -> roleMap.put(code, r));
+            }
+            
+            Map<String, Team> teamMap = new HashMap<>();
+            for (String name : allTeamNames) {
+                teamRepository.findByClubIdAndTeamName(clubId, name).ifPresent(t -> teamMap.put(name, t));
+            }
+            
+            // 3. Cache FAP API responses để tránh duplicate calls
+            Map<String, Boolean> emailValidationCache = new HashMap<>();
+            
             // Track processed users
             Set<String> processedUserCodes = new HashSet<>();
-
-            int lastRow = sheet.getLastRowNum();
+            
+            // Batch collections for save
+            List<User> usersToCreate = new ArrayList<>();
+            List<User> usersToUpdate = new ArrayList<>();
+            List<ClubMemberShip> membershipsToCreate = new ArrayList<>();
+            List<ClubMemberShip> membershipsToUpdate = new ArrayList<>();
+            List<RoleMemberShip> roleMembershipsToSave = new ArrayList<>();
+            List<ClubMemberShip> duplicateMembershipsToDelete = new ArrayList<>();
+            
+            // ✅ FIX: Track để tránh duplicate trong cùng batch
+            Set<String> studentCodesInBatch = new HashSet<>();
+            Set<String> emailsInBatch = new HashSet<>();
+            
+            int batchSize = 50; // Flush every 50 rows
             for (int r = 1; r <= lastRow; r++) {
                 Row row = sheet.getRow(r);
                 if (row == null) continue;
@@ -624,34 +924,114 @@ public class MemberServiceImpl implements MemberService{
                     String joinDateStr = colIndex.containsKey("join_date") ? readCell(row, colIndex.get("join_date")) : null;
 
                     if (studentCode == null || studentCode.isEmpty()) {
-                        throw new IllegalArgumentException("student_code is empty");
+                        throw new IllegalArgumentException("Mã sinh viên không được để trống");
                     }
                     if (semesterCode == null || semesterCode.isEmpty()) {
-                        throw new IllegalArgumentException("semester_code is empty");
+                        throw new IllegalArgumentException("Mã học kỳ không được để trống");
                     }
 
-                    // ✅ VALIDATE EMAIL với FAP API
+                    // ✅ OPTIMIZATION: Sử dụng cached data
+                    // Validate email với cache
                     if (email != null && !email.isEmpty()) {
-                        var profile = fapApiService.findProfileByEmail(email);
-                        if (profile.isEmpty()) {
-                            throw new IllegalArgumentException("Email " + email + " is not in allowed users list");
+                        Boolean isValid = emailValidationCache.get(email);
+                        if (isValid == null) {
+                            var profile = fapApiService.findProfileByEmail(email);
+                            isValid = profile.isPresent();
+                            emailValidationCache.put(email, isValid);
+                        }
+                        if (!isValid) {
+                            throw new IllegalArgumentException("Email " + email + " không có trong danh sách người dùng được phép");
                         }
                     }
 
-                    // Find or create user
-                    User user = userRepository.findByStudentCode(studentCode).orElse(null);
+                    // Find user from cache
+                    User user = userMap.get(studentCode);
                     boolean userCreated = false;
                     if (user == null) {
-                        user = User.builder()
-                                .studentCode(studentCode)
-                                .fullName(fullName)
-                                .email(email)
-                                .phoneNumber(phone)
-                                .isActive(true)
-                                .build();
-                        user = userRepository.save(user);
-                        userCreated = true;
-                        createdUsers++;
+                        // ✅ FIX: Kiểm tra duplicate trong batch trước khi tạo
+                        // Kiểm tra duplicate student_code
+                        if (studentCode != null && !studentCode.isEmpty() && studentCodesInBatch.contains(studentCode)) {
+                            throw new IllegalArgumentException(
+                                String.format("Mã sinh viên '%s' bị trùng lặp trong file Excel (dòng %d). Mỗi mã sinh viên chỉ được xuất hiện một lần.", 
+                                    studentCode, r + 1));
+                        }
+                        
+                        // Kiểm tra duplicate email
+                        if (email != null && !email.isEmpty() && emailsInBatch.contains(email.toLowerCase())) {
+                            throw new IllegalArgumentException(
+                                String.format("Email '%s' bị trùng lặp trong file Excel (dòng %d). Mỗi email chỉ được xuất hiện một lần.", 
+                                    email, r + 1));
+                        }
+                        
+                        // Kiểm tra email đã tồn tại trong database (ngoài cache)
+                        if (email != null && !email.isEmpty()) {
+                            Optional<User> existingUserByEmail = userRepository.findByEmailIgnoreCase(email);
+                            if (existingUserByEmail.isPresent()) {
+                                // User đã tồn tại với email này, nhưng khác student_code
+                                // Có thể là trường hợp user đã có email nhưng chưa có student_code
+                                User existingUser = existingUserByEmail.get();
+                                if (existingUser.getStudentCode() == null || existingUser.getStudentCode().isEmpty()) {
+                                    // User chưa có student_code, update thay vì tạo mới
+                                    existingUser.setStudentCode(studentCode);
+                                    userMap.put(studentCode, existingUser); // Update cache
+                                    user = existingUser;
+                                    usersToUpdate.add(user);
+                                    updatedUsers++;
+                                } else {
+                                    throw new IllegalArgumentException(
+                                        String.format("Email '%s' đã được sử dụng bởi mã sinh viên khác (%s) trong hệ thống (dòng %d).", 
+                                            email, existingUser.getStudentCode(), r + 1));
+                                }
+                            } else {
+                                // Tạo user mới
+                                user = User.builder()
+                                        .studentCode(studentCode)
+                                        .fullName(fullName)
+                                        .email(email)
+                                        .phoneNumber(phone)
+                                        .isActive(true)
+                                        .build();
+                                usersToCreate.add(user);
+                                if (studentCode != null && !studentCode.isEmpty()) {
+                                    studentCodesInBatch.add(studentCode);
+                                }
+                                if (email != null && !email.isEmpty()) {
+                                    emailsInBatch.add(email.toLowerCase());
+                                }
+                                userCreated = true;
+                                createdUsers++;
+                            }
+                        } else {
+                            // Không có email trong Excel
+                            // User entity yêu cầu email NOT NULL, nên cần tạo email tạm thời hoặc bỏ qua
+                            // Tạo email tạm thời dựa trên student_code để tránh lỗi NOT NULL
+                            String tempEmail = studentCode + "@temp.fpt.edu.vn";
+                            
+                            // Kiểm tra email tạm thời có bị trùng không
+                            Optional<User> existingUserByTempEmail = userRepository.findByEmailIgnoreCase(tempEmail);
+                            if (existingUserByTempEmail.isPresent()) {
+                                throw new IllegalArgumentException(
+                                    String.format("Không thể tạo user cho mã sinh viên '%s' (dòng %d). Email tạm thời đã tồn tại. Vui lòng cung cấp email trong file Excel.", 
+                                        studentCode, r + 1));
+                            }
+                            
+                            user = User.builder()
+                                    .studentCode(studentCode)
+                                    .fullName(fullName)
+                                    .email(tempEmail) // Email tạm thời, có thể update sau
+                                    .phoneNumber(phone)
+                                    .isActive(true)
+                                    .build();
+                            usersToCreate.add(user);
+                            if (studentCode != null && !studentCode.isEmpty()) {
+                                studentCodesInBatch.add(studentCode);
+                            }
+                            if (tempEmail != null && !tempEmail.isEmpty()) {
+                                emailsInBatch.add(tempEmail.toLowerCase());
+                            }
+                            userCreated = true;
+                            createdUsers++;
+                        }
                     } else {
                         // Update user info
                         boolean changed = false;
@@ -660,11 +1040,7 @@ public class MemberServiceImpl implements MemberService{
                             changed = true;
                         }
                         if (email != null && !email.isEmpty() && !email.equals(user.getEmail())) {
-                            // ✅ VALIDATE EMAIL trước khi update
-                            var profile = fapApiService.findProfileByEmail(email);
-                            if (profile.isEmpty()) {
-                                throw new IllegalArgumentException("Email " + email + " is not in allowed users list");
-                            }
+                            // Email đã được validate ở trên
                             user.setEmail(email);
                             changed = true;
                         }
@@ -673,7 +1049,7 @@ public class MemberServiceImpl implements MemberService{
                             changed = true;
                         }
                         if (changed) {
-                            userRepository.save(user);
+                            usersToUpdate.add(user);
                             updatedUsers++;
                         }
                     }
@@ -683,12 +1059,36 @@ public class MemberServiceImpl implements MemberService{
                         processedUserCodes.add(studentCode);
                     }
 
-                    // Find semester
-                    Semester semester = semesterRepository.findBySemesterCode(semesterCode)
-                            .orElseThrow(() -> new IllegalArgumentException("Semester not found: " + semesterCode));
+                    // Find semester from cache
+                    Semester semester = semesterMap.get(semesterCode);
+                    if (semester == null) {
+                        throw new IllegalArgumentException("Không tìm thấy học kỳ: " + semesterCode);
+                    }
 
+                    // ✅ OPTIMIZATION: Đảm bảo user đã có ID trước khi tìm membership
+                    // Nếu user mới tạo, cần save ngay để có ID
+                    if (user.getId() == null && usersToCreate.contains(user)) {
+                        // Remove from batch và save ngay
+                        usersToCreate.remove(user);
+                        user = userRepository.save(user);
+                        userMap.put(user.getStudentCode(), user); // Update cache
+                    }
+                    
                     // Find or create ClubMemberShip
-                    ClubMemberShip membership = clubMemberShipRepository.findByClubIdAndUserId(clubId, user.getId());
+                    // ✅ FIX: Xử lý trường hợp có nhiều ClubMemberShip trùng lặp
+                    List<ClubMemberShip> membershipList = clubMemberShipRepository.findByClubIdAndUserIdList(clubId, user.getId());
+                    ClubMemberShip membership = membershipList != null && !membershipList.isEmpty() 
+                        ? membershipList.get(0) // Lấy bản ghi đầu tiên (id nhỏ nhất)
+                        : null;
+                    
+                    // Nếu có nhiều bản ghi trùng lặp, xóa các bản ghi còn lại
+                    if (membershipList != null && membershipList.size() > 1) {
+                        log.warn("[Import] Found {} duplicate ClubMemberShip records for user {} in club {}. Keeping the first one (id: {}) and cleaning up duplicates...",
+                                membershipList.size(), user.getId(), clubId, membership.getId());
+                        for (int i = 1; i < membershipList.size(); i++) {
+                            duplicateMembershipsToDelete.add(membershipList.get(i));
+                        }
+                    }
                     boolean membershipCreated = false;
                     if (membership == null) {
                         LocalDate joinDate = joinDateStr != null ? parseDate(joinDateStr) : LocalDate.now();
@@ -698,7 +1098,7 @@ public class MemberServiceImpl implements MemberService{
                                 .joinDate(joinDate)
                                 .status(ClubMemberShipStatus.ACTIVE)
                                 .build();
-                        membership = clubMemberShipRepository.save(membership);
+                        membershipsToCreate.add(membership);
                         membershipCreated = true;
                         createdMemberships++;
                     } else {
@@ -706,30 +1106,32 @@ public class MemberServiceImpl implements MemberService{
                         if (membership.getStatus() != ClubMemberShipStatus.ACTIVE) {
                             membership.setStatus(ClubMemberShipStatus.ACTIVE);
                             membership.setEndDate(null);
-                            clubMemberShipRepository.save(membership);
+                            membershipsToUpdate.add(membership);
                             updatedMemberships++;
                         }
                     }
 
-                    // Find or create RoleMemberShip
-                    Optional<RoleMemberShip> rmOpt = roleMemberShipRepository.findByClubMemberShipAndSemester(membership, semester);
-                    RoleMemberShip roleMemberShip = rmOpt.orElse(new RoleMemberShip());
-                    boolean rmCreated = !rmOpt.isPresent();
+                    // ✅ FIX: Sử dụng helper method để đảm bảo chỉ có 1 RoleMemberShip
+                    RoleMemberShip roleMemberShip = getOrCreateSingleRoleMemberShip(membership, semester);
+                    
+                    // Kiểm tra nếu semester không phải current và chưa có bản ghi
+                    if (roleMemberShip == null) {
+                        throw new IllegalArgumentException(
+                            "Không thể tạo RoleMemberShip cho kỳ học không phải kỳ hiện tại: " + semesterCode + 
+                            ". Chỉ có thể import thành viên cho kỳ học đang hoạt động.");
+                    }
+                    
+                    boolean rmCreated = roleMemberShip.getId() == null; // Check if it's a new entity
 
-                    roleMemberShip.setClubMemberShip(membership);
-                    roleMemberShip.setSemester(semester);
-
-                    // Set role
+                    // Set role from cache
                     if (roleCode != null && !roleCode.isEmpty()) {
-                        ClubRole clubRole = clubRoleRepository.findByClubIdAndRoleCode(clubId, roleCode)
-                                .orElse(null);
+                        ClubRole clubRole = roleMap.get(roleCode);
                         roleMemberShip.setClubRole(clubRole);
                     }
 
-                    // Set team
+                    // Set team from cache
                     if (teamName != null && !teamName.isEmpty()) {
-                        Team team = teamRepository.findByClubIdAndTeamName(clubId, teamName)
-                                .orElse(null);
+                        Team team = teamMap.get(teamName);
                         roleMemberShip.setTeam(team);
                     }
 
@@ -737,7 +1139,7 @@ public class MemberServiceImpl implements MemberService{
                     boolean isActive = "true".equalsIgnoreCase(isActiveStr) || "1".equals(isActiveStr);
                     roleMemberShip.setIsActive(isActive);
 
-                    roleMemberShipRepository.save(roleMemberShip);
+                    roleMembershipsToSave.add(roleMemberShip);
                     if (rmCreated) {
                         createdRoleMemberships++;
                     } else {
@@ -745,6 +1147,53 @@ public class MemberServiceImpl implements MemberService{
                     }
 
                     processedHistories++;
+                    
+                    // ✅ OPTIMIZATION: Batch save và flush định kỳ
+                    if (totalRows % batchSize == 0) {
+                        // Save users first (they are referenced by memberships)
+                        if (!usersToCreate.isEmpty()) {
+                            userRepository.saveAll(usersToCreate);
+                            // Update cache với các user mới tạo
+                            for (User u : usersToCreate) {
+                                if (u.getStudentCode() != null && !u.getStudentCode().isEmpty()) {
+                                    userMap.put(u.getStudentCode(), u);
+                                }
+                                if (u.getEmail() != null && !u.getEmail().isEmpty()) {
+                                    emailsInBatch.add(u.getEmail().toLowerCase());
+                                }
+                            }
+                            usersToCreate.clear();
+                            // Clear batch tracking sau khi save
+                            studentCodesInBatch.clear();
+                            emailsInBatch.clear();
+                        }
+                        if (!usersToUpdate.isEmpty()) {
+                            userRepository.saveAll(usersToUpdate);
+                            usersToUpdate.clear();
+                        }
+                        
+                        // Delete duplicates
+                        if (!duplicateMembershipsToDelete.isEmpty()) {
+                            clubMemberShipRepository.deleteAll(duplicateMembershipsToDelete);
+                            duplicateMembershipsToDelete.clear();
+                        }
+                        
+                        // Save memberships
+                        if (!membershipsToCreate.isEmpty()) {
+                            clubMemberShipRepository.saveAll(membershipsToCreate);
+                            membershipsToCreate.clear();
+                        }
+                        if (!membershipsToUpdate.isEmpty()) {
+                            clubMemberShipRepository.saveAll(membershipsToUpdate);
+                            membershipsToUpdate.clear();
+                        }
+                        
+                        // Save role memberships
+                        if (!roleMembershipsToSave.isEmpty()) {
+                            roleMemberShipRepository.saveAll(roleMembershipsToSave);
+                            roleMembershipsToSave.clear();
+                        }
+                    }
 
                 } catch (Exception exRow) {
                     errors.add(ImportMemberError.builder()
@@ -754,6 +1203,26 @@ public class MemberServiceImpl implements MemberService{
                             .message(exRow.getMessage())
                             .build());
                 }
+            }
+            
+            // ✅ OPTIMIZATION: Flush remaining batches
+            if (!usersToCreate.isEmpty()) {
+                userRepository.saveAll(usersToCreate);
+            }
+            if (!usersToUpdate.isEmpty()) {
+                userRepository.saveAll(usersToUpdate);
+            }
+            if (!duplicateMembershipsToDelete.isEmpty()) {
+                clubMemberShipRepository.deleteAll(duplicateMembershipsToDelete);
+            }
+            if (!membershipsToCreate.isEmpty()) {
+                clubMemberShipRepository.saveAll(membershipsToCreate);
+            }
+            if (!membershipsToUpdate.isEmpty()) {
+                clubMemberShipRepository.saveAll(membershipsToUpdate);
+            }
+            if (!roleMembershipsToSave.isEmpty()) {
+                roleMemberShipRepository.saveAll(roleMembershipsToSave);
             }
         }
 

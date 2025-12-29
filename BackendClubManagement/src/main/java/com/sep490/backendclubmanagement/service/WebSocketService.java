@@ -13,6 +13,7 @@ import org.springframework.messaging.simp.user.SimpUserRegistry;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 import static io.lettuce.core.pubsub.PubSubOutput.Type.message;
@@ -208,8 +209,25 @@ public class WebSocketService {
             log.error("Failed to broadcast to userId: {}", userId, e);
         }
     }
+    public void broadcastHomepageUpdated(String source) {
+        try {
+            messagingTemplate.convertAndSend(
+                    "/topic/homepage",
+                    WebSocketMessage.of(
+                            "HOMEPAGE",
+                            "UPDATED",
+                            Map.of("source", source) // EVENT / NEWS / CLUB
+                    )
+            );
+            log.info("Broadcast homepage updated, source={}", source);
+        } catch (Exception e) {
+            log.error("Failed to broadcast homepage update", e);
+        }
+    }
 
 }
+
+
 
 
 

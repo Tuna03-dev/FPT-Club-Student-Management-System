@@ -13,6 +13,7 @@ import java.util.Optional;
 import com.sep490.backendclubmanagement.dto.request.StaffFilterRequest;
 @Repository
 public interface UserRepository extends JpaRepository<User, Long> {
+    @Query("SELECT u FROM User u WHERE LOWER(u.email) = LOWER(:email)")
     Optional<User> findByEmail(String email);
 
     Optional<User> findByEmailIgnoreCase(String email);
@@ -40,6 +41,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
     boolean existsByStudentCodeIgnoreCase(String studentCode);
 
     Optional<User> findByStudentCode(String studentCode);
+    List<User> findByStudentCodeIn(List<String> studentCodes);
 
     @Query("SELECT u.id FROM User u WHERE UPPER(u.systemRole.roleName) = UPPER(:roleName)")
     List<Long> findIdsBySystemRoleName(@Param("roleName") String roleName);

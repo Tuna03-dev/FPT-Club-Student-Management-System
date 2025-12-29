@@ -15,6 +15,7 @@ import java.util.List;
 public interface ClubMemberShipRepository extends JpaRepository<ClubMemberShip, Long> {
 
     // CLB mà user đang tham gia trong 1 học kỳ (không phụ thuộc tên collection ở ClubMemberShip)
+    // Yêu cầu phải có role trong semester hiện tại
     @Query("""
         select new com.sep490.backendclubmanagement.dto.response.MyClubDTO(
             c.id, c.clubName, c.logoUrl
@@ -22,6 +23,7 @@ public interface ClubMemberShipRepository extends JpaRepository<ClubMemberShip, 
         from ClubMemberShip cm
             join cm.club c
         where cm.user.id = :userId
+          and cm.status = 'ACTIVE'
           and exists (
                 select 1
                 from RoleMemberShip rm
@@ -32,6 +34,31 @@ public interface ClubMemberShipRepository extends JpaRepository<ClubMemberShip, 
         """)
     List<MyClubDTO> findClubsByUserIdAndSemesterId(@Param("userId") Long userId,
                                                    @Param("semesterId") Long semesterId);
+
+    // CLB mà user đang tham gia (tất cả active memberships, không yêu cầu role trong semester)
+    // Đồng bộ với logic getUserClubRoles()
+    @Query("""
+        select new com.sep490.backendclubmanagement.dto.response.MyClubDTO(
+            c.id, c.clubName, c.logoUrl
+        )
+        from ClubMemberShip cm
+            join cm.club c
+        where cm.user.id = :userId
+          and cm.status = 'ACTIVE'
+        """)
+    List<MyClubDTO> findActiveClubsByUserId(@Param("userId") Long userId);
+
+    // Lấy ClubMemberShip entity của user trong semester hiện tại (ACTIVE status only)
+    // Không check EXISTS role vì logic xử lý member không có role được handle ở code
+    @Query("""
+        select cm
+        from ClubMemberShip cm
+            join fetch cm.club c
+            join fetch cm.user u
+        where cm.user.id = :userId
+          and cm.status = 'ACTIVE'
+        """)
+    List<ClubMemberShip> findActiveClubMembershipsByUserId(@Param("userId") Long userId);
 
     // Tất cả membership của user (để dùng ở service khác)
     List<ClubMemberShip> findAllByUserId(Long userId);
@@ -214,8 +241,21 @@ public interface ClubMemberShipRepository extends JpaRepository<ClubMemberShip, 
     @Query("""
     SELECT cms FROM ClubMemberShip cms
     WHERE cms.club.id = :clubId AND cms.user.id = :userId
+    ORDER BY cms.id ASC
     """)
-    ClubMemberShip findByClubIdAndUserId(@Param("clubId") Long clubId, @Param("userId") Long userId);
+    List<ClubMemberShip> findByClubIdAndUserIdList(@Param("clubId") Long clubId, @Param("userId") Long userId);
+    
+    @Query("""
+    SELECT cms FROM ClubMemberShip cms
+    WHERE cms.club.id = :clubId AND cms.user.id = :userId
+    ORDER BY cms.id ASC
+    """)
+    java.util.Optional<ClubMemberShip> findFirstByClubIdAndUserId(@Param("clubId") Long clubId, @Param("userId") Long userId);
+    
+    // Giữ lại method cũ để tương thích, nhưng sẽ lấy phần tử đầu tiên
+    default ClubMemberShip findByClubIdAndUserId(Long clubId, Long userId) {
+        return findFirstByClubIdAndUserId(clubId, userId).orElse(null);
+    }
     @Query("SELECT COUNT(cms) > 0 FROM ClubMemberShip cms WHERE cms.club.id = :clubId AND cms.user.id = :userId AND cms.status = 'ACTIVE'")
     boolean existsByClubIdAndUserIdAndStatusActive(@Param("clubId") Long clubId, @Param("userId") Long userId);
 
@@ -224,12 +264,16 @@ public interface ClubMemberShipRepository extends JpaRepository<ClubMemberShip, 
     @Query("""
         SELECT cm
         FROM ClubMemberShip cm
-        WHERE cm.user.id IN :userIds
-          AND cm.club.id = :clubId
+        WHERE cm.club.id = :clubId
+          AND cm.user.id IN :userIds
           AND cm.status = 'ACTIVE'
+          AND cm.deletedAt IS NULL
+          AND (cm.endDate IS NULL OR cm.endDate > CURRENT_DATE)
     """)
-    List<ClubMemberShip> findByUserIdInAndClubId(@Param("userIds") List<Long> userIds,
-                                                 @Param("clubId") Long clubId);
+    List<ClubMemberShip> findByUserIdInAndClubId(
+            @Param("userIds") List<Long> userIds,
+            @Param("clubId") Long clubId
+    );
 
 
     @Query("""
@@ -306,6 +350,24 @@ public interface ClubMemberShipRepository extends JpaRepository<ClubMemberShip, 
       AND cr.roleCode NOT IN ('CLUB_PRESIDENT', 'CLUB_VICE')
 """)
     List<Long> findAllActiveNonLeadersMemberIds(Long clubId);
+    @Query(value = """
+    SELECT DISTINCT u.id
+    FROM club_memberships cm
+    JOIN role_memberships rm ON rm.club_membership_id = cm.id
+    JOIN club_roles cr ON cr.id = rm.clubrole_id
+    JOIN semesters s ON s.id = rm.semester_id
+    JOIN users u ON u.id = cm.user_id
+    WHERE cm.club_id = :clubId
+      AND cm.status = 'ACTIVE'
+      AND cm.deleted_at IS NULL
+      AND rm.is_active = 1
+      AND rm.deleted_at IS NULL
+      AND s.is_current = 1
+      AND cr.role_code NOT IN ('CLUB_PRESIDENT', 'CLUB_VICE_PRESIDENT')
+""", nativeQuery = true)
+    List<Long> findAvailableMemberUserIds(@Param("clubId") Long clubId);
+
+
 
 
 }

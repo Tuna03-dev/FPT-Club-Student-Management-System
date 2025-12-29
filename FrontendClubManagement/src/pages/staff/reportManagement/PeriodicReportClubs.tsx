@@ -177,7 +177,11 @@ export function PeriodicReportClubs() {
       setTotalElements(response.totalElements);
     } catch (error: any) {
       console.error("Error refreshing clubs data:", error);
-      toast.error("Không thể làm mới dữ liệu");
+      const errorMessage =
+        error?.response?.data?.message ||
+        error?.message ||
+        "Không thể làm mới dữ liệu";
+      toast.error(errorMessage);
     } finally {
       setIsRefreshingClubs(false);
     }
@@ -200,7 +204,11 @@ export function PeriodicReportClubs() {
       }
     } catch (error: any) {
       console.error("Error refreshing requirement data:", error);
-      toast.error("Không thể làm mới dữ liệu yêu cầu");
+      const errorMessage =
+        error?.response?.data?.message ||
+        error?.message ||
+        "Không thể làm mới dữ liệu yêu cầu";
+      toast.error(errorMessage);
     } finally {
       setIsRefreshing(false);
     }
@@ -265,7 +273,11 @@ export function PeriodicReportClubs() {
         setTotalElements(response.totalElements);
       } catch (error: any) {
         console.error("Error fetching data:", error);
-        toast.error(error.message || "Không thể tải dữ liệu");
+        const errorMessage =
+          error?.response?.data?.message ||
+          error?.message ||
+          "Không thể tải dữ liệu";
+        toast.error(errorMessage);
         navigate("/staff/report");
       } finally {
         setIsLoading(false);
@@ -562,7 +574,7 @@ export function PeriodicReportClubs() {
         <div className="flex items-center bg-secondary rounded-lg px-4 py-2">
           <Search className="h-4 w-4 text-muted-foreground mr-3" />
           <Input
-            placeholder="Tìm kiếm theo tên, mã, mô tả câu lạc bộ..."
+            placeholder="Tìm kiếm theo tên, mã câu lạc bộ..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="border-0 bg-transparent focus-visible:ring-0 flex-1"
@@ -749,9 +761,11 @@ export function PeriodicReportClubs() {
                                   "Error fetching report detail:",
                                   error
                                 );
-                                toast.error(
-                                  error.message || "Không thể tải báo cáo"
-                                );
+                                const errorMessage =
+                                  error?.response?.data?.message ||
+                                  error?.message ||
+                                  "Không thể tải báo cáo";
+                                toast.error(errorMessage);
                               } finally {
                                 setIsLoadingReport(false);
                               }

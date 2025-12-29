@@ -54,6 +54,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+  PaginationEllipsis,
+} from "@/components/ui/pagination";
 
 type FrontendReportType = "periodic" | "post-event" | "other" | "reports";
 
@@ -165,7 +174,11 @@ export function StaffReportManagement() {
       setTotalElements(response.totalElements);
     } catch (error: any) {
       console.error("Error fetching report requirements:", error);
-      toast.error("Không thể tải danh sách yêu cầu nộp báo cáo");
+      const errorMessage =
+        error?.response?.data?.message ||
+        error?.message ||
+        "Không thể tải danh sách yêu cầu nộp báo cáo";
+      toast.error(errorMessage);
       setReports([]);
     } finally {
       setIsLoading(false);
@@ -199,7 +212,11 @@ export function StaffReportManagement() {
       setReportListTotalElements(response.totalElements);
     } catch (error: any) {
       console.error("Error fetching reports:", error);
-      toast.error("Không thể tải danh sách báo cáo");
+      const errorMessage =
+        error?.response?.data?.message ||
+        error?.message ||
+        "Không thể tải danh sách báo cáo";
+      toast.error(errorMessage);
       setReportList([]);
     } finally {
       setReportListLoading(false);
@@ -251,7 +268,11 @@ export function StaffReportManagement() {
           clubIds = [event.clubId];
         } catch (error: any) {
           console.error("Error fetching event details:", error);
-          toast.error("Không thể lấy thông tin sự kiện. Vui lòng thử lại.");
+          const errorMessage =
+            error?.response?.data?.message ||
+            error?.message ||
+            "Không thể lấy thông tin sự kiện. Vui lòng thử lại.";
+          toast.error(errorMessage);
           return;
         }
       } else if (formData.type === "other") {
@@ -298,7 +319,11 @@ export function StaffReportManagement() {
       await fetchReportRequirements();
     } catch (error: any) {
       console.error("Error creating report requirement:", error);
-      toast.error(error.message || "Không thể tạo yêu cầu báo cáo");
+      const errorMessage =
+        error?.response?.data?.message ||
+        error?.message ||
+        "Không thể tạo yêu cầu báo cáo";
+      toast.error(errorMessage);
     } finally {
       setIsSubmitting(false);
     }
@@ -319,9 +344,9 @@ export function StaffReportManagement() {
   const getReportTypeLabel = (type: FrontendReportType) => {
     switch (type) {
       case "periodic":
-        return "Báo cáo Định kỳ";
+        return "Báo cáo định kỳ";
       case "post-event":
-        return "Báo cáo Sau sự kiện";
+        return "Báo cáo cho sự kiện";
       case "other":
         return "Loại báo cáo khác";
       default:
@@ -335,7 +360,7 @@ export function StaffReportManagement() {
       case "PENDING_UNIVERSITY":
         return "Chờ phê duyệt";
       case "APPROVED_UNIVERSITY":
-        return "Đã chấp nhận";
+        return "Đã phê duyệt";
       case "REJECTED_UNIVERSITY":
         return "Đã từ chối";
       case "RESUBMITTED_UNIVERSITY":
@@ -373,14 +398,15 @@ export function StaffReportManagement() {
             reportDetail.reportRequirement?.reportType
           ) || "periodic",
         status:
-          reportDetail.status === "PENDING_UNIVERSITY" ||
-          reportDetail.status === "RESUBMITTED_UNIVERSITY"
+          reportDetail.status === "PENDING_UNIVERSITY"
             ? "submitted"
-            : reportDetail.status === "APPROVED_UNIVERSITY"
-              ? "approved"
-              : reportDetail.status === "REJECTED_UNIVERSITY"
-                ? "rejected"
-                : "submitted",
+            : reportDetail.status === "RESUBMITTED_UNIVERSITY"
+              ? "resubmitted"
+              : reportDetail.status === "APPROVED_UNIVERSITY"
+                ? "approved"
+                : reportDetail.status === "REJECTED_UNIVERSITY"
+                  ? "rejected"
+                  : "submitted",
         submittedBy: reportDetail.createdBy?.fullName || "N/A",
         submittedByAvatar: "",
         department: reportDetail.club?.clubName || "",
@@ -435,7 +461,11 @@ export function StaffReportManagement() {
       setIsReportDetailModalOpen(true);
     } catch (error: any) {
       console.error("Error fetching report detail:", error);
-      toast.error(error.message || "Không thể tải chi tiết báo cáo");
+      const errorMessage =
+        error?.response?.data?.message ||
+        error?.message ||
+        "Không thể tải chi tiết báo cáo";
+      toast.error(errorMessage);
     }
   };
 
@@ -472,8 +502,8 @@ export function StaffReportManagement() {
         >
           <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="reports">Danh sách báo cáo</TabsTrigger>
-            <TabsTrigger value="periodic">Yêu cầu Định kỳ</TabsTrigger>
-            <TabsTrigger value="post-event">Yêu cầu Sau sự kiện</TabsTrigger>
+            <TabsTrigger value="periodic">Yêu cầu định kỳ</TabsTrigger>
+            <TabsTrigger value="post-event">Yêu cầu cho sự kiện</TabsTrigger>
             <TabsTrigger value="other">Yêu cầu khác</TabsTrigger>
           </TabsList>
         </Tabs>
@@ -484,7 +514,7 @@ export function StaffReportManagement() {
             <div className="flex items-center bg-secondary rounded-lg px-4 py-2 flex-1">
               <Search className="h-4 w-4 text-muted-foreground mr-3" />
               <Input
-                placeholder="Tìm kiếm theo tiêu đề, câu lạc bộ, người nộp..."
+                placeholder="Tìm kiếm theo tiêu đề, mô tả"
                 value={reportSearchQuery}
                 onChange={(e) => setReportSearchQuery(e.target.value)}
                 className="border-0 bg-transparent focus-visible:ring-0 flex-1"
@@ -520,7 +550,7 @@ export function StaffReportManagement() {
             <div className="flex items-center bg-secondary rounded-lg px-4 py-2 flex-1">
               <Search className="h-4 w-4 text-muted-foreground mr-3" />
               <Input
-                placeholder="Tìm kiếm theo tiêu đề, người nộp, bộ phận..."
+                placeholder="Tìm kiếm theo tiêu đề, mô tả"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="border-0 bg-transparent focus-visible:ring-0 flex-1"
@@ -689,35 +719,131 @@ export function StaffReportManagement() {
 
                 {/* Pagination */}
                 {reportListTotalPages > 1 && (
-                  <div className="flex items-center justify-center gap-2 pt-4">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() =>
-                        setReportListPage((prev) => Math.max(1, prev - 1))
-                      }
-                      disabled={reportListPage === 1 || reportListLoading}
-                    >
-                      Trước
-                    </Button>
-                    <span className="text-sm text-muted-foreground">
-                      Trang {reportListPage} / {reportListTotalPages}
-                    </span>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() =>
-                        setReportListPage((prev) =>
-                          Math.min(reportListTotalPages, prev + 1)
-                        )
-                      }
-                      disabled={
-                        reportListPage === reportListTotalPages ||
-                        reportListLoading
-                      }
-                    >
-                      Sau
-                    </Button>
+                  <div className="mt-8 flex justify-center">
+                    <Pagination>
+                      <PaginationContent>
+                        <PaginationItem>
+                          <PaginationPrevious
+                            onClick={() => {
+                              setReportListPage((prev) =>
+                                Math.max(1, prev - 1)
+                              );
+                              window.scrollTo({ top: 0, behavior: "smooth" });
+                            }}
+                            className={
+                              reportListPage === 1
+                                ? "pointer-events-none opacity-50"
+                                : "cursor-pointer"
+                            }
+                          />
+                        </PaginationItem>
+
+                        {/* Show page numbers with ellipsis when needed */}
+                        {(() => {
+                          const pages: (number | "ellipsis")[] = [];
+
+                          if (reportListTotalPages <= 7) {
+                            // Show all pages if 7 or fewer
+                            for (let i = 1; i <= reportListTotalPages; i++) {
+                              pages.push(i);
+                            }
+                          } else {
+                            // Always show first page
+                            pages.push(1);
+
+                            // Show ellipsis if current page is far from start
+                            if (reportListPage > 3) {
+                              pages.push("ellipsis");
+                            }
+
+                            // Show pages around current (avoid duplicates with first/last)
+                            const start = Math.max(2, reportListPage - 1);
+                            const end = Math.min(
+                              reportListTotalPages - 1,
+                              reportListPage + 1
+                            );
+                            for (let i = start; i <= end; i++) {
+                              if (i !== 1 && i !== reportListTotalPages) {
+                                pages.push(i);
+                              }
+                            }
+
+                            // Show ellipsis if current page is far from end
+                            if (reportListPage < reportListTotalPages - 2) {
+                              pages.push("ellipsis");
+                            }
+
+                            // Always show last page (if not already shown)
+                            if (reportListTotalPages !== 1) {
+                              pages.push(reportListTotalPages);
+                            }
+                          }
+
+                          // Remove duplicates
+                          const seen = new Set<number | string>();
+                          const uniquePages: (number | "ellipsis")[] = [];
+                          for (const item of pages) {
+                            if (item === "ellipsis") {
+                              // Only add ellipsis if not immediately after another ellipsis
+                              if (
+                                uniquePages[uniquePages.length - 1] !==
+                                "ellipsis"
+                              ) {
+                                uniquePages.push(item);
+                              }
+                            } else {
+                              if (!seen.has(item)) {
+                                seen.add(item);
+                                uniquePages.push(item);
+                              }
+                            }
+                          }
+
+                          return uniquePages.map((item, index) => {
+                            if (item === "ellipsis") {
+                              return (
+                                <PaginationItem key={`ellipsis-${index}`}>
+                                  <PaginationEllipsis />
+                                </PaginationItem>
+                              );
+                            }
+                            return (
+                              <PaginationItem key={item}>
+                                <PaginationLink
+                                  onClick={() => {
+                                    setReportListPage(item);
+                                    window.scrollTo({
+                                      top: 0,
+                                      behavior: "smooth",
+                                    });
+                                  }}
+                                  isActive={reportListPage === item}
+                                  className="cursor-pointer"
+                                >
+                                  {item}
+                                </PaginationLink>
+                              </PaginationItem>
+                            );
+                          });
+                        })()}
+
+                        <PaginationItem>
+                          <PaginationNext
+                            onClick={() => {
+                              setReportListPage((prev) =>
+                                Math.min(reportListTotalPages, prev + 1)
+                              );
+                              window.scrollTo({ top: 0, behavior: "smooth" });
+                            }}
+                            className={
+                              reportListPage === reportListTotalPages
+                                ? "pointer-events-none opacity-50"
+                                : "cursor-pointer"
+                            }
+                          ></PaginationNext>
+                        </PaginationItem>
+                      </PaginationContent>
+                    </Pagination>
                   </div>
                 )}
               </>
@@ -930,30 +1056,129 @@ export function StaffReportManagement() {
 
                 {/* Pagination */}
                 {totalPages > 1 && (
-                  <div className="flex items-center justify-center gap-2 pt-4">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() =>
-                        setCurrentPage((prev) => Math.max(1, prev - 1))
-                      }
-                      disabled={currentPage === 1 || isLoading}
-                    >
-                      Trước
-                    </Button>
-                    <span className="text-sm text-muted-foreground">
-                      Trang {currentPage} / {totalPages}
-                    </span>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() =>
-                        setCurrentPage((prev) => Math.min(totalPages, prev + 1))
-                      }
-                      disabled={currentPage === totalPages || isLoading}
-                    >
-                      Sau
-                    </Button>
+                  <div className="mt-8 flex justify-center">
+                    <Pagination>
+                      <PaginationContent>
+                        <PaginationItem>
+                          <PaginationPrevious
+                            onClick={() => {
+                              setCurrentPage((prev) => Math.max(1, prev - 1));
+                              window.scrollTo({ top: 0, behavior: "smooth" });
+                            }}
+                            className={
+                              currentPage === 1
+                                ? "pointer-events-none opacity-50"
+                                : "cursor-pointer"
+                            }
+                          />
+                        </PaginationItem>
+
+                        {/* Show page numbers with ellipsis when needed */}
+                        {(() => {
+                          const pages: (number | "ellipsis")[] = [];
+
+                          if (totalPages <= 7) {
+                            // Show all pages if 7 or fewer
+                            for (let i = 1; i <= totalPages; i++) {
+                              pages.push(i);
+                            }
+                          } else {
+                            // Always show first page
+                            pages.push(1);
+
+                            // Show ellipsis if current page is far from start
+                            if (currentPage > 3) {
+                              pages.push("ellipsis");
+                            }
+
+                            // Show pages around current (avoid duplicates with first/last)
+                            const start = Math.max(2, currentPage - 1);
+                            const end = Math.min(
+                              totalPages - 1,
+                              currentPage + 1
+                            );
+                            for (let i = start; i <= end; i++) {
+                              if (i !== 1 && i !== totalPages) {
+                                pages.push(i);
+                              }
+                            }
+
+                            // Show ellipsis if current page is far from end
+                            if (currentPage < totalPages - 2) {
+                              pages.push("ellipsis");
+                            }
+
+                            // Always show last page (if not already shown)
+                            if (totalPages !== 1) {
+                              pages.push(totalPages);
+                            }
+                          }
+
+                          // Remove duplicates
+                          const seen = new Set<number | string>();
+                          const uniquePages: (number | "ellipsis")[] = [];
+                          for (const item of pages) {
+                            if (item === "ellipsis") {
+                              // Only add ellipsis if not immediately after another ellipsis
+                              if (
+                                uniquePages[uniquePages.length - 1] !==
+                                "ellipsis"
+                              ) {
+                                uniquePages.push(item);
+                              }
+                            } else {
+                              if (!seen.has(item)) {
+                                seen.add(item);
+                                uniquePages.push(item);
+                              }
+                            }
+                          }
+
+                          return uniquePages.map((item, index) => {
+                            if (item === "ellipsis") {
+                              return (
+                                <PaginationItem key={`ellipsis-${index}`}>
+                                  <PaginationEllipsis />
+                                </PaginationItem>
+                              );
+                            }
+                            return (
+                              <PaginationItem key={item}>
+                                <PaginationLink
+                                  onClick={() => {
+                                    setCurrentPage(item);
+                                    window.scrollTo({
+                                      top: 0,
+                                      behavior: "smooth",
+                                    });
+                                  }}
+                                  isActive={currentPage === item}
+                                  className="cursor-pointer"
+                                >
+                                  {item}
+                                </PaginationLink>
+                              </PaginationItem>
+                            );
+                          });
+                        })()}
+
+                        <PaginationItem>
+                          <PaginationNext
+                            onClick={() => {
+                              setCurrentPage((prev) =>
+                                Math.min(totalPages, prev + 1)
+                              );
+                              window.scrollTo({ top: 0, behavior: "smooth" });
+                            }}
+                            className={
+                              currentPage === totalPages
+                                ? "pointer-events-none opacity-50"
+                                : "cursor-pointer"
+                            }
+                          ></PaginationNext>
+                        </PaginationItem>
+                      </PaginationContent>
+                    </Pagination>
                   </div>
                 )}
               </>

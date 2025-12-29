@@ -1031,17 +1031,17 @@ function PresidentNewsListImpl() {
           onOk={handleConfirmOk}
           title={
             confirmState.type === "submitDraft"
-              ? "Submit bản nháp"
+              ? "Gửi bản nháp"
               : confirmState.type === "deleteDraft"
                 ? "Xóa bản nháp"
-                : "Duyệt & gửi request lên Staff"
+                : "Duyệt & gửi tin tức lên Staff"
           }
           message={
             confirmState.type === "submitDraft"
-              ? `Bạn có chắc muốn submit bản nháp #${confirmState.id} thành request?`
+              ? `Bạn có chắc muốn nộp bản nháp thành tin tức lên Staff?`
               : confirmState.type === "deleteDraft"
-                ? `Bạn có chắc muốn xóa bản nháp #${confirmState.id}?`
-                : `Bạn có chắc duyệt & gửi request #${confirmState.id} lên Staff?`
+                ? `Bạn có chắc muốn xóa bản nháp?`
+                : `Bạn có chắc duyệt & gửi tin tức này lên Staff?`
           }
           okText={confirmState.type === "deleteDraft" ? "Xóa" : "Xác nhận"}
           okVariant={confirmState.type === "deleteDraft" ? "danger" : "primary"}

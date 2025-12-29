@@ -130,7 +130,34 @@ public class GlobalExceptionHandler {
                 .status(ErrorCode.TEAM_NAME_EXISTED.getHttpStatus())
                 .body(ApiResponse.error(ErrorCode.TEAM_NAME_EXISTED, ex.getMessage(), null));
     }
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ApiResponse<Void>> handleIllegalArgument(IllegalArgumentException ex) {
+        log.warn("Illegal argument: {}", ex.getMessage());
 
+        return ResponseEntity
+                .status(ErrorCode.INVALID_INPUT.getHttpStatus())
+                .body(ApiResponse.error(ErrorCode.INVALID_INPUT, ex.getMessage(), null));
+    }
 
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<ApiResponse<Void>> handleIllegalState(IllegalStateException ex) {
+        log.warn("Illegal state: {}", ex.getMessage());
+
+        // Nếu message là tiếng Anh, chuyển sang tiếng Việt
+        String message = ex.getMessage();
+        if (message != null) {
+            if (message.contains("Member not found")) {
+                message = "Không tìm thấy thành viên";
+            } else if (message.contains("No current semester")) {
+                message = "Chưa cấu hình kỳ học hiện tại";
+            } else if (message.contains("already left")) {
+                message = "Thành viên đã rời câu lạc bộ";
+            }
+        }
+
+        return ResponseEntity
+                .status(ErrorCode.INVALID_INPUT.getHttpStatus())
+                .body(ApiResponse.error(ErrorCode.INVALID_INPUT, message, null));
+    }
 
 }

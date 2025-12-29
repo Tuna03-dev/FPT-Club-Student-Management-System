@@ -106,7 +106,7 @@ public class ClubSecurity {
      * @return true if user is an officer, false otherwise
      */
     public boolean isTreasureInClub(Long clubId) {
-        return hasSystemRoleInClub(clubId, "CLUB_TREASURER");
+        return hasSystemRoleInClub(clubId, "CLUB_TREASURE");
     }
 
     /**

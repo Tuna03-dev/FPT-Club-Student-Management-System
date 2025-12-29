@@ -44,6 +44,7 @@ class PublicClubServiceImplTest {
         String q = "  dev club  ";
         Long campusId = 1L;
         Long categoryId = 2L;
+        Boolean hasActiveRecruitment = true;
         int page = 0;
         int size = 10;
 
@@ -65,12 +66,12 @@ class PublicClubServiceImplTest {
         PageRequest pr = PageRequest.of(page, size);
         Page<ClubCardRow> rowsPage = new PageImpl<>(List.of(row), pr, 1);
 
-        when(repo.findPublicClubs(eq("dev club"), eq(campusId), eq(categoryId), any(PageRequest.class)))
+        when(repo.findPublicClubs(eq("dev club"), eq(campusId), eq(categoryId), eq(hasActiveRecruitment), any(PageRequest.class)))
                 .thenReturn(rowsPage);
 
         // Act
         PageResp<PublicClubCardDTO> resp =
-                publicClubService.list(q, campusId, categoryId, page, size);
+                publicClubService.list(q, campusId, categoryId, hasActiveRecruitment, page, size);
 
         // Assert
         assertNotNull(resp);
@@ -102,12 +103,12 @@ class PublicClubServiceImplTest {
         PageRequest pr = PageRequest.of(page, size);
         Page<ClubCardRow> rowsPage = new PageImpl<>(List.of(), pr, 0);
 
-        when(repo.findPublicClubs(isNull(), isNull(), isNull(), any(PageRequest.class)))
+        when(repo.findPublicClubs(isNull(), isNull(), isNull(), isNull(), any(PageRequest.class)))
                 .thenReturn(rowsPage);
 
         // Act
         PageResp<PublicClubCardDTO> resp =
-                publicClubService.list(null, null, null, page, size);
+                publicClubService.list(null, null, null, null, page, size);
 
         // Assert
         assertNotNull(resp);

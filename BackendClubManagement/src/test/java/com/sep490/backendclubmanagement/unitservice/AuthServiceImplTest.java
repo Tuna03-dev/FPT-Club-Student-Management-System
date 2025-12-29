@@ -228,6 +228,7 @@ class AuthServiceImplTest {
 
         Map<String, Object> fapProfile = new HashMap<>();
         fapProfile.put("fullName", "Test User");
+        fapProfile.put("studentCode", "SE123456");
 
         when(fapApiService.findProfileByEmail(testEmail)).thenReturn(Optional.of(fapProfile));
         when(systemRoleService.findByRoleName("STUDENT")).thenReturn(Optional.of(testUser.getSystemRole()));

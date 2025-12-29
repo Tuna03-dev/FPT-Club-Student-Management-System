@@ -7,6 +7,7 @@ import com.sep490.backendclubmanagement.entity.SystemRole;
 import com.sep490.backendclubmanagement.entity.User;
 import com.sep490.backendclubmanagement.exception.AppException;
 import com.sep490.backendclubmanagement.exception.ErrorCode;
+import com.sep490.backendclubmanagement.repository.UserRepository;
 import com.sep490.backendclubmanagement.util.JwtUtil;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
@@ -29,6 +30,7 @@ public class AuthServiceImpl implements AuthService{
     private final FapApiService fapApiService;
     private final JwtUtil jwtUtil;
     private final UserService userService;
+    private final UserRepository userRepository;
     private final SystemRoleService systemRoleService;
     private final TokenBlacklistService tokenBlacklistService;
     private final RefreshTokenService refreshTokenService;
@@ -74,9 +76,17 @@ public class AuthServiceImpl implements AuthService{
             if (!user.getIsActive()) {
                 throw new AppException(ErrorCode.USER_NOT_ACTIVE);
             }
+            boolean needSave = false;
+            if (!Objects.equals(user.getStudentCode(), studentCode)) {
+                user.setStudentCode(studentCode);
+                needSave = true;
+            }
             // Ensure user has system role
             if (user.getSystemRole() == null) {
                 user.setSystemRole(role);
+                needSave = true;
+            }
+            if (needSave) {
                 user = userService.save(user);
             }
         }

@@ -125,7 +125,7 @@ class AdminDepartmentServiceImplTest {
         verify(adminDepartmentMapper).toDTOs(captor.capture());
         List<AdminDepartment> filtered = captor.getValue();
         assertEquals(1, filtered.size());
-        assertSame(d1, filtered.get(0));
+        assertEquals(d1.getId(), filtered.get(0).getId());
     }
 
     @Test

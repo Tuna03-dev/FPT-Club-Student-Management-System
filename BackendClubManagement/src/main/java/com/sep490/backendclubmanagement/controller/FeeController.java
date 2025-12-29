@@ -12,6 +12,7 @@ import com.sep490.backendclubmanagement.security.SecurityConfig;
 import com.sep490.backendclubmanagement.service.FeeService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -21,6 +22,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.Arrays;
 import java.util.List;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/clubs/{clubId}/fees")
 @RequiredArgsConstructor
@@ -124,8 +126,9 @@ public class FeeController {
         } catch (AppException ex) {
             return ApiResponse.error(ex.getErrorCode(), ex.getMessage(), null);
         } catch (Exception ex) {
+            log.error("Unexpected error generating payment QR: {}", ex.getMessage(), ex);
             return ApiResponse.error(ErrorCode.INTERNAL_SERVER_ERROR, 
-                    "Không thể tạo mã QR thanh toán: " + Arrays.toString(ex.getStackTrace()), null);
+                    "Không thể tạo mã QR thanh toán. Vui lòng thử lại sau.", null);
         }
     }
 

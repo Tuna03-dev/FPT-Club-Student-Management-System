@@ -52,6 +52,15 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+  PaginationEllipsis,
+} from "@/components/ui/pagination";
 import { Skeleton } from "@/components/ui/skeleton";
 import type {
   ClubManagementResponse,
@@ -123,7 +132,7 @@ export function StaffClubsManagement() {
   const [categoryPage, setCategoryPage] = useState(1);
   const [categoryPageSize] = useState(10);
   const [categoryTotalPages, setCategoryTotalPages] = useState(0);
-  const [categoryTotalElements, setCategoryTotalElements] = useState(0);
+  const [, setCategoryTotalElements] = useState(0);
 
   // Staff Club Management States
   const [clubs, setClubs] = useState<ClubManagementResponse[]>([]);
@@ -180,7 +189,11 @@ export function StaffClubsManagement() {
       setTotalElements(response.totalElements);
     } catch (error: any) {
       console.error("Error fetching clubs:", error);
-      toast.error(error.message || "Không thể tải danh sách câu lạc bộ");
+      const errorMessage =
+        error?.response?.data?.message ||
+        error?.message ||
+        "Không thể tải danh sách câu lạc bộ";
+      toast.error(errorMessage);
     } finally {
       if (!silent) setLoading(false);
     }
@@ -206,9 +219,13 @@ export function StaffClubsManagement() {
       if (!force && clubCategories && clubCategories.length > 0) return; // already loaded
       const categoriesData = await getAllClubCategories();
       setClubCategories(categoriesData);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error loading club categories:", err);
-      toast.error("Không thể tải thể loại câu lạc bộ");
+      const errorMessage =
+        err?.response?.data?.message ||
+        err?.message ||
+        "Không thể tải thể loại câu lạc bộ";
+      toast.error(errorMessage);
     }
   };
 
@@ -388,16 +405,19 @@ export function StaffClubsManagement() {
         toast.success("Tạo thể loại thành công");
         // Refetch to get correct order from backend
         await fetchCategories();
-        // Also update categories used in Clubs tab and refresh clubs list
+        // Also update categories used in Clubs tab dropdown filter
         try {
           await loadClubCategories(true);
         } catch (e) {
           console.error("Error loading club categories after create:", e);
         }
-        try {
-          await fetchClubs();
-        } catch (e) {
-          console.error("Error refreshing clubs after category create:", e);
+        // Only refresh clubs if we're on the all-clubs tab
+        if (activeTab === "all-clubs") {
+          try {
+            await fetchClubs();
+          } catch (e) {
+            console.error("Error refreshing clubs after category create:", e);
+          }
         }
       } else {
         console.error("Create category failed:", resp.message);
@@ -432,16 +452,19 @@ export function StaffClubsManagement() {
         toast.success("Cập nhật thể loại thành công");
         // Refetch to get correct order from backend
         await fetchCategories();
-        // Also update categories used in Clubs tab and refresh clubs list
+        // Also update categories used in Clubs tab dropdown filter
         try {
           await loadClubCategories(true);
         } catch (e) {
           console.error("Error loading club categories after update:", e);
         }
-        try {
-          await fetchClubs();
-        } catch (e) {
-          console.error("Error refreshing clubs after category update:", e);
+        // Only refresh clubs if we're on the all-clubs tab
+        if (activeTab === "all-clubs") {
+          try {
+            await fetchClubs();
+          } catch (e) {
+            console.error("Error refreshing clubs after category update:", e);
+          }
         }
       } else {
         console.error("Update failed:", resp.message);
@@ -470,16 +493,19 @@ export function StaffClubsManagement() {
         toast.success("Xóa thể loại thành công");
         // Refetch to get correct order from backend
         await fetchCategories();
-        // Also update categories used in Clubs tab and refresh clubs list
+        // Also update categories used in Clubs tab dropdown filter
         try {
           await loadClubCategories(true);
         } catch (e) {
           console.error("Error loading club categories after delete:", e);
         }
-        try {
-          await fetchClubs();
-        } catch (e) {
-          console.error("Error refreshing clubs after category delete:", e);
+        // Only refresh clubs if we're on the all-clubs tab
+        if (activeTab === "all-clubs") {
+          try {
+            await fetchClubs();
+          } catch (e) {
+            console.error("Error refreshing clubs after category delete:", e);
+          }
         }
       } else {
         console.error("Delete failed:", resp.message);
@@ -1416,38 +1442,132 @@ export function StaffClubsManagement() {
                       </Table>
                     </div>
                     {totalPages > 1 && (
-                      <div className="flex items-center justify-between px-2 py-4">
-                        <div className="text-sm text-muted-foreground">
-                          Hiển thị{" "}
-                          {clubs.length > 0 ? (page - 1) * pageSize + 1 : 0} -{" "}
-                          {Math.min(page * pageSize, totalElements)} trong tổng
-                          số {totalElements} câu lạc bộ
-                        </div>
-                        <div className="flex gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setPage((p) => Math.max(1, p - 1))}
-                            disabled={page === 1}
-                          >
-                            Trước
-                          </Button>
-                          <div className="flex items-center gap-1">
-                            <span className="text-sm">
-                              Trang {page} / {totalPages}
-                            </span>
-                          </div>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() =>
-                              setPage((p) => Math.min(totalPages, p + 1))
-                            }
-                            disabled={page >= totalPages}
-                          >
-                            Sau
-                          </Button>
-                        </div>
+                      <div className="mt-8 flex justify-center">
+                        <Pagination>
+                          <PaginationContent>
+                            <PaginationItem>
+                              <PaginationPrevious
+                                onClick={() => {
+                                  setPage((prev) => Math.max(1, prev - 1));
+                                  window.scrollTo({
+                                    top: 0,
+                                    behavior: "smooth",
+                                  });
+                                }}
+                                className={
+                                  page === 1
+                                    ? "pointer-events-none opacity-50"
+                                    : "cursor-pointer"
+                                }
+                              />
+                            </PaginationItem>
+
+                            {/* Show page numbers with ellipsis when needed */}
+                            {(() => {
+                              const pages: (number | "ellipsis")[] = [];
+
+                              if (totalPages <= 7) {
+                                // Show all pages if 7 or fewer
+                                for (let i = 1; i <= totalPages; i++) {
+                                  pages.push(i);
+                                }
+                              } else {
+                                // Always show first page
+                                pages.push(1);
+
+                                // Show ellipsis if current page is far from start
+                                if (page > 3) {
+                                  pages.push("ellipsis");
+                                }
+
+                                // Show pages around current (avoid duplicates with first/last)
+                                const start = Math.max(2, page - 1);
+                                const end = Math.min(totalPages - 1, page + 1);
+                                for (let i = start; i <= end; i++) {
+                                  if (i !== 1 && i !== totalPages) {
+                                    pages.push(i);
+                                  }
+                                }
+
+                                // Show ellipsis if current page is far from end
+                                if (page < totalPages - 2) {
+                                  pages.push("ellipsis");
+                                }
+
+                                // Always show last page (if not already shown)
+                                if (totalPages !== 1) {
+                                  pages.push(totalPages);
+                                }
+                              }
+
+                              // Remove duplicates
+                              const seen = new Set<number | string>();
+                              const uniquePages: (number | "ellipsis")[] = [];
+                              for (const item of pages) {
+                                if (item === "ellipsis") {
+                                  // Only add ellipsis if not immediately after another ellipsis
+                                  if (
+                                    uniquePages[uniquePages.length - 1] !==
+                                    "ellipsis"
+                                  ) {
+                                    uniquePages.push(item);
+                                  }
+                                } else {
+                                  if (!seen.has(item)) {
+                                    seen.add(item);
+                                    uniquePages.push(item);
+                                  }
+                                }
+                              }
+
+                              return uniquePages.map((item, index) => {
+                                if (item === "ellipsis") {
+                                  return (
+                                    <PaginationItem key={`ellipsis-${index}`}>
+                                      <PaginationEllipsis />
+                                    </PaginationItem>
+                                  );
+                                }
+                                return (
+                                  <PaginationItem key={item}>
+                                    <PaginationLink
+                                      onClick={() => {
+                                        setPage(item);
+                                        window.scrollTo({
+                                          top: 0,
+                                          behavior: "smooth",
+                                        });
+                                      }}
+                                      isActive={page === item}
+                                      className="cursor-pointer"
+                                    >
+                                      {item}
+                                    </PaginationLink>
+                                  </PaginationItem>
+                                );
+                              });
+                            })()}
+
+                            <PaginationItem>
+                              <PaginationNext
+                                onClick={() => {
+                                  setPage((prev) =>
+                                    Math.min(totalPages, prev + 1)
+                                  );
+                                  window.scrollTo({
+                                    top: 0,
+                                    behavior: "smooth",
+                                  });
+                                }}
+                                className={
+                                  page === totalPages
+                                    ? "pointer-events-none opacity-50"
+                                    : "cursor-pointer"
+                                }
+                              ></PaginationNext>
+                            </PaginationItem>
+                          </PaginationContent>
+                        </Pagination>
                       </div>
                     )}
                   </>
@@ -1732,75 +1852,131 @@ export function StaffClubsManagement() {
                   </Table>
                 </div>
                 {categoryTotalPages > 1 && (
-                  <div className="flex items-center justify-between px-2 py-4">
-                    <div className="text-sm text-muted-foreground">
-                      Hiển thị{" "}
-                      {categories.length > 0
-                        ? (categoryPage - 1) * categoryPageSize + 1
-                        : 0}{" "}
-                      -{" "}
-                      {Math.min(
-                        categoryPage * categoryPageSize,
-                        categoryTotalElements
-                      )}{" "}
-                      trong tổng số {categoryTotalElements} thể loại
-                    </div>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() =>
-                          handleCategoryPageChange(categoryPage - 1)
-                        }
-                        disabled={categoryPage === 1}
-                      >
-                        Trước
-                      </Button>
-                      <div className="flex items-center gap-1">
-                        {Array.from(
-                          { length: Math.min(5, categoryTotalPages) },
-                          (_, i) => {
-                            let pageNum;
-                            if (categoryTotalPages <= 5) {
-                              pageNum = i + 1;
-                            } else if (categoryPage < 4) {
-                              pageNum = i + 1;
-                            } else if (categoryPage > categoryTotalPages - 3) {
-                              pageNum = categoryTotalPages - 4 + i;
+                  <div className="mt-8 flex justify-center">
+                    <Pagination>
+                      <PaginationContent>
+                        <PaginationItem>
+                          <PaginationPrevious
+                            onClick={() => {
+                              handleCategoryPageChange(
+                                Math.max(1, categoryPage - 1)
+                              );
+                              window.scrollTo({ top: 0, behavior: "smooth" });
+                            }}
+                            className={
+                              categoryPage === 1
+                                ? "pointer-events-none opacity-50"
+                                : "cursor-pointer"
+                            }
+                          />
+                        </PaginationItem>
+
+                        {/* Show page numbers with ellipsis when needed */}
+                        {(() => {
+                          const pages: (number | "ellipsis")[] = [];
+
+                          if (categoryTotalPages <= 7) {
+                            // Show all pages if 7 or fewer
+                            for (let i = 1; i <= categoryTotalPages; i++) {
+                              pages.push(i);
+                            }
+                          } else {
+                            // Always show first page
+                            pages.push(1);
+
+                            // Show ellipsis if current page is far from start
+                            if (categoryPage > 3) {
+                              pages.push("ellipsis");
+                            }
+
+                            // Show pages around current (avoid duplicates with first/last)
+                            const start = Math.max(2, categoryPage - 1);
+                            const end = Math.min(
+                              categoryTotalPages - 1,
+                              categoryPage + 1
+                            );
+                            for (let i = start; i <= end; i++) {
+                              if (i !== 1 && i !== categoryTotalPages) {
+                                pages.push(i);
+                              }
+                            }
+
+                            // Show ellipsis if current page is far from end
+                            if (categoryPage < categoryTotalPages - 2) {
+                              pages.push("ellipsis");
+                            }
+
+                            // Always show last page (if not already shown)
+                            if (categoryTotalPages !== 1) {
+                              pages.push(categoryTotalPages);
+                            }
+                          }
+
+                          // Remove duplicates
+                          const seen = new Set<number | string>();
+                          const uniquePages: (number | "ellipsis")[] = [];
+                          for (const item of pages) {
+                            if (item === "ellipsis") {
+                              // Only add ellipsis if not immediately after another ellipsis
+                              if (
+                                uniquePages[uniquePages.length - 1] !==
+                                "ellipsis"
+                              ) {
+                                uniquePages.push(item);
+                              }
                             } else {
-                              pageNum = categoryPage - 2 + i;
+                              if (!seen.has(item)) {
+                                seen.add(item);
+                                uniquePages.push(item);
+                              }
+                            }
+                          }
+
+                          return uniquePages.map((item, index) => {
+                            if (item === "ellipsis") {
+                              return (
+                                <PaginationItem key={`ellipsis-${index}`}>
+                                  <PaginationEllipsis />
+                                </PaginationItem>
+                              );
                             }
                             return (
-                              <Button
-                                key={pageNum}
-                                variant={
-                                  categoryPage === pageNum
-                                    ? "default"
-                                    : "outline"
-                                }
-                                size="sm"
-                                onClick={() =>
-                                  handleCategoryPageChange(pageNum)
-                                }
-                                className="w-9"
-                              >
-                                {pageNum}
-                              </Button>
+                              <PaginationItem key={item}>
+                                <PaginationLink
+                                  onClick={() => {
+                                    handleCategoryPageChange(item);
+                                    window.scrollTo({
+                                      top: 0,
+                                      behavior: "smooth",
+                                    });
+                                  }}
+                                  isActive={categoryPage === item}
+                                  className="cursor-pointer"
+                                >
+                                  {item}
+                                </PaginationLink>
+                              </PaginationItem>
                             );
-                          }
-                        )}
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() =>
-                          handleCategoryPageChange(categoryPage + 1)
-                        }
-                        disabled={categoryPage >= categoryTotalPages}
-                      >
-                        Sau
-                      </Button>
-                    </div>
+                          });
+                        })()}
+
+                        <PaginationItem>
+                          <PaginationNext
+                            onClick={() => {
+                              handleCategoryPageChange(
+                                Math.min(categoryTotalPages, categoryPage + 1)
+                              );
+                              window.scrollTo({ top: 0, behavior: "smooth" });
+                            }}
+                            className={
+                              categoryPage === categoryTotalPages
+                                ? "pointer-events-none opacity-50"
+                                : "cursor-pointer"
+                            }
+                          ></PaginationNext>
+                        </PaginationItem>
+                      </PaginationContent>
+                    </Pagination>
                   </div>
                 )}
               </CardContent>

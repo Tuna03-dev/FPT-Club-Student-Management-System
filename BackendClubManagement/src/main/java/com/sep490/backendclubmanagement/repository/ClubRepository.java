@@ -50,7 +50,7 @@ public interface ClubRepository extends JpaRepository<Club, Long> {
     Optional<Club> findByIdWithDetails(@Param("id") Long id);
 
     // 🔹 Count total members for a club
-    @Query("SELECT COUNT(DISTINCT cm.id) FROM ClubMemberShip cm WHERE cm.club.id = :clubId")
+    @Query("SELECT COUNT(DISTINCT cm.id) FROM ClubMemberShip cm WHERE cm.club.id = :clubId AND cm.status = 'ACTIVE'")
     Long countMembersByClubId(@Param("clubId") Long clubId);
 
     // 🔹 Find clubs without wallet
@@ -58,11 +58,11 @@ public interface ClubRepository extends JpaRepository<Club, Long> {
     List<Club> findClubsWithoutWallet();
 
     // 🔹 Count total events for a club (only published events)
-    @Query("SELECT COUNT(e.id) FROM Event e WHERE e.club.id = :clubId AND e.isDraft = false")
+    @Query("SELECT COUNT(e.id) FROM Event e WHERE e.club.id = :clubId AND e.isDraft = false AND (e.eventType IS NULL OR UPPER(TRIM(e.eventType.typeName)) <> 'MEETING') AND e.deletedAt IS NULL")
     Long countEventsByClubId(@Param("clubId") Long clubId);
 
     // 🔹 Count total news for a club (only published news)
-    @Query("SELECT COUNT(n.id) FROM News n WHERE n.club.id = :clubId AND n.isDraft = false")
+    @Query("SELECT COUNT(n.id) FROM News n WHERE n.club.id = :clubId AND n.isDraft = false AND n.deletedAt IS NULL")
     Long countNewsByClubId(@Param("clubId") Long clubId);
 
     // 🔹 Check if club has active recruitment
@@ -101,12 +101,10 @@ public interface ClubRepository extends JpaRepository<Club, Long> {
 
     // 🔹 Filter clubs for staff management with search and pagination
     @Query("SELECT c FROM Club c " +
-            "LEFT JOIN c.campus ca " +
-            "LEFT JOIN c.clubCategory cc " +
             "WHERE (:keyword IS NULL OR LOWER(c.clubName) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
             "OR LOWER(c.clubCode) LIKE LOWER(CONCAT('%', :keyword, '%'))) " +
-            "AND (:campusId IS NULL OR ca.id = :campusId) " +
-            "AND (:categoryId IS NULL OR cc.id = :categoryId) " +
+            "AND (:campusId IS NULL OR c.campus.id = :campusId) " +
+            "AND (:categoryId IS NULL OR c.clubCategory.id = :categoryId) " +
             "AND (:status IS NULL OR c.status = :status)")
     Page<Club> getAllClubsByFilter(
             @Param("keyword") String keyword,

@@ -817,7 +817,7 @@ class ClubServiceTest {
         // Act & Assert - ifPresent lambda throws RuntimeException directly
         RuntimeException exception = assertThrows(RuntimeException.class, () ->
                 clubService.updateClubInfo(testClubId, request, testUserId, null, null));
-        assertEquals("CLUB_CODE_EXISTED", exception.getMessage());
+        assertEquals("Mã câu lạc bộ đã tồn tại", exception.getMessage());
     }
 
     @Test
@@ -837,7 +837,7 @@ class ClubServiceTest {
         // Act & Assert - ifPresent lambda throws RuntimeException directly
         RuntimeException exception = assertThrows(RuntimeException.class, () ->
                 clubService.updateClubInfo(testClubId, request, testUserId, null, null));
-        assertEquals("CLUB_NAME_EXISTED", exception.getMessage());
+        assertEquals("Tên câu lạc bộ đã tồn tại", exception.getMessage());
     }
 
     @Test

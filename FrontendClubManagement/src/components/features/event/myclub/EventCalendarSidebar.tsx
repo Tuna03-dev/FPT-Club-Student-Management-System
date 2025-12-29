@@ -28,6 +28,7 @@ interface EventCalendarSidebarProps {
   cancelledEvents: Event[] | null
   loadingCancelled: boolean
   onRequestClick: (event: Event, meta?: { requestEventId: number; status?: string }) => void
+  onCancelledEventClick?: (event: Event) => void
   onRefetch: () => Promise<void>
   determineEventStatus: (startDate: Date, endDate: Date) => "upcoming" | "ongoing" | "completed"
   getRequestStatusInfo: (status: string) => { label: string; className: string }
@@ -43,6 +44,7 @@ export function EventCalendarSidebar({
   cancelledEvents,
   loadingCancelled,
   onRequestClick,
+  onCancelledEventClick,
   onRefetch,
   determineEventStatus,
   getRequestStatusInfo,
@@ -72,6 +74,7 @@ export function EventCalendarSidebar({
         determineEventStatus={determineEventStatus}
         getErrorMessage={getErrorMessage}
         setCancelledEvents={setCancelledEvents}
+        onCancelledEventClick={onCancelledEventClick}
       />
     </div>
   )

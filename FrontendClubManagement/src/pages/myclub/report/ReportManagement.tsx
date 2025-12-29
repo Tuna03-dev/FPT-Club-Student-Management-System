@@ -63,10 +63,6 @@ import {
   Upload,
   X,
   UserPlus,
-  ChevronLeft,
-  ChevronRight,
-  ChevronsLeft,
-  ChevronsRight,
 } from "lucide-react";
 import {
   Pagination,
@@ -142,7 +138,7 @@ interface ReportRequest {
 
 const reportTypeLabels: Record<ReportType, string> = {
   periodic: "Báo cáo định kỳ",
-  post_event: "Báo cáo hậu sự kiện",
+  post_event: "Báo cáo cho sự kiện",
 };
 
 const reportTypeColors: Record<ReportType, string> = {
@@ -462,12 +458,12 @@ export function ClubReportManagement() {
         setTotalElements(response.totalElements);
         setHasNext(response.hasNext);
         setHasPrevious(response.hasPrevious);
-      } catch (err) {
+      } catch (err: any) {
         console.error("Error fetching report requirements:", err);
         const errorMessage =
-          err instanceof Error
-            ? err.message
-            : "Không thể tải danh sách yêu cầu nộp báo cáo";
+          err?.response?.data?.message ||
+          err?.message ||
+          "Không thể tải danh sách yêu cầu nộp báo cáo";
         setError(errorMessage);
         toast.error(errorMessage);
       } finally {
@@ -517,12 +513,12 @@ export function ClubReportManagement() {
         const response = await getMyReports(filterRequest);
         setMyReports(response.content);
         setTotalPagesMyReports(response.totalPages);
-      } catch (err) {
+      } catch (err: any) {
         console.error("Error fetching my reports:", err);
         const errorMessage =
-          err instanceof Error
-            ? err.message
-            : "Không thể tải danh sách báo cáo của tôi";
+          err?.response?.data?.message ||
+          err?.message ||
+          "Không thể tải danh sách báo cáo của tôi";
         setError(errorMessage);
         toast.error(errorMessage);
         setMyReports([]);
@@ -573,12 +569,12 @@ export function ClubReportManagement() {
         const response = await getClubReports(filterRequest);
         setAllClubReports(response.content);
         setTotalPagesClubReports(response.totalPages);
-      } catch (err) {
+      } catch (err: any) {
         console.error("Error fetching all club reports:", err);
         const errorMessage =
-          err instanceof Error
-            ? err.message
-            : "Không thể tải danh sách báo cáo của câu lạc bộ";
+          err?.response?.data?.message ||
+          err?.message ||
+          "Không thể tải danh sách báo cáo của câu lạc bộ";
         setError(errorMessage);
         toast.error(errorMessage);
         setAllClubReports([]);
@@ -599,69 +595,84 @@ export function ClubReportManagement() {
     semesterFilterReports,
   ]);
 
-  // Helper function to refresh all tabs data after actions
-  const refreshAllTabsData = async () => {
+  // Helper function to refresh current tab data after actions
+  // Only refreshes the currently active tab instead of all tabs
+  const refreshCurrentTabData = async () => {
     if (!clubId) return;
 
     try {
-      // Set loading states to show skeleton
-      setLoading(true);
-      setLoadingMyReports(true);
-      if (isClubOfficer) {
-        setLoadingAllClubReports(true);
-      }
+      if (activeTab === "requests") {
+        setLoading(true);
+        const requestsFilter: ClubReportRequirementFilterRequest = {
+          page: currentPage,
+          size: pageSize,
+          sort: "createdAt,desc",
+          keyword: debouncedSearchQuery || undefined,
+          status:
+            statusFilterRequests !== "all" ? statusFilterRequests : undefined,
+          semesterId:
+            semesterFilterRequests !== "all"
+              ? Number(semesterFilterRequests)
+              : undefined,
+        };
 
-      // Always refresh requests tab (use paginated API to match backend)
-      // Note: Backend already filters by teamId for team officers
-      const requestsFilter: ClubReportRequirementFilterRequest = {
-        page: currentPage,
-        size: pageSize,
-        sort: "createdAt,desc",
-        keyword: debouncedSearchQuery || undefined,
-        status:
-          statusFilterRequests !== "all" ? statusFilterRequests : undefined,
-        semesterId:
-          semesterFilterRequests !== "all"
-            ? Number(semesterFilterRequests)
-            : undefined,
-      };
+        const requestsResponse =
+          await getClubReportRequirementsForOfficerWithFilters(
+            clubId,
+            requestsFilter
+          );
 
-      const requestsResponse =
-        await getClubReportRequirementsForOfficerWithFilters(
-          clubId,
-          requestsFilter
+        const mappedRequests: ReportRequest[] = requestsResponse.content.map(
+          (req) => mapRequirementToReportRequest(req)
         );
 
-      const mappedRequests: ReportRequest[] = requestsResponse.content.map(
-        (req) => mapRequirementToReportRequest(req)
-      );
-
-      setReportRequests(mappedRequests);
-      setTotalPages(requestsResponse.totalPages);
-      setTotalElements(requestsResponse.totalElements);
-      setHasNext(requestsResponse.hasNext);
-      setHasPrevious(requestsResponse.hasPrevious);
-      setLoading(false);
-
-      // Always refresh submissions tab (my reports)
-      const myReportsFilter: ReportFilterRequest = {
-        clubId: clubId,
-        page: currentPageMyReports,
-        size: pageSize,
-        sort: "createdAt,desc",
-      };
-      const myReportsResponse = await getMyReports(myReportsFilter);
-      setMyReports(myReportsResponse.content);
-      setTotalPagesMyReports(myReportsResponse.totalPages);
-      setLoadingMyReports(false);
-
-      // Always refresh approval tab (all club reports) if user is club president
-      if (isClubOfficer) {
+        setReportRequests(mappedRequests);
+        setTotalPages(requestsResponse.totalPages);
+        setTotalElements(requestsResponse.totalElements);
+        setHasNext(requestsResponse.hasNext);
+        setHasPrevious(requestsResponse.hasPrevious);
+        setLoading(false);
+      } else if (activeTab === "my_reports") {
+        setLoadingMyReports(true);
+        const myReportsFilter: ReportFilterRequest = {
+          clubId: clubId,
+          page: currentPageMyReports,
+          size: pageSize,
+          sort: "createdAt,desc",
+          keyword: debouncedSearchQuery || undefined,
+          status:
+            statusFilterReports !== "all" &&
+            statusFilterReports !== "OVERDUE" &&
+            statusFilterReports !== "UNSUBMITTED"
+              ? statusFilterReports
+              : undefined,
+          semesterId:
+            semesterFilterReports !== "all"
+              ? Number(semesterFilterReports)
+              : undefined,
+        };
+        const myReportsResponse = await getMyReports(myReportsFilter);
+        setMyReports(myReportsResponse.content);
+        setTotalPagesMyReports(myReportsResponse.totalPages);
+        setLoadingMyReports(false);
+      } else if (activeTab === "club_reports" && isClubOfficer) {
+        setLoadingAllClubReports(true);
         const clubReportsFilter: ReportFilterRequest = {
           clubId: clubId,
           page: currentPageClubReports,
           size: pageSize,
           sort: "createdAt,desc",
+          keyword: debouncedSearchQuery || undefined,
+          status:
+            statusFilterReports !== "all" &&
+            statusFilterReports !== "OVERDUE" &&
+            statusFilterReports !== "UNSUBMITTED"
+              ? statusFilterReports
+              : undefined,
+          semesterId:
+            semesterFilterReports !== "all"
+              ? Number(semesterFilterReports)
+              : undefined,
         };
         const clubReportsResponse = await getClubReports(clubReportsFilter);
         setAllClubReports(clubReportsResponse.content);
@@ -669,12 +680,11 @@ export function ClubReportManagement() {
         setLoadingAllClubReports(false);
       }
     } catch (err) {
-      console.error("Error refreshing tabs data:", err);
+      console.error("Error refreshing tab data:", err);
       // Reset loading states on error
       setLoading(false);
       setLoadingMyReports(false);
       setLoadingAllClubReports(false);
-      // Don't show error toast here as it might be called multiple times
     }
   };
 
@@ -763,7 +773,7 @@ export function ClubReportManagement() {
       setSelectedTeamId(null);
 
       // Refresh data
-      await refreshAllTabsData();
+      await refreshCurrentTabData();
     } catch (error: any) {
       console.error("Error assigning team:", error);
       toast.error(
@@ -851,12 +861,12 @@ export function ClubReportManagement() {
       setDraftFile(null);
       setIsResubmitMode(false);
 
-      // Refresh all tabs data to update status
-      await refreshAllTabsData();
-    } catch (err) {
+      // Refresh current tab data to update status
+      await refreshCurrentTabData();
+    } catch (err: any) {
       console.error("Error saving draft:", err);
       const errorMessage =
-        err instanceof Error ? err.message : "Không thể lưu báo cáo";
+        err?.response?.data?.message || err?.message || "Không thể lưu báo cáo";
       toast.error(errorMessage);
     } finally {
       setSavingDraft(false);
@@ -938,7 +948,7 @@ export function ClubReportManagement() {
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
                 <Input
-                  placeholder="Tìm kiếm yêu cầu nộp báo cáo..."
+                  placeholder="Tìm kiếm yêu cầu nộp báo cáo theo tiêu đề, mô tả"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-10"
@@ -1093,9 +1103,13 @@ export function ClubReportManagement() {
                       } else {
                         toast.error("Không tìm thấy báo cáo");
                       }
-                    } catch (error) {
+                    } catch (error: any) {
                       console.error("Error fetching report detail:", error);
-                      toast.error("Không thể tải chi tiết báo cáo");
+                      const errorMessage =
+                        error?.response?.data?.message ||
+                        error?.message ||
+                        "Không thể tải chi tiết báo cáo";
+                      toast.error(errorMessage);
                     } finally {
                       setLoadingReportDetailId(null);
                     }
@@ -1613,7 +1627,7 @@ export function ClubReportManagement() {
                               ? "pointer-events-none opacity-50"
                               : "cursor-pointer"
                           }
-                        />
+                        ></PaginationNext>
                       </PaginationItem>
                     </PaginationContent>
                   </Pagination>
@@ -1629,7 +1643,7 @@ export function ClubReportManagement() {
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
                 <Input
-                  placeholder="Tìm kiếm báo cáo..."
+                  placeholder="Tìm kiếm báo cáo theo tiêu đề, nội dung"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-10"
@@ -1824,85 +1838,133 @@ export function ClubReportManagement() {
                 {/* Pagination */}
                 {totalPagesMyReports > 1 && (
                   <div className="mt-8 flex justify-center">
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setCurrentPageMyReports(1)}
-                        disabled={currentPageMyReports === 1}
-                      >
-                        <ChevronsLeft className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() =>
-                          setCurrentPageMyReports((prev) =>
-                            Math.max(1, prev - 1)
-                          )
-                        }
-                        disabled={currentPageMyReports === 1}
-                      >
-                        <ChevronLeft className="h-4 w-4" />
-                      </Button>
-                      <div className="flex items-center gap-1">
-                        {Array.from(
-                          { length: Math.min(5, totalPagesMyReports) },
-                          (_, i) => {
-                            let pageNum;
-                            if (totalPagesMyReports <= 5) {
-                              pageNum = i + 1;
-                            } else if (currentPageMyReports <= 3) {
-                              pageNum = i + 1;
-                            } else if (
-                              currentPageMyReports >=
+                    <Pagination>
+                      <PaginationContent>
+                        <PaginationItem>
+                          <PaginationPrevious
+                            onClick={() => {
+                              setCurrentPageMyReports((prev) =>
+                                Math.max(1, prev - 1)
+                              );
+                              window.scrollTo({ top: 0, behavior: "smooth" });
+                            }}
+                            className={
+                              currentPageMyReports === 1
+                                ? "pointer-events-none opacity-50"
+                                : "cursor-pointer"
+                            }
+                          />
+                        </PaginationItem>
+
+                        {/* Show page numbers with ellipsis when needed */}
+                        {(() => {
+                          const pages: (number | "ellipsis")[] = [];
+
+                          if (totalPagesMyReports <= 7) {
+                            // Show all pages if 7 or fewer
+                            for (let i = 1; i <= totalPagesMyReports; i++) {
+                              pages.push(i);
+                            }
+                          } else {
+                            // Always show first page
+                            pages.push(1);
+
+                            // Show ellipsis if current page is far from start
+                            if (currentPageMyReports > 3) {
+                              pages.push("ellipsis");
+                            }
+
+                            // Show pages around current (avoid duplicates with first/last)
+                            const start = Math.max(2, currentPageMyReports - 1);
+                            const end = Math.min(
+                              totalPagesMyReports - 1,
+                              currentPageMyReports + 1
+                            );
+                            for (let i = start; i <= end; i++) {
+                              if (i !== 1 && i !== totalPagesMyReports) {
+                                pages.push(i);
+                              }
+                            }
+
+                            // Show ellipsis if current page is far from end
+                            if (
+                              currentPageMyReports <
                               totalPagesMyReports - 2
                             ) {
-                              pageNum = totalPagesMyReports - 4 + i;
+                              pages.push("ellipsis");
+                            }
+
+                            // Always show last page (if not already shown)
+                            if (totalPagesMyReports !== 1) {
+                              pages.push(totalPagesMyReports);
+                            }
+                          }
+
+                          // Remove duplicates
+                          const seen = new Set<number | string>();
+                          const uniquePages: (number | "ellipsis")[] = [];
+                          for (const item of pages) {
+                            if (item === "ellipsis") {
+                              // Only add ellipsis if not immediately after another ellipsis
+                              if (
+                                uniquePages[uniquePages.length - 1] !==
+                                "ellipsis"
+                              ) {
+                                uniquePages.push(item);
+                              }
                             } else {
-                              pageNum = currentPageMyReports - 2 + i;
+                              if (!seen.has(item)) {
+                                seen.add(item);
+                                uniquePages.push(item);
+                              }
+                            }
+                          }
+
+                          return uniquePages.map((item, index) => {
+                            if (item === "ellipsis") {
+                              return (
+                                <PaginationItem key={`ellipsis-${index}`}>
+                                  <PaginationEllipsis />
+                                </PaginationItem>
+                              );
                             }
                             return (
-                              <Button
-                                key={pageNum}
-                                variant={
-                                  currentPageMyReports === pageNum
-                                    ? "default"
-                                    : "outline"
-                                }
-                                size="sm"
-                                onClick={() => setCurrentPageMyReports(pageNum)}
-                                className="w-10"
-                              >
-                                {pageNum}
-                              </Button>
+                              <PaginationItem key={item}>
+                                <PaginationLink
+                                  onClick={() => {
+                                    setCurrentPageMyReports(item);
+                                    window.scrollTo({
+                                      top: 0,
+                                      behavior: "smooth",
+                                    });
+                                  }}
+                                  isActive={currentPageMyReports === item}
+                                  className="cursor-pointer"
+                                >
+                                  {item}
+                                </PaginationLink>
+                              </PaginationItem>
                             );
-                          }
-                        )}
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() =>
-                          setCurrentPageMyReports((prev) =>
-                            Math.min(totalPagesMyReports, prev + 1)
-                          )
-                        }
-                        disabled={currentPageMyReports === totalPagesMyReports}
-                      >
-                        <ChevronRight className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() =>
-                          setCurrentPageMyReports(totalPagesMyReports)
-                        }
-                        disabled={currentPageMyReports === totalPagesMyReports}
-                      >
-                        <ChevronsRight className="h-4 w-4" />
-                      </Button>
-                    </div>
+                          });
+                        })()}
+
+                        <PaginationItem>
+                          <PaginationNext
+                            onClick={() => {
+                              setCurrentPageMyReports((prev) =>
+                                Math.min(totalPagesMyReports, prev + 1)
+                              );
+                              window.scrollTo({ top: 0, behavior: "smooth" });
+                            }}
+                            className={
+                              currentPageMyReports === totalPagesMyReports
+                                ? "pointer-events-none opacity-50"
+                                : "cursor-pointer"
+                            }
+                          ></PaginationNext>
+                        </PaginationItem>
+                      </PaginationContent>
+                    </Pagination>
                   </div>
                 )}
               </>
@@ -1917,7 +1979,7 @@ export function ClubReportManagement() {
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
                 <Input
-                  placeholder="Tìm kiếm báo cáo..."
+                  placeholder="Tìm kiếm báo cáo theo tiêu đề, nội dung"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-10"
@@ -2117,91 +2179,136 @@ export function ClubReportManagement() {
                 {/* Pagination */}
                 {totalPagesClubReports > 1 && (
                   <div className="mt-8 flex justify-center">
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setCurrentPageClubReports(1)}
-                        disabled={currentPageClubReports === 1}
-                      >
-                        <ChevronsLeft className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() =>
-                          setCurrentPageClubReports((prev) =>
-                            Math.max(1, prev - 1)
-                          )
-                        }
-                        disabled={currentPageClubReports === 1}
-                      >
-                        <ChevronLeft className="h-4 w-4" />
-                      </Button>
-                      <div className="flex items-center gap-1">
-                        {Array.from(
-                          { length: Math.min(5, totalPagesClubReports) },
-                          (_, i) => {
-                            let pageNum;
-                            if (totalPagesClubReports <= 5) {
-                              pageNum = i + 1;
-                            } else if (currentPageClubReports <= 3) {
-                              pageNum = i + 1;
-                            } else if (
-                              currentPageClubReports >=
+                    <Pagination>
+                      <PaginationContent>
+                        <PaginationItem>
+                          <PaginationPrevious
+                            onClick={() => {
+                              setCurrentPageClubReports((prev) =>
+                                Math.max(1, prev - 1)
+                              );
+                              window.scrollTo({ top: 0, behavior: "smooth" });
+                            }}
+                            className={
+                              currentPageClubReports === 1
+                                ? "pointer-events-none opacity-50"
+                                : "cursor-pointer"
+                            }
+                          />
+                        </PaginationItem>
+
+                        {/* Show page numbers with ellipsis when needed */}
+                        {(() => {
+                          const pages: (number | "ellipsis")[] = [];
+
+                          if (totalPagesClubReports <= 7) {
+                            // Show all pages if 7 or fewer
+                            for (let i = 1; i <= totalPagesClubReports; i++) {
+                              pages.push(i);
+                            }
+                          } else {
+                            // Always show first page
+                            pages.push(1);
+
+                            // Show ellipsis if current page is far from start
+                            if (currentPageClubReports > 3) {
+                              pages.push("ellipsis");
+                            }
+
+                            // Show pages around current (avoid duplicates with first/last)
+                            const start = Math.max(
+                              2,
+                              currentPageClubReports - 1
+                            );
+                            const end = Math.min(
+                              totalPagesClubReports - 1,
+                              currentPageClubReports + 1
+                            );
+                            for (let i = start; i <= end; i++) {
+                              if (i !== 1 && i !== totalPagesClubReports) {
+                                pages.push(i);
+                              }
+                            }
+
+                            // Show ellipsis if current page is far from end
+                            if (
+                              currentPageClubReports <
                               totalPagesClubReports - 2
                             ) {
-                              pageNum = totalPagesClubReports - 4 + i;
+                              pages.push("ellipsis");
+                            }
+
+                            // Always show last page (if not already shown)
+                            if (totalPagesClubReports !== 1) {
+                              pages.push(totalPagesClubReports);
+                            }
+                          }
+
+                          // Remove duplicates
+                          const seen = new Set<number | string>();
+                          const uniquePages: (number | "ellipsis")[] = [];
+                          for (const item of pages) {
+                            if (item === "ellipsis") {
+                              // Only add ellipsis if not immediately after another ellipsis
+                              if (
+                                uniquePages[uniquePages.length - 1] !==
+                                "ellipsis"
+                              ) {
+                                uniquePages.push(item);
+                              }
                             } else {
-                              pageNum = currentPageClubReports - 2 + i;
+                              if (!seen.has(item)) {
+                                seen.add(item);
+                                uniquePages.push(item);
+                              }
+                            }
+                          }
+
+                          return uniquePages.map((item, index) => {
+                            if (item === "ellipsis") {
+                              return (
+                                <PaginationItem key={`ellipsis-${index}`}>
+                                  <PaginationEllipsis />
+                                </PaginationItem>
+                              );
                             }
                             return (
-                              <Button
-                                key={pageNum}
-                                variant={
-                                  currentPageClubReports === pageNum
-                                    ? "default"
-                                    : "outline"
-                                }
-                                size="sm"
-                                onClick={() =>
-                                  setCurrentPageClubReports(pageNum)
-                                }
-                                className="w-10"
-                              >
-                                {pageNum}
-                              </Button>
+                              <PaginationItem key={item}>
+                                <PaginationLink
+                                  onClick={() => {
+                                    setCurrentPageClubReports(item);
+                                    window.scrollTo({
+                                      top: 0,
+                                      behavior: "smooth",
+                                    });
+                                  }}
+                                  isActive={currentPageClubReports === item}
+                                  className="cursor-pointer"
+                                >
+                                  {item}
+                                </PaginationLink>
+                              </PaginationItem>
                             );
-                          }
-                        )}
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() =>
-                          setCurrentPageClubReports((prev) =>
-                            Math.min(totalPagesClubReports, prev + 1)
-                          )
-                        }
-                        disabled={
-                          currentPageClubReports === totalPagesClubReports
-                        }
-                      >
-                        <ChevronRight className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() =>
-                          setCurrentPageClubReports(totalPagesClubReports)
-                        }
-                        disabled={
-                          currentPageClubReports === totalPagesClubReports
-                        }
-                      >
-                        <ChevronsRight className="h-4 w-4" />
-                      </Button>
-                    </div>
+                          });
+                        })()}
+
+                        <PaginationItem>
+                          <PaginationNext
+                            onClick={() => {
+                              setCurrentPageClubReports((prev) =>
+                                Math.min(totalPagesClubReports, prev + 1)
+                              );
+                              window.scrollTo({ top: 0, behavior: "smooth" });
+                            }}
+                            className={
+                              currentPageClubReports === totalPagesClubReports
+                                ? "pointer-events-none opacity-50"
+                                : "cursor-pointer"
+                            }
+                          ></PaginationNext>
+                        </PaginationItem>
+                      </PaginationContent>
+                    </Pagination>
                   </div>
                 )}
               </>
@@ -2531,14 +2638,14 @@ export function ClubReportManagement() {
                             setShowDetailModal(false);
                             setSelectedReportDetail(null);
 
-                            // Refresh all tabs data to update status
-                            await refreshAllTabsData();
-                          } catch (err) {
+                            // Refresh current tab data to update status
+                            await refreshCurrentTabData();
+                          } catch (err: any) {
                             console.error("Error submitting report:", err);
                             const errorMessage =
-                              err instanceof Error
-                                ? err.message
-                                : "Không thể nộp báo cáo";
+                              err?.response?.data?.message ||
+                              err?.message ||
+                              "Không thể nộp báo cáo";
                             toast.error(errorMessage);
                           } finally {
                             setApprovingReport(false);
@@ -2623,14 +2730,14 @@ export function ClubReportManagement() {
                             setShowDetailModal(false);
                             setSelectedReportDetail(null);
 
-                            // Refresh all tabs data to update status
-                            await refreshAllTabsData();
-                          } catch (err) {
+                            // Refresh current tab data to update status
+                            await refreshCurrentTabData();
+                          } catch (err: any) {
                             console.error("Error submitting report:", err);
                             const errorMessage =
-                              err instanceof Error
-                                ? err.message
-                                : "Không thể nộp báo cáo";
+                              err?.response?.data?.message ||
+                              err?.message ||
+                              "Không thể nộp báo cáo";
                             toast.error(errorMessage);
                           } finally {
                             setSubmitting(false);
@@ -2750,7 +2857,9 @@ export function ClubReportManagement() {
                             setApprovingReport(true);
                             const reviewRequest: ReviewReportByClubRequest = {
                               reportId: selectedReportDetail.id,
-                              status: "PENDING_UNIVERSITY",
+                              status: selectedReportDetail.mustResubmit
+                                ? "RESUBMITTED_UNIVERSITY"
+                                : "PENDING_UNIVERSITY",
                             };
 
                             await reviewReportByClub(reviewRequest);
@@ -2760,14 +2869,14 @@ export function ClubReportManagement() {
                             setShowDetailModal(false);
                             setSelectedReportDetail(null);
 
-                            // Refresh all tabs data to update status
-                            await refreshAllTabsData();
-                          } catch (err) {
+                            // Refresh current tab data to update status
+                            await refreshCurrentTabData();
+                          } catch (err: any) {
                             console.error("Error approving report:", err);
                             const errorMessage =
-                              err instanceof Error
-                                ? err.message
-                                : "Không thể duyệt báo cáo";
+                              err?.response?.data?.message ||
+                              err?.message ||
+                              "Không thể duyệt báo cáo";
                             toast.error(errorMessage);
                           } finally {
                             setApprovingReport(false);
@@ -3074,8 +3183,8 @@ export function ClubReportManagement() {
                   setSelectedReportDetail(null);
                   setDeleteTargetReportId(null);
 
-                  // Refresh all tabs data to update status
-                  await refreshAllTabsData();
+                  // Refresh current tab data to update status
+                  await refreshCurrentTabData();
                 } catch (err) {
                   console.error("Error deleting report:", err);
                   const errorMessage =
@@ -3157,8 +3266,8 @@ export function ClubReportManagement() {
                       setSelectedReportDetail(null);
                       setRejectReason("");
 
-                      // Refresh all tabs data to update status
-                      await refreshAllTabsData();
+                      // Refresh current tab data to update status
+                      await refreshCurrentTabData();
                     } catch (err) {
                       console.error("Error rejecting report:", err);
                       const errorMessage =
@@ -3380,8 +3489,8 @@ export function ClubReportManagement() {
                           setDraftContent("");
                           setDraftFileUrl("");
 
-                          // Refresh all tabs data to update status
-                          await refreshAllTabsData();
+                          // Refresh current tab data to update status
+                          await refreshCurrentTabData();
                         } catch (err) {
                           console.error("Error saving report:", err);
                           const errorMessage =
@@ -3485,8 +3594,8 @@ export function ClubReportManagement() {
                           setDraftContent("");
                           setDraftFileUrl("");
 
-                          // Refresh all tabs data to update status
-                          await refreshAllTabsData();
+                          // Refresh current tab data to update status
+                          await refreshCurrentTabData();
                         } catch (err) {
                           console.error("Error submitting report:", err);
                           const errorMessage =
@@ -3583,8 +3692,8 @@ export function ClubReportManagement() {
                           setEditingReportId(null);
                           setDraftFile(null);
 
-                          // Refresh all tabs data to update status
-                          await refreshAllTabsData();
+                          // Refresh current tab data to update status
+                          await refreshCurrentTabData();
                         } catch (err) {
                           console.error("Error submitting report:", err);
                           const errorMessage =
@@ -3829,8 +3938,8 @@ export function ClubReportManagement() {
                             setDraftFile(null);
                             setIsResubmitMode(false);
 
-                            // Refresh all tabs data to update status
-                            await refreshAllTabsData();
+                            // Refresh current tab data to update status
+                            await refreshCurrentTabData();
                           } catch (err) {
                             console.error("Error resubmitting report:", err);
                             const errorMessage =
@@ -3957,8 +4066,8 @@ export function ClubReportManagement() {
                                 setIsResubmitMode(false);
                                 setDraftFile(null);
 
-                                // Refresh all tabs data to update status
-                                await refreshAllTabsData();
+                                // Refresh current tab data to update status
+                                await refreshCurrentTabData();
                               } catch (err) {
                                 console.error("Error submitting report:", err);
                                 const errorMessage =

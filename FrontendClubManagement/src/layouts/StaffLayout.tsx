@@ -48,13 +48,13 @@ const managementItems = [
     key: "manage_club_creation",
     url: "/club-creation",
     icon: Building2,
-    label: "Các yêu cầu thành lập CLB",
+    label: "Các yêu cầu thành lập câu lạc bộ",
   },
   {
     key: "manage_club",
     url: "/clubs",
     icon: UserSquare2,
-    label: "Quản lý CLB",
+    label: "Quản lý câu lạc bộ",
   },
   {
     key: "manage_events",
@@ -92,6 +92,12 @@ const managementItems = [
     icon: Bell,
     label: "Thông báo",
   },
+  {
+    key: "admin_department",
+    url: "/admin-department",
+    icon: Building2,
+    label: "Quản lý thông tin liên hệ",
+  },
 ];
 
 const managementColors: Record<string, string> = {
@@ -103,6 +109,7 @@ const managementColors: Record<string, string> = {
   manage_reports: "bg-gradient-to-br from-pink-500 to-pink-600",
   staff_notifications: "bg-gradient-to-br from-purple-500 to-purple-600",
   manage_club: "bg-gradient-to-br from-red-500 to-red-600",
+  admin_department: "bg-gradient-to-br from-blue-500 to-blue-600",
 };
 
 export const StaffLayout = () => {
@@ -200,7 +207,7 @@ export const StaffLayout = () => {
                   <Tooltip key={item.key}>
                     <TooltipTrigger asChild>
                       <NavLink
-                        to={`/myclub/staff${item.url}`}
+                        to={`/staff${item.url}`}
                         end={item.url === ""}
                         className={({ isActive }) =>
                           `flex items-center justify-center px-8 py-2 rounded-lg transition-all relative ${
@@ -418,7 +425,7 @@ export const StaffLayout = () => {
                     {managementItems.map((item) => (
                       <DropdownMenuItem key={item.key} asChild>
                         <NavLink
-                          to={`/myclub/staff${item.url}`}
+                          to={`/staff${item.url}`}
                           className="flex items-center gap-3 w-full"
                           onClick={() => setIsMobileMenuOpen(false)}
                         >

@@ -79,10 +79,10 @@ public class RecruitmentService implements RecruitmentServiceInterface {
         if (keyword != null && !keyword.trim().isEmpty()) {
             String trimmedKeyword = keyword.trim();
 
-            // Get all records without keyword filter
+            // Get all records without keyword filter, but with sort from pageable
             Page<Recruitment> allRecruitmentsPage = (status == null)
-                    ? recruitmentRepository.findByClub_Id(clubId, PageRequest.of(0, Integer.MAX_VALUE))
-                    : recruitmentRepository.findByClub_IdAndStatus(clubId, status, PageRequest.of(0, Integer.MAX_VALUE));
+                    ? recruitmentRepository.findByClub_Id(clubId, PageRequest.of(0, Integer.MAX_VALUE, pageable.getSort()))
+                    : recruitmentRepository.findByClub_IdAndStatus(clubId, status, PageRequest.of(0, Integer.MAX_VALUE, pageable.getSort()));
 
             // Filter using Vietnamese normalization
             List<Recruitment> filteredList = allRecruitmentsPage.getContent().stream()
@@ -375,9 +375,9 @@ public class RecruitmentService implements RecruitmentServiceInterface {
         if (keyword != null && !keyword.trim().isEmpty()) {
             String trimmedKeyword = keyword.trim();
 
-            // Get all records without keyword filter
+            // Get all records without keyword filter, but with sort from pageable
             Page<RecruitmentApplication> allApplicationsPage =
-                applicationRepository.findApplicationsByRecruitment(recruitmentId, status, null, PageRequest.of(0, Integer.MAX_VALUE));
+                applicationRepository.findApplicationsByRecruitment(recruitmentId, status, null, PageRequest.of(0, Integer.MAX_VALUE, adjustedPageable.getSort()));
 
             // Filter using Vietnamese normalization
             List<RecruitmentApplication> filteredList = allApplicationsPage.getContent().stream()
@@ -435,9 +435,9 @@ public class RecruitmentService implements RecruitmentServiceInterface {
         if (keyword != null && !keyword.trim().isEmpty()) {
             String trimmedKeyword = keyword.trim();
 
-            // Get all records without keyword filter
+            // Get all records without keyword filter, but with sort from pageable
             Page<RecruitmentApplication> allApplicationsPage =
-                applicationRepository.findMyApplications(applicantId, status, null, PageRequest.of(0, Integer.MAX_VALUE));
+                applicationRepository.findMyApplications(applicantId, status, null, PageRequest.of(0, Integer.MAX_VALUE, adjustedPageable.getSort()));
 
             // Filter using Vietnamese normalization
             List<RecruitmentApplication> filteredList = allApplicationsPage.getContent().stream()
@@ -523,7 +523,7 @@ public class RecruitmentService implements RecruitmentServiceInterface {
 
         // Check if user is already an active member of the club
         Long clubId = club.getId();
-        boolean isAlreadyMember = clubMemberShipRepository.existsByUserIdAndClubId(applicantId, clubId);
+        boolean isAlreadyMember = clubMemberShipRepository.existsByUserIdAndClubIdAndStatus(applicantId, clubId, ClubMemberShipStatus.ACTIVE);
         if (isAlreadyMember) {
             throw new AppException(ErrorCode.ALREADY_CLUB_MEMBER);
         }
@@ -889,28 +889,29 @@ public class RecruitmentService implements RecruitmentServiceInterface {
         Long clubId = app.getRecruitment().getClub().getId();
         Long teamId = app.getTeamId();
         
-        // Check if user is already a member of the club (regardless of status)
-        boolean isAlreadyMember = clubMemberShipRepository
-                .existsByUserIdAndClubId(applicantId, clubId);
-
-        // Only proceed if user is not already a member
-        if (isAlreadyMember) {
-            // User is already a member of the club, do not add again
-            return;
-        }
-
-        // User is not a member yet, proceed to add them
         Club club = app.getRecruitment().getClub();
         User applicant = app.getApplicant();
 
-        // Create new ClubMemberShip
-        ClubMemberShip clubMembership = ClubMemberShip.builder()
-                .user(applicant)
-                .club(club)
-                .joinDate(LocalDate.now())
-                .status(ClubMemberShipStatus.ACTIVE)
-                .build();
-        clubMembership = clubMemberShipRepository.save(clubMembership);
+        // Check if user already has a ClubMemberShip with this club (regardless of status)
+        ClubMemberShip clubMembership = clubMemberShipRepository.findByClubIdAndUserId(clubId, applicantId);
+
+        if (clubMembership != null) {
+            // User already has a membership, reactivate it if needed
+            if (clubMembership.getStatus() != ClubMemberShipStatus.ACTIVE) {
+                clubMembership.setStatus(ClubMemberShipStatus.ACTIVE);
+                clubMembership.setJoinDate(LocalDate.now());
+                clubMembership = clubMemberShipRepository.save(clubMembership);
+            }
+        } else {
+            // User is not a member yet, create new ClubMemberShip
+            clubMembership = ClubMemberShip.builder()
+                    .user(applicant)
+                    .club(club)
+                    .joinDate(LocalDate.now())
+                    .status(ClubMemberShipStatus.ACTIVE)
+                    .build();
+            clubMembership = clubMemberShipRepository.save(clubMembership);
+        }
 
         // Get current semester
         Semester currentSemester = semesterRepository.findCurrentSemester()
@@ -920,19 +921,32 @@ public class RecruitmentService implements RecruitmentServiceInterface {
         Team team = teamRepository.findById(teamId)
                 .orElseThrow(() -> new AppException(ErrorCode.INTERNAL_SERVER_ERROR));
         
-        // Find ClubRole with role code MEMBER
-        ClubRole memberRole = clubRoleRepository.findByClubIdAndRoleCode(clubId, "MEMBER")
+        // Find ClubRole with role code CLUB_MEMBER
+        ClubRole memberRole = clubRoleRepository.findByClubIdAndRoleCode(clubId, "CLUB_MEMBER")
                 .orElse(null); // If not found, set to null (keep original behavior)
         
-        // Create RoleMemberShip to assign user to team
-        RoleMemberShip roleMembership = RoleMemberShip.builder()
-                .clubMemberShip(clubMembership)
-                .team(team)
-                .clubRole(memberRole) // Assign MEMBER role if found
-                .semester(currentSemester)
-                .isActive(true)
-                .build();
-        roleMembershipRepository.save(roleMembership);
+        // Check if user already has a RoleMemberShip in current semester
+        Optional<RoleMemberShip> existingRoleMembership = roleMembershipRepository
+                .findByClubMemberShipAndSemester(clubMembership, currentSemester);
+
+        if (existingRoleMembership.isPresent()) {
+            // Update existing RoleMemberShip to new team
+            RoleMemberShip roleMembership = existingRoleMembership.get();
+            roleMembership.setTeam(team);
+            roleMembership.setClubRole(memberRole);
+            roleMembership.setIsActive(true);
+            roleMembershipRepository.save(roleMembership);
+        } else {
+            // Create new RoleMemberShip to assign user to team
+            RoleMemberShip roleMembership = RoleMemberShip.builder()
+                    .clubMemberShip(clubMembership)
+                    .team(team)
+                    .clubRole(memberRole) // Assign CLUB_MEMBER role if found
+                    .semester(currentSemester)
+                    .isActive(true)
+                    .build();
+            roleMembershipRepository.save(roleMembership);
+        }
     }
 
 

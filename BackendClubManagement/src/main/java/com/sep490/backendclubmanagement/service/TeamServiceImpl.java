@@ -35,9 +35,10 @@ public class TeamServiceImpl implements TeamService {
     private final WebSocketService webSocketService;
 
     // === ROLE CODE CHUẨN ===
-    private static final String ROLE_CODE_TEAM_HEAD = "CLUB_TEAM_HEAD";
-    private static final String ROLE_CODE_TEAM_DEPUTY = "CLUB_TEAM_DEPUTY";
-    private static final String ROLE_CODE_TEAM_MEMBER = "CLUB_MEMBER";
+    private static final String ROLE_CODE_TEAM_HEAD = "CLUB_TEAM_HEAD";//truong ban
+    private static final String ROLE_CODE_TEAM_DEPUTY = "CLUB_TEAM_DEPUTY";//pho ban
+    private static final String ROLE_CODE_TEAM_MEMBER = "CLUB_MEMBER";//thanh vien
+
 
     @Override
     public List<TeamResponse> getTeamsByClubId(Long clubId) {
@@ -111,12 +112,6 @@ public class TeamServiceImpl implements TeamService {
             if (!notInClub.isEmpty()) {
                 throw new ResourceNotFoundException("Các User ID không thuộc CLB: " + notInClub);
             }
-
-            roleMembershipRepository.deactivateActiveRolesForUsers(
-                    distinctUserIds,
-                    club.getId(),
-                    currentSemester.getId()
-            );
         }
 
         // Tạo team
@@ -423,31 +418,37 @@ public class TeamServiceImpl implements TeamService {
     private void assignRoleToTeam(
             ClubMemberShip membership,
             Long userId,
-            ClubRole role,
+            ClubRole teamRole,        // ROLE TEAM (HEAD / MEMBER)
             Team team,
             Semester semester,
             Long actorId
     ) {
         if (membership == null) {
-            throw new ResourceNotFoundException("User ID " + userId + " không phải là thành viên của CLB.");
+            throw new ResourceNotFoundException(
+                    "User ID " + userId + " không phải là thành viên CLB"
+            );
         }
 
-        // 🔥 Remove toàn bộ role active ở các ban trước
-        roleMembershipRepository.deactivateActiveTeamRoles(
-                membership.getId(),
-                semester.getId()
-        );
+        // 1️⃣ Lấy DUY NHẤT role_membership của user trong kỳ
+        RoleMemberShip rm = roleMembershipRepository
+                .findByClubMemberShipAndSemester(membership, semester)
+                .orElseThrow(() ->
+                        new IllegalStateException(
+                                "User chưa có role trong học kỳ hiện tại"
+                        )
+                );
 
-        RoleMemberShip newRoleAssignment = new RoleMemberShip();
-        newRoleAssignment.setClubMemberShip(membership);
-        newRoleAssignment.setClubRole(role);
-        newRoleAssignment.setTeam(team);
-        newRoleAssignment.setSemester(semester);
-        newRoleAssignment.setIsActive(true);
+        /*
+         * 2️⃣ LOGIC QUAN TRỌNG
+         * - KHÔNG đổi clubRole nếu user là CLUB_PRESIDENT / CLUB_VICE
+         * - CHỈ gán team
+         */
+        rm.setTeam(team);
+        rm.setIsActive(true);
 
-        roleMembershipRepository.save(newRoleAssignment);
+        roleMembershipRepository.save(rm);
 
-        // SOCKET thông báo user được chuyển/gán vào ban mới
+        // 3️⃣ Realtime
         webSocketService.broadcastToUser(
                 userId,
                 "TEAM",
@@ -455,12 +456,23 @@ public class TeamServiceImpl implements TeamService {
                 Map.of(
                         "teamId", team.getId(),
                         "clubId", team.getClub().getId(),
-                        "roleCode", role.getRoleCode()
+                        "roleCode", rm.getClubRole().getRoleCode()
                 )
         );
 
-        sendTeamWelcomeNotification(userId, actorId, membership.getClub(), team, role);
+        // 4️⃣ Notification
+        sendTeamWelcomeNotification(
+                userId,
+                actorId,
+                membership.getClub(),
+                team,
+                rm.getClubRole()
+        );
     }
+
+
+
+
     private void sendTeamWelcomeNotification(
             Long recipientId,
             Long actorId,
@@ -510,10 +522,7 @@ public class TeamServiceImpl implements TeamService {
     @Transactional(readOnly = true)
     public List<AvailableMemberDTO> getAvailableMembers(Long clubId) {
 
-        Semester currentSemester = semesterRepository.findCurrentSemester()
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy học kỳ hiện tại."));
-
-        List<Long> ids = clubMembershipRepository.findAllActiveNonLeadersMemberIds(clubId);
+        List<Long> ids = clubMembershipRepository.findAvailableMemberUserIds(clubId);
 
         if (ids.isEmpty()) return List.of();
 

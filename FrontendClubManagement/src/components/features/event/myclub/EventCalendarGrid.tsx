@@ -8,6 +8,7 @@ export interface CalendarEvent {
   title: string
   location: string
   startDate: Date
+  endDate: Date
   status: "upcoming" | "ongoing" | "completed"
   isMyDraft?: boolean
   requestStatus?: string

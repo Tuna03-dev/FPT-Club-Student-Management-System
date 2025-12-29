@@ -75,11 +75,22 @@ const LoginPage: React.FC = () => {
         window.dispatchEvent(new Event("auth-state-changed"));
 
         toast.success("Đăng nhập thành công!", { duration: 2000 });
+        
+        // Kiểm tra xem có redirect path được lưu không
+        const redirectPath = sessionStorage.getItem("redirectAfterLogin");
+        if (redirectPath) {
+          sessionStorage.removeItem("redirectAfterLogin");
+          navigate(redirectPath, { replace: true });
+          return;
+        }
+        
         const normalizedSystemRole = user?.systemRole
           ? String(user.systemRole).trim().toUpperCase()
           : "";
 
-        if (normalizedSystemRole === "STAFF") {
+        if (normalizedSystemRole === "ADMIN") {
+          navigate("/admin", { replace: true });
+        } else if (normalizedSystemRole === "STAFF") {
           navigate("/staff/events", { replace: true });
         } else {
           navigate("/"); // Redirect to homepage after successful login
@@ -300,7 +311,7 @@ const LoginPage: React.FC = () => {
         </div>
 
         <p className="instruction">
-          Sử dụng tài khoản Google đã sử dụng với FAP của bạn để truy cập hệ
+          Dùng tài khoản Google đã đăng nhập với FAP của bạn để truy cập hệ
           thống
         </p>
 

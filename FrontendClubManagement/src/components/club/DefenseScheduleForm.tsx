@@ -47,13 +47,13 @@ export function DefenseScheduleForm({
       return;
     }
 
-    // Validate date is in the future
+    // Validate date is not in the past
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
     const defenseDate = new Date(formData.preferredDate1);
     if (defenseDate < today) {
-      toast.error("Ngày bảo vệ phải là ngày trong tương lai!");
+      toast.error("Không được chọn ngày trong quá khứ!");
       return;
     }
 
@@ -61,10 +61,8 @@ export function DefenseScheduleForm({
     toast.success("Đã gửi đề xuất lịch bảo vệ thành công!");
   };
 
-  // Get minimum date (tomorrow)
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  const minDate = tomorrow.toISOString().split("T")[0];
+  // Get minimum date (today)
+  const minDate = new Date().toISOString().split("T")[0];
 
   return (
     <form onSubmit={handleSubmit}>

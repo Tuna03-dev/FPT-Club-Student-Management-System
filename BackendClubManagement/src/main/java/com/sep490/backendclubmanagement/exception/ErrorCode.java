@@ -5,8 +5,8 @@ import org.springframework.http.HttpStatus;
 
 @Getter
 public enum ErrorCode {
-    INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, 500, "Internal server error"),
-    VALIDATION_ERROR(HttpStatus.BAD_REQUEST, 1000, "Validation failed"),
+    INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, 500, "Lỗi máy chủ nội bộ"),
+    VALIDATION_ERROR(HttpStatus.BAD_REQUEST, 1000, "Dữ liệu không hợp lệ"),
     UNAUTHORIZED(HttpStatus.FORBIDDEN, 403, "Người dùng không được phép truy cập"),
     INSUFFICIENT_PERMISSION(HttpStatus.FORBIDDEN, 403, "Không đủ quyền"),
     FORBIDDEN(HttpStatus.FORBIDDEN, 403, "Người dùng không được phép"),
@@ -56,6 +56,7 @@ public enum ErrorCode {
     CLUB_CODE_EXISTED(HttpStatus.BAD_REQUEST, 8000, "Mã câu lạc bộ đã tồn tại"),
     CLUB_NAME_EXISTED(HttpStatus.BAD_REQUEST, 8001, "Tên câu lạc bộ đã tồn tại"),
     USER_NOT_VALID(HttpStatus.BAD_REQUEST, 8002, "Email người dùng không hợp lệ hoặc không thuộc tổ chức"),
+    TEAM_NOT_FOUND(HttpStatus.NOT_FOUND, 8004, "Không tìm thấy ban/đội"),
     TEAM_NAME_EXISTED(HttpStatus.BAD_REQUEST, 8003, "Tên ban đã tồn tại trong câu lạc bộ"),
     TEAM_HAS_HISTORY(HttpStatus.BAD_REQUEST, 8101, "Không thể xoá phòng ban đã từng có thành viên");
 

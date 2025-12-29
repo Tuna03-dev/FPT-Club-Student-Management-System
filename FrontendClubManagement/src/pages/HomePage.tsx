@@ -26,7 +26,8 @@ import SpotlightSection from "../components/homepage/Spotlight";
 import UpcomingEvents from "../components/homepage/UpcomingEvents";
 import FeaturedClubs from "../components/homepage/FeaturedClubs";
 import LatestNews from "../components/homepage/LatestNews";
-
+import { useWebSocket } from "@/hooks/useWebSocket";
+import { authService } from "@/services/authService";
 /* ===========================
    TYPES DÙNG CHO GỢI Ý SEARCH
    =========================== */
@@ -160,7 +161,11 @@ const HomePage: React.FC = () => {
   const [isFocused, setIsFocused] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
   const navigate = useNavigate();
+  const token = authService.isAuthenticated()
+    ? localStorage.getItem("accessToken")
+    : null;
 
+  const { subscribeToSystemWide } = useWebSocket(token);
   /* LOAD HOME + BANNER */
   const fetchData = useCallback(async () => {
     try {
@@ -177,7 +182,20 @@ const HomePage: React.FC = () => {
     fetchData();
     publicBannerApi.get().then((r) => setBanner(r.data)); // <<-- LOAD BANNER
   }, [fetchData]);
+  useEffect(() => {
+    if (!subscribeToSystemWide) return;
 
+    const unsubscribe = subscribeToSystemWide((message) => {
+      if (message.type === "HOMEPAGE" && message.action === "UPDATED") {
+        console.log("🔄 Homepage updated via socket", message.payload);
+        fetchData();
+      }
+    });
+
+    return () => {
+      unsubscribe?.();
+    };
+  }, [subscribeToSystemWide, fetchData]);
   const fallbackImage = "/default-banner.jpg"; // <<-- Ảnh fallback
 
   const showSkeleton = loading && !data;
@@ -238,6 +256,17 @@ const HomePage: React.FC = () => {
           <h2 className="text-4xl md:text-6xl font-black uppercase text-[#ff6b35]">
             {banner?.subtitle ?? ""}
           </h2>
+          {banner?.ctaLabel && banner?.ctaLink && (
+            <div className="mt-8">
+              <button
+                onClick={() => navigate(banner.ctaLink)}
+                className="px-8 py-3 rounded-full bg-[#ff6b35] text-white text-lg font-semibold
+                 hover:bg-[#e55a2b] transition shadow-lg"
+              >
+                {banner.ctaLabel}
+              </button>
+            </div>
+          )}
 
           {/* SEARCH BOX GIỮ NGUYÊN */}
           <div className="mt-8 max-w-2xl mx-auto relative">
