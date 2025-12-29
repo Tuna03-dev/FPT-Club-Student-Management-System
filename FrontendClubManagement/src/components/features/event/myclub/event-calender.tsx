@@ -899,14 +899,30 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
       currentDate.getMonth(),
       day
     );
+    // Set time to start of day for comparison
+    const startOfDay = new Date(date);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(date);
+    endOfDay.setHours(23, 59, 59, 999);
+    
     return events
-      .filter((event) => event.startDate.toDateString() === date.toDateString())
+      .filter((event) => {
+        // Check if the day falls within the event's date range
+        const eventStart = new Date(event.startDate);
+        eventStart.setHours(0, 0, 0, 0);
+        const eventEnd = new Date(event.endDate);
+        eventEnd.setHours(23, 59, 59, 999);
+        
+        // Event is shown if the day overlaps with the event's date range
+        return startOfDay <= eventEnd && endOfDay >= eventStart;
+      })
       .map(
         (event): CalendarEvent => ({
           id: event.id,
           title: event.title,
           location: event.location,
           startDate: event.startDate,
+          endDate: event.endDate,
           status: event.status,
           isMyDraft: event.isMyDraft,
           requestStatus: event.requestStatus,
@@ -1142,6 +1158,7 @@ export function EventCalendar({ clubId }: EventCalendarProps) {
                 title: e.title,
                 location: e.location,
                 startDate: e.startDate,
+                endDate: e.endDate,
                 status: e.status,
                 isMyDraft: e.isMyDraft,
                 requestStatus: e.requestStatus,
