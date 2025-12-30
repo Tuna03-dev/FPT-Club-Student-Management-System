@@ -66,6 +66,9 @@ import { type PageResponse } from "@/types";
 import { getErrorMessage } from "@/lib/utils";
 
 import { toast } from "sonner";
+import { AxiosError } from "axios";
+import type { ApiResponse } from "@/api/axiosClient";
+import type { ImportMemberError } from "@/services/memberService";
 
 // API paging + data state
 type MembersPage = PageResponse<MemberResponseDTO>;
@@ -188,6 +191,18 @@ const Members = () => {
   const [leftMembersSearchQuery, setLeftMembersSearchQuery] = useState("");
   const debouncedLeftMembersSearch = useDebounce(leftMembersSearchQuery, 500);
   const [leftMembersPageNum, setLeftMembersPageNum] = useState(0);
+
+  // Validation errors dialog state
+  const [validationErrors, setValidationErrors] = useState<
+    Array<{
+      row: number;
+      studentCode: string;
+      semesterCode: string;
+      message: string;
+    }>
+  >([]);
+  const [showValidationDialog, setShowValidationDialog] = useState(false);
+  const [validationErrorTitle, setValidationErrorTitle] = useState("");
 
   // Function to update URL params (stable)
   const updateUrlParams = useCallback(
@@ -2009,10 +2024,36 @@ const Members = () => {
                     setExcelFile(null);
                     loadMembers();
                   } catch (error: unknown) {
-                    const errorMessage =
-                      error instanceof Error
-                        ? error.message
-                        : "Vui lòng kiểm tra lại file";
+                    // Check if error contains validation errors from backend
+                    if (error instanceof AxiosError) {
+                      const errorResponse = error.response?.data as
+                        | ApiResponse<{
+                            errors?: ImportMemberError[];
+                          }>
+                        | undefined;
+
+                      // Check if backend returned validation errors
+                      if (
+                        errorResponse?.data?.errors &&
+                        Array.isArray(errorResponse.data.errors) &&
+                        errorResponse.data.errors.length > 0
+                      ) {
+                        // Show validation errors dialog
+                        setValidationErrors(errorResponse.data.errors);
+                        setValidationErrorTitle(
+                          errorResponse.message ||
+                            `File Excel có ${errorResponse.data.errors.length} lỗi validation`
+                        );
+                        setShowValidationDialog(true);
+                        return; // Don't show toast, dialog will handle it
+                      }
+                    }
+
+                    // Regular error handling
+                    const errorMessage = getErrorMessage(
+                      error,
+                      "Vui lòng kiểm tra lại file"
+                    );
                     toast.error(
                       <div className="space-y-1">
                         <p className="font-semibold">Import thất bại</p>
@@ -2056,6 +2097,90 @@ const Members = () => {
         onUpdated={() => loadMembers()}
         isOfficer={isOfficer}
       />
+
+      {/* Validation Errors Dialog */}
+      <Dialog open={showValidationDialog} onOpenChange={setShowValidationDialog}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertCircle className="h-5 w-5" />
+              Lỗi Validation File Excel
+            </DialogTitle>
+            <DialogDescription>
+              {validationErrorTitle ||
+                `File Excel có ${validationErrors.length} lỗi validation. Vui lòng kiểm tra và sửa lại trước khi import.`}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="p-4 rounded-lg bg-destructive/10 border border-destructive/30">
+              <p className="text-sm text-destructive font-medium mb-2">
+                ⚠️ File Excel không thể import do có lỗi validation. Vui lòng
+                sửa các lỗi sau và thử lại:
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Tổng số lỗi: <strong>{validationErrors.length}</strong>
+              </p>
+            </div>
+
+            <div className="space-y-2 max-h-[400px] overflow-y-auto">
+              <div className="grid grid-cols-12 gap-2 text-xs font-semibold text-muted-foreground border-b pb-2 sticky top-0 bg-background">
+                <div className="col-span-1">Dòng</div>
+                <div className="col-span-3">Mã SV</div>
+                <div className="col-span-2">Mã Kỳ</div>
+                <div className="col-span-6">Lỗi</div>
+              </div>
+              {validationErrors.map((err, idx) => (
+                <div
+                  key={idx}
+                  className="grid grid-cols-12 gap-2 text-sm border-b pb-2 hover:bg-muted/50 p-2 rounded"
+                >
+                  <div className="col-span-1 font-medium text-primary">
+                    {err.row}
+                  </div>
+                  <div className="col-span-3 font-mono text-xs">
+                    {err.studentCode || "-"}
+                  </div>
+                  <div className="col-span-2 font-mono text-xs">
+                    {err.semesterCode || "-"}
+                  </div>
+                  <div className="col-span-6 text-destructive">
+                    {err.message}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowValidationDialog(false);
+                setValidationErrors([]);
+              }}
+            >
+              Đóng
+            </Button>
+            <Button
+              onClick={() => {
+                // Export errors to file or copy to clipboard
+                const errorText = validationErrors
+                  .map(
+                    (err) =>
+                      `Dòng ${err.row} (${err.studentCode} - ${err.semesterCode}): ${err.message}`
+                  )
+                  .join("\n");
+                navigator.clipboard.writeText(errorText);
+                toast.success("Đã sao chép danh sách lỗi vào clipboard");
+              }}
+              variant="secondary"
+            >
+              Sao chép danh sách lỗi
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

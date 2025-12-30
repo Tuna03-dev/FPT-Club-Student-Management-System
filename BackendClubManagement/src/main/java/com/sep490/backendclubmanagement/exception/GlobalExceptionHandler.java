@@ -18,8 +18,22 @@ public class GlobalExceptionHandler {
 
 
     @ExceptionHandler(AppException.class)
-    public ResponseEntity<ApiResponse<Void>> handleAppException(AppException ex) {
+    public ResponseEntity<ApiResponse<?>> handleAppException(AppException ex) {
         ErrorCode code = ex.getErrorCode();
+
+        // Nếu có validation errors (từ import Excel), trả về trong data
+        if (ex.getValidationErrors() != null && !ex.getValidationErrors().isEmpty()) {
+            return ResponseEntity
+                    .status(code.getHttpStatus())
+                    .body(ApiResponse.<com.sep490.backendclubmanagement.dto.response.ImportMembersResponse>builder()
+                            .code(code.getCode())
+                            .message(ex.getMessage())
+                            .timestamp(java.time.Instant.now())
+                            .data(com.sep490.backendclubmanagement.dto.response.ImportMembersResponse.builder()
+                                    .errors(ex.getValidationErrors())
+                                    .build())
+                            .build());
+        }
 
         return ResponseEntity
                 .status(code.getHttpStatus())

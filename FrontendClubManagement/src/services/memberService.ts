@@ -49,7 +49,7 @@ export interface MemberResponseDTO {
   endDate?: string | null;
   totalAttendanceRate: number;
   totalTerms: number;
-  lastActive: string;
+  lastActive: string | null; // Có thể null nếu chưa có hoạt động nào
   currentTerm: CurrentTermResponse;
   history: MemberHistoryResponse[];
 }
