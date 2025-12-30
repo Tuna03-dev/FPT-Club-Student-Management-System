@@ -355,7 +355,9 @@ const MemberDetailDialog = ({
                       <span className="text-muted-foreground">
                         Hoạt động cuối:
                       </span>
-                      <span className="font-semibold">{member.lastActive}</span>
+                      <span className="font-semibold">
+                        {member.lastActive || "Chưa có hoạt động"}
+                      </span>
                     </div>
                   </CardContent>
                 </Card>

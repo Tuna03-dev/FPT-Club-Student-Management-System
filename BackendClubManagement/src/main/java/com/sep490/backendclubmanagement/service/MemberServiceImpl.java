@@ -40,6 +40,7 @@ public class MemberServiceImpl implements MemberService{
     private final TeamRepository teamRepository;
     private final NotificationService notificationService;
     private final FapApiService fapApiService;
+    private final EventAttendanceRepository eventAttendanceRepository;
 
     /**
      * Helper method để đảm bảo chỉ có 1 RoleMemberShip cho mỗi member trong mỗi semester
@@ -751,10 +752,59 @@ public class MemberServiceImpl implements MemberService{
                 .endDate(clubMemberShip.getEndDate() != null ? clubMemberShip.getEndDate().toString() : null)
                 .totalAttendanceRate(90) // TODO: Tính thật
                 .totalTerms((int) totalTerms)
-                .lastActive("2025-10-18") // TODO: Lấy từ hoạt động gần nhất
+                .lastActive(getLastActiveDate(clubMemberShip.getUser().getId(), clubMemberShip.getClub().getId(), currentTermResponse, history))
                 .currentTerm(currentTermResponse)
                 .history(history)
                 .build();
+    }
+
+    /**
+     * Lấy ngày hoạt động cuối cùng của user trong club
+     * - Nếu kỳ này active (isActive = true): trả về ngày hiện tại
+     * - Nếu kỳ này không active: lấy ngày bắt đầu (startDate) của kỳ tạm nghỉ gần nhất từ history
+     */
+    private String getLastActiveDate(Long userId, Long clubId, CurrentTermResponse currentTermResponse, List<MemberHistoryResponse> history) {
+        // Nếu kỳ này active, trả về ngày hiện tại
+        if (currentTermResponse != null && Boolean.TRUE.equals(currentTermResponse.getIsActive())) {
+            String today = java.time.LocalDate.now().toString();
+            log.debug("User {} in club {} is active in current term, returning today: {}", userId, clubId, today);
+            return today;
+        }
+        
+        // Nếu kỳ này không active, tìm kỳ tạm nghỉ gần nhất trong history
+        if (history != null && !history.isEmpty()) {
+            // Tìm các kỳ có isActive = false và sắp xếp theo startDate giảm dần để lấy kỳ gần nhất
+            String lastInactiveStartDate = history.stream()
+                    .filter(h -> h.getStartDate() != null && !h.getStartDate().isEmpty())
+                    .filter(h -> Boolean.FALSE.equals(h.getIsActive())) // Chỉ lấy kỳ tạm nghỉ
+                    .sorted((h1, h2) -> {
+                        // Sắp xếp theo startDate giảm dần (kỳ gần nhất trước)
+                        try {
+                            java.time.LocalDate date1 = java.time.LocalDate.parse(h1.getStartDate());
+                            java.time.LocalDate date2 = java.time.LocalDate.parse(h2.getStartDate());
+                            return date2.compareTo(date1); // Giảm dần
+                        } catch (Exception e) {
+                            return 0;
+                        }
+                    })
+                    .map(MemberHistoryResponse::getStartDate)
+                    .findFirst()
+                    .orElse(null);
+            
+            if (lastInactiveStartDate != null) {
+                log.debug("User {} in club {} is inactive, returning start date of last inactive term: {}", userId, clubId, lastInactiveStartDate);
+                return lastInactiveStartDate;
+            }
+        }
+        
+        // Fallback: Nếu currentTerm không active và có startDate, lấy startDate của currentTerm
+        if (currentTermResponse != null && currentTermResponse.getStartDate() != null && !currentTermResponse.getStartDate().isEmpty()) {
+            log.debug("User {} in club {} is inactive, returning current term start date: {}", userId, clubId, currentTermResponse.getStartDate());
+            return currentTermResponse.getStartDate();
+        }
+        
+        log.debug("No inactive term found for user {} in club {}", userId, clubId);
+        return null; // Trả về null nếu không tìm thấy kỳ tạm nghỉ nào
     }
 
     @Override
@@ -888,6 +938,125 @@ public class MemberServiceImpl implements MemberService{
                 teamRepository.findByClubIdAndTeamName(clubId, name).ifPresent(t -> teamMap.put(name, t));
             }
             
+            // ✅ VALIDATION PHASE: Validate toàn bộ file trước khi import
+            List<ImportMemberError> validationErrors = new ArrayList<>();
+            Map<String, Integer> studentCodeRowMap = new HashMap<>(); // Track student code và dòng để phát hiện trùng
+            Map<String, Integer> emailRowMap = new HashMap<>(); // Track email và dòng để phát hiện trùng
+            
+            for (int r = 1; r <= lastRow; r++) {
+                Row row = sheet.getRow(r);
+                if (row == null) continue;
+                
+                try {
+                    String studentCode = readCell(row, colIndex.get("student_code"));
+                    String semesterCode = readCell(row, colIndex.get("semester_code"));
+                    String email = colIndex.containsKey("email") ? readCell(row, colIndex.get("email")) : null;
+                    String joinDateStr = colIndex.containsKey("join_date") ? readCell(row, colIndex.get("join_date")) : null;
+                    
+                    // Validate student code không trống
+                    if (studentCode == null || studentCode.trim().isEmpty()) {
+                        validationErrors.add(ImportMemberError.builder()
+                                .row(r + 1)
+                                .studentCode("")
+                                .semesterCode(semesterCode)
+                                .message("Mã sinh viên không được để trống")
+                                .build());
+                        continue;
+                    }
+                    
+                    // Kiểm tra trùng student code trong file
+                    if (studentCodeRowMap.containsKey(studentCode)) {
+                        validationErrors.add(ImportMemberError.builder()
+                                .row(r + 1)
+                                .studentCode(studentCode)
+                                .semesterCode(semesterCode)
+                                .message(String.format("Mã sinh viên '%s' bị trùng lặp trong file Excel (đã xuất hiện ở dòng %d). Mỗi mã sinh viên chỉ được xuất hiện một lần.", 
+                                    studentCode, studentCodeRowMap.get(studentCode)))
+                                .build());
+                    } else {
+                        studentCodeRowMap.put(studentCode, r + 1);
+                    }
+                    
+                    // Kiểm tra trùng email trong file
+                    if (email != null && !email.trim().isEmpty()) {
+                        String emailLower = email.toLowerCase().trim();
+                        if (emailRowMap.containsKey(emailLower)) {
+                            validationErrors.add(ImportMemberError.builder()
+                                    .row(r + 1)
+                                    .studentCode(studentCode)
+                                    .semesterCode(semesterCode)
+                                    .message(String.format("Email '%s' bị trùng lặp trong file Excel (đã xuất hiện ở dòng %d). Mỗi email chỉ được xuất hiện một lần.", 
+                                        email, emailRowMap.get(emailLower)))
+                                    .build());
+                        } else {
+                            emailRowMap.put(emailLower, r + 1);
+                        }
+                    }
+                    
+                    // Validate ngày tháng nếu có
+                    if (joinDateStr != null && !joinDateStr.trim().isEmpty()) {
+                        try {
+                            parseDate(joinDateStr, r + 1);
+                        } catch (IllegalArgumentException e) {
+                            validationErrors.add(ImportMemberError.builder()
+                                    .row(r + 1)
+                                    .studentCode(studentCode)
+                                    .semesterCode(semesterCode)
+                                    .message(e.getMessage())
+                                    .build());
+                        }
+                    }
+                    
+                    // Validate semester code
+                    if (semesterCode == null || semesterCode.trim().isEmpty()) {
+                        validationErrors.add(ImportMemberError.builder()
+                                .row(r + 1)
+                                .studentCode(studentCode)
+                                .semesterCode("")
+                                .message("Mã học kỳ không được để trống")
+                                .build());
+                    } else if (!semesterMap.containsKey(semesterCode)) {
+                        validationErrors.add(ImportMemberError.builder()
+                                .row(r + 1)
+                                .studentCode(studentCode)
+                                .semesterCode(semesterCode)
+                                .message("Không tìm thấy học kỳ: " + semesterCode)
+                                .build());
+                    }
+                    
+                    // ✅ VALIDATION: Kiểm tra trùng student code trong database
+                    // Nếu student code đã tồn tại trong database, báo lỗi thay vì ghi đè
+                    if (studentCode != null && !studentCode.trim().isEmpty()) {
+                        if (userMap.containsKey(studentCode)) {
+                            validationErrors.add(ImportMemberError.builder()
+                                    .row(r + 1)
+                                    .studentCode(studentCode)
+                                    .semesterCode(semesterCode)
+                                    .message(String.format("Mã sinh viên '%s' đã tồn tại trong hệ thống. Không thể import để tránh ghi đè dữ liệu. Vui lòng sử dụng chức năng cập nhật thông tin thành viên thay vì import.", 
+                                        studentCode))
+                                    .build());
+                        }
+                    }
+                    
+                } catch (Exception e) {
+                    validationErrors.add(ImportMemberError.builder()
+                            .row(r + 1)
+                            .studentCode("")
+                            .semesterCode("")
+                            .message("Lỗi khi đọc dòng: " + e.getMessage())
+                            .build());
+                }
+            }
+            
+            // Nếu có lỗi validation, throw exception với danh sách lỗi
+            if (!validationErrors.isEmpty()) {
+                String errorSummary = String.format(
+                    "File Excel có %d lỗi validation. Vui lòng kiểm tra và sửa lại trước khi import.",
+                    validationErrors.size()
+                );
+                throw new AppException(ErrorCode.INVALID_INPUT, errorSummary, validationErrors);
+            }
+            
             // 3. Cache FAP API responses để tránh duplicate calls
             Map<String, Boolean> emailValidationCache = new HashMap<>();
             
@@ -948,21 +1117,7 @@ public class MemberServiceImpl implements MemberService{
                     User user = userMap.get(studentCode);
                     boolean userCreated = false;
                     if (user == null) {
-                        // ✅ FIX: Kiểm tra duplicate trong batch trước khi tạo
-                        // Kiểm tra duplicate student_code
-                        if (studentCode != null && !studentCode.isEmpty() && studentCodesInBatch.contains(studentCode)) {
-                            throw new IllegalArgumentException(
-                                String.format("Mã sinh viên '%s' bị trùng lặp trong file Excel (dòng %d). Mỗi mã sinh viên chỉ được xuất hiện một lần.", 
-                                    studentCode, r + 1));
-                        }
-                        
-                        // Kiểm tra duplicate email
-                        if (email != null && !email.isEmpty() && emailsInBatch.contains(email.toLowerCase())) {
-                            throw new IllegalArgumentException(
-                                String.format("Email '%s' bị trùng lặp trong file Excel (dòng %d). Mỗi email chỉ được xuất hiện một lần.", 
-                                    email, r + 1));
-                        }
-                        
+                        // ✅ NOTE: Duplicate check đã được thực hiện ở validation phase
                         // Kiểm tra email đã tồn tại trong database (ngoài cache)
                         if (email != null && !email.isEmpty()) {
                             Optional<User> existingUserByEmail = userRepository.findByEmailIgnoreCase(email);
@@ -1033,25 +1188,13 @@ public class MemberServiceImpl implements MemberService{
                             createdUsers++;
                         }
                     } else {
-                        // Update user info
-                        boolean changed = false;
-                        if (fullName != null && !fullName.isEmpty() && !fullName.equals(user.getFullName())) {
-                            user.setFullName(fullName);
-                            changed = true;
-                        }
-                        if (email != null && !email.isEmpty() && !email.equals(user.getEmail())) {
-                            // Email đã được validate ở trên
-                            user.setEmail(email);
-                            changed = true;
-                        }
-                        if (phone != null && !phone.isEmpty() && !phone.equals(user.getPhoneNumber())) {
-                            user.setPhoneNumber(phone);
-                            changed = true;
-                        }
-                        if (changed) {
-                            usersToUpdate.add(user);
-                            updatedUsers++;
-                        }
+                        // ✅ VALIDATION: User đã tồn tại trong database - không được ghi đè
+                        // Nếu validation phase đã pass nhưng user vẫn tồn tại, có thể do race condition
+                        // Hoặc có thể là user được tạo trong batch trước đó
+                        // Trong mọi trường hợp, không được ghi đè - báo lỗi
+                        throw new IllegalArgumentException(
+                            String.format("Mã sinh viên '%s' đã tồn tại trong hệ thống (dòng %d). Không thể import để tránh ghi đè dữ liệu. Vui lòng sử dụng chức năng cập nhật thông tin thành viên thay vì import.", 
+                                studentCode, r + 1));
                     }
 
                     if (!processedUserCodes.contains(studentCode)) {
@@ -1091,7 +1234,7 @@ public class MemberServiceImpl implements MemberService{
                     }
                     boolean membershipCreated = false;
                     if (membership == null) {
-                        LocalDate joinDate = joinDateStr != null ? parseDate(joinDateStr) : LocalDate.now();
+                        LocalDate joinDate = joinDateStr != null ? parseDate(joinDateStr, r + 1) : LocalDate.now();
                         membership = ClubMemberShip.builder()
                                 .user(user)
                                 .club(club)
@@ -1266,11 +1409,61 @@ public class MemberServiceImpl implements MemberService{
         return null;
     }
 
-    private LocalDate parseDate(String dateStr) {
+    /**
+     * Parse và validate ngày tháng
+     * @param dateStr Chuỗi ngày tháng (format: yyyy-MM-dd)
+     * @param rowNumber Số dòng trong Excel (để báo lỗi)
+     * @return LocalDate đã parse
+     * @throws IllegalArgumentException nếu format không đúng
+     */
+    private LocalDate parseDate(String dateStr, int rowNumber) throws IllegalArgumentException {
+        if (dateStr == null || dateStr.trim().isEmpty()) {
+            throw new IllegalArgumentException("Ngày tháng không được để trống");
+        }
         try {
-            return LocalDate.parse(dateStr);
-        } catch (Exception e) {
+            // Thử parse với format ISO (yyyy-MM-dd)
+            return LocalDate.parse(dateStr.trim());
+        } catch (java.time.format.DateTimeParseException e) {
+            // Thử các format khác phổ biến
+            try {
+                // Format: dd/MM/yyyy
+                java.time.format.DateTimeFormatter formatter = java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy");
+                return LocalDate.parse(dateStr.trim(), formatter);
+            } catch (java.time.format.DateTimeParseException e2) {
+                try {
+                    // Format: dd-MM-yyyy
+                    java.time.format.DateTimeFormatter formatter2 = java.time.format.DateTimeFormatter.ofPattern("dd-MM-yyyy");
+                    return LocalDate.parse(dateStr.trim(), formatter2);
+                } catch (java.time.format.DateTimeParseException e3) {
+                    throw new IllegalArgumentException(
+                        String.format("Ngày tháng không hợp lệ: '%s'. Vui lòng sử dụng format: yyyy-MM-dd, dd/MM/yyyy hoặc dd-MM-yyyy (dòng %d)", 
+                            dateStr, rowNumber));
+                }
+            }
+        }
+    }
+    
+    /**
+     * Parse ngày tháng với fallback về ngày hiện tại nếu lỗi (dùng cho trường hợp optional)
+     */
+    private LocalDate parseDateWithFallback(String dateStr) {
+        if (dateStr == null || dateStr.trim().isEmpty()) {
             return LocalDate.now();
+        }
+        try {
+            return LocalDate.parse(dateStr.trim());
+        } catch (Exception e) {
+            try {
+                java.time.format.DateTimeFormatter formatter = java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy");
+                return LocalDate.parse(dateStr.trim(), formatter);
+            } catch (Exception e2) {
+                try {
+                    java.time.format.DateTimeFormatter formatter2 = java.time.format.DateTimeFormatter.ofPattern("dd-MM-yyyy");
+                    return LocalDate.parse(dateStr.trim(), formatter2);
+                } catch (Exception e3) {
+                    return LocalDate.now(); // Fallback
+                }
+            }
         }
     }
 }

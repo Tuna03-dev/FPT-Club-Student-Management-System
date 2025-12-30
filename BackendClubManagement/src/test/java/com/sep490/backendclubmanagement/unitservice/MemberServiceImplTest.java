@@ -51,6 +51,8 @@ class MemberServiceImplTest {
     private NotificationService notificationService;
     @Mock
     private FapApiService fapApiService;
+    @Mock
+    private EventAttendanceRepository eventAttendanceRepository;
 
     @InjectMocks
     private MemberServiceImpl memberService;
